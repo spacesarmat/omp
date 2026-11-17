@@ -6,6 +6,7 @@ import {
   copyLangOk,
   copyStateOk,
   isFragmentTemplate,
+  isInvoiceTemplate,
   previewNodes,
   renderBody,
   sampleVars,
@@ -61,6 +62,7 @@ function publicTemplate(row) {
     variables: row.variables,
     required: row.required,
     fragment: isFragmentTemplate(row.id),
+    invoice: isInvoiceTemplate(row.id),
   };
 }
 

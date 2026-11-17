@@ -187,8 +187,15 @@ const BY_ID = new Map(CATALOG.map((row) => [row.id, row]));
 /** Fragments are embedded into a host message, so they cannot carry their own buttons or media. */
 const FRAGMENTS = new Set(['renewal.quote', 'devices.limit']);
 
+/** Telegram invoices carry only a title, a description and the pay button: no media, no custom buttons. */
+const INVOICES = new Set(['pay.stars', 'donate.stars']);
+
 export function isFragmentTemplate(id) {
   return FRAGMENTS.has(String(id || ''));
+}
+
+export function isInvoiceTemplate(id) {
+  return INVOICES.has(String(id || ''));
 }
 
 export function templateById(id) {
@@ -340,9 +347,14 @@ export function validateCopy(template, input) {
   const body = normalizeDashes(src.body);
   let mediaKind = src.mediaKind === 'video' ? 'video' : src.mediaKind === 'photo' ? 'photo' : '';
   let mediaUrl = String(src.mediaUrl || '').trim();
-  if (template && isFragmentTemplate(template.id) && (mediaKind || src.buttons != null)) {
-    errors.push('Этот шаблон - часть другого сообщения, кнопки и медиа для него не поддерживаются');
-    mediaKind = '';
+  if (template && (mediaKind || src.buttons != null)) {
+    if (isFragmentTemplate(template.id)) {
+      errors.push('Этот шаблон - часть другого сообщения, кнопки и медиа для него не поддерживаются');
+      mediaKind = '';
+    } else if (isInvoiceTemplate(template.id)) {
+      errors.push('Счёт Telegram не поддерживает свои кнопки и медиа, текст уходит в описание счёта');
+      mediaKind = '';
+    }
   }
   if (!mediaKind) mediaUrl = '';
   if (mediaKind && (!/^https:\/\/\S+$/i.test(mediaUrl) || mediaUrl.length > 500)) {

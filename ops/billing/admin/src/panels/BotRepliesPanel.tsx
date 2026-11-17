@@ -14,6 +14,7 @@ type Template = {
   variables: Variable[];
   required: string[];
   fragment?: boolean;
+  invoice?: boolean;
   saved?: { state: string; lang: string; updatedAt: number; author: string }[];
 };
 type Btn = { text: string; kind: 'url' | 'callback'; value: string };
@@ -547,8 +548,12 @@ export function BotRepliesPanel({ csrf }: { csrf: string }) {
                   {body.length} / {limit}
                   {open.required && open.required.length ? '. Обязательные: ' + open.required.map((key) => '{' + key + '}').join(', ') : ''}
                 </div>
-                {open.fragment ? (
-                  <p className="text-xs text-muted-foreground">Этот шаблон - часть другого сообщения. Кнопки и медиа задаются в основном шаблоне.</p>
+                {open.fragment || open.invoice ? (
+                  <p className="text-xs text-muted-foreground">
+                    {open.invoice
+                      ? 'Это счёт Telegram: текст уходит в описание счёта, свои кнопки и медиа не поддерживаются.'
+                      : 'Этот шаблон - часть другого сообщения. Кнопки и медиа задаются в основном шаблоне.'}
+                  </p>
                 ) : (
                   <>
                 <div className="flex flex-wrap gap-2">

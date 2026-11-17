@@ -3,6 +3,7 @@ import {
   applyBuilt,
   escapeHtml,
   isFragmentTemplate,
+  isInvoiceTemplate,
   markupError,
   normalizeDashes,
   normalizeLang,
@@ -211,6 +212,26 @@ describe('bot copy fallback, raw fragments and safety', () => {
     const home = templateById('cabinet.home')!;
     const homeMedia = validateCopy(home, { body: '{status}', buttons: null, mediaKind: 'photo', mediaUrl: 'https://omp-player.online/a.jpg' });
     expect(homeMedia.ok).toBe(true);
+  });
+
+  it('rejects buttons and media on invoice templates, keeps the plain description', () => {
+    expect(isInvoiceTemplate('pay.stars')).toBe(true);
+    expect(isInvoiceTemplate('donate.stars')).toBe(true);
+    expect(isInvoiceTemplate('pay.crypto')).toBe(false);
+    for (const id of ['pay.stars', 'donate.stars']) {
+      const tpl = templateById(id)!;
+      const withMedia = validateCopy(tpl, { body: tpl.body, buttons: null, mediaKind: 'photo', mediaUrl: 'https://omp-player.online/a.jpg' });
+      expect(withMedia.ok).toBe(false);
+      const withButtons = validateCopy(tpl, {
+        body: tpl.body,
+        buttons: [[{ text: 'X', kind: 'url', value: 'https://omp-player.online' }]],
+        mediaKind: '',
+        mediaUrl: '',
+      });
+      expect(withButtons.ok).toBe(false);
+      const plain = validateCopy(tpl, { body: tpl.body, buttons: null, mediaKind: '', mediaUrl: '' });
+      expect(plain.ok).toBe(true);
+    }
   });
 
   it('keeps the stale-button toast out of the message catalog', () => {
