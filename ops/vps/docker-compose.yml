@@ -298,6 +298,9 @@ services:
       DHT_LOOKUP_MS: "8000"
       DHT_IDLE_MS: "600000"
       DHT_CACHE_MS: "600000"
+      # Reachable bootstrap nodes (host:port list), e.g. the LAN bitmagnet DHT port on the NUC.
+      # Empty default: the sidecar falls back to the public routers. Set in the deployment .env.
+      DHT_BOOTSTRAP_NODES: ${DHT_BOOTSTRAP_NODES:-}
       NODE_OPTIONS: "--max-old-space-size=96"
       HOME: /tmp
     mem_limit: 150m

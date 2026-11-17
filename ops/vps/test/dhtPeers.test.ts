@@ -232,6 +232,8 @@ describe('compose bounds for dht-peers', () => {
     expect(block).toContain('mem_limit: 150m');
     expect(block).toContain('memswap_limit: 150m');
     expect(block).toContain('DHT_TOKEN: ${DHT_PEERS_TOKEN:-}');
+    // The bootstrap setting must reach the container, with an empty default (public routers only).
+    expect(block).toContain('DHT_BOOTSTRAP_NODES: ${DHT_BOOTSTRAP_NODES:-}');
     expect(block).toContain('cap_drop:');
     expect(block).not.toMatch(/^\s+ports:/m);
     expect(base).toContain('BILLING_DHT_URL: ${BILLING_DHT_URL:-http://dht-peers:8788}');
