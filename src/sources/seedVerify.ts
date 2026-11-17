@@ -17,6 +17,8 @@ export interface SeedMeasure {
   live: boolean;
   seeders: number;
   leechers: number;
+  /** Snatched count. 0 when no tracker reported it (and on an older server answer). */
+  completed?: number;
   seedersMax: number;
   seedersMedian: number;
   peers: number;
@@ -90,6 +92,7 @@ export function parseSeedResponse(text: string): SeedMeasure[] | null {
       live: it.live === true,
       seeders: num('seeders'),
       leechers: num('leechers'),
+      completed: num('completed'),
       seedersMax: num('seedersMax'),
       seedersMedian: num('seedersMedian'),
       peers: num('peers'),
@@ -119,6 +122,7 @@ export function applySeedRound(rows: SourceResult[], measures: SeedMeasure[] | n
         hash: r.hash || hash,
         Seed: m.seeders,
         Peer: m.leechers,
+        completed: m.completed || 0,
         seedCheck: 'live' as const,
         seedCheckAt: m.measuredAt,
         seedersMax: m.seedersMax,

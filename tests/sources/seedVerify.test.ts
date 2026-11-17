@@ -64,6 +64,26 @@ describe('seed check apply', () => {
     expect(applySeedRound(rows, measures, false)[0].Seed).toBe(12);
   });
 
+  it('parses completed from the server answer and copies it onto a live row', () => {
+    const text = JSON.stringify({
+      items: [
+        { infohash: HASH, verified: true, live: true, seeders: 12, leechers: 3, completed: 14703, seedersMax: 12, seedersMedian: 12, peers: 0, samples: 1, measuredAt: 50 },
+        { infohash: OTHER, verified: true, live: true, seeders: 5, leechers: 1, seedersMax: 5, seedersMedian: 5, peers: 0, samples: 1, measuredAt: 50 },
+      ],
+    });
+    const measures = parseSeedResponse(text) as SeedMeasure[];
+    expect(measures[0].completed).toBe(14703);
+    // an older server answer without completed parses as 0
+    expect(measures[1].completed).toBe(0);
+    const rows = applySeedRound(
+      [row({ Title: 'A', hash: HASH, Seed: 1 }), row({ Title: 'B', hash: OTHER, Seed: 1 })],
+      measures,
+      true,
+    );
+    expect(rows[0]).toMatchObject({ Seed: 12, completed: 14703, seedCheck: 'live' });
+    expect(rows[1]).toMatchObject({ Seed: 5, completed: 0, seedCheck: 'live' });
+  });
+
   it('picks the top distinct infohashes and ignores a duplicate magnet', () => {
     const magnet = 'magnet:?xt=urn:btih:' + HASH + '&tr=' + encodeURIComponent('udp://tracker.example:6969/announce');
     const picked = pickProbeRows(

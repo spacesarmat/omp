@@ -32,6 +32,8 @@ export interface RpcResult {
   /** Present after the phone's seed check. Absent until that round finishes. */
   seedCheck?: 'live' | 'dht' | 'unverified';
   seedCheckAt?: number;
+  /** Snatched count (BEP 48/15 downloaded). Absent on an older phone build. */
+  completed?: number;
   dhtPeers?: number;
   dhtSeeds?: number;
   dhtEstimate?: boolean;

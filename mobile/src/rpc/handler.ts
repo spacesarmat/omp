@@ -143,6 +143,7 @@ export function toRpcResult(r: SourceResult, key: string): RpcResult {
   if (Array.isArray(r.sources) && r.sources.length) out.sources = r.sources.filter((s) => typeof s === 'string');
   if (r.seedCheck) out.seedCheck = r.seedCheck;
   if (typeof r.seedCheckAt === 'number') out.seedCheckAt = r.seedCheckAt;
+  if (typeof r.completed === 'number' && isFinite(r.completed)) out.completed = r.completed;
   if (typeof r.dhtPeers === 'number') out.dhtPeers = r.dhtPeers;
   if (typeof r.dhtSeeds === 'number') out.dhtSeeds = r.dhtSeeds;
   if (r.dhtEstimate === true) out.dhtEstimate = true;
