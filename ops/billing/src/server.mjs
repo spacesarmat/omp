@@ -99,6 +99,7 @@ import { createChangelogSource } from './changelog.mjs';
 import { ALLOWED_UPDATES, channelFromEnv, pinNotice, pinNoticeFailedLine } from './channelPins.mjs';
 import { codeHash, normalizeCode, randomId, sha256 } from './crypto.mjs';
 import { createCryptoInvoice, cryptoPayCredentials, cryptoPaySignatureMode, paidInvoice } from './cryptoPay.mjs';
+import { applyRateSettings, donateRateWait, ensureDonateRates, normalizeRateSettings } from './rates.mjs';
 import { countryCode, cryptoOffered, starCheckoutDecision } from './payMethods.mjs';
 import { quotePurchase } from './logic.mjs';
 import { goPage } from './go.mjs';
@@ -170,7 +171,7 @@ import {
   applyDonateSettings,
   applyDonation,
   confirmDonateHold,
-  cryptoAllowed,
+  cryptoDonateOpen,
   donateCryptoLinkLive,
   donateCsv,
   donateNoticeText,
@@ -1037,7 +1038,8 @@ async function ensureDonateCryptoLink(store, donationId, fetchImpl) {
   if (!quote || quote.method !== 'crypto') return { error: 'bad_order' };
   if (!state.settings.donate || state.settings.donate.crypto !== true) return { error: 'disabled' };
   const payer = (state.accounts || []).find((a) => a && a.id === quote.accountId) || null;
-  if (!cryptoAllowed(state.settings, payer, quote.asset)) return { error: 'disabled' };
+  // The asset amount is already frozen on the row, so a later stale rate does not block the link.
+  if (!cryptoDonateOpen(state.settings, payer)) return { error: 'disabled' };
   const creds = cryptoPayCredentials(state.settings);
   if (!creds.ready) return { error: 'disabled' };
   const issuedAt = Date.now();
@@ -1059,7 +1061,7 @@ async function ensureDonateCryptoLink(store, donationId, fetchImpl) {
     const row = (cur.donations || []).find((p) => p && p.id === donationId);
     if (!row) return { state: cur, result: { error: 'bad_order' } };
     const payerNow = (cur.accounts || []).find((a) => a && a.id === row.accountId) || null;
-    if (!cryptoAllowed(cur.settings, payerNow, row.asset)) return { state: cur, result: { error: 'disabled' } };
+    if (!cryptoDonateOpen(cur.settings, payerNow)) return { state: cur, result: { error: 'disabled' } };
     if (donateCryptoLinkLive(row, issuedAt, fresh.testnet)) {
       return {
         state: cur,
@@ -1375,6 +1377,10 @@ export function createApp(file, fetchImpl, opts) {
   // A tight loop from one IP is refused. 0 turns the limit off.
   const adsLimit = adsConfigLimitConfig(env);
   const adsConfigRate = adsLimit.ipMax > 0 ? createRateLimit(adsLimit.ipMax, adsLimit.windowMs) : null;
+  // Public login endpoints: a poll is a read, only a confirmed token writes. A flood gets 429 before the store.
+  const loginStatusRate = createRateLimit(120, 60 * 1000);
+  const loginOnceRate = createRateLimit(10, 60 * 1000);
+  const loginPasswordRate = createRateLimit(6, 10 * 60 * 1000);
   const legacyOn = legacyTokensEnabled(env);
   const readOnly = !!(opts && opts.readOnly);
   const store = readOnly ? readOnlyStore(toStore(file)) : toStore(file);
@@ -1968,10 +1974,20 @@ export function createApp(file, fetchImpl, opts) {
         return json(res, 200, { ok: true, token: started.token, deepLink, expiresAt: started.expiresAt });
       }
       if (req.method === 'GET' && path === '/admin/login/telegram/status') {
+        if (!loginStatusRate.allow(clientIp(req))) {
+          res.setHeader('retry-after', String(loginStatusRate.retryAfter(clientIp(req)) || 60));
+          return json(res, 429, { ok: false, error: 'rate' });
+        }
         const token = url.searchParams.get('token') || '';
-        const taken = adminAuth
-          ? adminAuth.takePanel({ token, now: Date.now() })
-          : await store.update((cur) => takeAdminPanelLogin(cur, { token, now: Date.now() }));
+        let taken;
+        if (adminAuth) {
+          taken = adminAuth.takePanel({ token, now: Date.now() });
+        } else {
+          // Peek on the read snapshot: a pending or unknown token must not open a write transaction.
+          // Only 'ok' consumes, inside update, so two concurrent polls still yield a single session.
+          const peek = takeAdminPanelLogin(await store.read(), { token, now: Date.now() }).result;
+          taken = peek.status === 'ok' ? await store.update((cur) => takeAdminPanelLogin(cur, { token, now: Date.now() })) : peek;
+        }
         if (taken.status === 'ok') {
           const id = randomId() + randomId();
           const csrf = randomId();
@@ -2001,13 +2017,21 @@ export function createApp(file, fetchImpl, opts) {
         return json(res, 200, { ok: false, status: taken.status || 'expired' });
       }
       if (req.method === 'GET' && path === '/admin/login/once') {
+        if (!loginOnceRate.allow(clientIp(req))) {
+          res.setHeader('retry-after', String(loginOnceRate.retryAfter(clientIp(req)) || 60));
+          return send(res, 429, loginPage('Слишком много попыток входа. Подождите минуту.'), {
+            'content-type': 'text/html; charset=utf-8',
+          });
+        }
         const token = url.searchParams.get('token') || '';
         let taken = { status: 'expired' };
         try {
           if (adminAuth) {
             taken = adminAuth.takeCli(await store.read(), { token, now: Date.now() });
           } else {
-            taken = await store.update((cur) => takeCliAdminLogin(cur, { token, now: Date.now() }));
+            // Peek without a write: only a valid token consumes (one serialized update).
+            const peek = takeCliAdminLogin(await store.read(), { token, now: Date.now() }).result;
+            taken = peek.status === 'ok' ? await store.update((cur) => takeCliAdminLogin(cur, { token, now: Date.now() })) : peek;
           }
         } catch (e) {
           taken = { status: 'expired' };
@@ -2032,16 +2056,19 @@ export function createApp(file, fetchImpl, opts) {
         return res.end();
       }
       if (req.method === 'POST' && path === '/admin/login') {
+        if (!loginPasswordRate.allow(clientIp(req))) {
+          res.setHeader('retry-after', String(loginPasswordRate.retryAfter(clientIp(req)) || 600));
+          if (wantsJson(req)) return json(res, 429, { ok: false, error: 'rate' });
+          return send(res, 429, loginPage('Слишком много попыток входа. Подождите несколько минут.'), {
+            'content-type': 'text/html; charset=utf-8',
+          });
+        }
         try {
           await readBody(req);
         } catch (e) {
           /* a bad body still rejects; it must not 500 */
         }
-        try {
-          await audit(file, 'login_fail', 'password disabled', null);
-        } catch (e) {
-          /* audit failure must not turn the rejection into 500 */
-        }
+        // Password login is disabled: no audit row per attempt, a flood would evict real admin actions.
         if (wantsJson(req)) {
           return json(res, 403, { ok: false, error: 'Вход по паролю отключён. Войдите через Telegram.' });
         }
@@ -2502,8 +2529,24 @@ export function createApp(file, fetchImpl, opts) {
         }
         if (path === '/admin/donate') {
           await store.update((state) => ({
-            state: { ...state, settings: { ...state.settings, donate: applyDonateSettings(state.settings.donate, body) } },
+            state: {
+              ...state,
+              settings: {
+                ...mergeSettings(state.settings, {
+                  cryptoRateUsdt: body.cryptoRateUsdt,
+                  cryptoRateTon: body.cryptoRateTon,
+                  cryptoRateBtc: body.cryptoRateBtc,
+                }),
+                donate: applyDonateSettings(state.settings.donate, body),
+                rates: applyRateSettings(state.settings.rates, body),
+              },
+            },
           }));
+          try {
+            await ensureDonateRates(store, net, Date.now());
+          } catch (e) {
+            /* a rate host can fail; the saved manual rate and the last good auto rate stay */
+          }
           await audit(file, 'donate_settings', 'Донат', admin);
           flashText = 'Настройки доната сохранены';
           redirectTo = '/admin/?tab=donations';
@@ -3594,6 +3637,7 @@ export async function pollBot(file, fetchImpl, opts) {
   const handledUpdates = new Set();
   let sweptAt = 0;
   let servicesAt = 0;
+  let ratesAt = 0;
   let serviceSnap = {};
   const legacyAlerts = opts && opts.legacyAlerts !== undefined ? !!opts.legacyAlerts : legacyAlertsOn(process.env);
   /** chatId → { kind } waiting for the next free-text reply */
@@ -3604,6 +3648,8 @@ export async function pollBot(file, fetchImpl, opts) {
   const sleep = (opts && opts.sleep) || ((ms) => new Promise((r) => setTimeout(r, ms)));
   const nowFn = (opts && opts.now) || (() => Date.now());
   const maxLoops = opts && opts.maxLoops ? opts.maxLoops : 0;
+  // A finite poll is a test. It does not call rate hosts unless refreshRates is set.
+  const refreshRates = opts && opts.refreshRates !== undefined ? !!opts.refreshRates : !maxLoops;
   const pollTimeoutMs = (opts && opts.pollTimeoutMs) || TG_POLL_TIMEOUT_MS;
   const sendTimeoutMs = (opts && opts.sendTimeoutMs) || TG_SEND_TIMEOUT_MS;
   const adminLoginOnly = !!(opts && opts.adminLoginOnly);
@@ -3631,6 +3677,16 @@ export async function pollBot(file, fetchImpl, opts) {
       }
       // «Сервис недоступен»: off while «Мониторинг» alerts on the same probes (svc:*), see legacyAlertsOn.
       // Disk under 10% and an error spike do not call the indexers.
+      if (refreshRates && !adminLoginOnly) {
+        const book = normalizeRateSettings(state.settings && state.settings.rates);
+        const every = book.refreshMin * 60 * 1000;
+        if (!ratesAt || nowFn() - ratesAt >= every) {
+          ratesAt = nowFn();
+          void ensureDonateRates(store, net, nowFn()).catch(() => {
+            /* a rate host can fail; the last saved rate stays */
+          });
+        }
+      }
       if (!adminLoginOnly && Date.now() - servicesAt > 5 * 60 * 1000) {
         servicesAt = Date.now();
         try {
@@ -3990,7 +4046,21 @@ export async function handleCallback(file, token, cq, net, timeoutMs, opts) {
   }
   const chatId = String(chat.id);
   let out = null;
+  // Amount, comment and a repeat of a frozen invoice do not call the rate hosts.
+  // A quote with a still-usable cache is answered first; the refresh continues after the answer.
+  // The tap waits only when that quote has no usable rate yet.
+  let rateWait = 'skip';
   try {
+    const rawData = String(cq.data || '');
+    if (rawData.indexOf('dn:n:') === 0 || rawData.indexOf('dn:p:') === 0) {
+      try {
+        const peeked = await store.read();
+        rateWait = donateRateWait(rawData, peeked, Date.now());
+        if (rateWait === 'block') await ensureDonateRates(store, net, Date.now());
+      } catch (e) {
+        /* a rate host can fail; the last saved rate still prices the invoice */
+      }
+    }
     const state = await store.read();
     let info = () => null;
     if (botNeedsDeviceInfo('', cq.data)) {
@@ -4022,6 +4092,11 @@ export async function handleCallback(file, token, cq, net, timeoutMs, opts) {
     } catch (e) {
       /* Telegram unreachable or timed out — keep polling */
     }
+  }
+  if (rateWait === 'background') {
+    void ensureDonateRates(store, net, Date.now()).catch(() => {
+      /* a rate host can fail; the answer already used the last good rate */
+    });
   }
 }
 

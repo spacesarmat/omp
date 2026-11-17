@@ -1,3 +1,5 @@
+import type { DonateRates } from './types';
+
 export type DonateForm = {
   enabled: boolean;
   yoomoney: boolean;
@@ -12,6 +14,16 @@ export type DonateForm = {
   thanksText: string;
   rubPerStar: string;
   notifyMin: string;
+  autoStar: boolean;
+  autoUsdt: boolean;
+  autoTon: boolean;
+  autoBtc: boolean;
+  starUsd: string;
+  markupPercent: string;
+  maxAgeHours: string;
+  cryptoRateUsdt: string;
+  cryptoRateTon: string;
+  cryptoRateBtc: string;
 };
 
 type Settings = {
@@ -30,8 +42,12 @@ type Settings = {
   showAmounts?: boolean;
 };
 
-export function formFromDonateSettings(src?: Settings): DonateForm {
+export function formFromDonateSettings(src?: Settings, rates?: DonateRates): DonateForm {
   const s = src || {};
+  const star = rates && rates.rows ? rates.rows.star : undefined;
+  const usdt = rates && rates.rows ? rates.rows.usdt : undefined;
+  const ton = rates && rates.rows ? rates.rows.ton : undefined;
+  const btc = rates && rates.rows ? rates.rows.btc : undefined;
   return {
     enabled: s.enabled === true,
     yoomoney: s.yoomoney === true,
@@ -44,8 +60,18 @@ export function formFromDonateSettings(src?: Settings): DonateForm {
     maxRub: String(s.maxRub ?? 100000),
     commentMax: String(s.commentMax ?? 200),
     thanksText: s.thanksText || 'Спасибо! Вы поддержали проект OMP.',
-    rubPerStar: String(s.rubPerStar ?? 0),
+    rubPerStar: String(star ? star.manual : s.rubPerStar ?? 0),
     notifyMin: String(s.notifyMin ?? 0),
+    autoStar: star ? star.auto === true : true,
+    autoUsdt: usdt ? usdt.auto === true : true,
+    autoTon: ton ? ton.auto === true : true,
+    autoBtc: btc ? btc.auto === true : true,
+    starUsd: String(rates && rates.starUsd != null ? rates.starUsd : 0.013),
+    markupPercent: String(rates && rates.markupPercent != null ? rates.markupPercent : 0),
+    maxAgeHours: String(rates && rates.maxAgeMin ? Math.round(rates.maxAgeMin / 60) : 24),
+    cryptoRateUsdt: String(usdt ? usdt.manual : 0),
+    cryptoRateTon: String(ton ? ton.manual : 0),
+    cryptoRateBtc: String(btc ? btc.manual : 0),
   };
 }
 

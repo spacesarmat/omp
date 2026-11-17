@@ -1,12 +1,30 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import type { ReleaseIntent } from '../../../design/schema.ts';
 import type { LayoutIssue } from '../../../design/layout-checks.ts';
+import type { FlowDocumentDiff, FlowIdDiff } from '../../../design/production-flow.ts';
 import type { DraftController } from '../drafts';
 import { useDraftController } from '../useDraftController';
 import { createEditorClient, EditorApiError, formatEditorIssue, type EditorClient } from '../client';
 import { EDITOR_TARGET_LABELS } from '../../shared/routes';
 import { AccessibilityPanel } from './AccessibilityPanel';
 import type { ExportDiff, ExportResult, ExportScope } from '../../export.mjs';
+
+function flowDiffSections(diff: FlowDocumentDiff): Array<[string, FlowIdDiff]> {
+  return [
+    ['rules', diff.rules],
+    ['nodes', diff.nodes],
+    ['edges', diff.edges],
+    ['variables', diff.variables],
+  ];
+}
+
+function formatFlowSection(section: FlowIdDiff): string {
+  return [
+    ...section.added.map((id) => `+${id}`),
+    ...section.removed.map((id) => `-${id}`),
+    ...section.changed.map((id) => `~${id}`),
+  ].join(' ');
+}
 
 export interface ExportPanelProps {
   controller: DraftController;
@@ -140,9 +158,25 @@ export function ExportPanel({ controller, client, issues: accessibilityIssues, g
         <div class="editor-export-diff">
           <strong>Изменения в скоупе</strong>
           <ul>
-            {diff.files.map((file) => (
-              <li key={file.path}><code>{file.action}</code> {file.path}</li>
-            ))}
+            {diff.files.map((file) => {
+              const flowSections = file.flow
+                ? flowDiffSections(file.flow).filter(([, section]) => (
+                  section.added.length > 0 || section.removed.length > 0 || section.changed.length > 0
+                ))
+                : [];
+              return (
+                <li key={file.path} data-testid={file.flow ? 'flow-diff' : undefined}>
+                  <code>{file.action}</code> {file.path}
+                  {flowSections.length > 0 && (
+                    <ul class="editor-export-flow-diff">
+                      {flowSections.map(([label, section]) => (
+                        <li key={label}>{label}: {formatFlowSection(section)}</li>
+                      ))}
+                    </ul>
+                  )}
+                </li>
+              );
+            })}
           </ul>
           {diff.foreignDirty.length > 0 && (
             <p class="editor-notice">Вне скоупа, не изменятся: {diff.foreignDirty.join(', ')}</p>

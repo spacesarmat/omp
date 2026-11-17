@@ -184,6 +184,44 @@ describe('platform previews', () => {
     expect(host.querySelector<HTMLElement>('[data-design-id="content"]')!.style.display).toBe('none');
   });
 
+  it('runs graph rules on simulate-mode clicks through the shared interpreter', () => {
+    const config = props('settings', 'desktop-windows');
+    config.mode = 'simulate';
+    config.flow = {
+      schemaVersion: 1,
+      id: 'preview-graph',
+      baseCommit: BASE,
+      rules: [{
+        id: 'graph-go',
+        screenId: 'settings',
+        elementId: 'settings-continue',
+        event: 'click',
+        action: { type: 'back' },
+        graph: {
+          nodes: [
+            { id: 't', kind: 'trigger', ruleId: 'graph-go', x: 0, y: 0 },
+            { id: 'a', kind: 'action', ruleId: 'graph-go', x: 1, y: 0, stepId: 's1' },
+          ],
+          edges: [{ id: 'e1', from: 't', to: 'a', branch: 'default' }],
+        },
+        steps: [{ id: 's1', action: { type: 'navigate', screenId: 'library' } }],
+      }],
+    };
+    const onNavigate = vi.fn();
+    const onTrace = vi.fn();
+    mount(h(DesktopPreview, { ...config, onNavigate, onTrace }));
+
+    const button = host.querySelector<HTMLElement>('[data-design-id="settings-continue"]')!;
+    act(() => {
+      button.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+    });
+
+    expect(onNavigate).toHaveBeenCalledWith('library');
+    expect(onTrace).toHaveBeenCalledWith([
+      expect.objectContaining({ ruleId: 'graph-go', event: 'click', action: 'navigate', target: 'library' }),
+    ]);
+  });
+
   it('materializes layout clones in the desktop preview without the original element', () => {
     const config = props('settings', 'desktop-windows');
     config.theme.layout = {

@@ -9,6 +9,16 @@ export const phoneAttached = signal(false);
 /** Grows on every attach (a new phone or the same one again). */
 export const phoneAttachCount = signal(0);
 
+// The active player's live snapshot, refreshed at registration and on the existing
+// phone-link cadence (post/postSoon, which the player already calls on state jumps).
+// Production flow publishers read playback.paused/finished from here; without a registered
+// player only the route transitions (started/stopped) are observable.
+export const tvPlayerState = signal<PlayerState | null>(null);
+
+function refreshPlayerState(): void {
+  tvPlayerState.value = bridge ? bridge.snapshot() : null;
+}
+
 let bridge: PlayerBridge | null = null;
 let transportOverride: Transport | null = null;
 let url: string | null = null;
@@ -39,8 +49,12 @@ export function setLinkTransport(t: Transport | null): void {
 /** The active player registers itself; returns unregister. Only one bridge at a time (last wins). */
 export function setPlayerBridge(b: PlayerBridge): () => void {
   bridge = b;
+  refreshPlayerState();
   return () => {
-    if (bridge === b) bridge = null;
+    if (bridge === b) {
+      bridge = null;
+      refreshPlayerState();
+    }
   };
 }
 
@@ -56,6 +70,7 @@ function fail(): void {
 }
 
 function post(): void {
+  refreshPlayerState();
   if (!url || inFlight) return;
   const gen = generation;
   let body: string;
@@ -126,6 +141,7 @@ export function detachPhone(): void {
 
 /** Posts now instead of waiting for the interval (after a command or a state jump). */
 export function postSoon(): void {
+  refreshPlayerState();
   if (!url || soonTimer !== null) return;
   soonTimer = setTimeout(() => {
     soonTimer = null;
