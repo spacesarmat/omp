@@ -170,7 +170,12 @@ export function DonationsPanel({
             <Field label="Порог уведомления, ₽" value={form.notifyMin} onChange={(v) => edit({ notifyMin: v })} />
           </div>
           <div className="space-y-3 rounded-md border p-3">
-            <p className="text-sm">Автокурсы. Сумма доната по-прежнему в рублях. Нет свежего курса - кнопка способа скрыта.</p>
+            <p className="text-sm">Автокурс - общий для подписок, доп. устройств и донатов: все суммы считаются от рублёвой базы (вкладка «Настройки»). Донат без свежего курса скрывает способ, подписка берёт запасной ручной тариф.</p>
+            {rates?.sub ? (
+              <p className="text-xs text-muted-foreground">
+                Подписка сейчас: {rates.sub.stars}★ / {rates.sub.usdt} USDT / {rates.sub.ton} TON / {rates.sub.btc} BTC; доп. устройство {rates.sub.starsExtra}★.
+              </p>
+            ) : null}
             <div className="grid gap-3 md:grid-cols-3">
               <Field label="USD за 1 звезду" value={form.starUsd} onChange={(v) => edit({ starUsd: v })} />
               <Field label="Наценка, %" value={form.markupPercent} onChange={(v) => edit({ markupPercent: v })} />

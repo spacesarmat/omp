@@ -30,6 +30,7 @@ export type DonateRates = {
   markupPercent: number;
   starUsd: number;
   rows: { star: DonateRateRow; usdt: DonateRateRow; ton: DonateRateRow; btc: DonateRateRow };
+  sub: { stars: number; starsExtra: number; usdt: string; ton: string; btc: string };
 };
 
 export type PaymentRow = {
