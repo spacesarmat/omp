@@ -8,10 +8,14 @@
 // When a bitmagnet source is passed, hashes left without a tracker measurement (samples = 0, the
 // tracker-less magnets) also get its DHT-derived counts as an estimate in the answer only: never
 // live, never verified, never stored - seed_probes keeps tracker-verified measurements alone.
+// A crowd source (phase 3, seedCrowd.mjs) then offers the devices' own swarm reports for the same
+// hashes: a fresh median of >= 2 devices wins over bitmagnet, a stale one keeps it. Same rules -
+// response-only, never live/verified, never stored, bounded by what is left of the request budget.
 // The background refresh of popular hashes lives in seedRefresh.mjs: one hash a minute, same gate.
 import { isIP } from 'node:net';
 import { isPublicAddress } from './monitorHttp.mjs';
 import { BITMAGNET_TIMEOUT_MS, mergeBitmagnetCounts } from './bitmagnetSource.mjs';
+import { CROWD_MIN_LEFT_MS, CROWD_WAIT_MS, mergeCrowdCounts } from './seedCrowd.mjs';
 
 export const SEED_TOP_N = 30;
 export const SEED_MAX_TRACKERS = 2;
@@ -870,6 +874,9 @@ async function runDhtBatch(dht, hashes, deadline, cap) {
  * tracker measurement; it never writes to the cache and never sets live/verified. Its wait is
  * bounded by `budgetMs` (the whole-request budget, default SEED_CHECK_BUDGET_MS) minus the time
  * scrape/DHT already spent, so a slow source cannot push the answer past the app's timeout.
+ * An optional `crowd` source (same shape) then offers the devices' swarm aggregates for the same
+ * hashes: a fresh median of >= 2 devices replaces the bitmagnet estimate, a stale one keeps it.
+ * Same budget rule, same response-only policy.
  */
 export async function runSeedCheck(opts) {
   const o = opts || {};
@@ -1027,8 +1034,54 @@ export async function runSeedCheck(opts) {
       }
     }
   }
+  // Crowd estimates (phase 3) for the same hashes, after bitmagnet: the devices' own swarm reports,
+  // aggregated to a median of >= 2 distinct devices. mergeCrowdCounts applies only a fresh aggregate
+  // (<= 6 h), so a fresh crowd estimate wins over the bitmagnet answer and a stale or absent one keeps
+  // it. Tracker-verified rows (samples > 0) are never offered here. Response-only: nothing is saved,
+  // live/verified are never set, and the wait is bounded by what is left of the whole-request budget.
+  let crowdApplied = 0;
+  if (o.crowd && typeof o.crowd.fetchCounts === 'function') {
+    const crowdWanted = [];
+    const crowdSeen = Object.create(null);
+    for (let i = 0; i < itemsOut.length; i++) {
+      const it = itemsOut[i];
+      if (it.samples === 0 && !crowdSeen[it.infohash]) {
+        crowdSeen[it.infohash] = 1;
+        crowdWanted.push(it.infohash);
+      }
+    }
+    if (crowdWanted.length) {
+      const budgetMs = typeof o.budgetMs === 'number' && o.budgetMs > 0 ? o.budgetMs : SEED_CHECK_BUDGET_MS;
+      const left = budgetMs - (nowFn() - now);
+      if (left > CROWD_MIN_LEFT_MS) {
+        const waitMs = Math.min(CROWD_WAIT_MS, left);
+        let crowdRows = new Map();
+        try {
+          crowdRows = await Promise.race([
+            Promise.resolve().then(() => o.crowd.fetchCounts(crowdWanted)),
+            delay(waitMs).then(() => new Map()),
+          ]);
+        } catch (e) {
+          crowdRows = new Map();
+        }
+        if (crowdRows && typeof crowdRows.get === 'function' && crowdRows.size) {
+          const crowdNow = nowFn();
+          for (let i = 0; i < itemsOut.length; i++) {
+            const it = itemsOut[i];
+            if (it.samples !== 0) continue;
+            const row = crowdRows.get(it.infohash);
+            if (!row) continue;
+            const merged = mergeCrowdCounts(it, row, { now: () => crowdNow });
+            if (merged.source !== 'crowd') continue;
+            itemsOut[i] = publicItem(it.infohash, merged, it.cached);
+            crowdApplied += 1;
+          }
+        }
+      }
+    }
+  }
   return {
     items: itemsOut,
-    stats: { asked: items.length, cache: fresh.length, live, dht: dhtUseful, bitmagnet: bmApplied },
+    stats: { asked: items.length, cache: fresh.length, live, dht: dhtUseful, bitmagnet: bmApplied, crowd: crowdApplied },
   };
 }
