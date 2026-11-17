@@ -415,8 +415,15 @@ describe('CIS language packs completeness', () => {
         expect(typeof raw === 'string' && raw.trim() !== '', code + ' string ' + id).toBe(true);
         expect(variablesIn(raw).sort(), code + ' string ' + id).toEqual(variablesIn(stringRow(id).ru).sort());
       }
-      const sampleKeys = Object.keys(sampleVars(templateById('cabinet.home')!, ''));
-      for (const key of sampleKeys) expect(String(pack.samples[key] || '').trim(), code + ' sample ' + key).not.toBe('');
+      for (const key of Object.keys(pack.samples)) expect(String(pack.samples[key] || '').trim(), code + ' sample ' + key).not.toBe('');
+      for (const row of CATALOG) {
+        const sv = sampleVars(row, code);
+        const ru = sampleVars(row, '');
+        for (const key of Object.keys(ru)) {
+          if (String(ru[key] ?? '').trim() === '') continue;
+          expect(String(sv[key] ?? '').trim(), code + ' preview ' + row.id + ' ' + key).not.toBe('');
+        }
+      }
     }
   });
 
