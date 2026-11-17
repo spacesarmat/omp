@@ -32,8 +32,8 @@ export const COINGECKO_URL = 'https://api.coingecko.com/api/v3/simple/price?ids=
 export const CBR_URL = 'https://www.cbr-xml-daily.ru/daily_json.js';
 
 const PAY_HOSTS = new Set(['https://pay.crypt.bot', 'https://testnet-pay.crypt.bot']);
-/** After the coins are priced, wait this long for the CBR file, then use the USDT dollar. */
-const CBR_GRACE_MS = 250;
+/** After the coins are priced, wait this long for Crypto Pay and the CBR file, then use what arrived. */
+const CBR_GRACE_MS = 800;
 const BOUNDS = {
   usdt: [10, 10000],
   ton: [0.1, 1e6],

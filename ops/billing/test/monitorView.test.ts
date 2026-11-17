@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildView, DEFAULT_PREFS, FILTER_TEXT, groupItems, itemState, yellowText, loadPrefs, matchesFilter, matchesQuery, PREFS_KEY, savePrefs, sortItems, type MonitorCheck, type MonitorPrefs } from '../admin/src/lib/monitorView.ts';
+import { buildView, DEFAULT_PREFS, FILTER_TEXT, groupItems, itemState, monitorDetailText, yellowText, loadPrefs, matchesFilter, matchesQuery, PREFS_KEY, savePrefs, sortItems, type MonitorCheck, type MonitorPrefs } from '../admin/src/lib/monitorView.ts';
 
 function c(id: string, group: string, ok: boolean | null, extra: Partial<MonitorCheck> = {}): MonitorCheck {
   return { id, group, name: id, path: '', ok, detail: ok === false ? 'таймаут' : 'ок', ms: 10, at: 1000, alert: true, history: '', uptime: null, ...extra };
@@ -129,5 +129,15 @@ describe('monitor tab view', () => {
     expect(g).toMatchObject({ total: 2, okCount: 2, warned: 1, failed: 0, folded: true });
     expect([1, 2, 5, 11, 21, 22].map(yellowText)).toEqual(['1 жёлтая', '2 жёлтые', '5 жёлтых', '11 жёлтых', '21 жёлтая', '22 жёлтые']);
     expect(loadPrefs({ getItem: () => JSON.stringify({ filter: 'code' }), setItem: () => {} }).filter).toBe('code');
+  });
+
+  it('detail text keeps the result and the raw check', () => {
+    const row = c('postgres', 'infra', false, { name: 'Postgres', detail: 'нет связи', context: 'timeout', ms: 40, path: 'direct', target: 'db' });
+    const text = monitorDetailText(row);
+    expect(text).toContain('Postgres');
+    expect(text).toContain('статус: ошибка');
+    expect(text).toContain('результат: нет связи');
+    expect(text).toContain('контекст: timeout');
+    expect(text).toContain('"id": "postgres"');
   });
 });
