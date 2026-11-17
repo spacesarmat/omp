@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   POPULAR_HITS,
   POPULAR_SEEDS,
+  REFRESH_BACKOFF_MS,
   TTL_MISS_MS,
   TTL_POPULAR_MS,
   TTL_RARE_MS,
@@ -10,6 +11,7 @@ import {
   parseHttpScrape,
   publicTrackers,
   runSeedCheck,
+  storedTrackers,
   trackerKey,
 } from '../src/seedProbe.mjs';
 import { itemFromCache, refreshDue, startSeedRefresh } from '../src/seedRefresh.mjs';
@@ -97,13 +99,65 @@ describe('completed (snatched) count', () => {
     const cached = await runSeedCheck({ items, cache, now: () => half, transport, deadlineMs: 1000 });
     expect(cached.items[0].cached).toBe(true);
     expect(calls).toBe(1);
-    // the refresh forces the scrape and updates the row in place
+    // the refresh forces the scrape and updates the row in place, stamping the attempt
     const forced = await runSeedCheck({ items, cache, now: () => half, transport, force: true, deadlineMs: 1000, timeoutMs: 500 });
     expect(forced.items[0]).toMatchObject({ cached: false, live: true, seeders: 20 });
     expect(calls).toBe(2);
     const rows = await cache.get([{ infohash: HASH, trackerKey: 'tracker.example' }]);
     expect(rows).toHaveLength(1);
     expect(rows[0].measuredAt).toBe(half);
+    expect(rows[0].refreshedAt).toBe(half);
+    // an endpoint save (no force) keeps the previous background stamp
+    const later = half + TTL_POPULAR_MS + 1000;
+    await runSeedCheck({ items, cache, now: () => later, transport, deadlineMs: 1000, timeoutMs: 500 });
+    const endpoint = (await cache.get([{ infohash: HASH, trackerKey: 'tracker.example' }]))[0];
+    expect(endpoint.measuredAt).toBe(later);
+    expect(endpoint.refreshedAt).toBe(half);
+  });
+
+  it('a failing hash backs off and the queue moves on to the next due hash', async () => {
+    const cache = createMemorySeedCache();
+    // scrapeJobs measures its deadline against the real clock: the attempt start must be a real timestamp
+    const now = Date.now();
+    const bad = { http: async () => null, udp: async () => null };
+    const a = [{ infohash: HASH, trackers: ['http://dead.example/announce'] }];
+    const stale = now - TTL_POPULAR_MS;
+    const row = (infohash: string, host: string) => ({
+      infohash,
+      trackerKey: host,
+      seeders: 25,
+      leechers: 1,
+      completed: 0,
+      seedersMax: 25,
+      seedersMedian: 25,
+      peers: 0,
+      dhtSeeds: 0,
+      peerEstimate: 0,
+      samples: 1,
+      measuredAt: stale,
+      live: true,
+      trackers: ['http://' + host + '/announce'],
+    });
+    // both rows are popular and stale; HASH is the most asked
+    await cache.save([row(HASH, 'dead.example')]);
+    await cache.save([row(HASH_B, 'live.example')]);
+    await cache.touch([{ infohash: HASH, trackerKey: 'dead.example' }], now);
+    await cache.touch([{ infohash: HASH, trackerKey: 'dead.example' }], now);
+    await cache.touch([{ infohash: HASH_B, trackerKey: 'live.example' }], now);
+    const due = (await cache.get([{ infohash: HASH, trackerKey: 'dead.example' }, { infohash: HASH_B, trackerKey: 'live.example' }]))
+      .filter((r) => refreshDue(r, now))
+      .sort((x, y) => y.hits - x.hits);
+    expect(due.map((r) => r.infohash)).toEqual([HASH, HASH_B]);
+    // the top row's trackers are down: the attempt fails, counts stay, the stamp backs it off
+    await runSeedCheck({ items: a, cache, now: () => now, transport: bad, force: true, deadlineMs: 1000, timeoutMs: 500 });
+    const next = (await cache.get([{ infohash: HASH, trackerKey: 'dead.example' }, { infohash: HASH_B, trackerKey: 'live.example' }]))
+      .filter((r) => refreshDue(r, now + 1000))
+      .sort((x, y) => y.hits - x.hits);
+    expect(next.map((r) => r.infohash)).toEqual([HASH_B]);
+    expect(next[0]).toMatchObject({ seeders: 25, live: true });
+    // the backed-off row keeps its working measurement
+    const kept = (await cache.get([{ infohash: HASH, trackerKey: 'dead.example' }]))[0];
+    expect(kept).toMatchObject({ seeders: 25, live: true, measuredAt: now - TTL_POPULAR_MS, refreshedAt: now });
   });
 
   it('a failed forced refresh keeps the working row; a real zero answer updates it', async () => {
@@ -115,18 +169,25 @@ describe('completed (snatched) count', () => {
     await runSeedCheck({ items, cache, now: () => now, transport: good, deadlineMs: 1000, timeoutMs: 500 });
     const before = (await cache.get(key))[0];
     expect(before).toMatchObject({ seeders: 20, live: true, hits: 1 });
-    // every tracker fails on the forced refresh: the stored measurement must survive untouched
+    // every tracker fails on the forced refresh: the stored measurement must survive untouched,
+    // but the attempt is stamped so the next tick takes another hash
     const bad = { http: async () => null, udp: async () => null };
     const half = now + TTL_POPULAR_MS / 2 + 1000;
     const out = await runSeedCheck({ items, cache, now: () => half, transport: bad, force: true, deadlineMs: 1000, timeoutMs: 500 });
     expect(out.stats.live).toBe(0);
     const after = (await cache.get(key))[0];
-    expect(after).toEqual(before);
+    expect(after).toMatchObject({ seeders: 20, leechers: 2, completed: 500, live: true, measuredAt: now, hits: 1, samples: 1 });
+    expect(after.refreshedAt).toBe(half);
+    // the backed-off row is not due; another due row without a stamp is
+    expect(refreshDue(after, half + 1000)).toBe(false);
+    expect(refreshDue(after, half + REFRESH_BACKOFF_MS)).toBe(true);
+    const other = { infohash: HASH_B, trackerKey: 'other.example', seeders: 30, hits: 4, live: true, measuredAt: now, trackers: ['http://other.example/announce'] };
+    expect(refreshDue(other, half + 1000)).toBe(true);
     // a tracker that answered with zeros is a real measurement (a dead torrent): it saves
     const zero = { http: async () => ({ seeders: 0, leechers: 0 }), udp: async () => null };
-    await runSeedCheck({ items, cache, now: () => half + 1000, transport: zero, force: true, deadlineMs: 1000, timeoutMs: 500 });
+    await runSeedCheck({ items, cache, now: () => half + REFRESH_BACKOFF_MS + 1000, transport: zero, force: true, deadlineMs: 1000, timeoutMs: 500 });
     const dead = (await cache.get(key))[0];
-    expect(dead).toMatchObject({ seeders: 0, leechers: 0, live: true, samples: 1, measuredAt: half + 1000, hits: 2 });
+    expect(dead).toMatchObject({ seeders: 0, leechers: 0, live: true, samples: 1, measuredAt: half + REFRESH_BACKOFF_MS + 1000, hits: 2, refreshedAt: half + REFRESH_BACKOFF_MS + 1000 });
     // without force a miss still records the empty row, as the endpoint always did
     const missCache = createMemorySeedCache();
     await runSeedCheck({ items, cache: missCache, now: () => now, transport: bad, deadlineMs: 1000, timeoutMs: 500 });
@@ -207,13 +268,24 @@ describe('publicTrackers', () => {
     expect(calls).toHaveLength(2);
     expect(calls[0]).toContain('private.example/secret/scrape?passkey=abc');
     expect(calls[1]).toContain('clean.example/scrape');
-    // the credential-bearing path is not stored; the clean address is
+    // a mixed list cannot rebuild the row's tracker key: nothing is stored, selection skips the row
     const rows = await cache.get([{ infohash: HASH, trackerKey: trackerKey(items[0]) }]);
-    expect(rows[0].trackers).toEqual(['http://clean.example/announce']);
+    expect(rows[0].trackers).toEqual([]);
     expect(JSON.stringify(rows[0])).not.toContain('secret');
     expect(JSON.stringify(rows[0])).not.toContain('passkey');
-    // the refresh cannot rebuild this row in place (the key differs): it skips it, not overwrites
     expect(itemFromCache(rows[0])).toBe(null);
+  });
+});
+
+describe('storedTrackers', () => {
+  it('stores a clean list, refuses a mixed credential list and a credential-only list', () => {
+    const clean = { infohash: HASH, trackers: ['http://one.example/announce?passkey=x', 'udp://two.example:6969/announce'] };
+    expect(storedTrackers(clean)).toEqual(['http://one.example/announce', 'udp://two.example:6969/announce']);
+    const mixed = { infohash: HASH, trackers: ['https://one.example/secret/announce', 'http://two.example/announce'] };
+    expect(storedTrackers(mixed)).toEqual([]);
+    const credential = { infohash: HASH, trackers: ['https://one.example/secret/announce'] };
+    expect(storedTrackers(credential)).toEqual([]);
+    expect(storedTrackers({ infohash: HASH, trackers: [] })).toEqual([]);
   });
 });
 
@@ -236,6 +308,18 @@ describe('refresh selection', () => {
     expect(refreshDue(miss, now + TTL_MISS_MS)).toBe(false);
     expect(refreshDue(null, now)).toBe(false);
     expect(refreshDue({ seeders: 40, hits: 5 }, now)).toBe(false);
+  });
+
+  it('a recent attempt - success or failure - backs the row off, the next due hash is not blocked', () => {
+    const tried = { infohash: HASH, live: true, seeders: 40, hits: 9, measuredAt: now - TTL_POPULAR_MS, refreshedAt: now };
+    expect(refreshDue(tried, now)).toBe(false);
+    expect(refreshDue(tried, now + REFRESH_BACKOFF_MS - 1)).toBe(false);
+    expect(refreshDue(tried, now + REFRESH_BACKOFF_MS)).toBe(true);
+    // an old stamp (or none) does not block
+    expect(refreshDue({ ...tried, refreshedAt: now - REFRESH_BACKOFF_MS }, now)).toBe(true);
+    expect(refreshDue({ ...tried, refreshedAt: 0 }, now)).toBe(true);
+    const other = { infohash: HASH_B, live: true, seeders: 40, hits: 5, measuredAt: now - TTL_POPULAR_MS };
+    expect(refreshDue(other, now)).toBe(true);
   });
 
   it('rebuilds the item from the cached trackers, and refuses a row it cannot update in place', () => {

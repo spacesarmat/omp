@@ -3,12 +3,12 @@
 // completed is the snatched count (0 when no tracker reported it). trackers holds public announce
 // addresses for the background refresh (migration 015): no query, no passkey. They are never logged.
 
-import { POPULAR_HITS, POPULAR_SEEDS, TTL_POPULAR_MS } from '../../seedProbe.mjs';
+import { POPULAR_HITS, POPULAR_SEEDS, REFRESH_BACKOFF_MS, TTL_POPULAR_MS } from '../../seedProbe.mjs';
 
 const KEEP_MS = 7 * 24 * 60 * 60 * 1000;
 
 const COLUMNS =
-  's.infohash, s.tracker_key, s.seeders, s.leechers, s.completed, s.seeders_max, s.seeders_median, s.peers, s.dht_seeds, s.peer_estimate, s.dht_estimate, s.samples, s.measured_at, s.hits, s.last_hit_at, s.live, s.trackers';
+  's.infohash, s.tracker_key, s.seeders, s.leechers, s.completed, s.seeders_max, s.seeders_median, s.peers, s.dht_seeds, s.peer_estimate, s.dht_estimate, s.samples, s.measured_at, s.hits, s.last_hit_at, s.live, s.trackers, s.refreshed_at';
 
 function num(v) {
   const n = Math.floor(Number(v) || 0);
@@ -38,6 +38,7 @@ function rowOf(r) {
     lastHitAt: num(r.last_hit_at),
     live: r.live === true,
     trackers: trackersOf(r.trackers),
+    refreshedAt: num(r.refreshed_at),
   };
 }
 
@@ -64,7 +65,10 @@ export async function loadSeedProbes(query, keys) {
 
 /**
  * One popular row past half its TTL, most asked first. Only rows with stored announce addresses:
- * the refresh re-scrapes those trackers. A trackerless row is left for the DHT phase.
+ * the refresh re-scrapes those trackers, and a non-empty stored list rebuilds the row's tracker key
+ * (storedTrackers refuses a mixed credential list), so the attempt updates this row in place.
+ * A row tried within REFRESH_BACKOFF_MS is skipped - success or failure - so one dead tracker
+ * cannot block the queue: the next tick takes another hash. Trackerless rows are left for the DHT phase.
  */
 export async function listPopularSeedProbes(query, now, limit) {
   const res = await query(
@@ -72,12 +76,25 @@ export async function listPopularSeedProbes(query, now, limit) {
       ' FROM seed_probes s' +
       ' WHERE (s.hits >= $1 OR s.seeders >= $2 OR s.dht_seeds >= $2)' +
       ' AND s.measured_at <= $3' +
+      ' AND (s.refreshed_at IS NULL OR s.refreshed_at <= $4)' +
       ' AND s.trackers IS NOT NULL AND jsonb_typeof(s.trackers) = \'array\' AND jsonb_array_length(s.trackers) > 0' +
       ' ORDER BY s.hits DESC, s.last_hit_at DESC' +
-      ' LIMIT $4',
-    [POPULAR_HITS, POPULAR_SEEDS, now - Math.floor(TTL_POPULAR_MS / 2), Math.max(1, Math.floor(limit || 1))],
+      ' LIMIT $5',
+    [POPULAR_HITS, POPULAR_SEEDS, now - Math.floor(TTL_POPULAR_MS / 2), now - REFRESH_BACKOFF_MS, Math.max(1, Math.floor(limit || 1))],
   );
   return res.rows.map(rowOf);
+}
+
+/** Stamp a background attempt without touching the measurement: counts, live, measured_at, hits stay. */
+export async function noteSeedRefresh(query, keys, now) {
+  const k = keysOf(keys);
+  if (!k.hashes.length) return;
+  await query(
+    'UPDATE seed_probes AS s SET refreshed_at = $3' +
+      ' FROM unnest($1::text[], $2::text[]) AS k(infohash, tracker_key)' +
+      ' WHERE s.infohash = k.infohash AND s.tracker_key = k.tracker_key',
+    [k.hashes, k.trackers, now],
+  );
 }
 
 export async function touchSeedProbes(query, keys, now) {
@@ -95,12 +112,14 @@ export async function saveSeedProbes(query, list, now) {
   for (let i = 0; i < list.length; i++) {
     const row = list[i];
     await query(
-      'INSERT INTO seed_probes (infohash, tracker_key, seeders, leechers, completed, seeders_max, seeders_median, peers, dht_seeds, peer_estimate, dht_estimate, samples, measured_at, hits, last_hit_at, live, trackers)' +
-        ' VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 1, $13, $14, $15)' +
+      'INSERT INTO seed_probes (infohash, tracker_key, seeders, leechers, completed, seeders_max, seeders_median, peers, dht_seeds, peer_estimate, dht_estimate, samples, measured_at, hits, last_hit_at, live, trackers, refreshed_at)' +
+        ' VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 1, $13, $14, $15, $16)' +
         ' ON CONFLICT (infohash, tracker_key) DO UPDATE SET seeders = EXCLUDED.seeders, leechers = EXCLUDED.leechers,' +
         ' completed = EXCLUDED.completed, seeders_max = EXCLUDED.seeders_max, seeders_median = EXCLUDED.seeders_median, peers = EXCLUDED.peers,' +
         ' dht_seeds = EXCLUDED.dht_seeds, peer_estimate = EXCLUDED.peer_estimate, dht_estimate = EXCLUDED.dht_estimate,' +
         ' samples = EXCLUDED.samples, measured_at = EXCLUDED.measured_at, live = EXCLUDED.live, trackers = EXCLUDED.trackers,' +
+        // an endpoint save carries no attempt stamp: the previous background stamp stays
+        ' refreshed_at = COALESCE(EXCLUDED.refreshed_at, seed_probes.refreshed_at),' +
         ' hits = seed_probes.hits + 1, last_hit_at = EXCLUDED.measured_at',
       [
         row.infohash,
@@ -118,6 +137,7 @@ export async function saveSeedProbes(query, list, now) {
         num(row.measuredAt),
         !!row.live,
         JSON.stringify(trackersOf(row.trackers)),
+        row.refreshedAt ? num(row.refreshedAt) : null,
       ],
     );
   }
@@ -129,6 +149,7 @@ export function createPgSeedCache(store) {
   return {
     get: (hashes) => loadSeedProbes(query, hashes),
     touch: (hashes, now) => touchSeedProbes(query, hashes, now),
+    noteRefresh: (hashes, now) => noteSeedRefresh(query, hashes, now),
     save: (list) => saveSeedProbes(query, list, Date.now()),
   };
 }

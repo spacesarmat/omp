@@ -771,10 +771,13 @@ CREATE INDEX referral_accruals_ord ON referral_accruals (ord);
     version: '015_seed_completed_trackers',
     sql: `
 -- Seed probes: the snatched count and the public announce addresses for the background refresh.
--- completed is null on old rows (read as 0). trackers is a jsonb array of public announce URLs
--- without query or passkey; null on old rows, which the refresh skips. Additive, no data rewrite.
+-- completed is null on old rows (read as 0). trackers is a jsonb array of credential-free announce
+-- URLs (standard path only, no query or passkey); null on old rows, which the refresh skips.
+-- refreshed_at stamps every background attempt (success or failure) so selection backs off a row
+-- for REFRESH_BACKOFF_MS and one dead tracker cannot block the queue. Additive, no data rewrite.
 ALTER TABLE seed_probes ADD COLUMN completed bigint;
 ALTER TABLE seed_probes ADD COLUMN trackers jsonb;
+ALTER TABLE seed_probes ADD COLUMN refreshed_at bigint;
 `,
   },
 ];

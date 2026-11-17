@@ -21,6 +21,12 @@ export const SEED_DEVICE_WINDOW_MS = 60 * 1000;
 export const TTL_POPULAR_MS = 20 * 60 * 1000;
 export const TTL_RARE_MS = 4 * 60 * 60 * 1000;
 export const TTL_MISS_MS = 10 * 60 * 1000;
+/**
+ * Every background attempt (success or failure) stamps refreshed_at; selection skips the row for
+ * this long afterwards. Half the popular TTL - the same cadence as the due threshold - so a dead
+ * tracker cannot block the queue: while one row backs off, the next tick takes another hash.
+ */
+export const REFRESH_BACKOFF_MS = Math.floor(TTL_POPULAR_MS / 2);
 export const POPULAR_SEEDS = 15;
 export const POPULAR_HITS = 3;
 export const COUNT_CAP = 1000000;
@@ -349,6 +355,19 @@ export function publicTrackers(item) {
   return out;
 }
 
+/**
+ * Trackers safe to store for a refresh: credential-free, and only when they rebuild the same
+ * tracker key as the original list. A mixed list (a credential-path tracker alongside clean ones)
+ * would refresh under a different key and never update this row, so nothing is stored and the
+ * selection skips it; the row keeps being checked when a device asks with the full addresses.
+ */
+export function storedTrackers(item) {
+  const list = publicTrackers(item);
+  if (!list.length) return [];
+  const hash = String((item && item.infohash) || '').toLowerCase();
+  return trackerKey({ infohash: hash, trackers: list }) === trackerKey(item) ? list : [];
+}
+
 export function probeKey(infohash, key) {
   return String(infohash || '') + '\n' + String(key || '');
 }
@@ -491,6 +510,14 @@ export function createMemorySeedCache() {
         row.lastHitAt = now;
       }
     },
+    // A background attempt stamp: selection backs off, the measurement itself is untouched.
+    async noteRefresh(keys, now) {
+      const list = Array.isArray(keys) ? keys : [];
+      for (let i = 0; i < list.length; i++) {
+        const row = rows.get(idOf(list[i]));
+        if (row) row.refreshedAt = now;
+      }
+    },
     async save(list) {
       for (let i = 0; i < list.length; i++) {
         const row = list[i];
@@ -514,6 +541,7 @@ export function createMemorySeedCache() {
           hits: (prev ? prev.hits : 0) + 1,
           lastHitAt: row.measuredAt,
           trackers: Array.isArray(row.trackers) ? row.trackers.slice() : [],
+          refreshedAt: row.refreshedAt || (prev ? prev.refreshedAt : 0) || 0,
         });
       }
     },
@@ -743,7 +771,13 @@ export async function runSeedCheck(opts) {
     // A forced refresh with no tracker answer must not erase a working measurement: the stored
     // row keeps its counts, live and measured_at. A real zero (samples > 0, a dead torrent) saves.
     // The endpoint never forces, so a miss there still records the 10-minute TTL row as before.
-    if (o.force && merged.samples === 0) continue;
+    // The attempt is stamped either way: selection backs off this row and takes another hash next tick.
+    if (o.force && merged.samples === 0) {
+      if (cache && typeof cache.noteRefresh === 'function') {
+        await cache.noteRefresh([{ infohash: hash, trackerKey: trackerKey(stale[i]) }], measuredAt);
+      }
+      continue;
+    }
     saved.push({
       infohash: hash,
       trackerKey: trackerKey(stale[i]),
@@ -759,8 +793,10 @@ export async function runSeedCheck(opts) {
       samples: merged.samples,
       measuredAt: merged.measuredAt,
       live: merged.live,
-      // Credential-free announce addresses for the refresh: standard path only, no query, no passkey, never logged.
-      trackers: publicTrackers(stale[i]),
+      // Credential-free announce addresses for the refresh: standard path only, no query, no passkey,
+      // and only when they rebuild this row's tracker key. Never logged.
+      trackers: storedTrackers(stale[i]),
+      refreshedAt: o.force ? merged.measuredAt : undefined,
     });
   }
   if (cache && saved.length) await cache.save(saved);

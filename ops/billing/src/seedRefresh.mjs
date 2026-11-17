@@ -3,11 +3,15 @@
 // per-host limits still hold. Selection is pure (refreshDue, itemFromCache) and testable without
 // a clock or a network. The cache row carries the public announce addresses (migration 015);
 // tracker URLs are never logged: the tick result and the log line carry counts only.
-import { POPULAR_HITS, POPULAR_SEEDS, publicTrackers, trackerKey, ttlMs } from './seedProbe.mjs';
+import { POPULAR_HITS, POPULAR_SEEDS, REFRESH_BACKOFF_MS, publicTrackers, trackerKey, ttlMs } from './seedProbe.mjs';
 
-/** A popular row (many seeds, or asked often) past half its TTL is due for a re-scrape. */
+/**
+ * A popular row (many seeds, or asked often) past half its TTL is due for a re-scrape.
+ * A row already tried within the backoff window is not due: the queue moves on to another hash.
+ */
 export function refreshDue(row, now) {
   if (!row || typeof row.measuredAt !== 'number' || !(row.measuredAt > 0)) return false;
+  if ((row.refreshedAt || 0) > 0 && now - row.refreshedAt < REFRESH_BACKOFF_MS) return false;
   const popular =
     (row.seeders || 0) >= POPULAR_SEEDS || (row.dhtSeeds || 0) >= POPULAR_SEEDS || (row.hits || 0) >= POPULAR_HITS;
   if (!popular) return false;
