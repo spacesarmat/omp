@@ -6,11 +6,13 @@ The English translation covers the latest versions only; the full history (in Ru
 
 ## Unreleased
 
+- [tech] Donation rates are fetched: USDT, TON and BTC from Crypto Pay (CoinGecko fallback), a star as 0.013 USD times the CBR dollar. The admin can leave auto on, type a manual rate, set a markup and a max age. A zero or too-old rate hides that method. Billing was not deployed
 - [tech] The local editor became a visual logic editor: a node canvas with triggers, conditions, actions and variables, output-input links, multi-select with a clipboard, five flow templates and a step-by-step debugger with mocks and trace comparison. Node editing is available on the desktop target and the settings page only
 - [tech] Logic flows pass validation (cycles, unreachable nodes, value types) and export together with the layout: the scoped diff shows changed rules, nodes, edges and variables. Production apps apply logic only after an explicit export through the generated module design/generated/flow.ts; autosave and preview do not change production
 - [tech] Cache nodes: POST /admin/cache/* requires the full role like other admin mutations - a read-only session can no longer change settings, nodes or node tokens
 - [tech] App Links: assetlinks.json no longer lists the public debug fingerprint for the release package - a fake APK cannot pass autoVerify and intercept /pair and /t/ links. Debug builds use the .test package
 - [tech] Admin login: status polling and the CLI link no longer open a database write on every request - only a confirmed token writes. The three public login endpoints get a per-IP limit, and the disabled password login no longer audits every attempt. An unauthenticated flood can no longer stall payments and activations
+- [tech] Donate: the wait window for Crypto Pay and CBR rates after CoinGecko is raised from 250 to 800 ms - the primary source more often prices the quote, with less CoinGecko fallback until the next refresh
 - [tech] Admin: NUC logs, a source check, the DHT probe, a crash report and monitor details open in a window over the page. A log has a filter, refresh and copy
 
 ## 0.30.1-beta.6

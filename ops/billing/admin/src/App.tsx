@@ -379,7 +379,7 @@ export function App() {
         </TabsContent>
         <TabsContent value="ads">{tab === 'ads' ? <AdsPanel csrf={d.csrf || ''} /> : null}</TabsContent>
         <TabsContent value="donations">
-          <DonationsPanel settings={d.settings?.donate} report={d.donations} run={run} />
+          <DonationsPanel settings={d.settings?.donate} rates={d.settings?.rates} report={d.donations} run={run} />
         </TabsContent>
         <TabsContent value="referral">
           <ReferralPanel
