@@ -2,6 +2,10 @@
 
 <!-- Markers [phone] [tv] [lg] [atv] [tech]: see docs/changelog-markers.md. [tech] bullets are technical or admin-only and never reach users. -->
 
+## Не выпущено
+
+- [tech] bitmagnet на NUC оставлен навсегда с DHT-краулером: compose в ops/vps/bitmagnet зеркалит сервер (--keys=dht_crawler, порты 3334 tcp+udp, TMDB_API_KEY), README и тест обновлены под новую политику. Web 3333 по-прежнему только на BITMAGNET_BIND, не через Caddy; том Postgres ~8 GB на 1 млн торрентов
+
 ## 0.30.1-beta.7
 
 - [phone] Приглашение: если рефереру начислен баланс, экран показывает сумму

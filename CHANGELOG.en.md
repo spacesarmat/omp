@@ -4,6 +4,10 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## Unreleased
+
+- [tech] bitmagnet on the NUC stays permanently with the DHT crawler: the compose in ops/vps/bitmagnet mirrors the server (--keys=dht_crawler, ports 3334 tcp+udp, TMDB_API_KEY), README and test updated for the new policy. Web 3333 still binds only to BITMAGNET_BIND, never through Caddy; the Postgres volume is ~8 GB per 1 million torrents
+
 ## 0.30.1-beta.7
 
 - [phone] Invite: a balance credit shows the amount
