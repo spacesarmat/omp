@@ -808,6 +808,9 @@ export function SettingsCard({
             ) : null}
             {group.title === 'Крипта' ? (
               <div className="space-y-2 md:col-span-2">
+                <p className="text-xs text-muted-foreground">
+                  Ручной курс ниже нужен подписке, если сумма в монете не задана, и донату, когда авто выключено. Автокурс доната настраивается на вкладке Донаты.
+                </p>
                 <label className="flex items-center gap-2 text-sm">
                   <input
                     type="checkbox"
