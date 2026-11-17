@@ -945,6 +945,8 @@ export const ru = {
     yesterday: 'вчера',
     seeds: { one: '{n} сид', few: '{n} сида', many: '{n} сидов' },
     leechers: { one: '{n} лич', few: '{n} лича', many: '{n} личей' },
+    /** Snatched count the tracker reported (BEP 48 downloaded). Not seeds, not peers. */
+    downloaded: { one: 'скачано {n} раз', few: 'скачано {n} раза', many: 'скачано {n} раз' },
     dhtPeers: { one: '{n} пир онлайн', few: '{n} пира онлайн', many: '{n} пиров онлайн' },
     jackettHint: 'Сайт закрыт проверкой Cloudflare? Войдите на нём через браузер (кнопка «Войти» у сайта в «Источниках поиска») или подключите его через Jackett, Prowlarr или FlareSolverr - как, в «Вопросах и ответах».',
     /** The TV search under sites behind Cloudflare: one sentence, the error itself not repeated. */

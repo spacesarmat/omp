@@ -64,6 +64,18 @@ describe('bencode scrape', () => {
     expect(parseHttpScrape(other, HASH)).toEqual({ seeders: 4, leechers: 1 });
   });
 
+  it('reads the snatched count only when asked, and keeps the pair otherwise', () => {
+    // scrapeBody carries downloaded=4: the default answer stays the seeders/leechers pair
+    expect(parseHttpScrape(scrapeBody(12, 3), HASH)).toEqual({ seeders: 12, leechers: 3 });
+    expect(parseHttpScrape(scrapeBody(12, 3), HASH, true)).toEqual({ seeders: 12, leechers: 3, completed: 4 });
+    const noDl = 'd5:filesd20:' + hexBytes(HASH) + 'd8:completei5e10:incompletei2eeee';
+    expect(parseHttpScrape(noDl, HASH, true)).toEqual({ seeders: 5, leechers: 2 });
+    const zero = 'd5:filesd20:' + hexBytes(HASH) + 'd8:completei5e10:downloadedi0e10:incompletei2eeee';
+    expect(parseHttpScrape(zero, HASH, true)).toEqual({ seeders: 5, leechers: 2, completed: 0 });
+    const badDl = 'd5:filesd20:' + hexBytes(HASH) + 'd8:completei5e10:downloadedi-3e10:incompletei2eeee';
+    expect(parseHttpScrape(badDl, HASH, true)).toEqual({ seeders: 5, leechers: 2 });
+  });
+
   it('builds an HTTP scrape URL and keeps the passkey', () => {
     const url = httpScrapeUrl('http://retracker.local/announce?passkey=abc', HASH);
     expect(url).toBe('http://retracker.local/scrape?passkey=abc&info_hash=' + encodeInfohash(HASH));
@@ -96,6 +108,17 @@ describe('merge', () => {
       { seeders: 9, leechers: 4 },
     ];
     expect(mergeScrape(100, 50, answers)).toEqual({ seeders: 9, leechers: 4, live: true });
+  });
+
+  it('takes the snatched count from the winning tracker, and only when it sent one', () => {
+    const answers: ScrapeCounts[] = [
+      { seeders: 5, leechers: 1, completed: 100 },
+      { seeders: 9, leechers: 4, completed: 14703 },
+    ];
+    expect(mergeScrape(0, 0, answers)).toEqual({ seeders: 9, leechers: 4, live: true, completed: 14703 });
+    const silent: ScrapeCounts[] = [{ seeders: 9, leechers: 4 }];
+    expect(mergeScrape(0, 0, silent)).toEqual({ seeders: 9, leechers: 4, live: true });
+    expect(mergeScrape(0, 0, [{ seeders: 1, leechers: 0, completed: 0 }]).completed).toBe(0);
   });
 
   it('keeps the search numbers when nobody answered', () => {
@@ -154,6 +177,27 @@ describe('cache', () => {
     expect(again.get(HASH)).toEqual({ seeders: 4, leechers: 1, live: true, at: 1_000_000 });
     setNow(1_000_000);
     expect(again.get('b'.repeat(40))).toBeNull();
+  });
+
+  it('persists the snatched count as c, and reads old lists without it', () => {
+    const { cache, box } = memory();
+    cache.put(HASH, { seeders: 4, leechers: 1, completed: 14703, live: true, at: 1_000_000 });
+    const saved = JSON.parse(box['tsp.liveSeeds']);
+    expect(saved.items).toEqual([{ h: HASH, s: 4, l: 1, t: 1_000_000, c: 14703 }]);
+    const again = new LiveSeedCache(
+      { get: (k) => box[k] || null, set: (k, v) => { box[k] = v; } },
+      () => 1_000_000 + 1000,
+      10 * 60 * 1000,
+    );
+    expect(again.get(HASH)).toEqual({ seeders: 4, leechers: 1, completed: 14703, live: true, at: 1_000_000 });
+    // an old saved list (no c) still loads, without a snatched count
+    box['tsp.liveSeeds'] = JSON.stringify({ v: 1, items: [{ h: HASH, s: 4, l: 1, t: 1_000_000 }] });
+    const old = new LiveSeedCache(
+      { get: (k) => box[k] || null, set: (k, v) => { box[k] = v; } },
+      () => 1_000_000 + 1000,
+      10 * 60 * 1000,
+    );
+    expect(old.get(HASH)).toEqual({ seeders: 4, leechers: 1, live: true, at: 1_000_000 });
   });
 });
 

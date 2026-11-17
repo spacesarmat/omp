@@ -150,7 +150,7 @@ import {
   sourceEnabled,
 } from './services.mjs';
 import { DHT_PROBE_INFOHASH, DHT_WINDOW_MS, dhtConfig, dhtPerMinute, probeDhtSidecar, queryDhtPeers, validDhtPerMinute } from './dhtPeers.mjs';
-import { createPgSeedCache } from './db/pg/seedProbeSql.mjs';
+import { createPgSeedCache, listPopularSeedProbes } from './db/pg/seedProbeSql.mjs';
 import { createPlaybackStore } from './db/pg/playbackSql.mjs';
 import { parseProgressBody, parseProgressQuery } from './playbackProgress.mjs';
 import { createCacheRepo } from './db/pg/cacheNodesSql.mjs';
@@ -168,6 +168,7 @@ import { scoreOf, watchRankEnabled } from './watchRank.mjs';
 import { startWatchFollow } from './watchFollow.mjs';
 import { defaultSeedTransport } from './seedProbeNet.mjs';
 import { SEED_DEVICE_MAX, SEED_DEVICE_WINDOW_MS, createMemorySeedCache, createTrackerGate, parseSeedRequest, runSeedCheck } from './seedProbe.mjs';
+import { startSeedRefresh } from './seedRefresh.mjs';
 import { bindDhtStats, dhtStatsView, noteDhtRequest, readyDhtStats, shutdownDhtStats } from './dhtStats.mjs';
 import { openStore, toStore } from './db/index.mjs';
 import { moveSecretsOutOfDb, secretViews, withEnvSecrets } from './envSecrets.mjs';
@@ -1586,6 +1587,37 @@ export function createApp(file, fetchImpl, opts) {
   const cryptoPayRate = createRateLimit(10, 10 * 60 * 1000);
   const thanksRate = createRateLimit(60, 10 * 60 * 1000);
   const seedCacheRead = readOnly ? { get: (hashes) => seedCache.get(hashes), touch: async () => {}, save: async () => {} } : seedCache;
+  // One DHT lookup shape shared by the endpoint and the background refresh. Null when the sidecar is off.
+  const seedDht = (cfg) =>
+    cfg.enabled
+      ? async (hash) => {
+        const found = await queryDhtPeers(cfg, hash, net);
+        if (found.status !== 200 || !found.body) return 0;
+        return {
+          peers: found.body.peers,
+          seedsEstimate: found.body.seedsEstimate,
+          peerEstimate: found.body.peerEstimate,
+          estimate: found.body.estimate === true,
+        };
+      }
+      : null;
+  // Popular hashes stay fresh without a device asking: one re-scrape a minute through the same gate
+  // and transport. PG only, never read-only, and only the startup block opts in (test apps do not schedule).
+  // The timers are unref'ed and the gate is shared, so nothing else holds the process or the tracker budget.
+  if (opts && opts.seedRefresh === true && !readOnly && typeof store.query === 'function') {
+    startSeedRefresh({
+      list: async (now) => (await listPopularSeedProbes((sql, params) => store.query(sql, params), now, 1))[0] || null,
+      // force: the row is past half its TTL but still cache-fresh for the endpoint; the refresh re-scrapes it
+      check: (item) => runSeedCheck({
+        items: [item],
+        cache: seedCache,
+        gate: seedGate,
+        transport: seedTransport,
+        dht: seedDht(dhtConfig(env)),
+        force: true,
+      }),
+    });
+  }
   const reg = store.registry;
   const backups = (opts && opts.pgBackups) || null;
   // «Мониторинг»: the scheduled runner when the server passes it, else one for «Проверить сейчас» only.
@@ -3365,18 +3397,7 @@ export function createApp(file, fetchImpl, opts) {
             cache: seedCacheRead,
             gate: seedGate,
             transport: seedTransport,
-            dht: cfg.enabled
-              ? async (hash) => {
-                const found = await queryDhtPeers(cfg, hash, net);
-                if (found.status !== 200 || !found.body) return 0;
-                return {
-                  peers: found.body.peers,
-                  seedsEstimate: found.body.seedsEstimate,
-                  peerEstimate: found.body.peerEstimate,
-                  estimate: found.body.estimate === true,
-                };
-              }
-              : null,
+            dht: seedDht(cfg),
           });
           counts = out.stats;
           status = 200;
@@ -4536,7 +4557,8 @@ if (started) {
       const adminAuthMem = readOnly ? createAdminAuthMemory({ consumedPath }) : null;
       // «Мониторинг»: scheduled only on the instance that polls the bot (no doubled alerts), never read-only.
       const monitor = monitorFor(store, { env: process.env, backups: pgBackups, readOnly });
-      await listen(store, port, undefined, { readOnly, pgBackups, adminAuthMem, monitor });
+      // seedRefresh: the background re-scrape of popular hashes runs on this instance (PG, not read-only).
+      await listen(store, port, undefined, { readOnly, pgBackups, adminAuthMem, monitor, seedRefresh: true });
       // Docker stop is SIGTERM. Write the DHT counters before exit; do not wait forever.
       let dhtStopping = false;
       const stopDht = () => {

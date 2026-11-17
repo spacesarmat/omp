@@ -69,6 +69,8 @@ export interface SourceResult extends SearchResult {
   seedCheck?: 'live' | 'dht' | 'unverified';
   /** Unix ms of the server measurement. */
   seedCheckAt?: number;
+  /** Snatched count the tracker reported (BEP 48/15 downloaded). 0 or absent: nothing to show. */
+  completed?: number;
   seedersMax?: number;
   seedersMedian?: number;
   /** DHT get_peers address sample. Not a seeder count. */

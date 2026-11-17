@@ -109,6 +109,7 @@ export function fromRpcResult(r: RpcResult, handle: string): TvResult | null {
   if (hash) out.hash = hash;
   if (r.seedCheck === 'live' || r.seedCheck === 'dht' || r.seedCheck === 'unverified') out.seedCheck = r.seedCheck;
   if (typeof r.seedCheckAt === 'number' && isFinite(r.seedCheckAt)) out.seedCheckAt = r.seedCheckAt;
+  if (typeof r.completed === 'number' && isFinite(r.completed)) out.completed = r.completed;
   if (typeof r.dhtPeers === 'number' && isFinite(r.dhtPeers)) out.dhtPeers = r.dhtPeers;
   if (typeof r.dhtSeeds === 'number' && isFinite(r.dhtSeeds)) out.dhtSeeds = r.dhtSeeds;
   if (r.dhtEstimate === true) out.dhtEstimate = true;
