@@ -173,9 +173,11 @@ describe('seed_crowd storage', () => {
     expect(row.devices).toBe(4101);
     expect(row.updatedAt).toBe(now - 7 * 3_600_000);
     // 7h > the 6h trust window: the merge refuses the estimate, the previous answer stays
+    // (the base carries no estimate flag; the merge only ever sets it to true, like bitmagnet)
     const merged = mergeCrowdCounts({ seeders: 0, leechers: 0, live: false, verified: false }, row, { now: () => now });
     expect(merged.source).toBeUndefined();
-    expect(merged.estimate).toBe(false);
+    expect(merged.estimate).toBeFalsy();
+    expect(merged.live).toBe(false);
   });
 
   it('stores only the hash, the irreversible key, the counts and the timestamp', async () => {
