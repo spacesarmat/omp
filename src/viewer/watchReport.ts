@@ -328,3 +328,9 @@ export function reportPlayResult(sample: WatchSample): void {
   enqueueWatch(sample);
   flushWatch();
 }
+
+/**
+ * The shared watch-signals transport (native HTTP on Android, XHR on webOS), exposed for the
+ * additive swarm reports (swarmReport.ts). Same session/device-token gate, same endpoint.
+ */
+export { send as sendSignalBody };

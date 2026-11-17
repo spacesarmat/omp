@@ -64,7 +64,8 @@ export interface SourceResult extends SearchResult {
   hash?: string;
   /**
    * Server seed check for this search. `live`: scrape answered. `dht`: a seed estimate, not a verified
-   * count - BEP 33, or bitmagnet counts (seedSource 'bitmagnet') carried by Seed/Peer.
+   * count - BEP 33, bitmagnet counts (seedSource 'bitmagnet') or the devices' crowd median
+   * (seedSource 'crowd') carried by Seed/Peer.
    * `unverified`: the round finished and this hash was not confirmed. Absent until that round ends.
    */
   seedCheck?: 'live' | 'dht' | 'unverified';
@@ -82,7 +83,7 @@ export interface SourceResult extends SearchResult {
   dhtEstimate?: boolean;
   /** The server found no usable tracker address for this hash. */
   noTracker?: boolean;
-  /** Estimate provenance: 'bitmagnet' when Seed/Peer came from the local DHT index. Never on a live row. */
+  /** Estimate provenance: 'bitmagnet' (local DHT index) or 'crowd' (devices' swarm reports). Never on a live row. */
   seedSource?: string;
   /** Age of the estimate counts at answer time, ms. Absent for a verified scrape. */
   seedAgeMs?: number;

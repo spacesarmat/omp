@@ -8,6 +8,7 @@ import { client } from '../store/servers';
 import { torrents } from '../store/library';
 import { swarmActive } from './torrentStatus';
 import { deadRelease, type DeadSample } from './deadRelease';
+import { noteSwarmSample } from '../viewer/swarmReport';
 
 export const SWARM_POLL_MS = 4000;
 
@@ -116,7 +117,11 @@ function applyList(list: Torrent[]): void {
   if (changed) torrents.value = next;
   for (let i = 0; i < list.length; i++) {
     const t = list[i];
-    if (t && t.hash) noteSwarm(t.hash, sampleOf(t), now);
+    if (t && t.hash) {
+      noteSwarm(t.hash, sampleOf(t), now);
+      // crowd counts (phase 3): only active torrents pass the gate inside noteSwarmSample
+      noteSwarmSample(t, now);
+    }
   }
 }
 
@@ -209,6 +214,8 @@ export function usePlaybackDead(hash: string | undefined, cache: CacheState | nu
     const sample: DeadSample = { active: true, seeders: t.connected_seeders && t.connected_seeders > 0 ? t.connected_seeders : 0, bytes: downloaded(t) };
     lastSample[keyOf(hash)] = sample;
     noteSwarm(hash, sample, Date.now());
+    // crowd counts (phase 3) from the player's /cache samples; the hash comes from the screen
+    noteSwarmSample({ hash: t.hash || hash, stat: t.stat, connected_seeders: t.connected_seeders, active_peers: t.active_peers }, Date.now());
   }, [hash, cache]);
   return isDeadRelease(hash);
 }

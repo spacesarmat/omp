@@ -918,6 +918,8 @@ export const en: EnDict<typeof ru> = {
     seedsOnTopic: 'The tracker address is on the release page',
     /** DHT get_peers sample, not a seeder/leecher split. */
     dhtVia: 'via DHT',
+    /** Crowd estimate: the median of the devices' own TorrServer swarm reports (phase 3). */
+    crowdVia: 'from devices',
     dhtMiss: 'DHT did not answer',
     /** Shown once when the tracker failed and there is no billing session. Not a DHT result. */
     dhtNeedsSub: 'DHT check needs an OMP subscription',
