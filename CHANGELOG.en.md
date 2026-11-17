@@ -8,6 +8,7 @@ The English translation covers the latest versions only; the full history (in Ru
 
 - [tech] The local editor became a visual logic editor: a node canvas with triggers, conditions, actions and variables, output-input links, multi-select with a clipboard, five flow templates and a step-by-step debugger with mocks and trace comparison. Node editing is available on the desktop target and the settings page only
 - [tech] Logic flows pass validation (cycles, unreachable nodes, value types) and export together with the layout: the scoped diff shows changed rules, nodes, edges and variables. Production apps apply logic only after an explicit export through the generated module design/generated/flow.ts; autosave and preview do not change production
+- [tech] Cache nodes: POST /admin/cache/* requires the full role like other admin mutations - a read-only session can no longer change settings, nodes or node tokens
 
 ## 0.30.1-beta.6
 
