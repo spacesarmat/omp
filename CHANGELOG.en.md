@@ -13,6 +13,7 @@ The English translation covers the latest versions only; the full history (in Ru
 - [tech] App Links: assetlinks.json no longer lists the public debug fingerprint for the release package - a fake APK cannot pass autoVerify and intercept /pair and /t/ links. Debug builds use the .test package
 - [tech] Admin login: status polling and the CLI link no longer open a database write on every request - only a confirmed token writes. The three public login endpoints get a per-IP limit, and the disabled password login no longer audits every attempt. An unauthenticated flood can no longer stall payments and activations
 - [tech] Donate: the wait window for Crypto Pay and CBR rates after CoinGecko is raised from 250 to 800 ms - the primary source more often prices the quote, with less CoinGecko fallback until the next refresh
+- [tech] Admin: NUC logs, a source check, the DHT probe, a crash report and monitor details open in a window over the page. A log has a filter, refresh and copy
 
 ## 0.30.1-beta.6
 
