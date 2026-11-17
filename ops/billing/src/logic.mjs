@@ -3,6 +3,7 @@ import { normalizeLang, pluralLang, str } from './botCopy.mjs';
 import { capReferralOff, mskMonthStart, normalizeReferralSettings, offerDays, offerPercent, referralCodeFor, referralDiscountRub, retentionStreak, REFERRAL_BONUS_MAX } from './referralAdmin.mjs';
 import { CRYPTO_ASSETS } from './cryptoPay.mjs';
 import { addMethodSplit, altCovers, cryptoDue, cryptoInvoiceMatches, emptyMethodSplit, isDevicePay, labelSettled, rubOfPayment, starDue, subscriptionPaidBefore } from './payMethods.mjs';
+import { paymentPricing } from './rates.mjs';
 import { grossUp, settledCovers, transferCovers } from './yoomoney.mjs';
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -2946,21 +2947,21 @@ export function quotePurchase(state, { kind, accountId, subscriptionId, now, wit
   let payAsset = '';
   let rub = price > 0 ? price : 0;
   if (method === 'stars') {
-    const stars = starDue(state.settings, kind, extras, rubGross, price);
+    const stars = starDue(state.settings, kind, extras, rubGross, price, now);
     if (!(stars >= 1)) return { state, result: { error: 'no_price' } };
     payMethod = 'stars';
     payAmount = String(stars);
     payAsset = 'XTR';
   } else if (method === 'crypto') {
     if (CRYPTO_ASSETS.indexOf(asset) < 0) return { state, result: { error: 'bad_method' } };
-    const amount = cryptoDue(state.settings, asset, kind, extras, rubGross, price);
+    const amount = cryptoDue(state.settings, asset, kind, extras, rubGross, price, now);
     if (!amount) return { state, result: { error: 'no_price' } };
     payMethod = 'crypto';
     payAmount = amount;
     payAsset = asset;
     if (!(rub > 0)) {
       const rateName = asset === 'USDT' ? 'cryptoRateUsdt' : asset === 'TON' ? 'cryptoRateTon' : 'cryptoRateBtc';
-      const rate = Number(state.settings[rateName]) || 0;
+      const rate = Number(paymentPricing(state.settings, now)[rateName]) || Number(state.settings[rateName]) || 0;
       if (rate > 0) rub = Number(amount) * rate;
     }
   } else if (!(price > 0)) {

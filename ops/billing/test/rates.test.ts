@@ -6,9 +6,9 @@ import {
   applyMarkup,
   applyRateSettings,
   combineRateQuotes,
-  donatePricing,
+  paymentPricing,
   donateRateWait,
-  ensureDonateRates,
+  ensureRates,
   fetchRateQuotes,
   mergeRateBook,
   normalizeRateSettings,
@@ -93,12 +93,12 @@ describe('donate rate cache', () => {
         usd: { rub: 100, source: 'cbr' },
       }, NOW),
     };
-    expect(donatePricing(settings, NOW).cryptoRateUsdt).toBe(100);
-    expect(donatePricing(settings, NOW).rubPerStar).toBeCloseTo(1.3, 5);
+    expect(paymentPricing(settings, NOW).cryptoRateUsdt).toBe(100);
+    expect(paymentPricing(settings, NOW).rubPerStar).toBeCloseTo(1.3, 5);
     const day = 24 * 60 * 60 * 1000;
-    expect(donatePricing(settings, NOW + day).cryptoRateUsdt).toBe(100);
-    expect(donatePricing(settings, NOW + day + 1).cryptoRateUsdt).toBe(0);
-    expect(donatePricing(settings, NOW + day + 1).rubPerStar).toBe(0);
+    expect(paymentPricing(settings, NOW + day).cryptoRateUsdt).toBe(100);
+    expect(paymentPricing(settings, NOW + day + 1).cryptoRateUsdt).toBe(0);
+    expect(paymentPricing(settings, NOW + day + 1).rubPerStar).toBe(0);
   });
 
   it('applies markup on top of the auto rate and leaves a manual rate untouched', () => {
@@ -106,12 +106,12 @@ describe('donate rate cache', () => {
       usdt: { rub: 110, source: 'cryptopay' },
       usd: { rub: 100, source: 'cbr' },
     }, NOW);
-    const auto = donatePricing({ cryptoRateUsdt: 50, donate: { rubPerStar: 2 }, rates }, NOW);
+    const auto = paymentPricing({ cryptoRateUsdt: 50, donate: { rubPerStar: 2 }, rates }, NOW);
     expect(auto.cryptoRateUsdt).toBeCloseTo(100, 5);
     expect(auto.rubPerStar).toBeCloseTo(1.3 / 1.1, 5);
     expect(starsForRub(100, auto.rubPerStar)).toBe(85);
     expect(applyMarkup(110, 10)).toBeCloseTo(100, 5);
-    const manual = donatePricing({
+    const manual = paymentPricing({
       cryptoRateUsdt: 50,
       donate: { rubPerStar: 2 },
       rates: { ...rates, auto: { usdt: false, ton: false, btc: false, star: false } },
@@ -190,15 +190,15 @@ describe('donate rate fetch', () => {
         return out;
       },
     };
-    const first = await ensureDonateRates(store, fetchImpl, NOW);
+    const first = await ensureRates(store, fetchImpl, NOW);
     expect(first.cache.usdt).toEqual({ rub: 95, source: 'cryptopay', at: NOW });
     expect(first.cache.usd).toEqual({ rub: 95, source: 'cbr', at: NOW });
     expect(state.settings.rates.cache.usdt.rub).toBe(95);
     const after = fetches;
-    await ensureDonateRates(store, fetchImpl, NOW + 60 * 1000);
+    await ensureRates(store, fetchImpl, NOW + 60 * 1000);
     expect(fetches).toBe(after);
     const failed = async () => json(500, {});
-    await ensureDonateRates(store, failed, NOW + 13 * 60 * 1000);
+    await ensureRates(store, failed, NOW + 13 * 60 * 1000);
     expect(state.settings.rates.cache.usdt.rub).toBe(95);
     expect(state.settings.rates.fetchedAt).toBe(NOW + 13 * 60 * 1000);
   });

@@ -6,6 +6,7 @@ The English translation covers the latest versions only; the full history (in Ru
 
 ## Unreleased
 
+- [tech] The auto rate applies to every payment, not only donations: the ruble tariffs (subscription and extra device) are the base. Stars and crypto (USDT/TON/BTC) are derived from rubles through the same rate book (CryptoPay/CBR/CoinGecko) with the same markup, max age and starUsd; manual tariffs and rates stay the fallback while auto is off or the rate is stale. Explicit asset prices no longer override a fresh auto rate. The book refreshes on the periodic tick and on donate taps; an unsupported or stale rate hides the method as before. donatePricing/ensureDonateRates renamed to paymentPricing/ensureRates
 - [tech] Bot: CIS languages - uk, be, kk, ky, uz, tg, tk, hy, az, ka, ro (11 codes, prefix normalizeLang with regional variants). The template catalog and the UI strings are translated into all 13 languages with variable parity kept; the strict pickVariant default and the RU/EN identity are unchanged. Migration 017 widens the bot_copy.lang CHECK to 13 values. Admin panel: the reply constructor language list carries 13 languages, preview and variable samples follow the variant language. A new billing image is needed; deployment by agreement
 
 ## 0.30.1-beta.9

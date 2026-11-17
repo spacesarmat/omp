@@ -103,7 +103,7 @@ import { createChangelogSource } from './changelog.mjs';
 import { ALLOWED_UPDATES, channelFromEnv, pinNotice, pinNoticeFailedLine } from './channelPins.mjs';
 import { codeHash, normalizeCode, randomId, sha256 } from './crypto.mjs';
 import { createCryptoInvoice, cryptoPayCredentials, cryptoPaySignatureMode, paidInvoice } from './cryptoPay.mjs';
-import { applyRateSettings, donateRateWait, ensureDonateRates, normalizeRateSettings } from './rates.mjs';
+import { applyRateSettings, donateRateWait, ensureRates, normalizeRateSettings } from './rates.mjs';
 import { countryCode, cryptoOffered, starCheckoutDecision } from './payMethods.mjs';
 import { quotePurchase } from './logic.mjs';
 import { goPage } from './go.mjs';
@@ -2816,7 +2816,7 @@ export function createApp(file, fetchImpl, opts) {
             },
           }));
           try {
-            await ensureDonateRates(store, net, Date.now());
+            await ensureRates(store, net, Date.now());
           } catch (e) {
             /* a rate host can fail; the saved manual rate and the last good auto rate stay */
           }
@@ -3967,7 +3967,7 @@ export async function pollBot(file, fetchImpl, opts) {
         const every = book.refreshMin * 60 * 1000;
         if (!ratesAt || nowFn() - ratesAt >= every) {
           ratesAt = nowFn();
-          void ensureDonateRates(store, net, nowFn()).catch(() => {
+          void ensureRates(store, net, nowFn()).catch(() => {
             /* a rate host can fail; the last saved rate stays */
           });
         }
@@ -4344,7 +4344,7 @@ export async function handleCallback(file, token, cq, net, timeoutMs, opts) {
       try {
         const peeked = await store.read();
         rateWait = donateRateWait(rawData, peeked, Date.now());
-        if (rateWait === 'block') await ensureDonateRates(store, net, Date.now());
+        if (rateWait === 'block') await ensureRates(store, net, Date.now());
       } catch (e) {
         /* a rate host can fail; the last saved rate still prices the invoice */
       }
@@ -4388,7 +4388,7 @@ export async function handleCallback(file, token, cq, net, timeoutMs, opts) {
     }
   }
   if (rateWait === 'background') {
-    void ensureDonateRates(store, net, Date.now()).catch(() => {
+    void ensureRates(store, net, Date.now()).catch(() => {
       /* a rate host can fail; the answer already used the last good rate */
     });
   }

@@ -1,10 +1,13 @@
 import { amountCovers, CRYPTO_ASSETS, formatAsset } from './cryptoPay.mjs';
 import { str } from './botCopy.mjs';
+import { paymentPricing } from './rates.mjs';
 
 /**
  * Telegram Stars and Crypto Pay prices. Both stay off until an admin turns the switch on.
- * Stars are a whole number per tariff. No fee is added on top.
- * Crypto uses the asset price from the admin screen, or the ruble tariff divided by the admin rate.
+ * The ruble tariff is the base: with a fresh auto rate the star and crypto amounts are derived
+ * from it (same book, markup and max age as donations); manual tariffs/rates are the fallback
+ * while auto is off or the rate is stale. Stars are a whole number per tariff. No fee is added
+ * on top. Crypto rounds to the asset scale.
  */
 
 const STAR_MAX = 1000000;
@@ -23,11 +26,17 @@ function assetKey(asset) {
 }
 
 /** Stars for one order before a ruble credit is scaled off. 0 when that tariff has no star price. */
-export function starList(settings, kind, extras) {
+export function starList(settings, kind, extras, rubGross, now) {
   const s = settings || {};
+  const n = Math.max(0, Math.floor(Number(extras) || 0));
+  const rate = paymentPricing(s, now).rubPerStar;
+  const gross = Number(rubGross) || 0;
+  if (rate > 0 && gross > 0) {
+    const stars = Math.ceil(gross / rate - 1e-9);
+    return wholeStars(stars);
+  }
   const base = wholeStars(s.starsPrice);
   const extra = wholeStars(s.starsExtra);
-  const n = Math.max(0, Math.floor(Number(extras) || 0));
   if (kind === 'dev') return extra > 0 ? extra * Math.max(1, n || 1) : 0;
   if (!(base > 0)) return 0;
   if (n > 0 && !(extra > 0)) return 0;
@@ -38,8 +47,8 @@ export function starList(settings, kind, extras) {
  * Stars the payer is charged. A ruble credit scales the star price down (floor, so nothing is added).
  * With no ruble price the full star tariff is used. 0 means this order cannot be paid in stars.
  */
-export function starDue(settings, kind, extras, rubGross, rubPay) {
-  const full = starList(settings, kind, extras);
+export function starDue(settings, kind, extras, rubGross, rubPay, now) {
+  const full = starList(settings, kind, extras, rubGross, now);
   if (!(full >= 1)) return 0;
   const gross = Number(rubGross) || 0;
   const pay = Number(rubPay) || 0;
@@ -49,8 +58,10 @@ export function starDue(settings, kind, extras, rubGross, rubPay) {
   return scaled >= 1 ? scaled : 0;
 }
 
-export function starsOffered(settings, kind) {
+export function starsOffered(settings, kind, now) {
   if (!settings || settings.starsEnabled !== true) return false;
+  const tariff = kind === 'dev' ? Number(settings.extraDeviceRub) : Number(settings.priceRub);
+  if (paymentPricing(settings, now).rubPerStar > 0 && tariff > 0) return true;
   if (kind === 'dev') return wholeStars(settings.starsExtra) >= 1;
   return wholeStars(settings.starsPrice) >= 1;
 }
@@ -69,13 +80,17 @@ function formatAssetFloor(asset, value) {
 
 /**
  * Crypto amount string for one order, or ''.
- * An explicit asset price wins. A ruble credit scales it down (floor), the same way as stars.
- * Otherwise rubPay / rate, rounded to the asset scale (half up). rubPay is already after credit.
+ * A fresh auto rate derives the amount from the ruble figure (already after credit), the same
+ * book as donations. Otherwise an explicit asset price wins and a ruble credit scales it down
+ * (floor); with neither, rubPay / manual rate, rounded to the asset scale (half up).
  */
-export function cryptoDue(settings, asset, kind, extras, rubGross, rubPay) {
+export function cryptoDue(settings, asset, kind, extras, rubGross, rubPay, now) {
   const key = assetKey(asset);
   if (!key) return '';
   const s = settings || {};
+  const autoRate = Number(paymentPricing(s, now)['cryptoRate' + key]) || 0;
+  const rubNow = Number(rubPay == null ? rubGross : rubPay) || 0;
+  if (autoRate > 0 && rubNow > 0) return formatAsset(asset, rubNow / autoRate);
   const base = Number(s['crypto' + key]) || 0;
   const extra = Number(s['cryptoExtra' + key]) || 0;
   const n = Math.max(0, Math.floor(Number(extras) || 0));
