@@ -289,7 +289,7 @@ function lockMethod(state, account, row, method, now, lang) {
     return {
       row: { ...named, method, asset: '', payAmount: up.gross, gross: up.gross, fee: up.fee, status: 'pending', step: '' },
       text: str('don.pay', lang, { method: title, amount: rubText(up.gross) }),
-      inline: { inline_keyboard: [[{ text: str('btn.wallet', lang, { amount: rubText(up.gross) }), url }]] },
+      inline: { inline_keyboard: [[{ text: str(method === 'PC' ? 'btn.wallet' : 'btn.card', lang, { amount: rubText(up.gross) }), url }]] },
       copy: { id: 'donate.pay', vars: { method: title, amount: rubText(up.gross) } },
     };
   }
@@ -374,7 +374,7 @@ function resendCheckout(state, row, lang) {
     const url = payUrl(state.settings.yoomoneyWallet, { sum: row.gross, label: 'don:' + row.id, paymentType: row.method });
     return {
       text: str('don.pay', lang, { method: title, amount: rubText(row.gross) }),
-      inline: { inline_keyboard: [[{ text: str('btn.wallet', lang, { amount: rubText(row.gross) }), url }]] },
+      inline: { inline_keyboard: [[{ text: str(row.method === 'PC' ? 'btn.wallet' : 'btn.card', lang, { amount: rubText(row.gross) }), url }]] },
       copy: { id: 'donate.pay', vars: { method: title, amount: rubText(row.gross) } },
     };
   }

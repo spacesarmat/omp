@@ -1362,9 +1362,12 @@ export function botReply(state, { chatId, text, now, awaiting, replyTo, from, pa
     if (!found) say(str('adm.find_miss', lang, { arg }), { adminPad: true, ...spec('admin.find_miss', { arg }, '') });
     else {
       const who = found.account.telegramId || found.account.id;
-      const status = statusText(cur, found.sub, found.account, { admin: true, lang });
+      // adminFind builds the card without a language; rebuild the view in the admin language so the
+      // limit breakdown (base/bonus/purchased/custom) is localized, not left RU inside an EN reply.
+      const subView = subscriptionView(cur, found.account.id, now, lang);
+      const status = statusText(cur, subView, found.account, { admin: true, lang });
       const code = found.reveal ? str('adm.free_code', lang, { code: formatCode(found.reveal.code) }) : '';
-      const codeHtml = found.reveal ? '\nСвободный код: <code>' + formatCode(found.reveal.code) + '</code>' : '';
+      const codeHtml = found.reveal ? str('adm.free_code', lang, { code: '<code>' + formatCode(found.reveal.code) + '</code>' }) : '';
       say(str('adm.find_hit', lang, { who, status, code }), { adminPad: true, ...spec('admin.find_hit', { who, status, code: codeHtml }, '', '', found.reveal ? ['code'] : []) });
     }
   } else if (action === 'admin_grant' && !arg) {
@@ -1549,9 +1552,11 @@ export function botReply(state, { chatId, text, now, awaiting, replyTo, from, pa
     say(supportReply, spec(supportId, {}, ''));
     if (notify) {
       const who = telegramDisplay(account) || chatId;
-      const note = str('sup.note', lang, { who, text: arg });
+      // Operational admin notice: stays RU regardless of the subscriber language, like the other
+      // admin broadcasts (payment/service notices). The subscriber's own reply above keeps their lang.
+      const note = str('sup.note', '', { who, text: arg });
       for (let i = 0; i < admins.length; i++) {
-        messages.push({ chatId: admins[i], text: note, keyboard: adminKeyboard(lang), supportNotify: String(chatId), ...spec('support.note', { who, text: arg }, '') });
+        messages.push({ chatId: admins[i], text: note, keyboard: adminKeyboard(''), supportNotify: String(chatId), ...spec('support.note', { who, text: arg }, '', '') });
       }
     }
   } else if (action === 'donate') {

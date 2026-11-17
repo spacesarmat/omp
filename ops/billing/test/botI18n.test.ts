@@ -11,6 +11,7 @@ import {
   variablesIn,
 } from '../src/botCopy.mjs';
 import {
+  botCallback,
   botReply,
   grantUserMessage,
   mainKeyboard,
@@ -248,5 +249,98 @@ describe('EN base fallback without a saved template', () => {
     expect(cab.messages[0].text).toContain('Личный кабинет');
     expect(cab.messages[0].text).toContain('Подписка до 18.11.2026 12:00 МСК');
     expect(cab.messages[0].keyboard.keyboard.flat().map((b: { text: string }) => b.text)).toContain('Кабинет');
+  });
+});
+
+describe('donate pay button matches the chosen method', () => {
+  function donateState(lang: string) {
+    const opened = ensureTelegramAccount(emptyState(), '42', NOW);
+    const state = opened.state;
+    state.settings.yoomoneyWallet = '410011111111111';
+    state.settings.donate = { enabled: true, amounts: '100', minRub: 50, maxRub: 15000, yoomoney: true };
+    state.accounts = state.accounts.map((a: { id: string }) => ({ ...a, lang }));
+    return state;
+  }
+
+  function lock(lang: string, method: string) {
+    const from = lang === 'en' ? { lang: 'en-US' } : { firstName: 'Анна' };
+    const menu = botReply(donateState(lang), { chatId: '42', text: '/donate', now: NOW, from });
+    const picked = botCallback(menu.state, { chatId: '42', data: 'dn:a:100', now: NOW, lang: from.lang });
+    const draft = picked.state.donations.find((d: { amountRub: number }) => d.amountRub === 100);
+    const skipped = botCallback(picked.state, { chatId: '42', data: 'dn:s:' + draft.id, now: NOW, lang: from.lang });
+    const named = botCallback(skipped.state, { chatId: '42', data: 'dn:n:' + draft.id + ':0', now: NOW, lang: from.lang });
+    return botCallback(named.state, { chatId: '42', data: 'dn:p:' + draft.id + ':' + method, now: NOW, lang: from.lang });
+  }
+
+  it('RU: AC gives a card button and message, PC gives wallet', () => {
+    const ac = lock('', 'AC');
+    expect(ac.messages[0].text).toContain('Карта - ');
+    expect(ac.messages[0].inline.inline_keyboard[0][0].text).toContain('Карта - ');
+    expect(ac.messages[0].inline.inline_keyboard[0][0].url).toContain('paymentType=AC');
+    const pc = lock('', 'PC');
+    expect(pc.messages[0].text).toContain('Кошелёк - ');
+    expect(pc.messages[0].inline.inline_keyboard[0][0].text).toContain('Кошелёк - ');
+  });
+
+  it('EN: AC gives Card (not Wallet), PC gives Wallet', () => {
+    const ac = lock('en', 'AC');
+    expect(ac.messages[0].text).toContain('Card - ');
+    expect(ac.messages[0].inline.inline_keyboard[0][0].text).toContain('Card - ');
+    expect(ac.messages[0].text).not.toContain('Wallet');
+    const pc = lock('en', 'PC');
+    expect(pc.messages[0].text).toContain('Wallet - ');
+    expect(pc.messages[0].inline.inline_keyboard[0][0].text).toContain('Wallet - ');
+  });
+});
+
+describe('support notice to admins stays RU', () => {
+  it('an EN subscriber support message notifies admins in RU with RU buttons', () => {
+    let state = emptyState();
+    state.settings.adminTelegramIds = '99';
+    const opened = ensureTelegramAccount(state, '42', NOW);
+    state = { ...opened.state, accounts: opened.state.accounts.map((a: { id: string }) => ({ ...a, lang: 'en' })) };
+    const out = botReply(state, { chatId: '42', text: '/support hello', now: NOW, from: { lang: 'en-US' } });
+    const toAdmin = out.messages.find((m: { chatId: string }) => m.chatId === '99')!;
+    expect(toAdmin.text).toContain('Поддержка · ');
+    expect(toAdmin.text).toContain('Ответьте на это сообщение');
+    const keys = toAdmin.keyboard.keyboard.flat().map((b: { text: string }) => b.text);
+    expect(keys).toContain('Сводка');
+    expect(keys).not.toContain('Summary');
+    // The subscriber's own confirmation keeps their language.
+    const toUser = out.messages.find((m: { chatId: string }) => m.chatId === '42')!;
+    expect(toUser.text).toContain('The message was passed to the administrator');
+  });
+});
+
+describe('admin find localizes the limit breakdown and code label', () => {
+  function findState() {
+    let state = emptyState();
+    state.settings.adminTelegramIds = '99';
+    Object.assign(state.settings, { priceRub: 150, periodDays: 30 });
+    const opened = ensureTelegramAccount(state, '42', NOW);
+    const created = createSubscription(opened.state, { accountId: opened.account.id, now: NOW, days: 30 });
+    state = created.state;
+    const sub = created.result.subscriptionId as string;
+    state = { ...state, subscriptions: state.subscriptions.map((s: { id: string }) => (s.id === sub ? { ...s, limitOverride: 3 } : s)) };
+    state = deviceCode(state, sub, NOW).state; // a free code with a plain value, so the card reveals it
+    return state;
+  }
+
+  it('EN admin finds a custom-limit account: EN limit text and EN free-code HTML', () => {
+    const out = botReply(findState(), { chatId: '99', text: '/find 42', now: NOW, from: { lang: 'en-US' }, pad: 'admin' });
+    const msg = out.messages[0];
+    expect(msg.text).toContain('(custom limit)');
+    expect(msg.text).not.toContain('индивидуальный лимит');
+    expect(msg.text).toContain('Free code: ');
+    expect(msg.copy.vars.code).toContain('Free code: <code>');
+  });
+
+  it('RU admin find keeps the RU limit text and code label unchanged', () => {
+    const out = botReply(findState(), { chatId: '99', text: '/find 42', now: NOW, pad: 'admin' });
+    const msg = out.messages[0];
+    expect(msg.text).toContain('(индивидуальный лимит)');
+    expect(msg.text).not.toContain('custom limit');
+    expect(msg.text).toContain('Свободный код: ');
+    expect(msg.copy.vars.code).toContain('Свободный код: <code>');
   });
 });
