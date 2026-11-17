@@ -10,6 +10,9 @@
 //   an http->http hop or an https->http downgrade is refused). At most MAX_REDIRECTS hops, and the
 //   SSRF gate (resolvePublic + address pinning) runs again on every hop. One timeout budget is
 //   shared across the whole chain, so a redirect loop cannot outlive the per-job deadline.
+// - The tracker rate-limit gate (deps.gate) is applied to every contacted host, redirect targets
+//   included: each hop takes a slot, spends a request-window stamp and honours the per-host gap,
+//   then releases the slot. A gate refusal is a miss, so redirects cannot bypass the tracker limits.
 import { Agent as HttpAgent, request as httpRequest } from 'node:http';
 import { Agent as HttpsAgent, request as httpsRequest } from 'node:https';
 import { createSocket } from 'node:dgram';
@@ -59,11 +62,12 @@ export function httpScrape(url, infohash, timeoutMs, deps) {
   const o = deps || {};
   const lookup = o.lookup || dnsLookup;
   const requestImpl = o.request || null;
+  const gate = o.gate || null;
   if (aborted(o.signal)) return Promise.resolve(null);
   // One deadline for the whole redirect chain: each hop spends what is left, not a fresh budget.
   const budget = typeof timeoutMs === 'number' && timeoutMs > 0 ? timeoutMs : 0;
   const deadline = Date.now() + budget;
-  return fetchScrape(url, infohash, deadline, lookup, requestImpl, o.signal, 0);
+  return fetchScrape(url, infohash, deadline, lookup, requestImpl, o.signal, gate, 0);
 }
 
 function hostnameOf(url) {
@@ -74,20 +78,32 @@ function hostnameOf(url) {
   }
 }
 
-/** Resolve the gate, scrape one hop, then follow an https redirect with the gate run again. */
-async function fetchScrape(url, infohash, deadline, lookup, requestImpl, signal, hops) {
+/**
+ * Resolve the SSRF gate, scrape one hop, then follow an https redirect with both gates run again.
+ * The tracker gate (when passed) takes a slot, a request-window stamp and the per-host gap for
+ * EVERY contacted host, redirect targets included, and releases the slot after the hop. A refusal
+ * is a miss (null), so several announce hosts redirecting to one target cannot stampede it.
+ */
+async function fetchScrape(url, infohash, deadline, lookup, requestImpl, signal, gate, hops) {
   if (aborted(signal)) return null;
-  const addr = await resolvePublic(hostnameOf(url), lookup);
+  const host = hostnameOf(url);
+  const addr = await resolvePublic(host, lookup);
   if (!addr || aborted(signal)) return null;
   const left = deadline - Date.now();
   if (left <= 0) return null;
-  const result = await readHttp(url, infohash, left, addr, requestImpl, signal);
+  if (gate && !gate.take(host, Date.now())) return null;
+  let result;
+  try {
+    result = await readHttp(url, infohash, left, addr, requestImpl, signal);
+  } finally {
+    if (gate) gate.release();
+  }
   if (!result) return null;
   if (!result.redirect) return result.sample;
   if (hops >= MAX_REDIRECTS) return null;
   const next = redirectTarget(url, result.redirect);
   if (!next) return null;
-  return fetchScrape(next, infohash, deadline, lookup, requestImpl, signal, hops + 1);
+  return fetchScrape(next, infohash, deadline, lookup, requestImpl, signal, gate, hops + 1);
 }
 
 /** Absolute https target of a Location header, or null. Relative hops stay on the current scheme. */

@@ -662,8 +662,12 @@ async function scrapeJobs(jobs, opts) {
     while (Date.now() < deadline) {
       const job = claim();
       if (!job) return;
+      const isUdp = job.kind === 'udp';
       const now = Date.now();
-      if (!gate.take(job.host, now)) {
+      // UDP scrapes a single host, so it is gated here. HTTP gates every contacted host inside the
+      // transport (each redirect hop included): a redirect target is a different host and must not
+      // bypass the per-host gap or the shared request-window budget. A gate refusal there is a miss.
+      if (isUdp && !gate.take(job.host, now)) {
         job.tries = (job.tries || 0) + 1;
         if (job.tries <= 8 && Date.now() < deadline) retry.push(job);
         await delay(Math.min(80, Math.max(0, deadline - Date.now())));
@@ -678,9 +682,9 @@ async function scrapeJobs(jobs, opts) {
         if (ac) timer = setTimeout(() => ac.abort(), budget);
         const signal = ac ? ac.signal : undefined;
         const sample = await Promise.race([
-          job.kind === 'udp'
+          isUdp
             ? opts.transport.udp(job.host, job.port, job.hash, budget, { signal: signal })
-            : opts.transport.http(job.url, job.hash, budget, { signal: signal }),
+            : opts.transport.http(job.url, job.hash, budget, { signal: signal, gate: gate }),
           delay(budget).then(() => null),
         ]);
         if (sample && capCount(sample.seeders) !== null && capCount(sample.leechers) !== null) {
@@ -694,7 +698,7 @@ async function scrapeJobs(jobs, opts) {
       } finally {
         if (timer) clearTimeout(timer);
         if (ac) ac.abort();
-        gate.release();
+        if (isUdp) gate.release();
       }
     }
   }
