@@ -13,6 +13,8 @@ import { emptyState, normalizeState } from '../src/state.mjs';
 import { openStore, storeEngine, toStore } from '../src/db/index.mjs';
 import { createApp } from '../src/server.mjs';
 import { testStore } from './pg';
+import { botCopyRepoFor } from '../src/botCopyStore.mjs';
+import { LANG_CODES } from '../src/botCopy.mjs';
 
 const PG_URL = process.env.BILLING_TEST_DATABASE_URL || '';
 const REQUIRE_PG = process.env.BILLING_TEST_REQUIRE_PG === '1';
@@ -472,5 +474,31 @@ describe.skipIf(!PG_URL)('postgres only', () => {
     ]);
     const idx = await store.query("SELECT indexdef FROM pg_indexes WHERE indexname = 'devices_active_code' AND schemaname = $1", [schema]);
     expect(idx.rows[0].indexdef).toMatch(/UNIQUE.*WHERE \(status = 'active'::text\)/);
+  });
+
+  it('bot_copy and bot_copy_versions accept every CIS language, keep existing rows and reject unsupported codes', async () => {
+    const store = await createPgStore({ connectionString: PG_URL, schema: schemaName() });
+    opened.push(store);
+    const repo = botCopyRepoFor(store);
+    const now = Date.now();
+    const base = { id: 'referral.friend', state: '', buttons: null, mediaKind: '', mediaUrl: '' };
+    expect((await repo.save({ ...base, lang: 'ru', body: 'RU keep +{days}' }, '777', now)).ok).toBe(true);
+    for (const code of LANG_CODES.filter((c) => c !== 'ru' && c !== 'en')) {
+      const saved = await repo.save({ ...base, lang: code, body: 'D +{days} ' + code }, '777', now);
+      expect(saved.ok, code).toBe(true);
+      const got = await repo.lookup('referral.friend', '', code);
+      expect(got && got.body, code).toBe('D +{days} ' + code);
+      const hist = await repo.history('referral.friend', '', code);
+      expect(hist.length, code).toBeGreaterThan(0);
+      expect(hist[0].body, code).toBe('D +{days} ' + code);
+    }
+    expect((await repo.lookup('referral.friend', '', 'ru'))!.body).toBe('RU keep +{days}');
+    expect((await repo.save({ ...base, lang: 'de', body: 'x +{days}' }, '777', now)).ok).toBe(false);
+    await expect(
+      store.query("INSERT INTO bot_copy (template_id, sub_state, lang, body, updated_at) VALUES ('referral.friend', '', 'de', 'x', 1)"),
+    ).rejects.toThrow();
+    await expect(
+      store.query("INSERT INTO bot_copy_versions (template_id, sub_state, lang, body, created_at, action) VALUES ('referral.friend', '', 'de', 'x', 1, 'save')"),
+    ).rejects.toThrow();
   });
 });

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   CATALOG,
+  LANG_CODES,
   bodyFor,
   normalizeLang,
   pickVariant,
@@ -8,15 +9,18 @@ import {
   sampleVars,
   str,
   stringIds,
+  stringRow,
   templateById,
   variablesIn,
 } from '../src/botCopy.mjs';
+import { LANG_PACKS } from '../src/botCopyLangs/index.mjs';
 import {
   botCallback,
   botReply,
   daysText,
   grantUserMessage,
   mainKeyboard,
+  parseAction,
   paymentUserMessage,
   pendingUserText,
   rejectUserText,
@@ -389,5 +393,53 @@ describe('referral notice words follow the selected template language', () => {
       { subState: 'active', lang: '', body: 'ACTIVE +{days}' },
     ];
     expect(renderNotice(rows, normalizeLang('de'), 3)).toBe('FRIEND +3 дня');
+  });
+});
+
+describe('CIS language packs completeness', () => {
+  const packs = LANG_PACKS as Record<string, { catalog: Record<string, string>; strings: Record<string, string>; samples: Record<string, string> }>;
+  const codes = LANG_CODES.filter((c) => c !== 'ru' && c !== 'en');
+
+  it('every pack carries raw non-empty entries with RU variable parity', () => {
+    expect(codes.length).toBe(11);
+    for (const code of codes) {
+      const pack = packs[code];
+      expect(pack, code).toBeTruthy();
+      for (const row of CATALOG) {
+        const raw = pack.catalog[row.id];
+        expect(typeof raw === 'string' && raw.trim() !== '', code + ' catalog ' + row.id).toBe(true);
+        expect(variablesIn(raw).sort(), code + ' catalog ' + row.id).toEqual(variablesIn(row.body).sort());
+      }
+      for (const id of stringIds()) {
+        const raw = pack.strings[id];
+        expect(typeof raw === 'string' && raw.trim() !== '', code + ' string ' + id).toBe(true);
+        expect(variablesIn(raw).sort(), code + ' string ' + id).toEqual(variablesIn(stringRow(id).ru).sort());
+      }
+      const sampleKeys = Object.keys(sampleVars(templateById('cabinet.home')!, ''));
+      for (const key of sampleKeys) expect(String(pack.samples[key] || '').trim(), code + ' sample ' + key).not.toBe('');
+    }
+  });
+
+  it('pack texts stay free of em and en dashes', () => {
+    const blob = JSON.stringify(packs);
+    expect(blob).not.toContain('\u2014');
+    expect(blob).not.toContain('\u2013');
+  });
+
+  it('regional and uppercase codes normalize to the pack code', () => {
+    for (const code of codes) {
+      expect(normalizeLang(code + '-UA')).toBe(code);
+      expect(normalizeLang(code.toUpperCase())).toBe(code);
+    }
+    expect(normalizeLang('de-DE')).toBe('');
+  });
+
+  it('main keyboard labels of every language parse back to actions', () => {
+    for (const code of LANG_CODES) {
+      const kb = mainKeyboard(code) as { keyboard: { text: string }[][] };
+      const labels = kb.keyboard.flat().map((b) => b.text);
+      expect(labels.length, code).toBeGreaterThan(3);
+      for (const label of labels) expect(parseAction(label), code + ' label ' + label).toBeTruthy();
+    }
   });
 });
