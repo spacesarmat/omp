@@ -3,8 +3,8 @@
 // shared cap so one search cannot stampede a tracker. DHT is one extra lookup per batch when the
 // sidecar is configured: one lookup per batch, preferably a hash with no tracker address.
 // BEP 33 seed estimates are labeled estimates. The get_peers address count is not a seed count.
-// A background refresh of popular hashes is not here. Next step: one hash a minute, same gate,
-// only when hits are high and the row is past half its TTL.
+// `completed` is the tracker's snatched count (BEP 48 `downloaded`, BEP 15 downloaded), not seeds.
+// The background refresh of popular hashes lives in seedRefresh.mjs: one hash a minute, same gate.
 import { isIP } from 'node:net';
 import { isPublicAddress } from './monitorHttp.mjs';
 
@@ -154,6 +154,7 @@ export function httpScrapeUrl(announce, infohashHex) {
 
 /**
  * Seeders (`complete`) and leechers (`incomplete`) for this infohash.
+ * `completed` (the snatched count, BEP 48 `downloaded`) is added only when the tracker sent it.
  * A scrape dict with a single file entry is accepted even when its key does not match.
  */
 export function parseHttpScrape(body, infohashHex) {
@@ -177,7 +178,10 @@ export function parseHttpScrape(body, infohashHex) {
   const seeders = capCount(entry.complete);
   const leechers = capCount(entry.incomplete);
   if (seeders === null || leechers === null) return null;
-  return { seeders, leechers };
+  const out = { seeders, leechers };
+  const completed = capCount(entry.downloaded);
+  if (completed !== null) out.completed = completed;
+  return out;
 }
 
 const MAGIC = 0x41727101980n;
@@ -301,6 +305,37 @@ export function trackerKey(item) {
   return key.length > 1024 ? key.slice(0, 1024) : key;
 }
 
+/**
+ * The announce URLs the gate accepts, reduced to the public address: scheme, host, port, path.
+ * The query (a passkey can sit there) and the fragment are dropped, userinfo never passes parseTracker.
+ * Stored on the cache row so the background refresh can scrape the same trackers again. Never logged.
+ */
+export function publicTrackers(item) {
+  const hash = String((item && item.infohash) || '').toLowerCase();
+  const list = item && Array.isArray(item.trackers) ? item.trackers : [];
+  const out = [];
+  const seen = Object.create(null);
+  for (let i = 0; i < list.length && out.length < 4; i++) {
+    const raw = String(list[i] || '');
+    if (!raw || raw.length > 300) continue;
+    const t = parseTracker(raw, hash);
+    if (!t) continue;
+    let url;
+    try {
+      const u = new URL(raw);
+      url = t.kind === 'udp'
+        ? 'udp://' + (t.host.indexOf(':') >= 0 ? '[' + t.host + ']' : t.host) + ':' + t.port + '/announce'
+        : u.origin + u.pathname;
+    } catch (e) {
+      continue;
+    }
+    if (seen[url]) continue;
+    seen[url] = true;
+    out.push(url);
+  }
+  return out;
+}
+
 export function probeKey(infohash, key) {
   return String(infohash || '') + '\n' + String(key || '');
 }
@@ -330,6 +365,8 @@ export function dhtSample(raw) {
 /**
  * Chosen seeders: the median when two or more trackers answered, otherwise the max.
  * Leechers come from the sample closest to that choice.
+ * `completed` (snatched) follows the same median/max rule over the samples that reported it;
+ * a tracker that did not send `downloaded` does not pull the count down.
  * `peers` is the DHT address sample. `dhtSeeds` is the BEP 33 estimate. Only a tracker answer is verified.
  */
 export function mergeMeasurements(samples, dhtPeers, now) {
@@ -338,6 +375,8 @@ export function mergeMeasurements(samples, dhtPeers, now) {
   const seedersMax = seeds.length ? Math.max.apply(null, seeds) : 0;
   const seedersMedian = seeds.length ? median(seeds) : 0;
   const chosen = seeds.length >= 2 ? seedersMedian : seedersMax;
+  const comps = list.filter((s) => capCount(s.completed) !== null).map((s) => s.completed);
+  const completed = comps.length >= 2 ? median(comps) : comps.length ? Math.max.apply(null, comps) : 0;
   let leechers = 0;
   if (list.length) {
     let best = list[0];
@@ -356,6 +395,7 @@ export function mergeMeasurements(samples, dhtPeers, now) {
   return {
     seeders: chosen,
     leechers,
+    completed,
     seedersMax,
     seedersMedian,
     peers: dht.peers,
@@ -425,7 +465,7 @@ export function createMemorySeedCache() {
       const list = Array.isArray(keys) ? keys : [];
       for (let i = 0; i < list.length; i++) {
         const row = rows.get(idOf(list[i]));
-        if (row) out.push({ ...row });
+        if (row) out.push({ ...row, trackers: Array.isArray(row.trackers) ? row.trackers.slice() : [] });
       }
       return out;
     },
@@ -448,6 +488,7 @@ export function createMemorySeedCache() {
           trackerKey: row.trackerKey || '',
           seeders: row.seeders,
           leechers: row.leechers,
+          completed: row.completed || 0,
           seedersMax: row.seedersMax,
           seedersMedian: row.seedersMedian,
           peers: row.peers,
@@ -459,6 +500,7 @@ export function createMemorySeedCache() {
           live: !!row.live,
           hits: (prev ? prev.hits : 0) + 1,
           lastHitAt: row.measuredAt,
+          trackers: Array.isArray(row.trackers) ? row.trackers.slice() : [],
         });
       }
     },
@@ -517,6 +559,7 @@ function publicItem(hash, merged, cached) {
     live: !!merged.live,
     seeders: merged.seeders || 0,
     leechers: merged.leechers || 0,
+    completed: merged.completed || 0,
     seedersMax: merged.seedersMax || 0,
     seedersMedian: merged.seedersMedian || 0,
     peers: merged.peers || 0,
@@ -536,6 +579,7 @@ function fromCache(row) {
     live: !!row.live,
     seeders: row.seeders || 0,
     leechers: row.leechers || 0,
+    completed: row.completed || 0,
     seedersMax: row.seedersMax || 0,
     seedersMedian: row.seedersMedian || 0,
     peers: row.peers || 0,
@@ -591,7 +635,9 @@ async function scrapeJobs(jobs, opts) {
         ]);
         if (sample && capCount(sample.seeders) !== null && capCount(sample.leechers) !== null) {
           if (!samples[job.hash]) samples[job.hash] = [];
-          samples[job.hash].push({ seeders: sample.seeders, leechers: sample.leechers });
+          const rec = { seeders: sample.seeders, leechers: sample.leechers };
+          if (capCount(sample.completed) !== null) rec.completed = sample.completed;
+          samples[job.hash].push(rec);
         }
       } catch (e) {
         // a tracker miss is not a failure of the batch
@@ -612,6 +658,8 @@ async function scrapeJobs(jobs, opts) {
 /**
  * Cache hits return at once. The rest are scraped until the deadline. One DHT lookup runs beside
  * the scrapes for the first hash that was not cached. The answer keeps the request order.
+ * `force` scrapes even a fresh row: the background refresh asks at half the TTL, when the endpoint
+ * would still answer from the cache. The gate and the deadline apply the same way.
  */
 export async function runSeedCheck(opts) {
   const o = opts || {};
@@ -630,7 +678,7 @@ export async function runSeedCheck(opts) {
   const stale = [];
   for (let i = 0; i < wanted.length; i++) {
     const row = byId[probeKey(wanted[i].infohash, wanted[i].trackerKey)];
-    if (row && cacheFresh(row, now)) fresh.push(wanted[i]);
+    if (!o.force && row && cacheFresh(row, now)) fresh.push(wanted[i]);
     else stale.push(items[i]);
   }
   if (cache && fresh.length) await cache.touch(fresh, now);
@@ -684,6 +732,7 @@ export async function runSeedCheck(opts) {
       trackerKey: trackerKey(stale[i]),
       seeders: merged.seeders,
       leechers: merged.leechers,
+      completed: merged.completed,
       seedersMax: merged.seedersMax,
       seedersMedian: merged.seedersMedian,
       peers: merged.peers,
@@ -693,6 +742,8 @@ export async function runSeedCheck(opts) {
       samples: merged.samples,
       measuredAt: merged.measuredAt,
       live: merged.live,
+      // Public announce addresses for the background refresh. No query, no passkey, never logged.
+      trackers: publicTrackers(stale[i]),
     });
   }
   if (cache && saved.length) await cache.save(saved);

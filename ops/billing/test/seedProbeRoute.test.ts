@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { activate, createSubscription, deviceCode } from '../src/logic.mjs';
 import { createApp, formatSeedLog } from '../src/server.mjs';
-import { createPgSeedCache } from '../src/db/pg/seedProbeSql.mjs';
+import { createPgSeedCache, listPopularSeedProbes } from '../src/db/pg/seedProbeSql.mjs';
+import { TTL_POPULAR_MS } from '../src/seedProbe.mjs';
 import { emptyState } from '../src/state.mjs';
 import { readState, testStore, writeState } from './pg';
 
 const HASH = 'ab'.repeat(20);
+const HASH_B = 'cd'.repeat(20);
 const DEV = 'b'.repeat(32);
 
 function mockRes() {
@@ -129,5 +131,104 @@ describe('POST /v1/seed-check', () => {
     const rows = await cache.get(key);
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({ infohash: HASH, seeders: 3, leechers: 1, hits: 2, live: true, measuredAt: at });
+  });
+
+  it('round-trips completed and public trackers, and selects one popular stale row', async () => {
+    const store = await testStore();
+    const cache = createPgSeedCache(store);
+    const query = (sql: string, params: unknown[]) => store.query(sql, params);
+    const at = Date.now();
+    await cache.save([
+      {
+        infohash: HASH,
+        trackerKey: 'tracker.example',
+        seeders: 20,
+        leechers: 1,
+        completed: 1234,
+        seedersMax: 20,
+        seedersMedian: 20,
+        peers: 0,
+        samples: 1,
+        measuredAt: at,
+        live: true,
+        trackers: ['http://tracker.example/announce'],
+      },
+    ]);
+    const key = [{ infohash: HASH, trackerKey: 'tracker.example' }];
+    const rows = await cache.get(key);
+    expect(rows[0]).toMatchObject({ completed: 1234, trackers: ['http://tracker.example/announce'] });
+    // popular by seeds and past half the popular TTL: due
+    const due = await listPopularSeedProbes(query, at + TTL_POPULAR_MS / 2 + 1000, 1);
+    expect(due.map((r: { infohash: string }) => r.infohash)).toEqual([HASH]);
+    // still fresh: not due
+    expect(await listPopularSeedProbes(query, at + 1000, 1)).toEqual([]);
+    // an old row without stored trackers (pre-015) is skipped, not refreshed
+    await cache.save([
+      {
+        infohash: HASH_B,
+        trackerKey: 'old.example',
+        seeders: 40,
+        leechers: 0,
+        seedersMax: 40,
+        seedersMedian: 40,
+        peers: 0,
+        samples: 1,
+        measuredAt: at - TTL_POPULAR_MS,
+        live: true,
+      },
+    ]);
+    const only = await listPopularSeedProbes(query, at + TTL_POPULAR_MS, 5);
+    expect(only.map((r: { infohash: string }) => r.infohash)).toEqual([HASH]);
+    // a re-save updates completed and trackers in place, hits grow
+    await cache.save([
+      {
+        infohash: HASH,
+        trackerKey: 'tracker.example',
+        seeders: 25,
+        leechers: 2,
+        completed: 2000,
+        seedersMax: 25,
+        seedersMedian: 25,
+        peers: 0,
+        samples: 1,
+        measuredAt: at + TTL_POPULAR_MS,
+        live: true,
+        trackers: ['http://tracker.example/announce', 'udp://udp.example:6969/announce'],
+      },
+    ]);
+    const again = await cache.get(key);
+    expect(again[0]).toMatchObject({ seeders: 25, completed: 2000, hits: 2, trackers: ['http://tracker.example/announce', 'udp://udp.example:6969/announce'] });
+  });
+
+  it('answers completed from the scrape and stores trackers without the passkey', async () => {
+    const file = await testStore();
+    const now = Date.now();
+    const created = createSubscription(emptyState(), { accountId: 'acc', now, days: 30 });
+    const act = activate(created.state, { code: created.result.code, deviceId: DEV, now });
+    await writeState(file, act.state);
+    const app = createApp(file, async () => ({ status: 200, headers: { get: () => null }, text: async () => '{}' }), {
+      env: {},
+      monitor: { health: () => null },
+      seedTransport: {
+        http: async () => ({ seeders: 8, leechers: 2, completed: 500 }),
+        udp: async () => null,
+      },
+    });
+    const slot = deviceCode(await readState(file), created.result.subscriptionId, Date.now());
+    await writeState(file, slot.state);
+    const activated = await call(app, 'POST', '/v1/activate', { json: { code: slot.code, deviceId: DEV, tokens: 'pair' } });
+    expect(activated.status).toBe(200);
+    const headers = { authorization: 'Bearer ' + (activated.data.accessToken as string), 'x-device-id': DEV };
+    const body = 'items=' + encodeURIComponent(JSON.stringify([
+      { infohash: HASH, trackers: ['http://tracker.example/announce?passkey=secret'] },
+    ]));
+    const out = await call(app, 'POST', '/v1/seed-check', { body, headers });
+    expect(out.status).toBe(200);
+    expect((out.data.items as { completed: number }[])[0]).toMatchObject({ seeders: 8, completed: 500 });
+    expect(out.body).not.toContain('passkey');
+    expect(out.body).not.toContain('tracker.example');
+    const cache = createPgSeedCache(file);
+    const rows = await cache.get([{ infohash: HASH, trackerKey: 'tracker.example' }]);
+    expect(rows[0]).toMatchObject({ completed: 500, trackers: ['http://tracker.example/announce'] });
   });
 });

@@ -767,6 +767,16 @@ ALTER TABLE referral_accruals ADD COLUMN extra jsonb NOT NULL DEFAULT '{}';
 CREATE INDEX referral_accruals_ord ON referral_accruals (ord);
 `,
   },
+  {
+    version: '015_seed_completed_trackers',
+    sql: `
+-- Seed probes: the snatched count and the public announce addresses for the background refresh.
+-- completed is null on old rows (read as 0). trackers is a jsonb array of public announce URLs
+-- without query or passkey; null on old rows, which the refresh skips. Additive, no data rewrite.
+ALTER TABLE seed_probes ADD COLUMN completed bigint;
+ALTER TABLE seed_probes ADD COLUMN trackers jsonb;
+`,
+  },
 ];
 
 /** Apply pending migrations. Safe to run from several processes: they wait on the lock. */
