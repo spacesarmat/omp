@@ -148,6 +148,8 @@ export function toRpcResult(r: SourceResult, key: string): RpcResult {
   if (typeof r.dhtSeeds === 'number') out.dhtSeeds = r.dhtSeeds;
   if (r.dhtEstimate === true) out.dhtEstimate = true;
   if (r.noTracker === true) out.noTracker = true;
+  if (typeof r.seedSource === 'string' && r.seedSource) out.seedSource = r.seedSource;
+  if (typeof r.seedAgeMs === 'number' && isFinite(r.seedAgeMs)) out.seedAgeMs = r.seedAgeMs;
   return out;
 }
 

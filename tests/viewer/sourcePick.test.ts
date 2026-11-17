@@ -59,6 +59,17 @@ describe('viewer source rank', () => {
     expect(pick && pick.badge).toBe(pickBadge('dht', phone.device));
   });
 
+  it('treats a bitmagnet estimate as a DHT pick, not a live scrape', () => {
+    const list = [
+      row({ Title: 'Quiet 1080p', Seed: 0, seedCheck: 'unverified' }),
+      row({ Title: 'BM 1080p AVC', Seed: 22, Peer: 4, seedCheck: 'dht', dhtEstimate: true, dhtSeeds: 0, seedSource: 'bitmagnet' }),
+    ];
+    const pick = pickDefaultSource(list, 'bm', phone);
+    expect(pick && pick.row.Title).toBe('BM 1080p AVC');
+    expect(pick && pick.reason).toBe('dht');
+    expect(pick && pick.badge).toBe(pickBadge('dht', phone.device));
+  });
+
   it('penalises a huge file on a slow link and prefers the smaller one', () => {
     const slow = { device: deviceCaps('phone'), speedBps: 200 * 1024, now: NOW };
     const big = 40 * 1024 * 1024 * 1024;

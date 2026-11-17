@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { saveBillingSession } from '../../src/billing/session';
-import { applySeedRound, parseSeedResponse, pickProbeRows, watchSeedVerify, type SeedMeasure } from '../../src/sources/seedVerify';
+import { SEED_CHECK_TIMEOUT_MS, applySeedRound, parseSeedResponse, pickProbeRows, watchSeedVerify, type SeedMeasure } from '../../src/sources/seedVerify';
 import type { SourceContext, SourceResult } from '../../src/sources/types';
+// @ts-ignore plain .mjs module, no declaration file
+import { SEED_CHECK_BUDGET_MS } from '../../ops/billing/src/seedProbe.mjs';
 
 const HASH = 'ab'.repeat(20);
 const OTHER = 'cd'.repeat(20);
@@ -186,5 +188,49 @@ describe('seed check apply', () => {
     expect(applied).toEqual([]);
     expect(applySeedRound([plain], applied, true)[0].seedCheck).toBe('unverified');
     watch.cancel();
+  });
+});
+
+describe('bitmagnet estimates on the row', () => {
+  it('writes estimate counts with source and age, never live, and leaves a verified row alone', () => {
+    const text = JSON.stringify({
+      items: [
+        { infohash: HASH, verified: false, live: false, seeders: 21, leechers: 4, peers: 0, dhtSeeds: 0, estimate: true, noTracker: true, samples: 0, measuredAt: 50, source: 'bitmagnet', ageMs: 60000 },
+        { infohash: OTHER, verified: true, live: true, seeders: 12, leechers: 3, seedersMax: 12, seedersMedian: 12, peers: 0, samples: 2, measuredAt: 50 },
+      ],
+    });
+    const measures = parseSeedResponse(text) as SeedMeasure[];
+    expect(measures[0].source).toBe('bitmagnet');
+    expect(measures[0].ageMs).toBe(60000);
+    const rows = applySeedRound(
+      [row({ Title: 'A', hash: HASH, Seed: 0, Peer: 0 }), row({ Title: 'B', hash: OTHER, Seed: 1 })],
+      measures,
+      true,
+    );
+    expect(rows[0]).toMatchObject({ Seed: 21, Peer: 4, seedCheck: 'dht', seedSource: 'bitmagnet', seedAgeMs: 60000, noTracker: true, dhtEstimate: true });
+    expect(rows[0].seedCheck).not.toBe('live');
+    expect(rows[1]).toMatchObject({ Seed: 12, Peer: 3, seedCheck: 'live' });
+    expect(rows[1].seedSource).toBeUndefined();
+    expect(rows[1].seedAgeMs).toBeUndefined();
+  });
+
+  it('a pure DHT estimate keeps the search numbers, and an older answer carries no source or age', () => {
+    const measures = parseSeedResponse(
+      JSON.stringify({
+        items: [
+          { infohash: HASH, verified: false, live: false, seeders: 0, leechers: 0, peers: 9, dhtSeeds: 4, estimate: true, samples: 0, measuredAt: 50 },
+        ],
+      }),
+    ) as SeedMeasure[];
+    expect(measures[0].source).toBeUndefined();
+    expect(measures[0].ageMs).toBeUndefined();
+    const rows = applySeedRound([row({ Title: 'A', hash: HASH, Seed: 9 })], measures, true);
+    expect(rows[0]).toMatchObject({ Seed: 9, seedCheck: 'dht', dhtSeeds: 4, dhtEstimate: true });
+    expect(rows[0].seedSource).toBeUndefined();
+    expect(rows[0].seedAgeMs).toBeUndefined();
+  });
+
+  it('the server request budget matches the app check timeout', () => {
+    expect(SEED_CHECK_BUDGET_MS).toBe(SEED_CHECK_TIMEOUT_MS);
   });
 });

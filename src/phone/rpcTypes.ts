@@ -38,6 +38,10 @@ export interface RpcResult {
   dhtSeeds?: number;
   dhtEstimate?: boolean;
   noTracker?: boolean;
+  /** Estimate provenance ('bitmagnet'). Absent on an older phone build. */
+  seedSource?: string;
+  /** Age of the estimate counts at answer time, ms. Absent on an older phone build. */
+  seedAgeMs?: number;
 }
 
 export interface RpcFailure {

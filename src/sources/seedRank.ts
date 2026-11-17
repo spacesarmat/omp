@@ -1,7 +1,7 @@
 // Order of a finished search once the server has checked seeds. Until that round finishes, the list
 // stays in the ordinary seed order. Chromium 53 safe: no ?., no ??, no regex u flag.
 import { qualityRank } from '../monitor/quality';
-import { t } from '../i18n';
+import { t, tp } from '../i18n';
 import { seedCheckLine } from './dhtPeers';
 import { parseRelease } from './filters';
 import { infohashOf, phoneSeedBits, trackerTargets, type SeedDisplay } from './liveSeeds';
@@ -42,6 +42,15 @@ export function seasonScore(title: string, seasons: number[]): number {
 }
 
 /**
+ * Seed count of an estimate row: the BEP 33 dhtSeeds, or the bitmagnet counts now carried by Seed.
+ * 0 for a live or unchecked row, and for an estimate without any count.
+ */
+export function estimateSeedCount(r: SourceResult): number {
+  if (r.seedCheck !== 'dht' || !r.dhtEstimate) return 0;
+  return Math.max(r.dhtSeeds || 0, r.seedSource === 'bitmagnet' ? r.Seed || 0 : 0);
+}
+
+/**
  * Higher is better. A checked swarm is always above an unchecked row.
  * Inside that, more seeds win, then a fresher measurement, then the title match, the season, the quality, the size.
  */
@@ -51,11 +60,12 @@ export function rankScore(r: SourceResult, query: string, now: number): number {
   const hit = words.length ? matchCount(r.Title || '', words) : 0;
   const season = seasonScore(r.Title || '', seasons);
   let score = hit * 4000 + season * 8000 + qualityRank(r.Title || '') * 100 + sizeScore(r.sizeBytes);
+  const estSeeds = estimateSeedCount(r);
   if (r.seedCheck === 'live' && (r.Seed || 0) > 0) {
     const age = typeof r.seedCheckAt === 'number' ? now - r.seedCheckAt : FRESH_WINDOW_MS;
     score += LIVE_BASE + Math.min(r.Seed, 20000) * 1000 + freshnessScore(age);
-  } else if (r.seedCheck === 'dht' && r.dhtEstimate && (r.dhtSeeds || 0) > 0) {
-    score += DHT_BASE + Math.min(r.dhtSeeds || 0, 500) * 20;
+  } else if (r.seedCheck === 'dht' && estSeeds > 0) {
+    score += DHT_BASE + Math.min(estSeeds, 500) * 20;
   } else if (r.seedCheck === 'live') {
     // The scrape answered and nobody is seeding. Still above a row we could not check.
     score += 100000;
@@ -124,6 +134,12 @@ export function seedStatusLine(r: SourceResult): string {
   }
   if (r.seedCheck === 'dht') {
     const reason = r.noTracker || !trackerListed(r) ? 'notrackers' : 'timeout';
+    // bitmagnet estimate: real seed/leech counts from the local DHT index, shown as an estimate
+    // (the «~» mark and «по DHT»), never as a verified scrape. Existing i18n keys only.
+    if (r.seedSource === 'bitmagnet' && (r.Seed || 0) > 0) {
+      const est = '~' + tp('sources.seeds', r.Seed || 0) + ' · ' + tp('sources.leechers', r.Peer || 0) + ' · ' + t('sources.dhtVia');
+      return reason === 'notrackers' ? t('sources.seedsNoTracker') + ' · ' + est : est;
+    }
     const dht =
       r.dhtEstimate && typeof r.dhtSeeds === 'number'
         ? { ok: true as const, peers: r.dhtPeers || 0, estimate: true, seedsEstimate: r.dhtSeeds }
