@@ -494,6 +494,18 @@ export function createTrackerGate(opts) {
     release() {
       inFlight = inFlight > 0 ? inFlight - 1 : 0;
     },
+    // Why a take would fail, as a wait time: the ms left on the per-host gap when the gap is the
+    // ONLY blocker (a sequential request may wait it out), 0 when take would succeed right now, or
+    // null when a concurrency/window cap blocks. A cap is a legitimate limit, not a gap to wait out.
+    gapWaitMs(host, now) {
+      if (inFlight >= maxInFlight) return null;
+      prune(now);
+      if (stamps.length >= windowMax) return null;
+      if (Object.prototype.hasOwnProperty.call(hostAt, host) && now - hostAt[host] < perHostGapMs) {
+        return perHostGapMs - (now - hostAt[host]);
+      }
+      return 0;
+    },
   };
 }
 

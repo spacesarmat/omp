@@ -12,7 +12,9 @@
 //   shared across the whole chain, so a redirect loop cannot outlive the per-job deadline.
 // - The tracker rate-limit gate (deps.gate) is applied to every contacted host, redirect targets
 //   included: each hop takes a slot, spends a request-window stamp and honours the per-host gap,
-//   then releases the slot. A gate refusal is a miss, so redirects cannot bypass the tracker limits.
+//   then releases the slot. A per-host gap refusal is waited out inside the shared deadline (two
+//   hashes may share a tracker, and an http->https upgrade contacts one host twice), so a working
+//   scrape is not dropped; a window/concurrency cap is a legitimate limit and returns a miss at once.
 import { Agent as HttpAgent, request as httpRequest } from 'node:http';
 import { Agent as HttpsAgent, request as httpsRequest } from 'node:https';
 import { createSocket } from 'node:dgram';
@@ -26,6 +28,31 @@ const MAX_BYTES = 65536;
 /** At most this many redirect hops; the next redirect after the cap is refused. */
 const MAX_REDIRECTS = 3;
 const REDIRECT_CODES = [301, 302, 307, 308];
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Take a tracker-gate slot for `host`, waiting out the per-host gap when it is the only blocker.
+ * Two hashes can share one tracker, and an http->https upgrade contacts the same host twice; both
+ * are sequential requests that must wait the gap, not be dropped. The wait is bounded by the shared
+ * deadline. A concurrency/window cap (gapWaitMs null) is a legitimate limit and returns false at
+ * once - no spinning to the deadline. Returns true with the slot held, false for a miss.
+ */
+async function takeGate(gate, host, deadline, signal) {
+  let now = Date.now();
+  while (!gate.take(host, now)) {
+    const wait = gate.gapWaitMs(host, now);
+    if (wait === null) return false;
+    const left = deadline - Date.now();
+    if (wait >= left) return false;
+    await delay(wait + 1);
+    if (aborted(signal)) return false;
+    now = Date.now();
+  }
+  return true;
+}
 
 /** First public address, or null when any answer is private or the name does not resolve. */
 export async function resolvePublic(host, lookup) {
@@ -89,12 +116,13 @@ async function fetchScrape(url, infohash, deadline, lookup, requestImpl, signal,
   const host = hostnameOf(url);
   const addr = await resolvePublic(host, lookup);
   if (!addr || aborted(signal)) return null;
+  if (deadline - Date.now() <= 0) return null;
+  // Wait out the per-host gap inside the shared deadline; a window/concurrency cap is a miss.
+  if (gate && !(await takeGate(gate, host, deadline, signal))) return null;
   const left = deadline - Date.now();
-  if (left <= 0) return null;
-  if (gate && !gate.take(host, Date.now())) return null;
-  let result;
+  let result = null;
   try {
-    result = await readHttp(url, infohash, left, addr, requestImpl, signal);
+    if (left > 0) result = await readHttp(url, infohash, left, addr, requestImpl, signal);
   } finally {
     if (gate) gate.release();
   }

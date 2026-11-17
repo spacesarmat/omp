@@ -26,7 +26,7 @@ type Script = { status: number; headers?: Record<string, string>; body?: string;
 function fakeRequest(choose: (host: string, path: string, protocol: string) => Script) {
   const calls: any[] = [];
   const impl = (options: any, cb: (res: any) => void) => {
-    calls.push(options);
+    calls.push({ ...options, at: Date.now() });
     const host = String(options.servername || (options.headers && options.headers.Host) || '');
     const script = choose(host, String(options.path || ''), String(options.protocol || ''));
     const req: any = new EventEmitter();
@@ -173,19 +173,47 @@ describe('httpScrape tracker gate on every hop', () => {
       if (host === 'secure.example') return { status: 200, body: scrapeBody(8, 1) };
       return { status: 302, headers: { location: 'https://secure.example' + SCRAPE_PATH } };
     });
+  // An http->https upgrade that stays on the SAME hostname (the second hop hits the host gap).
+  const sameHostUpgrade = () =>
+    fakeRequest((_host, _path, protocol) => {
+      if (protocol === 'http:') return { status: 302, headers: { location: 'https://tracker.example' + SCRAPE_PATH } };
+      return { status: 200, body: scrapeBody(8, 1) };
+    });
 
-  it('applies the per-host gap to a redirect target shared by two announce hosts', async () => {
-    const gate = createTrackerGate({ perHostGapMs: 500 });
+  it('waits out the per-host gap for a shared tracker and completes within the deadline', async () => {
+    // Two hashes share one HTTP tracker: the second scrape must wait the gap, not be dropped.
+    const gate = createTrackerGate({ perHostGapMs: 60 });
+    const impl = fakeRequest(() => ({ status: 200, body: scrapeBody(8, 1) }));
+    const first = await httpScrape('http://tracker.example' + SCRAPE_PATH, HASH, 2000, { lookup, request: impl, gate });
+    const second = await httpScrape('http://tracker.example' + SCRAPE_PATH, HASH, 2000, { lookup, request: impl, gate });
+    expect(first).toEqual({ seeders: 8, leechers: 1 });
+    expect(second).toEqual({ seeders: 8, leechers: 1 });
+    expect(impl.calls).toHaveLength(2);
+    expect(impl.calls[1].at - impl.calls[0].at).toBeGreaterThanOrEqual(60); // gap respected
+  });
+
+  it('completes an http->https redirect on the same hostname (second hop waits the gap)', async () => {
+    const gate = createTrackerGate({ perHostGapMs: 60 });
+    const impl = sameHostUpgrade();
+    const out = await httpScrape('http://tracker.example' + SCRAPE_PATH, HASH, 2000, { lookup, request: impl, gate });
+    expect(out).toEqual({ seeders: 8, leechers: 1 });
+    expect(impl.calls).toHaveLength(2);
+    expect(impl.calls[0].protocol).toBe('http:');
+    expect(impl.calls[1].protocol).toBe('https:');
+    expect(impl.calls[1].servername).toBe('tracker.example');
+    expect(impl.calls[1].at - impl.calls[0].at).toBeGreaterThanOrEqual(60); // gap respected
+  });
+
+  it('respects the per-host gap of a redirect target shared by two announce hosts', async () => {
+    const gate = createTrackerGate({ perHostGapMs: 60 });
     const impl = redirectImpl();
     const first = await httpScrape('http://tracker.example' + SCRAPE_PATH, HASH, 2000, { lookup, request: impl, gate });
-    expect(first).toEqual({ seeders: 8, leechers: 1 });
-    // A different announce host redirecting to the same target inside the gap is refused.
     const second = await httpScrape('http://other.example' + SCRAPE_PATH, HASH, 2000, { lookup, request: impl, gate });
-    expect(second).toBe(null);
-    // secure.example was contacted once (by the first chain); the second chain never reached it.
+    expect(first).toEqual({ seeders: 8, leechers: 1 });
+    expect(second).toEqual({ seeders: 8, leechers: 1 });
     const secureCalls = impl.calls.filter((c: any) => c.servername === 'secure.example');
-    expect(secureCalls).toHaveLength(1);
-    expect(impl.calls).toHaveLength(3); // tracker.example, secure.example, other.example
+    expect(secureCalls).toHaveLength(2); // both chains reach the target, spaced by the gap
+    expect(secureCalls[1].at - secureCalls[0].at).toBeGreaterThanOrEqual(60);
   });
 
   it('spends the shared request-window budget on every redirect hop', async () => {
@@ -202,16 +230,26 @@ describe('httpScrape tracker gate on every hop', () => {
     expect(next.calls).toHaveLength(0);
   });
 
-  it('returns null without contacting a redirect target the gate refuses', async () => {
-    const gate = createTrackerGate({ perHostGapMs: 500 });
-    // The target was just contacted: its per-host gap blocks the redirect hop.
-    expect(gate.take('secure.example', Date.now())).toBe(true);
-    gate.release();
+  it('returns null without contacting a redirect target when the window is exhausted', async () => {
+    // windowMax 1: the origin hop spends the only slot, so the redirect hop is capped (not a gap).
+    const gate = createTrackerGate({ perHostGapMs: 0, windowMs: 10000, windowMax: 1 });
     const impl = redirectImpl();
     const out = await httpScrape('http://tracker.example' + SCRAPE_PATH, HASH, 2000, { lookup, request: impl, gate });
     expect(out).toBe(null);
-    expect(impl.calls).toHaveLength(1); // only the origin hop; the refused target is never contacted
+    expect(impl.calls).toHaveLength(1); // only the origin hop; the capped target is never contacted
     expect(impl.calls[0].servername).toBe('tracker.example');
+  });
+
+  it('returns null when the per-host gap outlives the remaining budget (no spinning)', async () => {
+    const gate = createTrackerGate({ perHostGapMs: 500 });
+    expect(gate.take('tracker.example', Date.now())).toBe(true); // host just contacted
+    gate.release();
+    const impl = fakeRequest(() => ({ status: 200, body: scrapeBody(8, 1) }));
+    const started = Date.now();
+    const out = await httpScrape('http://tracker.example' + SCRAPE_PATH, HASH, 40, { lookup, request: impl, gate });
+    expect(out).toBe(null);
+    expect(impl.calls).toHaveLength(0); // budget too short to wait the gap: a miss, no contact
+    expect(Date.now() - started).toBeLessThan(400); // did not spin to the gap or beyond the budget
   });
 
   it('still scrapes normally when no gate is passed', async () => {
