@@ -1,18 +1,18 @@
 {
-  "version": "0.30.1-beta.8",
-  "ipkUrl": "https://github.com/spacesarmat/omp/releases/download/v0.30.1-beta.8/OMP-0.30.1-beta.8.apk",
-  "ipkHash": "62613bd6e42f678151e96b87c245c4e61c7f1605a6442a254a9f6a98190f6c1e",
-  "ipkSize": 93565409,
+  "version": "0.30.1-beta.9",
+  "ipkUrl": "https://github.com/spacesarmat/omp/releases/download/v0.30.1-beta.9/OMP-0.30.1-beta.9.apk",
+  "ipkHash": "4437f94914ef8688a2270af5c34b8ebe1d88573ca0b27151fdc407577f41644e",
+  "ipkSize": 93570385,
   "apks": {
     "arm64": {
-      "url": "https://github.com/spacesarmat/omp/releases/download/v0.30.1-beta.8/OMP-0.30.1-beta.8-arm64.apk",
-      "sha256": "00e16816981b428288f1318bba5fa7778c3a0c2dab289a2515078907b03028d9",
-      "size": 59017143
+      "url": "https://github.com/spacesarmat/omp/releases/download/v0.30.1-beta.9/OMP-0.30.1-beta.9-arm64.apk",
+      "sha256": "1a7e98f0c3fa808925c05b135489c593772e9792ecd1bfe30800d0428e88ca2e",
+      "size": 59022119
     },
     "armv7": {
-      "url": "https://github.com/spacesarmat/omp/releases/download/v0.30.1-beta.8/OMP-0.30.1-beta.8-armv7.apk",
-      "sha256": "4665a9a4c42bb7c612f466a96d967ef9ecf80600d38ddea030230969da4e66a1",
-      "size": 54836171
+      "url": "https://github.com/spacesarmat/omp/releases/download/v0.30.1-beta.9/OMP-0.30.1-beta.9-armv7.apk",
+      "sha256": "dddac539716df792f013a813df08bd3ab57d36380abb8f0252f119376fa95aae",
+      "size": 54841147
     }
   },
   "notes": [
@@ -20,5 +20,5 @@
   ],
   "notesTv": [],
   "notesPhone": [],
-  "releaseUrl": "https://github.com/spacesarmat/omp/releases/tag/v0.30.1-beta.8"
+  "releaseUrl": "https://github.com/spacesarmat/omp/releases/tag/v0.30.1-beta.9"
 }

@@ -1,12 +1,12 @@
 {
-  "version": "0.30.1-beta.8",
-  "ipkUrl": "https://github.com/spacesarmat/omp/releases/download/v0.30.1-beta.8/OMP-0.30.1-beta.8-webOS.ipk",
-  "ipkHash": "12aef99a8d37bef6fc477a41813c6d7c85c49d96e12b7385a5d9ca1cf84199a6",
-  "ipkSize": 618130,
+  "version": "0.30.1-beta.9",
+  "ipkUrl": "https://github.com/spacesarmat/omp/releases/download/v0.30.1-beta.9/OMP-0.30.1-beta.9-webOS.ipk",
+  "ipkHash": "0853011972a6390b24ed355463089acd297778b88c67385df7426b1d09a5d13b",
+  "ipkSize": 620560,
   "notes": [
     "Исправления и улучшения"
   ],
-  "releaseUrl": "https://github.com/spacesarmat/omp/releases/tag/v0.30.1-beta.8",
+  "releaseUrl": "https://github.com/spacesarmat/omp/releases/tag/v0.30.1-beta.9",
   "notesTv": [],
   "notesPhone": []
 }
