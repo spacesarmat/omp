@@ -360,4 +360,45 @@ describe('ExportPanel', () => {
     expect(host.querySelector<HTMLButtonElement>('[data-action="export"]')!.disabled).toBe(false);
     expect(host.querySelector('[data-testid="confirm-geometry-warnings"]')).not.toBeNull();
   });
+
+  it('shows structured flow changes (rules, nodes, edges, variables) in the export diff', async () => {
+    const diff: ExportDiff = {
+      baseCommit: BASE,
+      targets: ['desktop-windows'],
+      foreignDirty: [],
+      files: [
+        {
+          path: 'design/flows/desktop-default.json',
+          action: 'update',
+          before: '{}',
+          after: '{}',
+          flow: {
+            rules: { added: ['server-rule'], removed: ['old-rule'], changed: ['base-rule'] },
+            nodes: { added: ['n2'], removed: [], changed: [] },
+            edges: { added: ['e2'], removed: ['e1'], changed: [] },
+            variables: { added: [], removed: [], changed: ['var-1'] },
+          },
+        },
+      ],
+    };
+    const client: EditorClient = {
+      state: async () => ({ baseCommit: BASE, dirtyDesign: false }),
+      getDraft: async () => null,
+      putDraft: async (draft) => draft,
+      getDesign: async () => null,
+      rebaseDraft: async () => { throw new Error('NOT_IMPLEMENTED'); },
+      exportDraft: async () => { throw new Error('NOT_IMPLEMENTED'); },
+      exportDiff: async () => diff,
+    };
+    act(() => render(h(ExportPanel, { controller, client }), host));
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>('[data-action="show-diff"]')!.click();
+    });
+    const flowEntry = host.querySelector('[data-testid="flow-diff"]')!;
+    expect(flowEntry.textContent).toContain('design/flows/desktop-default.json');
+    expect(flowEntry.textContent).toContain('server-rule');
+    expect(flowEntry.textContent).toContain('old-rule');
+    expect(flowEntry.textContent).toContain('base-rule');
+    expect(flowEntry.textContent).toContain('var-1');
+  });
 });

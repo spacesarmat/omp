@@ -106,6 +106,19 @@ export function emptyState() {
         notifyMin: 0,
         showAmounts: false,
       },
+      /**
+       * Donate auto rates. On until an admin turns a switch off.
+       * cache holds the last good number; 0 is never stored.
+       */
+      rates: {
+        refreshMin: 12,
+        maxAgeMin: 1440,
+        markupPercent: 0,
+        starUsd: 0.013,
+        auto: { usdt: true, ton: true, btc: true, star: true },
+        cache: {},
+        fetchedAt: 0,
+      },
       /** Devices every subscription includes (1-20) unless an admin set an individual limit (limitOverride). */
       baseDevices: BASE_DEVICES_DEFAULT,
       /** Days of access after paidUntil (search keeps working, the bot says «льготный период»). */

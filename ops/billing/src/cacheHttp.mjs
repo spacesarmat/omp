@@ -21,6 +21,7 @@ import {
   validPrefixMb,
   validPrefixPercent,
 } from './cacheNodes.mjs';
+import { roleOf } from './desk.mjs';
 
 const NODE_ID = /^[a-f0-9]{16}$/;
 const ERRORS = { '': true, add_failed: true, no_metadata: true, prefix_short: true, torrserver: true };
@@ -142,6 +143,11 @@ export async function routeCache(req, res, deps) {
     if (!admin) return;
     const body = await adminBody(deps, req, admin);
     if (!body) return;
+    // Same gate as the other admin POST routes: a read-role session must not change nodes or tokens.
+    if (roleOf((await deps.store.read()).settings, admin) !== 'full') {
+      reply(res, json, 403, { ok: false, error: 'Режим только просмотра' });
+      return;
+    }
     if (path === '/admin/cache/settings') {
       const patch = {};
       if (body.enabled !== undefined) patch.cacheNodesEnabled = body.enabled;

@@ -1,6 +1,7 @@
 import { useState } from 'preact/hooks';
 import type { DesktopDesignTarget, FlowDocument } from '../../../design/schema.ts';
 import { simulatePreviewClick, type SimulationResult } from '../simulation';
+import { FlowDebugger } from './FlowDebugger';
 
 export interface SimulationPanelProps {
   target: DesktopDesignTarget;
@@ -8,9 +9,11 @@ export interface SimulationPanelProps {
   serverConnected: boolean;
   onServerConnected(value: boolean): void;
   error?: string;
+  route?: string;
+  orientation?: string;
 }
 
-export function SimulationPanel({ target, flow, serverConnected, onServerConnected, error }: SimulationPanelProps) {
+export function SimulationPanel({ target, flow, serverConnected, onServerConnected, error, route = 'settings', orientation = 'landscape' }: SimulationPanelProps) {
   const [result, setResult] = useState<SimulationResult | null>(null);
   const [localError, setLocalError] = useState('');
   const run = async () => {
@@ -43,6 +46,7 @@ export function SimulationPanel({ target, flow, serverConnected, onServerConnect
           </ol>
         </div>
       )}
+      <FlowDebugger flow={flow} target={target} route={route} orientation={orientation} />
     </section>
   );
 }
