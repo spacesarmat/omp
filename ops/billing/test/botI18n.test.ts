@@ -4,6 +4,7 @@ import {
   bodyFor,
   normalizeLang,
   pickVariant,
+  renderBody,
   sampleVars,
   str,
   stringIds,
@@ -13,6 +14,7 @@ import {
 import {
   botCallback,
   botReply,
+  daysText,
   grantUserMessage,
   mainKeyboard,
   paymentUserMessage,
@@ -342,5 +344,50 @@ describe('admin find localizes the limit breakdown and code label', () => {
     expect(msg.text).not.toContain('custom limit');
     expect(msg.text).toContain('Свободный код: ');
     expect(msg.copy.vars.code).toContain('Свободный код: <code>');
+  });
+});
+
+describe('referral notice words follow the selected template language', () => {
+  it('daysText declines in RU by default and uses day/days in EN', () => {
+    expect(daysText(1, '')).toBe('1 день');
+    expect(daysText(3, '')).toBe('3 дня');
+    expect(daysText(7, 'ru')).toBe('7 дней');
+    expect(daysText(1, 'en')).toBe('1 day');
+    expect(daysText(3, 'en')).toBe('3 days');
+    expect(daysText(7, 'en')).toBe('7 days');
+  });
+
+  // Mirrors sendReferralNotices: pick the variant for the recipient, then render {days} in the
+  // language of the SELECTED template (a RU default stays RU even for an EN recipient).
+  function renderNotice(rows: { subState: string; lang: string; body: string }[], recipientLang: string, days: number) {
+    const picked = pickVariant(rows, '', recipientLang);
+    const tplLang = picked ? normalizeLang(picked.lang) : recipientLang;
+    return renderBody(picked ? picked.body : '', { days: daysText(days, tplLang) });
+  }
+
+  it('EN recipient with only a RU default template gets RU day words (strict default)', () => {
+    const rows = [{ subState: '', lang: '', body: 'FRIEND +{days}' }];
+    expect(renderNotice(rows, 'en', 3)).toBe('FRIEND +3 дня');
+  });
+
+  it('RU recipient with the RU default template gets RU day words', () => {
+    const rows = [{ subState: '', lang: '', body: 'REFERRER +{days}' }];
+    expect(renderNotice(rows, 'ru', 7)).toBe('REFERRER +7 дней');
+  });
+
+  it('EN recipient with an EN template gets EN day words', () => {
+    const rows = [
+      { subState: '', lang: '', body: 'FRIEND +{days}' },
+      { subState: '', lang: 'en', body: 'FRIEND +{days}' },
+    ];
+    expect(renderNotice(rows, 'en', 3)).toBe('FRIEND +3 days');
+  });
+
+  it('an unsupported language still picks the RU default and renders RU words', () => {
+    const rows = [
+      { subState: '', lang: '', body: 'FRIEND +{days}' },
+      { subState: 'active', lang: '', body: 'ACTIVE +{days}' },
+    ];
+    expect(renderNotice(rows, normalizeLang('uk'), 3)).toBe('FRIEND +3 дня');
   });
 });

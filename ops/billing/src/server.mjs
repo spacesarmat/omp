@@ -1425,14 +1425,20 @@ async function sendReferralNotices(store, token, messages, fetchImpl) {
         if (acc && acc.telegramId) {
           const sub = subscriptionView(state, acc.id, Date.now());
           const rec = copyRecipient(state, acc.id, Date.now());
+          const id = msg.role === 'friend' ? 'referral.friend' : 'referral.referrer';
+          // The interpolated words follow the language of the SELECTED template, not the recipient:
+          // strict pickVariant gives an EN recipient the RU default template when no EN variant is
+          // saved, so {days} must decline in RU to stay consistent with that template body.
+          const picked = await repo.lookup(id, rec.state, rec.lang);
+          const tplLang = picked ? normalizeLang(picked.lang) : rec.lang;
           const applied = await repo.apply(
             {
-              id: msg.role === 'friend' ? 'referral.friend' : 'referral.referrer',
+              id,
               state: rec.state,
               lang: rec.lang,
               vars: {
-                days: daysText(totalDays, rec.lang),
-                expires_at: sub && sub.paidUntil ? mskDateTime(sub.paidUntil, rec.lang) : '',
+                days: daysText(totalDays, tplLang),
+                expires_at: sub && sub.paidUntil ? mskDateTime(sub.paidUntil, tplLang) : '',
                 name: telegramDisplay(acc),
                 ref_link: referralCodeFor(acc.id),
               },
@@ -1442,7 +1448,7 @@ async function sendReferralNotices(store, token, messages, fetchImpl) {
           if (applied.used === 'template' && applied.text) {
             text = applied.text;
             // A saved template must not hide the ruble award: keep the balance line after it.
-            if (Number(msg.credit) > 0) text += '\n' + str('ref.credit', rec.lang, { n: Math.floor(Number(msg.credit)) });
+            if (Number(msg.credit) > 0) text += '\n' + str('ref.credit', tplLang, { n: Math.floor(Number(msg.credit)) });
             opts = { parseMode: applied.parseMode, inline: applied.inline, keyboard: mainKeyboard(rec.lang), media: applied.media };
           }
         }
