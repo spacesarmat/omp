@@ -4,6 +4,7 @@
 
 ## Не выпущено
 
+- [tech] bitmagnet на NUC оставлен навсегда с DHT-краулером: compose в ops/vps/bitmagnet зеркалит сервер (--keys=dht_crawler, порты 3334 tcp+udp, TMDB_API_KEY), README и тест обновлены под новую политику. Web 3333 по-прежнему только на BITMAGNET_BIND, не через Caddy; том Postgres ~8 GB на 1 млн торрентов
 - [tech] Мониторинг сидов: модуль-источник bitmagnet - батч-запрос seed/leech по infohash через GraphQL (до 30 хешей за запрос), политика свежести и слияния с текущими counts, ошибки не роняют вызывающего. Дополняет Torznab-поиск, не дублирует его. Wiring в server.mjs - отдельным PR после фазы 1
 
 ## 0.30.1-beta.7
