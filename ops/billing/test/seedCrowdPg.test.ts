@@ -4,8 +4,8 @@
 import { describe, expect, it } from 'vitest';
 import { activate, createSubscription, deviceCode } from '../src/logic.mjs';
 import { createApp } from '../src/server.mjs';
-import { createCrowdRepo, loadCrowdReports, saveCrowdReports } from '../src/db/pg/seedCrowdSql.mjs';
-import { CROWD_DEDUP_MS, CROWD_WINDOW_MS, crowdDeviceKey } from '../src/seedCrowd.mjs';
+import { createCrowdRepo, crowdCounts, loadCrowdReports, saveCrowdReports } from '../src/db/pg/seedCrowdSql.mjs';
+import { CROWD_DEDUP_MS, CROWD_WINDOW_MS, crowdDeviceKey, mergeCrowdCounts } from '../src/seedCrowd.mjs';
 import { emptyState } from '../src/state.mjs';
 import { readState, testStore, writeState } from './pg';
 
@@ -122,6 +122,60 @@ describe('seed_crowd storage', () => {
     await saveCrowdReports(query, crowdDeviceKey('row-p2'), [{ infohash: HASH_B, seeders: 4, leechers: 0 }], now);
     const left = await query('SELECT infohash FROM seed_crowd', []);
     expect(left.rows.map((r: { infohash: string }) => r.infohash)).toEqual([HASH_B]);
+  });
+
+  it('medians three devices over the full set and drops a pair broken by the window', async () => {
+    const store = await testStore();
+    const repo = createCrowdRepo(store);
+    const now = Date.now();
+    await repo.save(crowdDeviceKey('m1'), [{ infohash: HASH, seeders: 1, leechers: 0 }], now - 60_000);
+    await repo.save(crowdDeviceKey('m2'), [{ infohash: HASH, seeders: 100, leechers: 50 }], now - 60_000);
+    await repo.save(crowdDeviceKey('m3'), [{ infohash: HASH, seeders: 3, leechers: 2 }], now - 60_000);
+    expect((await repo.fetchCounts([HASH])).get(HASH)).toMatchObject({ seeders: 3, leechers: 2, devices: 3 });
+    // one fresh + one outside the 24h window: the stale report leaves, a single device is not an estimate
+    await repo.save(crowdDeviceKey('m4'), [{ infohash: HASH_B, seeders: 5, leechers: 1 }], now - 60_000);
+    await repo.save(crowdDeviceKey('m5'), [{ infohash: HASH_B, seeders: 5, leechers: 1 }], now - CROWD_WINDOW_MS - 10_000);
+    expect((await repo.fetchCounts([HASH_B])).size).toBe(0);
+  });
+
+  it('a popular hash beyond the old read cap does not evict another hash', async () => {
+    const store = await testStore();
+    const query = (sql: string, params: unknown[]) => store.query(sql, params);
+    const now = Date.now();
+    // 4100 devices on one hash - more than the old 4096-row batch cap
+    await query(
+      'INSERT INTO seed_crowd (infohash, device_key, seeders, leechers, reported_at)' +
+        " SELECT $1, 'bulk-' || g, 5, 1, $2 FROM generate_series(1, 4100) AS g",
+      [HASH, now - 3_600_000],
+    );
+    await saveCrowdReports(query, crowdDeviceKey('small-1'), [{ infohash: HASH_B, seeders: 2, leechers: 0 }], now - 60_000);
+    await saveCrowdReports(query, crowdDeviceKey('small-2'), [{ infohash: HASH_B, seeders: 10, leechers: 4 }], now - 60_000);
+    const out = await crowdCounts(query, [HASH, HASH_B], now);
+    expect(out.get(HASH)).toMatchObject({ seeders: 5, leechers: 1, devices: 4100, source: 'crowd' });
+    expect(out.get(HASH).updatedAt).toBe(now - 3_600_000);
+    // the second hash keeps its own full aggregate, untouched by the popular one
+    expect(out.get(HASH_B)).toMatchObject({ seeders: 6, leechers: 2, devices: 2 });
+    expect(out.get(HASH_B).updatedAt).toBe(now - 60_000);
+  });
+
+  it('the oldest report of the full set keeps the aggregate stale despite thousands of fresh ones', async () => {
+    const store = await testStore();
+    const query = (sql: string, params: unknown[]) => store.query(sql, params);
+    const now = Date.now();
+    await query(
+      'INSERT INTO seed_crowd (infohash, device_key, seeders, leechers, reported_at)' +
+        " SELECT $1, 'bulk-' || g, 5, 1, $2 FROM generate_series(1, 4100) AS g",
+      [HASH, now - 3_600_000],
+    );
+    // one 7h-old report inside the 24h window: sampling it away would fake a fresh aggregate
+    await saveCrowdReports(query, crowdDeviceKey('old-device'), [{ infohash: HASH, seeders: 5, leechers: 1 }], now - 7 * 3_600_000);
+    const row = (await crowdCounts(query, [HASH], now)).get(HASH);
+    expect(row.devices).toBe(4101);
+    expect(row.updatedAt).toBe(now - 7 * 3_600_000);
+    // 7h > the 6h trust window: the merge refuses the estimate, the previous answer stays
+    const merged = mergeCrowdCounts({ seeders: 0, leechers: 0, live: false, verified: false }, row, { now: () => now });
+    expect(merged.source).toBeUndefined();
+    expect(merged.estimate).toBe(false);
   });
 
   it('stores only the hash, the irreversible key, the counts and the timestamp', async () => {

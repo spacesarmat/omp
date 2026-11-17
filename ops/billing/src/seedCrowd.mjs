@@ -15,7 +15,9 @@
 // per-device rate limit. An estimate needs CROWD_MIN_DEVICES distinct devices inside CROWD_WINDOW_MS:
 // a single report is not an estimate. The aggregate carries the OLDEST contributing report's
 // timestamp, so one stale report cannot hide behind a fresh one (the same rule bitmagnetSource
-// applies to mixed records).
+// applies to mixed records). The median, the threshold and the oldest timestamp are computed in
+// SQL over the FULL set of each hash's reports (db/pg/seedCrowdSql.mjs): no sampling cap can
+// evict another hash's reports or change what the full set would answer.
 //
 // Merge policy (mergeCrowdCounts, the bitmagnetSource shape): a fresh aggregate (<= CROWD_FRESH_MS,
 // >= CROWD_MIN_DEVICES) applies as source 'crowd', estimate, ageMs - never live, never verified.
@@ -43,7 +45,8 @@ export const CROWD_WAIT_MS = 2000;
 export const CROWD_MIN_LEFT_MS = 100;
 /** Answer cache over the crowd aggregate, the same window as bitmagnet. */
 export const CROWD_CACHE_TTL_MS = 60 * 1000;
-const CLOCK_SKEW_MS = 60 * 1000;
+/** A small future clock skew is tolerated, by the SQL window and by the merge alike. */
+export const CROWD_CLOCK_SKEW_MS = 60 * 1000;
 
 /**
  * Irreversible per-device key: sha256 of the registry device row id (the access token's stable
@@ -101,68 +104,11 @@ export function parseSwarmReports(raw) {
   return { ok: true, items: out };
 }
 
-/** Median of whole numbers, the seedProbe rule: middle value, or the rounded mean of the two middles. */
-function median(nums) {
-  if (!nums.length) return 0;
-  const s = nums.slice().sort((a, b) => a - b);
-  const mid = Math.floor(s.length / 2);
-  if (s.length % 2) return s[mid];
-  return Math.round((s[mid - 1] + s[mid]) / 2);
-}
-
-/**
- * Rows { infohash, deviceKey, seeders, leechers, reportedAt } -> Map<hash, aggregate>.
- * Only reports inside CROWD_WINDOW_MS (a one-minute future skew tolerated) count; the newest
- * report per device+hash wins; an aggregate needs CROWD_MIN_DEVICES distinct devices and carries
- * the median counts plus the OLDEST contributing timestamp. A single device produces no entry.
- */
-export function aggregateCrowdReports(rows, now) {
-  const out = new Map();
-  const latest = new Map();
-  const list = Array.isArray(rows) ? rows : [];
-  for (let i = 0; i < list.length; i++) {
-    const r = list[i];
-    if (!r || typeof r !== 'object') continue;
-    const hash = String(r.infohash || '').toLowerCase();
-    if (!/^[0-9a-f]{40}$/.test(hash)) continue;
-    const device = String(r.deviceKey || '');
-    if (!device) continue;
-    const seeders = count(r.seeders);
-    const leechers = count(r.leechers);
-    if (seeders === null || leechers === null) continue;
-    const at = r.reportedAt;
-    if (typeof at !== 'number' || !isFinite(at)) continue;
-    const age = now - at;
-    if (age < -CLOCK_SKEW_MS || age >= CROWD_WINDOW_MS) continue;
-    const id = hash + '\n' + device;
-    const prev = latest.get(id);
-    if (!prev || at > prev.reportedAt) latest.set(id, { hash, seeders, leechers, reportedAt: at });
-  }
-  const groups = new Map();
-  for (const r of latest.values()) {
-    if (!groups.has(r.hash)) groups.set(r.hash, []);
-    groups.get(r.hash).push(r);
-  }
-  for (const [hash, reports] of groups) {
-    if (reports.length < CROWD_MIN_DEVICES) continue;
-    let oldest = reports[0].reportedAt;
-    for (let i = 1; i < reports.length; i++) if (reports[i].reportedAt < oldest) oldest = reports[i].reportedAt;
-    out.set(hash, {
-      seeders: median(reports.map((r) => r.seeders)),
-      leechers: median(reports.map((r) => r.leechers)),
-      devices: reports.length,
-      updatedAt: oldest,
-      source: 'crowd',
-    });
-  }
-  return out;
-}
-
 /** Age-only freshness with the bitmagnet clock-skew tolerance. */
 function isFresh(row, maxAgeMs, now) {
   if (!row || typeof row.updatedAt !== 'number' || !isFinite(row.updatedAt)) return false;
   const age = now - row.updatedAt;
-  return age >= -CLOCK_SKEW_MS && age < maxAgeMs;
+  return age >= -CROWD_CLOCK_SKEW_MS && age < maxAgeMs;
 }
 
 /**

@@ -4,10 +4,10 @@ import { describe, expect, it } from 'vitest';
 import {
   CROWD_BATCH_MAX,
   CROWD_COUNT_CAP,
+  CROWD_DEDUP_MS,
   CROWD_FRESH_MS,
   CROWD_MIN_DEVICES,
   CROWD_WINDOW_MS,
-  aggregateCrowdReports,
   crowdDeviceKey,
   mergeCrowdCounts,
   parseSwarmReports,
@@ -17,17 +17,6 @@ import { createMemorySeedCache, runSeedCheck } from '../src/seedProbe.mjs';
 const HASH = 'ab'.repeat(20);
 const HASH_B = 'cd'.repeat(20);
 const NOW = 1_800_000_000_000;
-
-function report(p: Partial<{ infohash: string; deviceKey: string; seeders: number; leechers: number; reportedAt: number }> = {}) {
-  return {
-    infohash: HASH,
-    deviceKey: 'k1',
-    seeders: 4,
-    leechers: 1,
-    reportedAt: NOW - 60_000,
-    ...p,
-  };
-}
 
 describe('parseSwarmReports', () => {
   it('accepts an absent field as an empty batch', () => {
@@ -91,71 +80,17 @@ describe('crowdDeviceKey', () => {
   });
 });
 
-describe('aggregateCrowdReports', () => {
-  it('medians two devices and stamps the oldest contributing report', () => {
-    const rows = [
-      report({ deviceKey: 'k1', seeders: 2, leechers: 0, reportedAt: NOW - 3_600_000 }),
-      report({ deviceKey: 'k2', seeders: 10, leechers: 4, reportedAt: NOW - 60_000 }),
-    ];
-    const out = aggregateCrowdReports(rows, NOW);
-    expect(out.get(HASH)).toEqual({
-      seeders: 6,
-      leechers: 2,
-      devices: 2,
-      updatedAt: NOW - 3_600_000,
-      source: 'crowd',
-    });
-  });
-
-  it('takes the true median of three devices, not the max', () => {
-    const rows = [
-      report({ deviceKey: 'k1', seeders: 1, leechers: 0 }),
-      report({ deviceKey: 'k2', seeders: 100, leechers: 50 }),
-      report({ deviceKey: 'k3', seeders: 3, leechers: 2 }),
-    ];
-    const row = aggregateCrowdReports(rows, NOW).get(HASH);
-    expect(row && row.seeders).toBe(3);
-    expect(row && row.leechers).toBe(2);
-    expect(row && row.devices).toBe(3);
-  });
-
-  it('a single device is not an estimate', () => {
-    expect(aggregateCrowdReports([report()], NOW).size).toBe(0);
+// The aggregate itself (median, device threshold, 24h window, oldest timestamp) is computed in
+// SQL over the full set of each hash's reports - seedCrowdPg.test.ts covers it on Postgres (CI),
+// including the >4096-report popular hash that must not evict another hash or hide an old report.
+describe('crowd policy constants', () => {
+  it('pins the window, the trust threshold, the dedup and the caps', () => {
+    expect(CROWD_WINDOW_MS).toBe(24 * 60 * 60 * 1000);
+    expect(CROWD_FRESH_MS).toBe(6 * 60 * 60 * 1000);
     expect(CROWD_MIN_DEVICES).toBe(2);
-  });
-
-  it('drops reports outside the 24h window, so one stale device cannot pair with a fresh one', () => {
-    const rows = [
-      report({ deviceKey: 'k1', reportedAt: NOW - 60_000 }),
-      report({ deviceKey: 'k2', reportedAt: NOW - CROWD_WINDOW_MS - 1 }),
-    ];
-    expect(aggregateCrowdReports(rows, NOW).size).toBe(0);
-  });
-
-  it('tolerates a small clock skew but not a future report', () => {
-    const rows = [
-      report({ deviceKey: 'k1', reportedAt: NOW + 30_000 }),
-      report({ deviceKey: 'k2', reportedAt: NOW - 60_000 }),
-    ];
-    expect(aggregateCrowdReports(rows, NOW).get(HASH)).toBeTruthy();
-    const future = [
-      report({ deviceKey: 'k1', reportedAt: NOW + 5 * 60_000 }),
-      report({ deviceKey: 'k2', reportedAt: NOW - 60_000 }),
-    ];
-    expect(aggregateCrowdReports(future, NOW).size).toBe(0);
-  });
-
-  it('keeps the newest report per device and skips invalid rows', () => {
-    const rows = [
-      report({ deviceKey: 'k1', seeders: 1, reportedAt: NOW - 7_200_000 }),
-      report({ deviceKey: 'k1', seeders: 5, reportedAt: NOW - 60_000 }),
-      report({ deviceKey: 'k2', seeders: 7, reportedAt: NOW - 60_000 }),
-      report({ deviceKey: '', seeders: 9 }),
-      { infohash: 'bad', deviceKey: 'k3', seeders: 9, leechers: 0, reportedAt: NOW },
-    ];
-    const row = aggregateCrowdReports(rows, NOW).get(HASH);
-    expect(row && row.seeders).toBe(6);
-    expect(row && row.devices).toBe(2);
+    expect(CROWD_DEDUP_MS).toBe(10 * 60 * 1000);
+    expect(CROWD_BATCH_MAX).toBe(20);
+    expect(CROWD_COUNT_CAP).toBe(1000000);
   });
 });
 
