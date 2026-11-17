@@ -306,9 +306,18 @@ export function trackerKey(item) {
 }
 
 /**
- * The announce URLs the gate accepts, reduced to the public address: scheme, host, port, path.
- * The query (a passkey can sit there) and the fragment are dropped, userinfo never passes parseTracker.
- * Stored on the cache row so the background refresh can scrape the same trackers again. Never logged.
+ * The only paths stored for a re-scrape: a bare announce/scrape endpoint, optionally .php.
+ * A passkey can sit in a path segment (/secret/announce, /announce/<token>): such a URL is
+ * credential-bearing and is dropped from storage, not stripped. The foreground scrape still
+ * uses the full original URL - this whitelist is for the cache row only.
+ */
+const STORED_ANNOUNCE_PATH = /^\/(announce|scrape)(\.php)?$/i;
+
+/**
+ * Credential-free announce addresses for the cache row: scheme, host, port and a standard
+ * announce path only. The query (a passkey can sit there), the fragment and userinfo are dropped,
+ * and a path with extra segments (a passkey or token can sit there) drops the whole URL.
+ * UDP keeps host and port. The background refresh re-scrapes these; they are never logged.
  */
 export function publicTrackers(item) {
   const hash = String((item && item.infohash) || '').toLowerCase();
@@ -323,9 +332,13 @@ export function publicTrackers(item) {
     let url;
     try {
       const u = new URL(raw);
-      url = t.kind === 'udp'
-        ? 'udp://' + (t.host.indexOf(':') >= 0 ? '[' + t.host + ']' : t.host) + ':' + t.port + '/announce'
-        : u.origin + u.pathname;
+      if (t.kind === 'udp') {
+        url = 'udp://' + (t.host.indexOf(':') >= 0 ? '[' + t.host + ']' : t.host) + ':' + t.port + '/announce';
+      } else {
+        // a non-standard path can carry a credential: refuse to store it at all
+        if (!STORED_ANNOUNCE_PATH.test(u.pathname)) continue;
+        url = u.origin + u.pathname;
+      }
     } catch (e) {
       continue;
     }
@@ -727,6 +740,10 @@ export async function runSeedCheck(opts) {
     const merged = mergeMeasurements(samples[hash] || [], hash === dhtHash ? dhtHit : 0, measuredAt);
     merged.noTracker = trackerJobs(stale[i]).length === 0;
     measured[hash] = merged;
+    // A forced refresh with no tracker answer must not erase a working measurement: the stored
+    // row keeps its counts, live and measured_at. A real zero (samples > 0, a dead torrent) saves.
+    // The endpoint never forces, so a miss there still records the 10-minute TTL row as before.
+    if (o.force && merged.samples === 0) continue;
     saved.push({
       infohash: hash,
       trackerKey: trackerKey(stale[i]),
@@ -742,7 +759,7 @@ export async function runSeedCheck(opts) {
       samples: merged.samples,
       measuredAt: merged.measuredAt,
       live: merged.live,
-      // Public announce addresses for the background refresh. No query, no passkey, never logged.
+      // Credential-free announce addresses for the refresh: standard path only, no query, no passkey, never logged.
       trackers: publicTrackers(stale[i]),
     });
   }

@@ -105,6 +105,34 @@ describe('completed (snatched) count', () => {
     expect(rows).toHaveLength(1);
     expect(rows[0].measuredAt).toBe(half);
   });
+
+  it('a failed forced refresh keeps the working row; a real zero answer updates it', async () => {
+    const cache = createMemorySeedCache();
+    const now = Date.now();
+    const key = [{ infohash: HASH, trackerKey: 'tracker.example' }];
+    const items = [{ infohash: HASH, trackers: ['http://tracker.example/announce'] }];
+    const good = { http: async () => ({ seeders: 20, leechers: 2, completed: 500 }), udp: async () => null };
+    await runSeedCheck({ items, cache, now: () => now, transport: good, deadlineMs: 1000, timeoutMs: 500 });
+    const before = (await cache.get(key))[0];
+    expect(before).toMatchObject({ seeders: 20, live: true, hits: 1 });
+    // every tracker fails on the forced refresh: the stored measurement must survive untouched
+    const bad = { http: async () => null, udp: async () => null };
+    const half = now + TTL_POPULAR_MS / 2 + 1000;
+    const out = await runSeedCheck({ items, cache, now: () => half, transport: bad, force: true, deadlineMs: 1000, timeoutMs: 500 });
+    expect(out.stats.live).toBe(0);
+    const after = (await cache.get(key))[0];
+    expect(after).toEqual(before);
+    // a tracker that answered with zeros is a real measurement (a dead torrent): it saves
+    const zero = { http: async () => ({ seeders: 0, leechers: 0 }), udp: async () => null };
+    await runSeedCheck({ items, cache, now: () => half + 1000, transport: zero, force: true, deadlineMs: 1000, timeoutMs: 500 });
+    const dead = (await cache.get(key))[0];
+    expect(dead).toMatchObject({ seeders: 0, leechers: 0, live: true, samples: 1, measuredAt: half + 1000, hits: 2 });
+    // without force a miss still records the empty row, as the endpoint always did
+    const missCache = createMemorySeedCache();
+    await runSeedCheck({ items, cache: missCache, now: () => now, transport: bad, deadlineMs: 1000, timeoutMs: 500 });
+    const miss = (await missCache.get(key))[0];
+    expect(miss).toMatchObject({ seeders: 0, live: false, samples: 0 });
+  });
 });
 
 describe('publicTrackers', () => {
@@ -130,6 +158,62 @@ describe('publicTrackers', () => {
     expect(trackerKey({ infohash: HASH, trackers: publicTrackers(item) })).toBe(trackerKey(item));
     expect(publicTrackers({ infohash: HASH, trackers: [] })).toEqual([]);
     expect(publicTrackers(null)).toEqual([]);
+  });
+
+  it('stores only standard announce paths: a passkey or token in the path drops the whole URL', () => {
+    const item = {
+      infohash: HASH,
+      trackers: [
+        'https://tracker.example/secret/announce',
+        'http://tracker.example/announce',
+        'http://tracker.example:8080/announce.php',
+        'udp://udp.example:6969',
+        'https://tracker.example/announce/0123456789abcdef0123456789abcdef',
+        'https://tracker.example/announce/',
+        'https://tracker.example/passkey/abc/scrape',
+      ],
+    };
+    expect(publicTrackers(item)).toEqual([
+      'http://tracker.example/announce',
+      'http://tracker.example:8080/announce.php',
+      'udp://udp.example:6969/announce',
+    ]);
+    // a query passkey on a standard path is stripped, the address stays
+    expect(publicTrackers({ infohash: HASH, trackers: ['https://tracker.example/announce?passkey=abc'] })).toEqual([
+      'https://tracker.example/announce',
+    ]);
+  });
+
+  it('the foreground scrape keeps the full original URL; only storage is sanitized', async () => {
+    const calls: string[] = [];
+    const cache = createMemorySeedCache();
+    const now = Date.now();
+    const transport = {
+      http: async (url: string) => {
+        calls.push(url);
+        return { seeders: 9, leechers: 1, completed: 40 };
+      },
+      udp: async () => null,
+    };
+    const items = [
+      {
+        infohash: HASH,
+        trackers: ['https://private.example/secret/announce?passkey=abc', 'http://clean.example/announce'],
+      },
+    ];
+    const out = await runSeedCheck({ items, cache, now: () => now, transport, deadlineMs: 1000, timeoutMs: 500 });
+    expect(out.items[0]).toMatchObject({ live: true, seeders: 9 });
+    // both trackers were scraped with their original addresses, passkey included
+    expect(calls).toHaveLength(2);
+    expect(calls[0]).toContain('private.example/secret/scrape?passkey=abc');
+    expect(calls[1]).toContain('clean.example/scrape');
+    // the credential-bearing path is not stored; the clean address is
+    const rows = await cache.get([{ infohash: HASH, trackerKey: trackerKey(items[0]) }]);
+    expect(rows[0].trackers).toEqual(['http://clean.example/announce']);
+    expect(JSON.stringify(rows[0])).not.toContain('secret');
+    expect(JSON.stringify(rows[0])).not.toContain('passkey');
+    // the refresh cannot rebuild this row in place (the key differs): it skips it, not overwrites
+    expect(itemFromCache(rows[0])).toBe(null);
   });
 });
 

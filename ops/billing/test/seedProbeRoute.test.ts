@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { activate, createSubscription, deviceCode } from '../src/logic.mjs';
 import { createApp, formatSeedLog } from '../src/server.mjs';
 import { createPgSeedCache, listPopularSeedProbes } from '../src/db/pg/seedProbeSql.mjs';
-import { TTL_POPULAR_MS } from '../src/seedProbe.mjs';
+import { TTL_POPULAR_MS, runSeedCheck } from '../src/seedProbe.mjs';
 import { emptyState } from '../src/state.mjs';
 import { readState, testStore, writeState } from './pg';
 
@@ -230,5 +230,87 @@ describe('POST /v1/seed-check', () => {
     const cache = createPgSeedCache(file);
     const rows = await cache.get([{ infohash: HASH, trackerKey: 'tracker.example' }]);
     expect(rows[0]).toMatchObject({ completed: 500, trackers: ['http://tracker.example/announce'] });
+  });
+
+  it('a passkey in the announce path is scraped with the full URL but never stored', async () => {
+    const file = await testStore();
+    const now = Date.now();
+    const created = createSubscription(emptyState(), { accountId: 'acc', now, days: 30 });
+    const act = activate(created.state, { code: created.result.code, deviceId: DEV, now });
+    await writeState(file, act.state);
+    const seen: string[] = [];
+    const app = createApp(file, async () => ({ status: 200, headers: { get: () => null }, text: async () => '{}' }), {
+      env: {},
+      monitor: { health: () => null },
+      seedTransport: {
+        http: async (url: string) => {
+          seen.push(url);
+          return { seeders: 8, leechers: 2, completed: 500 };
+        },
+        udp: async () => null,
+      },
+    });
+    const slot = deviceCode(await readState(file), created.result.subscriptionId, Date.now());
+    await writeState(file, slot.state);
+    const activated = await call(app, 'POST', '/v1/activate', { json: { code: slot.code, deviceId: DEV, tokens: 'pair' } });
+    expect(activated.status).toBe(200);
+    const headers = { authorization: 'Bearer ' + (activated.data.accessToken as string), 'x-device-id': DEV };
+    const body = 'items=' + encodeURIComponent(JSON.stringify([
+      { infohash: HASH, trackers: ['https://tracker.example/secret/announce?passkey=abc'] },
+    ]));
+    const out = await call(app, 'POST', '/v1/seed-check', { body, headers });
+    expect(out.status).toBe(200);
+    expect((out.data.items as { live: boolean }[])[0].live).toBe(true);
+    // the foreground scrape used the original credential-bearing address
+    expect(seen).toHaveLength(1);
+    expect(seen[0]).toContain('tracker.example/secret/scrape?passkey=abc');
+    expect(out.body).not.toContain('passkey');
+    expect(out.body).not.toContain('secret');
+    // nothing credential-bearing is stored; the row cannot be refreshed and is not selected
+    const cache = createPgSeedCache(file);
+    const rows = await cache.get([{ infohash: HASH, trackerKey: 'tracker.example' }]);
+    expect(rows[0].trackers).toEqual([]);
+    expect(JSON.stringify(rows[0])).not.toContain('secret');
+    expect(JSON.stringify(rows[0])).not.toContain('passkey');
+    const due = await listPopularSeedProbes((sql: string, params: unknown[]) => file.query(sql, params), Date.now() + TTL_POPULAR_MS, 5);
+    expect(due).toEqual([]);
+  });
+
+  it('a failed forced refresh preserves the stored row in Postgres', async () => {
+    const store = await testStore();
+    const cache = createPgSeedCache(store);
+    const at = Date.now();
+    await cache.save([
+      {
+        infohash: HASH,
+        trackerKey: 'tracker.example',
+        seeders: 20,
+        leechers: 2,
+        completed: 500,
+        seedersMax: 20,
+        seedersMedian: 20,
+        peers: 0,
+        samples: 1,
+        measuredAt: at,
+        live: true,
+        trackers: ['http://tracker.example/announce'],
+      },
+    ]);
+    const key = [{ infohash: HASH, trackerKey: 'tracker.example' }];
+    const before = (await cache.get(key))[0];
+    // the refresh scrape fails (e.g. the tracker wants the passkey that storage dropped)
+    const out = await runSeedCheck({
+      items: [{ infohash: HASH, trackers: ['http://tracker.example/announce'] }],
+      cache,
+      now: () => at + TTL_POPULAR_MS / 2 + 1000,
+      transport: { http: async () => null, udp: async () => null },
+      force: true,
+      deadlineMs: 1000,
+      timeoutMs: 500,
+    });
+    expect(out.stats.live).toBe(0);
+    const after = (await cache.get(key))[0];
+    expect(after).toEqual(before);
+    expect(after).toMatchObject({ seeders: 20, completed: 500, live: true, measuredAt: at, hits: 1 });
   });
 });
