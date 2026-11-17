@@ -2,6 +2,9 @@
 # Own Postgres and own network. Does not mount billing data, the omp .env, or Caddy.
 # Torznab stays on the host loopback unless BITMAGNET_BIND is a LAN address.
 # Do not publish this port through Caddy or Cloudflare.
+# Local change from tag v0.20.12-beta.5: DHT crawler enabled (--keys=dht_crawler)
+# and host ports 3334/tcp+udp published, per official bitmagnet docs.
+# Web/Torznab (3333) stay on BITMAGNET_BIND only (LAN or loopback, never 0.0.0.0).
 
 name: omp-bitmagnet-test
 
@@ -16,14 +19,17 @@ services:
     environment:
       POSTGRES_HOST: postgres
       POSTGRES_PASSWORD: ${BITMAGNET_PG_PASSWORD:?set BITMAGNET_PG_PASSWORD}
-    # HTTP and the queue only. Leave the DHT crawler off so the disk stays small.
+      TMDB_API_KEY: ${TMDB_API_KEY}
     command:
       - worker
       - run
       - --keys=http_server
       - --keys=queue_server
+      - --keys=dht_crawler
     ports:
       - "${BITMAGNET_BIND:-127.0.0.1}:3333:3333"
+      - "3334:3334/tcp"
+      - "3334:3334/udp"
     mem_limit: 512m
     memswap_limit: 512m
     pids_limit: 256
