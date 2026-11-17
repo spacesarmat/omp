@@ -8,9 +8,10 @@ export interface PhoneReferral {
   code: string;
   friends: number;
   noticeDays: number;
+  noticeCredit: number;
 }
 
-const OFF: PhoneReferral = { enabled: false, code: '', friends: 0, noticeDays: 0 };
+const OFF: PhoneReferral = { enabled: false, code: '', friends: 0, noticeDays: 0, noticeCredit: 0 };
 
 export function loadPhoneReferral(): Promise<PhoneReferral> {
   if (!billingSession()) return Promise.resolve(OFF);
@@ -18,7 +19,7 @@ export function loadPhoneReferral(): Promise<PhoneReferral> {
     (acc) => {
       const row = acc && acc.referral;
       if (!row || !row.enabled) return OFF;
-      return { enabled: true, code: row.code || '', friends: row.friends || 0, noticeDays: row.noticeDays || 0 };
+      return { enabled: true, code: row.code || '', friends: row.friends || 0, noticeDays: row.noticeDays || 0, noticeCredit: row.noticeCredit || 0 };
     },
     () => OFF,
   );

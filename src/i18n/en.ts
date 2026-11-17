@@ -2689,6 +2689,7 @@ export const en: EnDict<typeof ru> = {
     copied: 'Link copied',
     qr: 'Invite QR code',
     noticeApp: 'A friend paid. You received {n} days.',
+    noticeCredit: 'Balance credit: {n} RUB.',
     noticeBot: 'Referral: a friend paid, you get +{n} days.',
   },
   faq: {

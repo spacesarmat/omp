@@ -14,9 +14,9 @@ import {
   resetBotPollState,
 } from '../src/botPoll.mjs';
 import { createApp, pollBot } from '../src/server.mjs';
-import { issueCliAdminLogin } from '../src/logic.mjs';
+import { issueCliAdminLogin, quotePurchase } from '../src/logic.mjs';
 import { emptyState } from '../src/state.mjs';
-import { updateState, writeState, testStore } from './pg';
+import { readState, updateState, writeState, testStore } from './pg';
 
 const NOW = Date.parse('2026-10-18T12:00:00Z');
 const TOKEN = 'poll-test-token';
@@ -406,6 +406,80 @@ describe('pollBot: update types and the channel pin notice', () => {
     };
     await pollBot(file, fetchImpl, { maxLoops: 1, sleep: async () => {}, now: () => NOW, channel: '' });
     expect(calls.filter((u) => u.indexOf('/deleteMessage') >= 0)).toHaveLength(0);
+  });
+});
+
+describe('pollBot: a rejected Stars charge is refunded', () => {
+  it('returns the Stars of a second discounted order and marks the row refunded', async () => {
+    const file = await dbFile();
+    const DAY = 86400000;
+    const labels = await updateState(file, (s) => {
+      const state = {
+        ...s,
+        settings: {
+          ...s.settings,
+          priceRub: 200,
+          periodDays: 30,
+          starsEnabled: true,
+          starsPrice: 100,
+          referral: { enabled: true, friendDiscount: true, friendDiscountPercent: 10, delayDays: 0 },
+        },
+        accounts: [
+          { id: 'ref', telegramId: '7' },
+          { id: 'friend', telegramId: '42' },
+        ],
+        subscriptions: [
+          { id: 's-ref', accountId: 'ref', product: 'jackett', paidUntil: NOW + 100 * DAY, extraSlots: 0, creditRub: 0 },
+          { id: 's-friend', accountId: 'friend', product: 'jackett', paidUntil: NOW + 10 * DAY, extraSlots: 0, creditRub: 0 },
+        ],
+        referralBinds: [{ friendId: 'friend', referrerId: 'ref', code: 'OMP-X', boundAt: NOW - DAY }],
+      };
+      const first = quotePurchase(state, { kind: 'sub', accountId: 'friend', subscriptionId: 's-friend', now: NOW, method: 'stars' });
+      const second = quotePurchase(first.state, { kind: 'new', accountId: 'friend', now: NOW, method: 'stars' });
+      return { state: second.state, result: { first: first.result.label, second: second.result.label } };
+    });
+    const calls: Call[] = [];
+    let polled = false;
+    const fetchImpl = async (url: string, init?: { body?: string }) => {
+      calls.push({ url: String(url), body: init && init.body ? String(init.body) : '' });
+      if (String(url).indexOf('/getUpdates') >= 0) {
+        if (polled) return jsonResponse(200, { ok: true, result: [] });
+        polled = true;
+        return jsonResponse(200, {
+          ok: true,
+          result: [
+            {
+              update_id: 1,
+              message: {
+                message_id: 1,
+                chat: { id: 42, type: 'private' },
+                successful_payment: { currency: 'XTR', total_amount: 90, invoice_payload: labels.first, telegram_payment_charge_id: 'c1' },
+              },
+            },
+            {
+              update_id: 2,
+              message: {
+                message_id: 2,
+                chat: { id: 42, type: 'private' },
+                successful_payment: { currency: 'XTR', total_amount: 90, invoice_payload: labels.second, telegram_payment_charge_id: 'c2' },
+              },
+            },
+          ],
+        });
+      }
+      return jsonResponse(200, { ok: true, result: true });
+    };
+    await pollBot(file, fetchImpl, { maxLoops: 2, sleep: async () => {}, now: () => NOW });
+    const refunds = calls.filter((c) => c.url.indexOf('/refundStarPayment') >= 0);
+    expect(refunds).toHaveLength(1);
+    expect(JSON.parse(refunds[0].body)).toEqual({ user_id: 42, telegram_payment_charge_id: 'c2' });
+    const end = await readState(file);
+    const rejected = end.payments.find((p: { operationId?: string }) => p.operationId === 'stars:c2');
+    expect(rejected.error).toBe('refunded');
+    expect(rejected.refundedAt).toBeGreaterThan(0);
+    const applied = end.payments.find((p: { operationId?: string }) => p.operationId === 'stars:c1');
+    expect(applied.error).toBeUndefined();
+    expect(end.audit.some((a: { action?: string }) => a.action === 'stars_refund')).toBe(true);
   });
 });
 

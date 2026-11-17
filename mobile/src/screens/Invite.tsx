@@ -13,6 +13,7 @@ export interface InviteCard {
   code: string;
   friends: number;
   noticeDays?: number;
+  noticeCredit?: number;
 }
 
 /** The program is off until an admin turns it on. A loader reads the signed-in card from /v1/me. */
@@ -87,6 +88,7 @@ export function Invite({
           <p data-invite-code>{t('invite.code', { code: view.code })}</p>
           <p data-invite-count>{t('invite.friends', { n: view.friends })}</p>
           {card.noticeDays ? <p data-invite-notice>{t('invite.noticeApp', { n: card.noticeDays })}</p> : null}
+          {card.noticeCredit ? <p data-invite-credit>{t('invite.noticeCredit', { n: card.noticeCredit })}</p> : null}
           {qr ? <img src={qr} alt={t('invite.qr')} width={180} height={180} /> : null}
           <button type="button" class="m-btn m-btn-primary tm" data-code="P36.2" data-invite-share onClick={share}>
             {t('invite.share')}

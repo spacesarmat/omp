@@ -49,6 +49,7 @@ const limit = v('limit', 'Лимит смен', '2');
 const when = v('when', 'Когда снова', '19.12.2026 15:00 МСК');
 const total = v('total', 'Итого', '200 ₽');
 const extraLine = v('extra_line', 'Строка доп. устройства', '');
+const discountLine = v('discount_line', 'Строка скидки по приглашению', '');
 const creditLine = v('credit_line', 'Строка зачёта', '');
 const totalLine = v('total_line', 'Строка итога', '');
 const minRub = v('min_rub', 'Минимум', '50');
@@ -81,6 +82,7 @@ export const CATALOG = [
   t('pay.received_renew', 'Оплата', 'Оплата: продление', '✅ Оплата получена. Подписка продлена до {expires_at}.{extra}{balance}\nПривязанные устройства продолжают работать - ничего вводить не нужно.{code}', [expires, extra, balance, code], ['expires_at']),
   t('pay.received_device', 'Оплата', 'Оплата: доп. устройство', '✅ Оплата получена: доп. устройство до {until}, дальше продлевается вместе с подпиской.\n{code}', [until, code], ['until']),
   t('pay.received_credit', 'Оплата', 'Оплата ушла в зачёт', '✅ Оплата {amount} получена, но {head}\nДоп. устройство можно купить только вместе с активной подпиской.\nМы зачли {amount}: сумма вычтется из следующего продления. Нажмите «Оплатить».', [amount, head, balance], ['amount']),
+  t('pay.received_credit_repeat', 'Оплата', 'Оплата ушла в зачёт (повторный заказ)', '✅ Оплата {amount} получена и зачтена кредитом: скидка по приглашению одноразовая, а заказ уже был оплачен.\n{amount}{balance} вычтется из следующего продления. Подписка до {expires_at}.', [amount, balance, expires], ['amount', 'expires_at']),
   t('pay.pending', 'Оплата', 'Платёж ждёт подтверждения', '⏳ Платёж{amount} получен и ждёт подтверждения. Подписка продлится сама - платить ещё раз не нужно.\nЕсли что-то не так - «Поддержка».', [amount]),
   t('pay.rejected', 'Оплата', 'Платёж не подтверждён', 'Платёж{amount} не подтверждён - подписка не продлена.\nЕсли деньги списались, напишите в «Поддержку».', [amount]),
   t('pay.reminder_d3', 'Оплата', 'Напоминание за 3 дня', '⚠️ Подписка OMP заканчивается через 3 дня - {expires_at}.{renewal}\nНажмите «Оплатить» - ссылка на оплату придёт в этот чат.', [expires, renewal, price, daysLeft], ['expires_at']),
@@ -96,8 +98,8 @@ export const CATALOG = [
     'renewal.quote',
     'Продление',
     'Состав продления',
-    'Продление на {days}, до {expires_at}:\n• подписка - {price}\n{extra_line}{credit_line}{total_line}',
-    [days, expires, price, extraLine, creditLine, totalLine, total, balance],
+    'Продление на {days}, до {expires_at}:\n• подписка - {price}\n{discount_line}{extra_line}{credit_line}{total_line}',
+    [days, expires, price, discountLine, extraLine, creditLine, totalLine, total, balance],
     ['days', 'expires_at', 'price'],
   ),
 

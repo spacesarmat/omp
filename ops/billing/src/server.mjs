@@ -7,7 +7,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { extname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readCappedBody } from './httpBody.mjs';
-import { applyReferralPost, normalizeReferralSettings, publicReferral, referralCodeFor } from './referralAdmin.mjs';
+import { applyReferralPost, claimReferralNotices, publicReferral, referralCodeFor, restoreReferralNotices } from './referralAdmin.mjs';
 import { homePayload, userPayload } from './adminApi.mjs';
 import {
   accountByDevice,
@@ -157,7 +157,6 @@ import { cacheEnabled } from './cacheNodes.mjs';
 import { isCachePath, routeCache } from './cacheHttp.mjs';
 import { isBotCopyPath, routeBotCopy } from './botCopyHttp.mjs';
 import { botCopyRepoFor } from './botCopyStore.mjs';
-import { referralNotes } from './botCopy.mjs';
 import { browserReadCors, handleDesk, isBrowserRead } from './deskHttp.mjs';
 import { publishAdmin } from './adminLive.mjs';
 import { diskAlert, diskRatio, pushRollback, recentFailCount, recordProbes, roleOf, snapshotSettings, spikeAlert } from './desk.mjs';
@@ -1352,18 +1351,6 @@ function settleMoney(state, notice) {
   return applyPayment(state, notice);
 }
 
-/** Settle a payment and collect the referral grants made inside the same write, so notices are not lost. */
-async function settleWithNotes(store, notice) {
-  let notes = [];
-  const applied = await store.update((cur) => {
-    const before = cur.referralJournal || [];
-    const out = settleMoney(cur, notice);
-    notes = referralNotes(before, out.state.referralJournal || []);
-    return out;
-  });
-  return { applied, notes };
-}
-
 async function finishDonate(state, applied, fetchImpl, store) {
   if (!applied || applied.kind !== 'donate' || applied.duplicate) return;
   publishAdmin({ type: applied.error ? 'error' : 'payment' });
@@ -1402,6 +1389,116 @@ async function finishDonate(state, applied, fetchImpl, store) {
   }
 }
 
+/**
+ * Send claimed referral notices. A saved bot-reply template (referral.referrer / referral.friend)
+ * replaces the in-code text for day grants; without a template, or for a balance-only grant, the
+ * plain text goes out. Returns the restore entries of the sends Telegram did not take.
+ */
+async function sendReferralNotices(store, token, messages, fetchImpl) {
+  const list = messages || [];
+  const failed = [];
+  if (!list.length || !token) return failed;
+  let repo = null;
+  let custom = false;
+  try {
+    repo = botCopyRepoFor(store);
+    custom = repo ? await repo.anyCustom(['referral.referrer', 'referral.friend']) : false;
+  } catch (e) {
+    custom = false;
+  }
+  const state = custom ? await store.read() : null;
+  for (let i = 0; i < list.length; i++) {
+    const msg = list[i];
+    let text = msg.text;
+    let opts = {};
+    const totalDays = (Number(msg.days) || 0) + (Number(msg.retention) || 0);
+    if (custom && repo && msg.accountId && totalDays > 0) {
+      try {
+        const acc = (state.accounts || []).find((a) => a && a.id === msg.accountId);
+        if (acc && acc.telegramId) {
+          const sub = subscriptionView(state, acc.id, Date.now());
+          const rec = copyRecipient(state, acc.id, Date.now());
+          const applied = await repo.apply(
+            {
+              id: msg.role === 'friend' ? 'referral.friend' : 'referral.referrer',
+              state: rec.state,
+              lang: rec.lang,
+              vars: {
+                days: daysText(totalDays),
+                expires_at: sub && sub.paidUntil ? mskDateTime(sub.paidUntil) : '',
+                name: telegramDisplay(acc),
+                ref_link: referralCodeFor(acc.id),
+              },
+            },
+            { text: msg.text },
+          );
+          if (applied.used === 'template' && applied.text) {
+            text = applied.text;
+            // A saved template must not hide the ruble award: keep the balance line after it.
+            if (Number(msg.credit) > 0) text += '\n' + Math.floor(Number(msg.credit)) + ' ₽ на баланс';
+            opts = { parseMode: applied.parseMode, inline: applied.inline, keyboard: mainKeyboard(), media: applied.media };
+          }
+        }
+      } catch (e) {
+        /* the plain text still goes out */
+      }
+    }
+    let ok = false;
+    try {
+      const out = await telegramSend(token, msg.chatId, text, fetchImpl, opts);
+      ok = !!(out && out.ok);
+    } catch (e) {
+      ok = false;
+    }
+    if (!ok && msg.restore) failed.push.apply(failed, msg.restore);
+  }
+  return failed;
+}
+
+/** Claim the pending referral notices (only with a bot token) and send them once. */
+async function flushReferralNotices(store, fetchImpl) {
+  const peek = await store.read();
+  if (!peek || !peek.settings || !peek.settings.botToken) return;
+  if (!(peek.referralJournal || []).some((row) => row && (row.noticePending || row.friendNoticePending))) return;
+  const claimed = await store.update((cur) => {
+    const notes = claimReferralNotices(cur);
+    return { state: notes.state, result: { messages: notes.messages, token: (cur.settings && cur.settings.botToken) || '' } };
+  });
+  const failed = await sendReferralNotices(store, claimed.token, claimed.messages || [], fetchImpl);
+  if (failed.length) await store.update((state) => ({ state: restoreReferralNotices(state, failed) }));
+}
+
+/**
+ * A Stars charge that arrived but could not be applied (error amount, e.g. the one-time referral
+ * discount was already used) is returned at once. The row then reads refunded, so a retry of the
+ * same charge is a duplicate and the admin button does not offer it again.
+ */
+async function refundRejectedStars(store, state, token, charge, fetchImpl) {
+  const operationId = 'stars:' + charge;
+  const payment = (state.payments || []).find((p) => p && p.operationId === operationId);
+  const account = payment ? (state.accounts || []).find((a) => a && a.id === payment.accountId) : null;
+  if (!payment || payment.error !== 'amount' || !account || !account.telegramId) return;
+  let sent;
+  try {
+    sent = await telegramMethod(token, 'refundStarPayment', { user_id: Number(account.telegramId), telegram_payment_charge_id: charge }, fetchImpl);
+  } catch (e) {
+    return;
+  }
+  const already = /already refunded|CHARGE_ALREADY_REFUNDED/i.test((sent && sent.description) || '');
+  if (!sent.ok && !already) return;
+  const id = randomId();
+  await store.update((cur) => ({
+    state: logAudit(
+      {
+        ...cur,
+        payments: cur.payments.map((p) => (p.operationId === operationId ? { ...p, error: 'refunded', refundedAt: Date.now() } : p)),
+      },
+      { id, action: 'stars_refund', detail: operationId + ': платёж не применён, звёзды возвращены', now: Date.now(), actor: { kind: 'system', id: '', label: 'бот' } },
+    ),
+  }));
+  publishAdmin({ type: 'audit', action: 'stars_refund', id });
+}
+
 function tellPayment(state, result, fetchImpl, store) {
   const accountId = result.subscriptionId
     ? (state.subscriptions.find((s) => s.id === result.subscriptionId) || {}).accountId
@@ -1418,52 +1515,6 @@ function tellPayment(state, result, fetchImpl, store) {
     keyboard: msg.keyboard,
     copy,
   });
-}
-
-/** Referral texts go out only after an admin saved that template. Until then nothing is sent. */
-async function notifyReferralGrants(store, notes, state, fetchImpl) {
-  const list = notes || [];
-  if (!list.length || !store) return;
-  const repo = botCopyRepoFor(store);
-  if (!repo) return;
-  if (!(await repo.anyCustom(['referral.referrer', 'referral.friend']))) return;
-  const settings = normalizeReferralSettings(state.settings && state.settings.referral);
-  const token = state.settings && state.settings.botToken;
-  for (let i = 0; i < list.length; i++) {
-    const note = list[i];
-    const id = note.role === 'friend' ? 'referral.friend' : 'referral.referrer';
-    const acc = (state.accounts || []).find((a) => a && a.id === note.accountId);
-    if (!acc || !acc.telegramId) continue;
-    const sub = subscriptionView(state, acc.id, Date.now());
-    const days = note.role === 'friend' ? settings.friendDays : note.days;
-    if (!(days > 0)) continue;
-    const rec = copyRecipient(state, acc.id, Date.now());
-    const applied = await repo.apply(
-      {
-        id,
-        state: rec.state,
-        lang: rec.lang,
-        vars: {
-          days: daysText(days),
-          expires_at: sub && sub.paidUntil ? mskDateTime(sub.paidUntil) : '',
-          name: telegramDisplay(acc),
-          ref_link: referralCodeFor(acc.id),
-        },
-      },
-      { text: '' },
-    );
-    if (applied.used !== 'template' || !applied.text) continue;
-    try {
-      await telegramSend(token, acc.telegramId, applied.text, fetchImpl, {
-        parseMode: applied.parseMode,
-        inline: applied.inline,
-        keyboard: mainKeyboard(),
-        media: applied.media,
-      });
-    } catch (e) {
-      /* the days are already stored */
-    }
-  }
 }
 
 export function createApp(file, fetchImpl, opts) {
@@ -2586,14 +2637,7 @@ export function createApp(file, fetchImpl, opts) {
           if (!confirmed(body)) flashError = 'Нужно подтверждение';
           else {
             const args = { operationId: body.operationId || '', now: Date.now(), actor: adminActor(admin) };
-            let referralNotesHere = [];
-            const out = await store.update((state) => {
-              if (!confirm) return rejectPendingPayment(state, args);
-              const before = state.referralJournal || [];
-              const res = confirmPendingPayment(state, args);
-              referralNotesHere = referralNotes(before, res.state.referralJournal || []);
-              return res;
-            });
+            const out = await store.update((state) => (confirm ? confirmPendingPayment(state, args) : rejectPendingPayment(state, args)));
             if (out.error === 'already') flashError = 'Платёж уже обработан';
             else if (out.error === 'not_found') flashError = 'Платёж не найден';
             else if (!confirm) {
@@ -2619,7 +2663,7 @@ export function createApp(file, fetchImpl, opts) {
               try {
                 const freshConfirm = await store.read();
                 await tellPayment(freshConfirm, out, net, store);
-                await notifyReferralGrants(store, referralNotesHere, freshConfirm, net);
+                await flushReferralNotices(store, net);
               } catch (e) {
                 /* the payment is applied; the Telegram notice is best effort */
               }
@@ -2638,7 +2682,8 @@ export function createApp(file, fetchImpl, opts) {
             const charge = operationId.indexOf('stars:') === 0 ? operationId.slice(6) : '';
             if (!payment || payment.provider !== 'stars' || !charge || !account || !account.telegramId) flashError = 'Это не оплата звёздами';
             else if (payment.error === 'refunded') flashError = 'Звёзды уже возвращены';
-            else if (payment.error) flashError = 'Этот платёж не возвратить';
+            // amount / bad_label: the Stars were taken but nothing was applied, so they can still be returned.
+            else if (payment.error && payment.error !== 'amount' && payment.error !== 'bad_label') flashError = 'Этот платёж не возвратить';
             else {
               const sent = await telegramMethod(
                 cur.settings.botToken,
@@ -2744,19 +2789,13 @@ export function createApp(file, fetchImpl, opts) {
           redirectTo = '/admin/?tab=donations';
         }
         if (path === '/admin/referral') {
+          let note = '';
           await store.update((state) => {
-            const r = applyReferralPost(body, state.referralJournal || [], state.referralBinds || []);
-            return {
-              state: {
-                ...state,
-                settings: { ...state.settings, referral: r.settings },
-                referralJournal: r.journal,
-                referralBinds: r.binds,
-              },
-              result: { ok: true },
-            };
+            const r = applyReferralPost(body, state, { now: Date.now(), actor: adminActor(admin) });
+            note = r.note || '';
+            return { state: r.state, result: { ok: true } };
           });
-          flashText = 'Реферальная программа сохранена';
+          flashText = note || 'Реферальная программа сохранена';
           redirectTo = '/admin/?tab=referral';
         }
         if (path === '/admin/ads/banner') {
@@ -3133,24 +3172,22 @@ export function createApp(file, fetchImpl, opts) {
         const seenCountry = countryCode(req.headers['cf-ipcountry']);
         // Optional. A read-only cutover must still answer /v1/me.
         const countryDirty = !readOnly && seenCountry && account.country !== seenCountry;
+        let referralMessages = [];
         if (!readOnly && (settleReferrals(state, now).state !== state || countryDirty)) {
           const accountId = account.id;
-          let notes = [];
           const next = await store.update((cur) => {
-            const before = cur.referralJournal || [];
             let merged = settleReferrals(cur, now).state;
-            notes = referralNotes(before, merged.referralJournal || []);
             if (!readOnly && seenCountry && account.country !== seenCountry) merged = rememberCountry(merged, accountId, seenCountry);
-            return { state: merged, result: merged };
+            // Without a bot token the notices cannot be sent: leave them pending instead of clearing the flags.
+            const claimed = cur.settings && cur.settings.botToken ? claimReferralNotices(merged) : { state: merged, messages: [] };
+            referralMessages = claimed.messages;
+            return { state: claimed.state, result: claimed.state };
           });
-          if (next && next.accounts) {
-            state = next;
-            try {
-              await notifyReferralGrants(store, notes, state, net);
-            } catch (e) {
-              /* the grant is stored either way */
-            }
-          }
+          if (next && next.accounts) state = next;
+        }
+        if (referralMessages.length && state.settings && state.settings.botToken) {
+          const failed = await sendReferralNotices(store, state.settings.botToken, referralMessages, net);
+          if (failed.length) await store.update((cur) => ({ state: restoreReferralNotices(cur, failed) }));
         }
         const view = subscriptionView(state, account.id, now);
         // A bound phone over the current device limit (an extra slot was not renewed) has no access.
@@ -3589,14 +3626,16 @@ export function createApp(file, fetchImpl, opts) {
         }
         const paid = paidInvoice(body);
         if (!paid) return send(res, 200, 'ok');
-        const { applied, notes } = await settleWithNotes(store, {
-          operationId: 'crypto:' + paid.invoiceId,
-          label: paid.payload,
-          amount: paid.paidAmount,
-          currency: paid.asset,
-          now,
-          cryptoTestnet: state.settings.cryptoTestnet === true,
-        });
+        const applied = await store.update((cur) =>
+          settleMoney(cur, {
+            operationId: 'crypto:' + paid.invoiceId,
+            label: paid.payload,
+            amount: paid.paidAmount,
+            currency: paid.asset,
+            now,
+            cryptoTestnet: state.settings.cryptoTestnet === true,
+          }),
+        );
         const freshPay = await store.read();
         if (applied.kind === 'donate') {
           await finishDonate(freshPay, applied, net, store);
@@ -3605,13 +3644,9 @@ export function createApp(file, fetchImpl, opts) {
         if (!applied.duplicate && !applied.error) {
           try {
             await tellPayment(freshPay, applied, net, store);
+            await flushReferralNotices(store, net);
           } catch (e) {
             /* the payment is stored either way */
-          }
-          try {
-            await notifyReferralGrants(store, notes, freshPay, net);
-          } catch (e) {
-            /* the grants are stored either way */
           }
         }
         if (!applied.duplicate && adminNotifyEnabled(freshPay.settings)) {
@@ -3672,18 +3707,20 @@ export function createApp(file, fetchImpl, opts) {
           await noted('bad_type');
           return send(res, 400, 'bad type');
         }
-        const { applied, notes } = await settleWithNotes(store, {
-          operationId: body.operation_id,
-          label: body.label,
-          amount: body.amount,
-          currency: body.currency,
-          unaccepted: body.unaccepted,
-          withdrawAmount: body.withdraw_amount,
-          notificationType: body.notification_type,
-          // `sign` is the current check. The gross (`withdraw_amount`) has to be in that notice.
-          requireWithdraw: !!body.sign,
-          now,
-        });
+        const applied = await store.update((cur) =>
+          settleMoney(cur, {
+            operationId: body.operation_id,
+            label: body.label,
+            amount: body.amount,
+            currency: body.currency,
+            unaccepted: body.unaccepted,
+            withdrawAmount: body.withdraw_amount,
+            notificationType: body.notification_type,
+            // `sign` is the current check. The gross (`withdraw_amount`) has to be in that notice.
+            requireWithdraw: !!body.sign,
+            now,
+          }),
+        );
         const freshPay = (await store.read());
         if (applied.kind === 'donate') {
           await finishDonate(freshPay, applied, net, store);
@@ -3691,11 +3728,7 @@ export function createApp(file, fetchImpl, opts) {
         }
         if (!applied.duplicate && !applied.error) {
           await tellPayment(freshPay, applied, net, store);
-          try {
-            await notifyReferralGrants(store, notes, freshPay, net);
-          } catch (e) {
-            /* the grants are stored either way */
-          }
+          await flushReferralNotices(store, net);
         }
         if (applied.pending) {
           const chat = telegramOfPayment(freshPay, applied);
@@ -3993,17 +4026,16 @@ export async function pollBot(file, fetchImpl, opts) {
           if (charge && payload) {
             const paidAt = Date.now();
             let applied;
-            let notes = [];
             try {
-              const settled = await settleWithNotes(store, {
-                operationId: 'stars:' + charge,
-                label: payload,
-                amount: String(sp.total_amount),
-                currency: 'XTR',
-                now: paidAt,
-              });
-              applied = settled.applied;
-              notes = settled.notes;
+              applied = await store.update((cur) =>
+                settleMoney(cur, {
+                  operationId: 'stars:' + charge,
+                  label: payload,
+                  amount: String(sp.total_amount),
+                  currency: 'XTR',
+                  now: paidAt,
+                }),
+              );
             } catch (e) {
               // The write did not commit. Do not ack the update, so the next poll retries it.
               handledUpdates.delete(u.update_id);
@@ -4015,16 +4047,16 @@ export async function pollBot(file, fetchImpl, opts) {
               await finishDonate(freshStar, applied, net, store);
               continue;
             }
+            // The charge already happened: a rejected Stars payment is returned, not left on the account.
+            if (!applied.duplicate && applied.error === 'amount') {
+              await refundRejectedStars(store, freshStar, token, charge, net);
+            }
             if (!applied.duplicate && !applied.error) {
               try {
                 await tellPayment(freshStar, applied, net, store);
+                await flushReferralNotices(store, net);
               } catch (e) {
                 /* the payment is stored either way */
-              }
-              try {
-                await notifyReferralGrants(store, notes, freshStar, net);
-              } catch (e) {
-                /* the grants are stored either way */
               }
             }
             if (!applied.duplicate && adminNotifyEnabled(freshStar.settings)) {
@@ -4296,7 +4328,8 @@ export async function runReminders(file, fetchImpl, now) {
       messages.push(reminderMessage(state, rows[i], at));
       next = markReminder(next, { ...rows[i], now: at });
     }
-    return { state: next, result: { rows, messages, token: state.settings.botToken } };
+    const notes = claimReferralNotices(next);
+    return { state: notes.state, result: { rows, messages, referralMessages: notes.messages, token: state.settings.botToken } };
   });
   let sent = 0;
   let failed = 0;
@@ -4324,6 +4357,9 @@ export async function runReminders(file, fetchImpl, now) {
       await store.update((state) => ({ state: releaseReminder(state, row) }));
     }
   }
+  const extra = claimed.referralMessages || [];
+  const failedNotes = await sendReferralNotices(store, claimed.token, extra, net);
+  if (failedNotes.length) await store.update((state) => ({ state: restoreReferralNotices(state, failedNotes) }));
   return { sent, failed };
 }
 
