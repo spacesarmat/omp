@@ -25,7 +25,8 @@
  * maxAgeMin (default 24 hours) is not used, and that method stays hidden.
  * Markup percent lowers the ruble rate so the donor sends (1 + p/100) more of the asset.
  */
-import { cryptoPayCredentials, formatAsset } from './cryptoPay.mjs';
+import { cryptoPayCredentials } from './cryptoPay.mjs';
+import { cryptoDue, starList } from './payMethods.mjs';
 
 export const STAR_USD_DEFAULT = 0.013;
 export const COINGECKO_URL = 'https://api.coingecko.com/api/v3/simple/price?ids=tether,the-open-network,bitcoin&vs_currencies=rub';
@@ -264,11 +265,6 @@ export function rateAdminView(settings, now) {
       last,
     };
   };
-  const subStars = (rub) => {
-    if (price.rubPerStar > 0 && rub > 0) return Math.ceil(rub / price.rubPerStar - 1e-9);
-    return 0;
-  };
-  const subAsset = (asset, rate, rub) => (rate > 0 && rub > 0 ? formatAsset(asset, rub / rate) : '');
   const priceRub = positive(s.priceRub);
   const extraRub = positive(s.extraDeviceRub);
   return {
@@ -277,26 +273,16 @@ export function rateAdminView(settings, now) {
     markupPercent: book.markupPercent,
     starUsd: book.starUsd,
     rows: { star: row('star'), usdt: row('usdt'), ton: row('ton'), btc: row('btc') },
-    // What a subscription and an extra device cost right now, derived from the ruble base.
-    // Manual tariffs are the fallback while auto is off or the rate is stale.
+    // The invoice computation itself (starList/cryptoDue): ruble base, manual fallback,
+    // star cap and asset rounding included, so the admin sees what a customer pays.
     sub: {
-      stars: subStars(priceRub) || wholeTariff(s.starsPrice),
-      starsExtra: subStars(extraRub) || wholeTariff(s.starsExtra),
-      usdt: subAsset('USDT', price.cryptoRateUsdt, priceRub) || explicitAsset(s.cryptoUsdt),
-      ton: subAsset('TON', price.cryptoRateTon, priceRub) || explicitAsset(s.cryptoTon),
-      btc: subAsset('BTC', price.cryptoRateBtc, priceRub) || explicitAsset(s.cryptoBtc),
+      stars: starList(s, 'sub', 0, priceRub, at),
+      starsExtra: starList(s, 'dev', 0, extraRub, at),
+      usdt: cryptoDue(s, 'USDT', 'sub', 0, priceRub, null, at),
+      ton: cryptoDue(s, 'TON', 'sub', 0, priceRub, null, at),
+      btc: cryptoDue(s, 'BTC', 'sub', 0, priceRub, null, at),
     },
   };
-}
-
-function wholeTariff(value) {
-  const n = Number(value);
-  return Number.isInteger(n) && n >= 1 && n <= 1000000 ? n : 0;
-}
-
-function explicitAsset(value) {
-  const n = Number(value);
-  return Number.isFinite(n) && n > 0 ? String(n) : '';
 }
 
 /** Admin form. A bad number keeps the current one. The cache is not cleared. */
