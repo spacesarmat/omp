@@ -1,28 +1,26 @@
 {
-  "version": "0.30.1-beta.6",
-  "ipkUrl": "https://github.com/spacesarmat/omp/releases/download/v0.30.1-beta.6/OMP-0.30.1-beta.6.apk",
-  "ipkHash": "70f73327de6f6679ce467155d2d4077c160a2affa7a1f02bc15cb6cb2afa5b81",
-  "ipkSize": 93528446,
+  "version": "0.30.1-beta.7",
+  "ipkUrl": "https://github.com/spacesarmat/omp/releases/download/v0.30.1-beta.7/OMP-0.30.1-beta.7.apk",
+  "ipkHash": "7fec819abb37689a94618ab0f0a5988b291efc60be1c3f40e57b9bb4959ab608",
+  "ipkSize": 93544913,
   "apks": {
     "arm64": {
-      "url": "https://github.com/spacesarmat/omp/releases/download/v0.30.1-beta.6/OMP-0.30.1-beta.6-arm64.apk",
-      "sha256": "05b11a3cf3a92468de5a01db26e13cf319cd2d0e79c06f4e8fcf6d4709e82bae",
-      "size": 58980184
+      "url": "https://github.com/spacesarmat/omp/releases/download/v0.30.1-beta.7/OMP-0.30.1-beta.7-arm64.apk",
+      "sha256": "c87ad2170836bdf4ca3444d850ec86912d8372603975fef56f19cc67eed382f8",
+      "size": 58996651
     },
     "armv7": {
-      "url": "https://github.com/spacesarmat/omp/releases/download/v0.30.1-beta.6/OMP-0.30.1-beta.6-armv7.apk",
-      "sha256": "f03a2ace79880b45dbb34e4c11e17c0875f3e3bf6ea5a2d892938893640c4225",
-      "size": 54799212
+      "url": "https://github.com/spacesarmat/omp/releases/download/v0.30.1-beta.7/OMP-0.30.1-beta.7-armv7.apk",
+      "sha256": "fcd60b3426efe8b8f3f97107b104507c2df13da792dea7320339477f8475492c",
+      "size": 54815679
     }
   },
   "notes": [
-    "На Android TV плеер 2160 обновлён до 0.2.26. Экран ТВ по-прежнему со своими кнопками OMP"
+    "Исправления и улучшения"
   ],
-  "notesTv": [
-    "На Android TV плеер 2160 обновлён до 0.2.26. Экран ТВ по-прежнему со своими кнопками OMP"
-  ],
+  "notesTv": [],
   "notesPhone": [
-    "Встроенный плеер 2160 обновлён до 0.2.26. Полоса перемотки на всю ширину с одинаковыми боковыми отступами, прошедшее слева и остаток справа (пока длина неизвестна, обе стороны --:--), при буферизации в центре спиннер"
+    "Приглашение: если рефереру начислен баланс, экран показывает сумму"
   ],
-  "releaseUrl": "https://github.com/spacesarmat/omp/releases/tag/v0.30.1-beta.6"
+  "releaseUrl": "https://github.com/spacesarmat/omp/releases/tag/v0.30.1-beta.7"
 }
