@@ -22,6 +22,12 @@ export function Modal({ title, onClose, children }: { title: string; onClose: ()
         closeRef.current();
         return;
       }
+      // The page search (Ctrl+K) listens on window and would steal focus behind the window.
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        e.stopPropagation();
+        return;
+      }
       if (e.key !== 'Tab' || !root) return;
       const nodes = Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE));
       if (!nodes.length) {

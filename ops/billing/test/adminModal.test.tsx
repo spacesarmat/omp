@@ -149,6 +149,24 @@ describe('admin modal', () => {
     expect(document.activeElement).toBe(buttons[buttons.length - 1]);
   });
 
+  it('blocks the page search shortcut while the window is open', () => {
+    const onPalette = vi.fn();
+    window.addEventListener('keydown', onPalette);
+    try {
+      render(createElement(Modal, { title: 'Лог', onClose: () => {} }, createElement('input', { type: 'text' })));
+      const dialog = document.querySelector('[role="dialog"]') as HTMLElement;
+      dialog.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true, bubbles: true }));
+      expect(onPalette).not.toHaveBeenCalled();
+      act(() => {
+        root.render(null);
+      });
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true, bubbles: true }));
+      expect(onPalette).toHaveBeenCalledOnce();
+    } finally {
+      window.removeEventListener('keydown', onPalette);
+    }
+  });
+
   it('does not reopen a NUC log closed while its request runs', async () => {
     const gate = deferred<{ ok: boolean; lines: string }>();
     const fetchMock = vi.fn((input: RequestInfo | URL) => {
