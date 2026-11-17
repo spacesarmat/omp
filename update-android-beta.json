@@ -1,26 +1,24 @@
 {
-  "version": "0.30.1-beta.7",
-  "ipkUrl": "https://github.com/spacesarmat/omp/releases/download/v0.30.1-beta.7/OMP-0.30.1-beta.7.apk",
-  "ipkHash": "7fec819abb37689a94618ab0f0a5988b291efc60be1c3f40e57b9bb4959ab608",
-  "ipkSize": 93544913,
+  "version": "0.30.1-beta.8",
+  "ipkUrl": "https://github.com/spacesarmat/omp/releases/download/v0.30.1-beta.8/OMP-0.30.1-beta.8.apk",
+  "ipkHash": "62613bd6e42f678151e96b87c245c4e61c7f1605a6442a254a9f6a98190f6c1e",
+  "ipkSize": 93565409,
   "apks": {
     "arm64": {
-      "url": "https://github.com/spacesarmat/omp/releases/download/v0.30.1-beta.7/OMP-0.30.1-beta.7-arm64.apk",
-      "sha256": "c87ad2170836bdf4ca3444d850ec86912d8372603975fef56f19cc67eed382f8",
-      "size": 58996651
+      "url": "https://github.com/spacesarmat/omp/releases/download/v0.30.1-beta.8/OMP-0.30.1-beta.8-arm64.apk",
+      "sha256": "00e16816981b428288f1318bba5fa7778c3a0c2dab289a2515078907b03028d9",
+      "size": 59017143
     },
     "armv7": {
-      "url": "https://github.com/spacesarmat/omp/releases/download/v0.30.1-beta.7/OMP-0.30.1-beta.7-armv7.apk",
-      "sha256": "fcd60b3426efe8b8f3f97107b104507c2df13da792dea7320339477f8475492c",
-      "size": 54815679
+      "url": "https://github.com/spacesarmat/omp/releases/download/v0.30.1-beta.8/OMP-0.30.1-beta.8-armv7.apk",
+      "sha256": "4665a9a4c42bb7c612f466a96d967ef9ecf80600d38ddea030230969da4e66a1",
+      "size": 54836171
     }
   },
   "notes": [
     "Исправления и улучшения"
   ],
   "notesTv": [],
-  "notesPhone": [
-    "Приглашение: если рефереру начислен баланс, экран показывает сумму"
-  ],
-  "releaseUrl": "https://github.com/spacesarmat/omp/releases/tag/v0.30.1-beta.7"
+  "notesPhone": [],
+  "releaseUrl": "https://github.com/spacesarmat/omp/releases/tag/v0.30.1-beta.8"
 }

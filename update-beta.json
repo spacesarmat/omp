@@ -1,14 +1,12 @@
 {
-  "version": "0.30.1-beta.7",
-  "ipkUrl": "https://github.com/spacesarmat/omp/releases/download/v0.30.1-beta.7/OMP-0.30.1-beta.7-webOS.ipk",
-  "ipkHash": "db11ce65904b5d9774f3695f3b12a9e153cc4938af007c53a3a8f0b3b25befd8",
-  "ipkSize": 613292,
+  "version": "0.30.1-beta.8",
+  "ipkUrl": "https://github.com/spacesarmat/omp/releases/download/v0.30.1-beta.8/OMP-0.30.1-beta.8-webOS.ipk",
+  "ipkHash": "12aef99a8d37bef6fc477a41813c6d7c85c49d96e12b7385a5d9ca1cf84199a6",
+  "ipkSize": 618130,
   "notes": [
     "Исправления и улучшения"
   ],
-  "releaseUrl": "https://github.com/spacesarmat/omp/releases/tag/v0.30.1-beta.7",
+  "releaseUrl": "https://github.com/spacesarmat/omp/releases/tag/v0.30.1-beta.8",
   "notesTv": [],
-  "notesPhone": [
-    "Приглашение: если рефереру начислен баланс, экран показывает сумму"
-  ]
+  "notesPhone": []
 }
