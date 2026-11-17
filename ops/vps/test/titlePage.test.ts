@@ -43,13 +43,16 @@ describe('title link page', () => {
     expect(html).not.toMatch(/magnet:|utm_/);
   });
 
-  it('publishes assetlinks for the release package with the release and debug fingerprints', () => {
+  it('publishes assetlinks for the release package with the release fingerprint only', () => {
+    // The debug keystore is public: listing its fingerprint for the release package would let a
+    // fake APK pass autoVerify and intercept /pair and /t/ links. Debug builds use the .test package.
     const debugFp = gradle.match(/SHA-256: ([0-9A-F:]+)/)![1];
     // apksigner verify --print-certs on OMP-0.20.8-beta.1-arm64.apk (public release)
     const releaseFp = 'BD:F5:16:CA:37:09:67:8A:CF:03:6C:12:CB:09:54:6A:9E:B2:55:A0:51:0F:53:EF:1D:AD:29:1A:51:F3:06:8D';
     expect(links).toHaveLength(1);
     expect(links[0].relation).toEqual(['delegate_permission/common.handle_all_urls']);
     expect(links[0].target.package_name).toBe('com.spacesarmat.omp');
-    expect(links[0].target.sha256_cert_fingerprints).toEqual([releaseFp, debugFp]);
+    expect(links[0].target.sha256_cert_fingerprints).toEqual([releaseFp]);
+    expect(links[0].target.sha256_cert_fingerprints).not.toContain(debugFp);
   });
 });
