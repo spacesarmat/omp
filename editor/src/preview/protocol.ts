@@ -1,5 +1,13 @@
 import type { InteractionTrace } from '../../../design/interaction.ts';
-import type { DesignTarget, DesignFormat, DesignState, FlowDocument, ThemeDocument } from '../../../design/schema.ts';
+import {
+  INTERACTION_ACTION_TYPES,
+  type DesignTarget,
+  type DesignFormat,
+  type DesignState,
+  type FlowDocument,
+  type ThemeDocument,
+  type InteractionAction,
+} from '../../../design/schema.ts';
 import { isDesktopRouteId, type DesktopRouteId } from '../../../desktop/src/shell/routes';
 
 interface Envelope {
@@ -75,7 +83,7 @@ function trace(value: unknown): InteractionTrace[] {
   return value.map((entry) => {
     const source = record(entry);
     const action = text(source.action, 'trace action', 20);
-    if (!['navigate', 'back', 'toast'].includes(action)) throw new Error('Invalid trace action');
+    if (!INTERACTION_ACTION_TYPES.includes(action as InteractionAction['type'])) throw new Error('Invalid trace action');
     return {
       ...source,
       ruleId: text(source.ruleId, 'ruleId', 64),

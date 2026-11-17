@@ -1321,6 +1321,10 @@ export function createApp(file, fetchImpl, opts) {
   // A tight loop from one IP is refused. 0 turns the limit off.
   const adsLimit = adsConfigLimitConfig(env);
   const adsConfigRate = adsLimit.ipMax > 0 ? createRateLimit(adsLimit.ipMax, adsLimit.windowMs) : null;
+  // Public login endpoints: a poll is a read, only a confirmed token writes. A flood gets 429 before the store.
+  const loginStatusRate = createRateLimit(120, 60 * 1000);
+  const loginOnceRate = createRateLimit(10, 60 * 1000);
+  const loginPasswordRate = createRateLimit(6, 10 * 60 * 1000);
   const legacyOn = legacyTokensEnabled(env);
   const readOnly = !!(opts && opts.readOnly);
   const store = readOnly ? readOnlyStore(toStore(file)) : toStore(file);
@@ -1914,10 +1918,20 @@ export function createApp(file, fetchImpl, opts) {
         return json(res, 200, { ok: true, token: started.token, deepLink, expiresAt: started.expiresAt });
       }
       if (req.method === 'GET' && path === '/admin/login/telegram/status') {
+        if (!loginStatusRate.allow(clientIp(req))) {
+          res.setHeader('retry-after', String(loginStatusRate.retryAfter(clientIp(req)) || 60));
+          return json(res, 429, { ok: false, error: 'rate' });
+        }
         const token = url.searchParams.get('token') || '';
-        const taken = adminAuth
-          ? adminAuth.takePanel({ token, now: Date.now() })
-          : await store.update((cur) => takeAdminPanelLogin(cur, { token, now: Date.now() }));
+        let taken;
+        if (adminAuth) {
+          taken = adminAuth.takePanel({ token, now: Date.now() });
+        } else {
+          // Peek on the read snapshot: a pending or unknown token must not open a write transaction.
+          // Only 'ok' consumes, inside update, so two concurrent polls still yield a single session.
+          const peek = takeAdminPanelLogin(await store.read(), { token, now: Date.now() }).result;
+          taken = peek.status === 'ok' ? await store.update((cur) => takeAdminPanelLogin(cur, { token, now: Date.now() })) : peek;
+        }
         if (taken.status === 'ok') {
           const id = randomId() + randomId();
           const csrf = randomId();
@@ -1947,13 +1961,21 @@ export function createApp(file, fetchImpl, opts) {
         return json(res, 200, { ok: false, status: taken.status || 'expired' });
       }
       if (req.method === 'GET' && path === '/admin/login/once') {
+        if (!loginOnceRate.allow(clientIp(req))) {
+          res.setHeader('retry-after', String(loginOnceRate.retryAfter(clientIp(req)) || 60));
+          return send(res, 429, loginPage('Слишком много попыток входа. Подождите минуту.'), {
+            'content-type': 'text/html; charset=utf-8',
+          });
+        }
         const token = url.searchParams.get('token') || '';
         let taken = { status: 'expired' };
         try {
           if (adminAuth) {
             taken = adminAuth.takeCli(await store.read(), { token, now: Date.now() });
           } else {
-            taken = await store.update((cur) => takeCliAdminLogin(cur, { token, now: Date.now() }));
+            // Peek without a write: only a valid token consumes (one serialized update).
+            const peek = takeCliAdminLogin(await store.read(), { token, now: Date.now() }).result;
+            taken = peek.status === 'ok' ? await store.update((cur) => takeCliAdminLogin(cur, { token, now: Date.now() })) : peek;
           }
         } catch (e) {
           taken = { status: 'expired' };
@@ -1978,16 +2000,19 @@ export function createApp(file, fetchImpl, opts) {
         return res.end();
       }
       if (req.method === 'POST' && path === '/admin/login') {
+        if (!loginPasswordRate.allow(clientIp(req))) {
+          res.setHeader('retry-after', String(loginPasswordRate.retryAfter(clientIp(req)) || 600));
+          if (wantsJson(req)) return json(res, 429, { ok: false, error: 'rate' });
+          return send(res, 429, loginPage('Слишком много попыток входа. Подождите несколько минут.'), {
+            'content-type': 'text/html; charset=utf-8',
+          });
+        }
         try {
           await readBody(req);
         } catch (e) {
           /* a bad body still rejects; it must not 500 */
         }
-        try {
-          await audit(file, 'login_fail', 'password disabled', null);
-        } catch (e) {
-          /* audit failure must not turn the rejection into 500 */
-        }
+        // Password login is disabled: no audit row per attempt, a flood would evict real admin actions.
         if (wantsJson(req)) {
           return json(res, 403, { ok: false, error: 'Вход по паролю отключён. Войдите через Telegram.' });
         }

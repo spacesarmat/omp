@@ -110,6 +110,23 @@ async function sendAlbum(call, chat, { caption, album }) {
  * Posts the release. `root` is the repo root (CHANGELOG.md, src/lib/donate.ts, screenshots).
  * Resolves to 1 when the buttons of an album post could not be sent (the post then has no download links), else 0.
  */
+/**
+ * Short update line. No photo and no pin (betas are not pinned today).
+ * Text plus the OMP version and the release link.
+ */
+export async function postNotice({ text, tag, token, chat, fetch: doFetch = fetch, log = console.log }) {
+  const version = String(tag).replace(/^v/, '');
+  const link = `https://github.com/spacesarmat/omp/releases/tag/v${version}`;
+  const call = caller(token, doFetch);
+  const form = new FormData();
+  form.set('chat_id', chat);
+  form.set('text', `${text}\nOMP ${version}\n${link}`);
+  form.set('disable_web_page_preview', 'true');
+  await call('sendMessage', form);
+  log(`Telegram: notice for ${version}`);
+  return 0;
+}
+
 export async function postRelease({ tag, root = '.', token, chat, fetch: doFetch = fetch, log = console.log, pause = sleep }) {
   const call = caller(token, doFetch);
   const post = releasePost(tag, root, log);
@@ -189,7 +206,16 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     console.log('Telegram: no TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID, skipping');
     process.exit(0);
   }
-  if (!tag) throw new Error('usage: telegram-post.mjs <tag> | <tag> --edit-photo <id> | <tag> --delete <ids>');
+  if (!tag) throw new Error('usage: telegram-post.mjs <tag> | <tag> --notice <text> | <tag> --edit-photo <id> | <tag> --delete <ids>');
+  if (mode === '--notice') {
+    const text = process.argv[4];
+    if (!text) throw new Error('--notice needs text');
+    await postNotice({ text, tag, token, chat }).catch((e) => {
+      console.log(String(e.message));
+      process.exit(1);
+    });
+    process.exit(0);
+  }
   const parseIds = (ids = '') => ids.split(',').map((p) => p.trim()).filter(Boolean).flatMap((p) => {
     const [a, b = a] = p.split('-').map(Number);
     return Array.from({ length: b - a + 1 }, (_, i) => a + i);

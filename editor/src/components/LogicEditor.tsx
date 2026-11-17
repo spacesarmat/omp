@@ -13,11 +13,12 @@ interface RuleForm {
 }
 
 function formOf(rule: InteractionRule): RuleForm {
+  const actionType = rule.action.type;
   return {
     condition: rule.condition?.kind === 'eq' && rule.condition.path === 'server.connected'
       ? rule.condition.value === true ? 'server-true' : 'server-false'
       : rule.condition ? 'custom' : 'none',
-    action: rule.action.type,
+    action: actionType === 'navigate' || actionType === 'back' || actionType === 'toast' ? actionType : 'toast',
     destination: rule.action.type === 'navigate' ? rule.action.screenId : 'library',
     message: rule.action.type === 'toast' ? rule.action.message : '',
   };
