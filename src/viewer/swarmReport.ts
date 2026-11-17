@@ -3,12 +3,13 @@
 // swarm; this module reports connected_seeders and the active-peer split along the existing signal
 // path - same endpoint, same device token, same «Помогать улучшать подбор» gate as the watch votes.
 // Only infohash + seeders + leechers leave the device: the server derives the irreversible device
-// key and stores nothing else. One report per hash per window, batches of 20, a 30 s flush.
+// key and stores nothing else. One report per hash per window, batches of 20, a 30 s flush. The
+// window starts only when the server accepted the batch; a failed send retries on a later flush.
 // Chromium 53 safe: no ?., no ??, no Object.values.
 import { deviceId } from '../billing/session';
 import { settings } from '../store/settings';
 import { swarmActive } from '../lib/torrentStatus';
-import { sendSignalBody } from './watchReport';
+import { sendSignalBody, type SignalDelivery } from './watchReport';
 
 export const SWARM_REPORT_WINDOW_MS = 10 * 60 * 1000;
 export const SWARM_REPORT_BATCH_MAX = 20;
@@ -21,19 +22,23 @@ export interface SwarmSample {
   leechers: number;
 }
 
-let poster: ((body: { [key: string]: string }) => Promise<void>) | null = null;
+let poster: ((body: { [key: string]: string }) => Promise<void | SignalDelivery>) | null = null;
 const queue: { [hash: string]: { sample: SwarmSample; at: number } } = {};
 const lastSent: { [hash: string]: number } = {};
+// Hashes whose batch is on the wire right now: a sample arriving mid-flight does not queue a
+// duplicate. This is NOT the dedup window - that one (lastSent) starts only on server acceptance.
+const inFlight: { [hash: string]: number } = {};
 let flushTimer: ReturnType<typeof setTimeout> | null = null;
 
 /** Tests replace the network. Null restores the shared watch-signals sender. */
-export function setSwarmPoster(fn: ((body: { [key: string]: string }) => Promise<void>) | null): void {
+export function setSwarmPoster(fn: ((body: { [key: string]: string }) => Promise<void | SignalDelivery>) | null): void {
   poster = fn;
 }
 
 export function resetSwarmReport(): void {
   Object.keys(queue).forEach((k) => delete queue[k]);
   Object.keys(lastSent).forEach((k) => delete lastSent[k]);
+  Object.keys(inFlight).forEach((k) => delete inFlight[k]);
   if (flushTimer) clearTimeout(flushTimer);
   flushTimer = null;
 }
@@ -51,8 +56,8 @@ function cap(v: number): number {
   return n > COUNT_CAP ? COUNT_CAP : n;
 }
 
-function send(body: { [key: string]: string }): Promise<void> {
-  if (poster) return poster(body).then(() => undefined, () => undefined);
+function send(body: { [key: string]: string }): Promise<SignalDelivery> {
+  if (poster) return poster(body).then((r) => (r === 'failed' || r === 'no-session' ? r : 'accepted'), () => 'failed');
   return sendSignalBody(body);
 }
 
@@ -81,7 +86,7 @@ export function noteSwarmSample(
   if (!swarmActive(t.stat)) return;
   if (!helpOn()) return;
   const at = typeof now === 'number' ? now : Date.now();
-  const sent = lastSent[hash] || 0;
+  const sent = lastSent[hash] || inFlight[hash] || 0;
   if (sent && at - sent < SWARM_REPORT_WINDOW_MS) return;
   const seeders = raw(t.connected_seeders);
   const peers = raw(t.active_peers);
@@ -93,6 +98,12 @@ export function noteSwarmSample(
   else schedule();
 }
 
+/**
+ * Send one batch. The dedup window starts ONLY when the server accepted the batch: a failed send
+ * (network, timeout, non-2xx) puts the reports back for a later flush - the next scheduled one, no
+ * storm - and a missing session never counts as sent. Samples arriving mid-flight do not queue a
+ * duplicate (inFlight); if the batch is not accepted, the original report is restored.
+ */
 export function flushSwarm(): void {
   if (flushTimer) {
     clearTimeout(flushTimer);
@@ -104,13 +115,28 @@ export function flushSwarm(): void {
     keys.forEach((k) => delete queue[k]);
     return;
   }
-  const items: SwarmSample[] = [];
-  for (let i = 0; i < keys.length && items.length < SWARM_REPORT_BATCH_MAX; i++) {
+  const entries: { sample: SwarmSample; at: number }[] = [];
+  for (let i = 0; i < keys.length && entries.length < SWARM_REPORT_BATCH_MAX; i++) {
     const entry = queue[keys[i]];
     delete queue[keys[i]];
-    lastSent[entry.sample.infohash] = entry.at;
-    items.push(entry.sample);
+    inFlight[entry.sample.infohash] = entry.at;
+    entries.push(entry);
   }
-  void send({ swarm: JSON.stringify(items), deviceId: deviceId(), help: '1' });
+  const items = entries.map((e) => e.sample);
+  void send({ swarm: JSON.stringify(items), deviceId: deviceId(), help: '1' }).then((result) => {
+    for (let i = 0; i < entries.length; i++) {
+      const h = entries[i].sample.infohash;
+      delete inFlight[h];
+      if (result === 'accepted') {
+        lastSent[h] = entries[i].at;
+      } else if (!queue[h]) {
+        // Not accepted: the window must not start. Put the report back for a later flush.
+        queue[h] = entries[i];
+      }
+    }
+    // A failed batch retries on the next flush; without a session the reports wait for a later
+    // sample to schedule one (the sender resolves at once, nothing to retry against).
+    if (result === 'failed') schedule();
+  });
   if (Object.keys(queue).length) schedule();
 }
