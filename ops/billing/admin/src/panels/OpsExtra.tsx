@@ -31,12 +31,17 @@ export function CrashesDesk({ csrf }: { csrf: string }) {
   });
   const groups = q.data?.groups || [];
   const [crash, setCrash] = useState<{ title: string; text: string } | null>(null);
+  const crashGen = useRef(0);
   async function openLog(g: Group) {
+    const gen = ++crashGen.current;
     setCrash({ title: g.title, text: '' });
     try {
       const res = await fetch('/admin/api/crashes/log?id=' + encodeURIComponent(g.id), { credentials: 'same-origin' });
-      setCrash({ title: g.title, text: await res.text() });
+      const text = await res.text();
+      if (gen !== crashGen.current) return;
+      setCrash({ title: g.title, text });
     } catch {
+      if (gen !== crashGen.current) return;
       setCrash({ title: g.title, text: 'лог недоступен' });
     }
   }
@@ -87,7 +92,16 @@ export function CrashesDesk({ csrf }: { csrf: string }) {
           </CardContent>
         </Card>
         ))}
-      {crash ? <LogDialog title={'Сбой: ' + crash.title} text={crash.text} onClose={() => setCrash(null)} /> : null}
+      {crash ? (
+        <LogDialog
+          title={'Сбой: ' + crash.title}
+          text={crash.text}
+          onClose={() => {
+            crashGen.current += 1;
+            setCrash(null);
+          }}
+        />
+      ) : null}
     </div>
   );
 }

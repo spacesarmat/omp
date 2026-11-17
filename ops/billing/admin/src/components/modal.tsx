@@ -31,7 +31,7 @@ export function Modal({ title, onClose, children }: { title: string; onClose: ()
       const first = nodes[0];
       const last = nodes[nodes.length - 1];
       const active = document.activeElement;
-      if (e.shiftKey && (active === first || !root.contains(active))) {
+      if (e.shiftKey && (active === root || active === first || !root.contains(active))) {
         e.preventDefault();
         last.focus();
       } else if (!e.shiftKey && active === last) {

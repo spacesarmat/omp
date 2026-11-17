@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import { useLive } from '@/lib/live';
@@ -368,24 +368,36 @@ type NucBox = {
 
 function SourceCheck({ csrf, label }: { csrf: string; label: string }) {
   const [text, setText] = useState<string | null>(null);
+  const gen = useRef(0);
   return (
     <>
       <Button
         variant="secondary"
-        onClick={() =>
+        onClick={() => {
+          const my = ++gen.current;
           void post('/admin/api/sources/check', csrf, {}).then((r) => {
+            if (my !== gen.current) return;
             const health = (r as { health?: HealthRow[] }).health;
             if (!r.ok || !health) {
               toast(r.ok ? 'Проверено' : r.flash?.error || 'Не вышло');
               return;
             }
             setText(healthReport(health));
-          })
-        }
+          });
+        }}
       >
         {label}
       </Button>
-      {text != null ? <LogDialog title="Проверка источников" text={text} onClose={() => setText(null)} /> : null}
+      {text != null ? (
+        <LogDialog
+          title="Проверка источников"
+          text={text}
+          onClose={() => {
+            gen.current += 1;
+            setText(null);
+          }}
+        />
+      ) : null}
     </>
   );
 }
@@ -395,6 +407,7 @@ type OpenLog = { name: string; text: string; refreshing: boolean };
 export function NucDesk({ csrf }: { csrf: string }) {
   const { paused } = useLive();
   const [log, setLog] = useState<OpenLog | null>(null);
+  const logGen = useRef(0);
   const query = useQuery({
     queryKey: ['nuc'],
     refetchInterval: paused ? false : 15000,
@@ -458,19 +471,25 @@ export function NucDesk({ csrf }: { csrf: string }) {
           text={log.text}
           refreshing={log.refreshing}
           onRefresh={() => void openLog(log.name)}
-          onClose={() => setLog(null)}
+          onClose={() => {
+            logGen.current += 1;
+            setLog(null);
+          }}
         />
       ) : null}
     </div>
   );
 
   async function openLog(name: string) {
+    const gen = ++logGen.current;
     setLog((cur) => ({ name, text: cur && cur.name === name ? cur.text : '', refreshing: true }));
     try {
       const res = await fetch('/admin/api/nuc/logs?name=' + encodeURIComponent(name), { credentials: 'same-origin' });
       const j = (await res.json()) as { lines?: string; error?: string };
+      if (gen !== logGen.current) return;
       setLog({ name, text: j.lines || j.error || '', refreshing: false });
     } catch {
+      if (gen !== logGen.current) return;
       setLog({ name, text: 'логи недоступны', refreshing: false });
     }
   }

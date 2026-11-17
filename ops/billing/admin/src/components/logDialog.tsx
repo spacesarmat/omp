@@ -46,6 +46,10 @@ export function LogDialog({
               toast('Пусто');
               return;
             }
+            if (!navigator.clipboard) {
+              toast('Не скопировалось');
+              return;
+            }
             void navigator.clipboard.writeText(shown).then(
               () => toast('Скопировано'),
               () => toast('Не скопировалось'),
