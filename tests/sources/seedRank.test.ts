@@ -84,6 +84,14 @@ describe('seed ranking', () => {
     ];
     expect(rankSearchResults(list, '', NOW).map((r) => r.Title)).toEqual(['Live', 'Estimate', 'Unchecked big']);
   });
+
+  it('a zero bitmagnet estimate gets no estimate bonus over an unchecked row', () => {
+    const list = [
+      row({ Title: 'Dead estimate', Seed: 0, Peer: 0, seedCheck: 'dht', dhtEstimate: true, dhtSeeds: 0, seedSource: 'bitmagnet' }),
+      row({ Title: 'Unchecked', Seed: 3, seedCheck: 'unverified' }),
+    ];
+    expect(rankSearchResults(list, '', NOW).map((r) => r.Title)).toEqual(['Unchecked', 'Dead estimate']);
+  });
 });
 
 describe('one seed status', () => {

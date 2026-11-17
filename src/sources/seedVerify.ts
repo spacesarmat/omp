@@ -152,8 +152,10 @@ export function applySeedRound(rows: SourceResult[], measures: SeedMeasure[] | n
         noTracker: m.noTracker,
       };
       // An estimate that carries counts (bitmagnet): the numbers reach the row, still an estimate -
-      // never live/verified. A pure BEP 33 sample has seeders 0 and keeps the search numbers.
-      if ((m.seeders || 0) > 0 || (m.leechers || 0) > 0) {
+      // never live/verified. A fresh bitmagnet zero overwrites the search counts too (a dead torrent
+      // must not keep the indexer's number as an estimate). A pure BEP 33 sample has no source and
+      // seeders 0: it keeps the search numbers.
+      if (m.source === 'bitmagnet' || (m.seeders || 0) > 0 || (m.leechers || 0) > 0) {
         out.Seed = m.seeders;
         out.Peer = m.leechers;
       }

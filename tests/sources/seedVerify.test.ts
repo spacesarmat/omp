@@ -230,6 +230,19 @@ describe('bitmagnet estimates on the row', () => {
     expect(rows[0].seedAgeMs).toBeUndefined();
   });
 
+  it('a fresh bitmagnet zero overwrites the search counts instead of keeping them as an estimate', () => {
+    const measures = parseSeedResponse(
+      JSON.stringify({
+        items: [
+          { infohash: HASH, verified: false, live: false, seeders: 0, leechers: 0, peers: 0, dhtSeeds: 0, estimate: true, noTracker: true, samples: 0, measuredAt: 50, source: 'bitmagnet', ageMs: 1000 },
+        ],
+      }),
+    ) as SeedMeasure[];
+    const rows = applySeedRound([row({ Title: 'A', hash: HASH, Seed: 50, Peer: 7 })], measures, true);
+    expect(rows[0]).toMatchObject({ Seed: 0, Peer: 0, seedCheck: 'dht', seedSource: 'bitmagnet', seedAgeMs: 1000 });
+    expect(rows[0].seedCheck).not.toBe('live');
+  });
+
   it('the server request budget matches the app check timeout', () => {
     expect(SEED_CHECK_BUDGET_MS).toBe(SEED_CHECK_TIMEOUT_MS);
   });
