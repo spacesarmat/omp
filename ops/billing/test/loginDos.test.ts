@@ -75,7 +75,7 @@ function mockRes() {
   };
 }
 
-async function call(app: (req: unknown, res: unknown) => Promise<void>, method: string, path: string, opts: { body?: unknown } = {}) {
+async function call(app: (req: unknown, res: unknown) => Promise<void>, method: string, path: string, opts: { body?: unknown; ip?: string } = {}) {
   const payload = opts.body === undefined ? '' : JSON.stringify(opts.body);
   const req = {
     method,
@@ -85,6 +85,7 @@ async function call(app: (req: unknown, res: unknown) => Promise<void>, method: 
       cookie: '',
       accept: 'application/json',
       'content-type': opts.body === undefined ? '' : 'application/json',
+      ...(opts.ip ? { 'cf-connecting-ip': opts.ip } : {}),
     },
     async *[Symbol.asyncIterator]() {
       if (payload) yield Buffer.from(payload);
@@ -159,29 +160,47 @@ describe('public login endpoints do not write on every poll', () => {
     const store = memoryStore();
     const app = createApp(store, noFetch, { env: {} });
     let last = 0;
+    let retryAfter = '';
     for (let i = 0; i < 121; i++) {
-      last = (await call(app, 'GET', '/admin/login/telegram/status?token=deadbeef')).status;
+      const r = await call(app, 'GET', '/admin/login/telegram/status?token=deadbeef', { ip: '203.0.113.1' });
+      last = r.status;
+      retryAfter = String(r.headers['retry-after'] || '');
     }
     expect(last).toBe(429);
+    expect(Number(retryAfter)).toBeGreaterThan(0);
+    const other = await call(app, 'GET', '/admin/login/telegram/status?token=deadbeef', { ip: '203.0.113.2' });
+    expect(other.status).toBe(200);
   });
 
   it('a CLI once flood is rate limited per IP', async () => {
     const store = memoryStore();
     const app = createApp(store, noFetch, { env: {} });
     let last = 0;
+    let retryAfter = '';
     for (let i = 0; i < 11; i++) {
-      last = (await call(app, 'GET', '/admin/login/once?token=junk')).status;
+      const r = await call(app, 'GET', '/admin/login/once?token=junk', { ip: '203.0.113.1' });
+      last = r.status;
+      retryAfter = String(r.headers['retry-after'] || '');
     }
     expect(last).toBe(429);
+    expect(Number(retryAfter)).toBeGreaterThan(0);
+    const other = await call(app, 'GET', '/admin/login/once?token=junk', { ip: '203.0.113.2' });
+    expect(other.status).toBe(403);
   });
 
   it('a password login flood is rate limited per IP', async () => {
     const store = memoryStore();
     const app = createApp(store, noFetch, { env: {} });
     let last = 0;
+    let retryAfter = '';
     for (let i = 0; i < 7; i++) {
-      last = (await call(app, 'POST', '/admin/login', { body: { password: 'x' } })).status;
+      const r = await call(app, 'POST', '/admin/login', { body: { password: 'x' }, ip: '203.0.113.1' });
+      last = r.status;
+      retryAfter = String(r.headers['retry-after'] || '');
     }
     expect(last).toBe(429);
+    expect(Number(retryAfter)).toBeGreaterThan(0);
+    const other = await call(app, 'POST', '/admin/login', { body: { password: 'x' }, ip: '203.0.113.2' });
+    expect(other.status).toBe(403);
   });
 });
