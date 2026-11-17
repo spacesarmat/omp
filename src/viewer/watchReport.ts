@@ -41,7 +41,7 @@ export interface WatchSample {
 }
 
 let contextFn: (() => SourceContext | null) | null = null;
-let poster: ((body: { [key: string]: string }) => Promise<void>) | null = null;
+let poster: ((body: { [key: string]: string }) => Promise<void | SignalDelivery>) | null = null;
 
 const queue: WatchSample[] = [];
 const openAt: { [key: string]: number } = {};
@@ -54,8 +54,8 @@ export function setWatchContext(fn: (() => SourceContext | null) | null): void {
   contextFn = fn;
 }
 
-/** Tests replace the network. Null restores the app sender. */
-export function setWatchPoster(fn: ((body: { [key: string]: string }) => Promise<void>) | null): void {
+/** Tests replace the network. Null restores the app sender. A poster may return a delivery result. */
+export function setWatchPoster(fn: ((body: { [key: string]: string }) => Promise<void | SignalDelivery>) | null): void {
   poster = fn;
 }
 
@@ -124,10 +124,18 @@ function browserCodecs(): string {
   }
 }
 
-function xhrPost(body: { [key: string]: string }): Promise<void> {
+/**
+ * Delivery result of a signal batch. `accepted`: the server answered 2xx. `failed`: network error,
+ * timeout or a non-2xx answer. `no-session`: there is no billing session/token/context to send with.
+ * The watch votes stay fire-and-forget; the swarm reports (swarmReport.ts) start their dedup window
+ * only on `accepted` and retry a `failed` batch on a later flush.
+ */
+export type SignalDelivery = 'accepted' | 'failed' | 'no-session';
+
+function xhrPost(body: { [key: string]: string }): Promise<SignalDelivery> {
   const s = billingSession();
   const token = s ? s.access || s.token : '';
-  if (!token) return Promise.resolve();
+  if (!token) return Promise.resolve('no-session');
   const form = Object.keys(body)
     .map((k) => encodeURIComponent(k) + '=' + encodeURIComponent(body[k]))
     .join('&');
@@ -139,25 +147,26 @@ function xhrPost(body: { [key: string]: string }): Promise<void> {
       x.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
       x.setRequestHeader('Authorization', 'Bearer ' + token);
       x.setRequestHeader('X-Device-Id', deviceId());
-      x.onload = () => resolve();
-      x.onerror = () => resolve();
-      x.ontimeout = () => resolve();
+      x.onload = () => resolve(x.status >= 200 && x.status < 300 ? 'accepted' : 'failed');
+      x.onerror = () => resolve('failed');
+      x.ontimeout = () => resolve('failed');
       x.send(form);
     } catch (e) {
-      resolve();
+      resolve('failed');
     }
   });
 }
 
-function send(body: { [key: string]: string }): Promise<void> {
-  if (poster) return poster(body).then(() => undefined, () => undefined);
-  if (!billingSession()) return Promise.resolve();
+function send(body: { [key: string]: string }): Promise<SignalDelivery> {
+  // A test poster that returns nothing keeps the old fire-and-forget semantics: accepted.
+  if (poster) return poster(body).then((r) => (r === 'failed' || r === 'no-session' ? r : 'accepted'), () => 'failed');
+  if (!billingSession()) return Promise.resolve('no-session');
   const ctx = contextFn ? contextFn() : tvSourceContext();
-  if (!ctx) return Promise.resolve();
+  if (!ctx) return Promise.resolve('no-session');
   if (nativeSourceHttp()) {
     return withDeviceToken(ctx, (headers) => billingPost(ctx, '/v1/watch-signals', body, { headers, timeoutMs: 12000 })).then(
-      () => undefined,
-      () => undefined,
+      (res) => (res && res.status === 200 ? 'accepted' : 'failed'),
+      () => 'failed',
     );
   }
   return xhrPost(body);
@@ -328,3 +337,9 @@ export function reportPlayResult(sample: WatchSample): void {
   enqueueWatch(sample);
   flushWatch();
 }
+
+/**
+ * The shared watch-signals transport (native HTTP on Android, XHR on webOS), exposed for the
+ * additive swarm reports (swarmReport.ts). Same session/device-token gate, same endpoint.
+ */
+export { send as sendSignalBody };

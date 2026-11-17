@@ -42,12 +42,13 @@ export function seasonScore(title: string, seasons: number[]): number {
 }
 
 /**
- * Seed count of an estimate row: the BEP 33 dhtSeeds, or the bitmagnet counts now carried by Seed.
- * 0 for a live or unchecked row, and for an estimate without any count.
+ * Seed count of an estimate row: the BEP 33 dhtSeeds, or the bitmagnet/crowd counts now carried by
+ * Seed. 0 for a live or unchecked row, and for an estimate without any count.
  */
 export function estimateSeedCount(r: SourceResult): number {
   if (r.seedCheck !== 'dht' || !r.dhtEstimate) return 0;
-  return Math.max(r.dhtSeeds || 0, r.seedSource === 'bitmagnet' ? r.Seed || 0 : 0);
+  const counted = r.seedSource === 'bitmagnet' || r.seedSource === 'crowd';
+  return Math.max(r.dhtSeeds || 0, counted ? r.Seed || 0 : 0);
 }
 
 /**
@@ -134,8 +135,15 @@ export function seedStatusLine(r: SourceResult): string {
   }
   if (r.seedCheck === 'dht') {
     const reason = r.noTracker || !trackerListed(r) ? 'notrackers' : 'timeout';
+    // A crowd estimate (phase 3) is the median of the devices' own TorrServer swarm reports, marked
+    // «по данным устройств». A valid crowd zero is shown as such too: it must not fall through to
+    // the DHT formatter, which would attribute the zero to DHT (or show a saved DHT sample instead).
+    if (r.seedSource === 'crowd') {
+      const est = '~' + tp('sources.seeds', r.Seed || 0) + ' · ' + tp('sources.leechers', r.Peer || 0) + ' · ' + t('sources.crowdVia');
+      return reason === 'notrackers' ? t('sources.seedsNoTracker') + ' · ' + est : est;
+    }
     // bitmagnet estimate: real seed/leech counts from the local DHT index, shown as an estimate
-    // (the «~» mark and «по DHT»), never as a verified scrape. Existing i18n keys only.
+    // (the «~» mark and «по DHT»), never as a verified scrape.
     if (r.seedSource === 'bitmagnet' && (r.Seed || 0) > 0) {
       const est = '~' + tp('sources.seeds', r.Seed || 0) + ' · ' + tp('sources.leechers', r.Peer || 0) + ' · ' + t('sources.dhtVia');
       return reason === 'notrackers' ? t('sources.seedsNoTracker') + ' · ' + est : est;

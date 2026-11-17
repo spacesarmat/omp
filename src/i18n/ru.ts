@@ -937,6 +937,8 @@ export const ru = {
     seedsOnTopic: 'Адрес трекера на странице раздачи',
     /** DHT get_peers sample, not a seeder/leecher split. */
     dhtVia: 'по DHT',
+    /** Crowd estimate: the median of the devices' own TorrServer swarm reports (phase 3). */
+    crowdVia: 'по данным устройств',
     dhtMiss: 'DHT не ответил',
     /** Shown once when the tracker failed and there is no billing session. Not a DHT result. */
     dhtNeedsSub: 'Проверка по DHT - с подпиской OMP',

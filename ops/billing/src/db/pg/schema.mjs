@@ -780,6 +780,25 @@ ALTER TABLE seed_probes ADD COLUMN trackers jsonb;
 ALTER TABLE seed_probes ADD COLUMN refreshed_at bigint;
 `,
   },
+  {
+    version: '016_seed_crowd',
+    sql: `
+-- Crowd swarm counts reported by the devices (src/seedCrowd.mjs, phase 3 of the seed monitoring).
+-- One row per infohash and device: device_key is a sha256 of the registry device row id, never the
+-- token, a telegram id or a device name. Only the hash, the key, the counts and the timestamp are
+-- stored - no tracker address, no title. The upsert dedups a device+hash inside CROWD_DEDUP_MS;
+-- reports older than CROWD_WINDOW_MS are pruned on the next write. Additive, no data rewrite.
+CREATE TABLE seed_crowd (
+  infohash text NOT NULL,
+  device_key text NOT NULL,
+  seeders integer NOT NULL,
+  leechers integer NOT NULL,
+  reported_at bigint NOT NULL,
+  PRIMARY KEY (infohash, device_key)
+);
+CREATE INDEX seed_crowd_reported ON seed_crowd (reported_at);
+`,
+  },
 ];
 
 /** Apply pending migrations. Safe to run from several processes: they wait on the lock. */

@@ -29,7 +29,7 @@ export interface SeedMeasure {
   noTracker?: boolean;
   samples: number;
   measuredAt: number;
-  /** Estimate provenance ('bitmagnet'). Absent on a verified row and on an older server answer. */
+  /** Estimate provenance ('bitmagnet', 'crowd'). Absent on a verified row and on an older server answer. */
   source?: string;
   /** Age of the estimate counts at answer time, ms. Absent when the server did not send it. */
   ageMs?: number;
@@ -151,11 +151,11 @@ export function applySeedRound(rows: SourceResult[], measures: SeedMeasure[] | n
         dhtEstimate: true,
         noTracker: m.noTracker,
       };
-      // An estimate that carries counts (bitmagnet): the numbers reach the row, still an estimate -
-      // never live/verified. A fresh bitmagnet zero overwrites the search counts too (a dead torrent
+      // An estimate that carries counts (bitmagnet, crowd): the numbers reach the row, still an
+      // estimate - never live/verified. A fresh zero overwrites the search counts too (a dead torrent
       // must not keep the indexer's number as an estimate). A pure BEP 33 sample has no source and
       // seeders 0: it keeps the search numbers.
-      if (m.source === 'bitmagnet' || (m.seeders || 0) > 0 || (m.leechers || 0) > 0) {
+      if (m.source === 'bitmagnet' || m.source === 'crowd' || (m.seeders || 0) > 0 || (m.leechers || 0) > 0) {
         out.Seed = m.seeders;
         out.Peer = m.leechers;
       }

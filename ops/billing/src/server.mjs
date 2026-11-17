@@ -151,6 +151,8 @@ import {
 } from './services.mjs';
 import { DHT_PROBE_INFOHASH, DHT_WINDOW_MS, dhtConfig, dhtPerMinute, probeDhtSidecar, queryDhtPeers, validDhtPerMinute } from './dhtPeers.mjs';
 import { createPgSeedCache, listPopularSeedProbes } from './db/pg/seedProbeSql.mjs';
+import { createCrowdRepo } from './db/pg/seedCrowdSql.mjs';
+import { CROWD_CACHE_TTL_MS, crowdDeviceKey } from './seedCrowd.mjs';
 import { createPlaybackStore } from './db/pg/playbackSql.mjs';
 import { parseProgressBody, parseProgressQuery } from './playbackProgress.mjs';
 import { createCacheRepo } from './db/pg/cacheNodesSql.mjs';
@@ -534,6 +536,8 @@ export function formatSeedLog(status, ms, deviceId, counts) {
     bit(c.dht) +
     ' bitmagnet=' +
     bit(c.bitmagnet) +
+    ' crowd=' +
+    bit(c.crowd) +
     ' device=' +
     deviceLogId(deviceId) +
     '\n'
@@ -1619,6 +1623,13 @@ export function createApp(file, fetchImpl, opts) {
     }
     return seedBitmagnet;
   };
+  // Crowd swarm reports (phase 3): devices send the counts TorrServer shows them while playing or
+  // preloading, along the watch-signals path (additive `swarm` field). PG only - the seed_crowd
+  // table lives outside the state snapshot and outside seed_probes, so the refresh never sees it.
+  // The seed-check read goes through the same 60 s answer cache as bitmagnet: one aggregate query
+  // per hash per minute, concurrent callers share the pending batch. Estimates stay response-only.
+  const crowdRepo = typeof store.query === 'function' ? createCrowdRepo(store) : null;
+  const seedCrowdCounts = crowdRepo ? createBitmagnetCountsCache(crowdRepo, { ttlMs: CROWD_CACHE_TTL_MS }) : null;
   // Popular hashes stay fresh without a device asking: one re-scrape a minute through the same gate
   // and transport. PG only, never read-only, and only the startup block opts in (test apps do not schedule).
   // The timers are unref'ed and the gate is shared, so nothing else holds the process or the tracker budget.
@@ -3417,8 +3428,10 @@ export function createApp(file, fetchImpl, opts) {
             transport: seedTransport,
             dht: seedDht(cfg),
             bitmagnet: bitmagnetFor(state.settings),
+            crowd: seedCrowdCounts,
             // The app waits SEED_CHECK_TIMEOUT_MS (8 s) for the whole check: the optional bitmagnet
-            // lookup may use only what scrape/DHT leave of that budget, never push the answer past it.
+            // and crowd lookups may use only what scrape/DHT leave of that budget, never push the
+            // answer past it.
             budgetMs: (opts && opts.seedBudgetMs) || SEED_CHECK_BUDGET_MS,
           });
           counts = out.stats;
@@ -3479,13 +3492,21 @@ export function createApp(file, fetchImpl, opts) {
         const body = await readBody(req);
         const parsed = parseSignalBody(body);
         if (!parsed.ok) return json(res, 400, { error: 'bad_request' });
-        if (!parsed.help || !parsed.items.length) return json(res, 200, { ok: true, accepted: 0 });
+        if (!parsed.help || (!parsed.items.length && !parsed.swarm.length)) return json(res, 200, { ok: true, accepted: 0, crowd: 0 });
         const sub = state.subscriptions.find((s) => s.id === caller.code.subscriptionId);
         const accountId = sub && sub.accountId ? String(sub.accountId) : String(caller.code.id || '');
         const voter = voterHash(accountId, deviceId);
         if (!voter) return json(res, 400, { error: 'bad_request' });
         const accepted = await watchRepo.saveSignals(voter, parsed.items, now);
-        return json(res, 200, { ok: true, accepted });
+        // Crowd counts (phase 3): the device key is the irreversible hash of the registry device
+        // row id - never the token, never a personal id. The per-device rate limit above and the
+        // SQL dedup window bound the writes; only infohash + counts + timestamp land in seed_crowd.
+        let crowd = 0;
+        if (parsed.swarm.length && crowdRepo) {
+          const deviceKey = crowdDeviceKey(caller.rowId);
+          if (deviceKey) crowd = await crowdRepo.save(deviceKey, parsed.swarm, now);
+        }
+        return json(res, 200, { ok: true, accepted, crowd });
       }
       if (req.method === 'POST' && path === '/v1/search') {
         const started = Date.now();

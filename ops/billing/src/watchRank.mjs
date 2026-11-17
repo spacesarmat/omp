@@ -5,6 +5,7 @@
 // Until then the feed stays byte for byte, so an empty table does not reshuffle search.
 import { sha256 } from './crypto.mjs';
 import { normalizeInfohash } from './cacheNodes.mjs';
+import { parseSwarmReports } from './seedCrowd.mjs';
 
 export const BLEND_K = 8;
 export const COMMUNITY_SAMPLES = 3;
@@ -427,9 +428,15 @@ function oneSignal(raw, deviceClass, codecs) {
   };
 }
 
-/** A batch from the app. `help` false stores nothing. At most 20 rows. */
+/**
+ * A batch from the app. `help` false stores nothing. At most 20 rows.
+ * The additive `swarm` field (phase 3 crowd counts) rides alongside: an array or JSON string of
+ * { infohash, seeders, leechers }, parsed by seedCrowd. It is read from the outer body before the
+ * payload unwrap (the app sends it as a separate form field), or from the payload itself.
+ */
 export function parseSignalBody(body) {
   let src = body && typeof body === 'object' ? body : {};
+  const swarmRaw = src.swarm;
   if (typeof src.payload === 'string' && src.payload) {
     try {
       const parsed = JSON.parse(src.payload);
@@ -444,7 +451,9 @@ export function parseSignalBody(body) {
     }
   }
   const help = src.help === undefined ? true : !(src.help === false || src.help === 'false' || src.help === 0 || src.help === '0');
-  if (!help) return { ok: true, help: false, items: [] };
+  const swarm = parseSwarmReports(swarmRaw !== undefined ? swarmRaw : src.swarm);
+  if (!swarm.ok) return { ok: false, error: 'bad_request' };
+  if (!help) return { ok: true, help: false, items: [], swarm: [] };
   const deviceClass = deviceClassOf(src.deviceClass);
   const codecs = codecList(src.codecs);
   const list = Array.isArray(src.items) ? src.items : [];
@@ -454,7 +463,7 @@ export function parseSignalBody(body) {
     const row = oneSignal(list[i], deviceClass, codecs);
     if (row) items.push(row);
   }
-  return { ok: true, help: true, items };
+  return { ok: true, help: true, items, swarm: swarm.items };
 }
 
 /** Releases the cache job should hear about. Seedless rows stay out: popularity skips them. */
