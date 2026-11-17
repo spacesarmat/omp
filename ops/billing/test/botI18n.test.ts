@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   CATALOG,
+  LANG_CODES,
   bodyFor,
   normalizeLang,
   pickVariant,
@@ -8,15 +9,18 @@ import {
   sampleVars,
   str,
   stringIds,
+  stringRow,
   templateById,
   variablesIn,
 } from '../src/botCopy.mjs';
+import { LANG_PACKS } from '../src/botCopyLangs/index.mjs';
 import {
   botCallback,
   botReply,
   daysText,
   grantUserMessage,
   mainKeyboard,
+  parseAction,
   paymentUserMessage,
   pendingUserText,
   rejectUserText,
@@ -99,11 +103,11 @@ describe('bilingual catalog completeness', () => {
 });
 
 describe('strict language default is preserved', () => {
-  it('normalizeLang still maps only ru/en, everything else to empty', () => {
+  it('normalizeLang maps ru/en prefixes and unsupported codes to empty', () => {
     expect(normalizeLang('en-US')).toBe('en');
     expect(normalizeLang('ru')).toBe('ru');
-    expect(normalizeLang('uk')).toBe('');
     expect(normalizeLang('de')).toBe('');
+    expect(normalizeLang('fr')).toBe('');
   });
 
   it('an unsupported language uses only the default variant, never a state-only one', () => {
@@ -112,7 +116,7 @@ describe('strict language default is preserved', () => {
       { subState: 'active', lang: '', body: 'active-default-lang' },
       { subState: '', lang: 'ru', body: 'ru' },
     ];
-    expect(pickVariant(rows, 'active', normalizeLang('uk'))?.body).toBe('default');
+    expect(pickVariant(rows, 'active', normalizeLang('de'))?.body).toBe('default');
     expect(pickVariant(rows, 'active', '')?.body).toBe('default');
     expect(pickVariant(rows, 'active', 'ru')?.body).toBe('ru');
   });
@@ -121,7 +125,7 @@ describe('strict language default is preserved', () => {
     expect(str('btn.pay', 'en')).toBe('Pay');
     expect(str('btn.pay', 'ru')).toBe('Оплатить');
     expect(str('btn.pay', '')).toBe('Оплатить');
-    expect(str('btn.pay', 'uk')).toBe('Оплатить');
+    expect(str('btn.pay', 'de')).toBe('Оплатить');
   });
 });
 
@@ -246,8 +250,8 @@ describe('EN base fallback without a saved template', () => {
   });
 
   it('an unsupported language falls back to the RU cabinet', () => {
-    const f = setup('uk');
-    const cab = botReply(f.state, { chatId: '42', text: 'Кабинет', now: NOW, from: { lang: 'uk' } });
+    const f = setup('de');
+    const cab = botReply(f.state, { chatId: '42', text: 'Кабинет', now: NOW, from: { lang: 'de' } });
     expect(cab.messages[0].text).toContain('Личный кабинет');
     expect(cab.messages[0].text).toContain('Подписка до 18.11.2026 12:00 МСК');
     expect(cab.messages[0].keyboard.keyboard.flat().map((b: { text: string }) => b.text)).toContain('Кабинет');
@@ -388,6 +392,61 @@ describe('referral notice words follow the selected template language', () => {
       { subState: '', lang: '', body: 'FRIEND +{days}' },
       { subState: 'active', lang: '', body: 'ACTIVE +{days}' },
     ];
-    expect(renderNotice(rows, normalizeLang('uk'), 3)).toBe('FRIEND +3 дня');
+    expect(renderNotice(rows, normalizeLang('de'), 3)).toBe('FRIEND +3 дня');
+  });
+});
+
+describe('CIS language packs completeness', () => {
+  const packs = LANG_PACKS as Record<string, { catalog: Record<string, string>; strings: Record<string, string>; samples: Record<string, string> }>;
+  const codes = LANG_CODES.filter((c) => c !== 'ru' && c !== 'en');
+
+  it('every pack carries raw non-empty entries with RU variable parity', () => {
+    expect(codes.length).toBe(11);
+    for (const code of codes) {
+      const pack = packs[code];
+      expect(pack, code).toBeTruthy();
+      for (const row of CATALOG) {
+        const raw = pack.catalog[row.id];
+        expect(typeof raw === 'string' && raw.trim() !== '', code + ' catalog ' + row.id).toBe(true);
+        expect(variablesIn(raw).sort(), code + ' catalog ' + row.id).toEqual(variablesIn(row.body).sort());
+      }
+      for (const id of stringIds()) {
+        const raw = pack.strings[id];
+        expect(typeof raw === 'string' && raw.trim() !== '', code + ' string ' + id).toBe(true);
+        expect(variablesIn(raw).sort(), code + ' string ' + id).toEqual(variablesIn(stringRow(id).ru).sort());
+      }
+      for (const key of Object.keys(pack.samples)) expect(String(pack.samples[key] || '').trim(), code + ' sample ' + key).not.toBe('');
+      for (const row of CATALOG) {
+        const sv = sampleVars(row, code);
+        const ru = sampleVars(row, '');
+        for (const key of Object.keys(ru)) {
+          if (String(ru[key] ?? '').trim() === '') continue;
+          expect(String(sv[key] ?? '').trim(), code + ' preview ' + row.id + ' ' + key).not.toBe('');
+        }
+      }
+    }
+  });
+
+  it('pack texts stay free of em and en dashes', () => {
+    const blob = JSON.stringify(packs);
+    expect(blob).not.toContain('\u2014');
+    expect(blob).not.toContain('\u2013');
+  });
+
+  it('regional and uppercase codes normalize to the pack code', () => {
+    for (const code of codes) {
+      expect(normalizeLang(code + '-UA')).toBe(code);
+      expect(normalizeLang(code.toUpperCase())).toBe(code);
+    }
+    expect(normalizeLang('de-DE')).toBe('');
+  });
+
+  it('main keyboard labels of every language parse back to actions', () => {
+    for (const code of LANG_CODES) {
+      const kb = mainKeyboard(code) as { keyboard: { text: string }[][] };
+      const labels = kb.keyboard.flat().map((b) => b.text);
+      expect(labels.length, code).toBeGreaterThan(3);
+      for (const label of labels) expect(parseAction(label), code + ' label ' + label).toBeTruthy();
+    }
   });
 });

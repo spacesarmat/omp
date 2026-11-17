@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { api } from '@/lib/api';
 
-type Variable = { key: string; label: string; sample: string; sampleEn?: string };
+type Variable = { key: string; label: string; sample: string; sampleEn?: string; samples?: Record<string, string> };
 type Template = {
   id: string;
   category: string;
@@ -37,6 +37,17 @@ const LANGS = [
   ['', 'По умолчанию'],
   ['ru', 'RU'],
   ['en', 'EN'],
+  ['uk', 'UK'],
+  ['be', 'BE'],
+  ['kk', 'KK'],
+  ['ky', 'KY'],
+  ['uz', 'UZ'],
+  ['tg', 'TG'],
+  ['tk', 'TK'],
+  ['hy', 'HY'],
+  ['az', 'AZ'],
+  ['ka', 'KA'],
+  ['ro', 'RO'],
 ] as const;
 const EMOJI = ['✅', '⚠️', '⏳', '👋', '💳', '🎁', '📱', '💬', '⭐'];
 
@@ -449,7 +460,9 @@ export function BotRepliesPanel({ csrf }: { csrf: string }) {
     ? body.replace(/\{([A-Za-z][A-Za-z0-9_]*)\}/g, (_, key: string) => {
         const found = open.variables.find((item) => item.key === key);
         if (!found) return '{' + key + '}';
-        return lang === 'en' && found.sampleEn !== undefined ? found.sampleEn : found.sample;
+        if (lang === 'en' && found.sampleEn !== undefined) return found.sampleEn;
+        if (found.samples && found.samples[lang] !== undefined) return found.samples[lang];
+        return found.sample;
       })
     : preview;
 

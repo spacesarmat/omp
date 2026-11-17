@@ -1,5 +1,5 @@
 import { codeHash, deviceOk, normalizeCode, randomCode, randomId, sha256 } from './crypto.mjs';
-import { normalizeLang, str } from './botCopy.mjs';
+import { normalizeLang, pluralLang, str } from './botCopy.mjs';
 import { capReferralOff, mskMonthStart, normalizeReferralSettings, offerDays, offerPercent, referralCodeFor, referralDiscountRub, retentionStreak, REFERRAL_BONUS_MAX } from './referralAdmin.mjs';
 import { CRYPTO_ASSETS } from './cryptoPay.mjs';
 import { addMethodSplit, altCovers, cryptoDue, cryptoInvoiceMatches, emptyMethodSplit, isDevicePay, labelSettled, rubOfPayment, starDue, subscriptionPaidBefore } from './payMethods.mjs';
@@ -218,14 +218,22 @@ export function deviceLimitNow(state, sub, now) {
   return baseLimitOf(state, sub) + activeBonus(sub, at) + activeExtras(state, sub, at);
 }
 
-function plural(n, one, few, many) {
-  const a = Math.abs(n) % 100;
-  const b = a % 10;
-  if (a > 10 && a < 20) return many;
-  if (b === 1) return one;
-  if (b >= 2 && b <= 4) return few;
-  return many;
-}
+/** Limit part words per language: one/few/many where the language declines, one form where it does not. */
+const LIMIT_WORD_FORMS = {
+  ru: { base: ['базовое', 'базовых', 'базовых'], bonus: ['бонусный', 'бонусных', 'бонусных'], extra: ['купленный', 'купленных', 'купленных'] },
+  en: { base: ['base', 'base', 'base'], bonus: ['bonus', 'bonus', 'bonus'], extra: ['purchased', 'purchased', 'purchased'] },
+  uk: { base: ['базове', 'базові', 'базових'], bonus: ['бонусний', 'бонусні', 'бонусних'], extra: ['придбаний', 'придбані', 'придбаних'] },
+  be: { base: ['базавае', 'базавыя', 'базавых'], bonus: ['бонусны', 'бонусныя', 'бонусных'], extra: ['набыты', 'набытыя', 'набытых'] },
+  kk: { base: ['базалық', 'базалық', 'базалық'], bonus: ['бонустық', 'бонустық', 'бонустық'], extra: ['сатып алынған', 'сатып алынған', 'сатып алынған'] },
+  ky: { base: ['базалык', 'базалык', 'базалык'], bonus: ['бонустук', 'бонустук', 'бонустук'], extra: ['сатып алынган', 'сатып алынган', 'сатып алынган'] },
+  uz: { base: ['asosiy', 'asosiy', 'asosiy'], bonus: ['bonus', 'bonus', 'bonus'], extra: ['sotib olingan', 'sotib olingan', 'sotib olingan'] },
+  tg: { base: ['асосӣ', 'асосӣ', 'асосӣ'], bonus: ['бонусӣ', 'бонусӣ', 'бонусӣ'], extra: ['харидашуда', 'харидашуда', 'харидашуда'] },
+  tk: { base: ['esasy', 'esasy', 'esasy'], bonus: ['bonus', 'bonus', 'bonus'], extra: ['satyn alnan', 'satyn alnan', 'satyn alnan'] },
+  hy: { base: ['հիմնական', 'հիմնական', 'հիմնական'], bonus: ['բոնուսային', 'բոնուսային', 'բոնուսային'], extra: ['գնված', 'գնված', 'գնված'] },
+  az: { base: ['əsas', 'əsas', 'əsas'], bonus: ['bonus', 'bonus', 'bonus'], extra: ['alınmış', 'alınmış', 'alınmış'] },
+  ka: { base: ['ძირითადი', 'ძირითადი', 'ძირითადი'], bonus: ['ბონუსური', 'ბონუსური', 'ბონუსური'], extra: ['შეძენილი', 'შეძენილი', 'შეძენილი'] },
+  ro: { base: ['de bază', 'de bază', 'de bază'], bonus: ['bonus', 'bonus', 'bonus'], extra: ['cumpărat', 'cumpărat', 'cumpărat'] },
+};
 
 /**
  * The limit and its parts, for the bot, the cabinet and the panel:
@@ -250,14 +258,14 @@ export function limitBreakdown(state, sub, now, lang) {
   const bonus = Array.from(groups.values()).sort((a, b) => (a.until === null ? -1 : b.until === null ? 1 : a.until - b.until));
   const bonusTotal = activeBonus(sub, at);
   const extra = activeExtras(state, sub, at);
-  const en = lang === 'en';
-  const parts = [override !== null ? str('lim.custom', lang, { n: override }) : base + ' ' + (en ? 'base' : plural(base, 'базовое', 'базовых', 'базовых'))];
+  const words = LIMIT_WORD_FORMS[lang] || LIMIT_WORD_FORMS.ru;
+  const parts = [override !== null ? str('lim.custom', lang, { n: override }) : base + ' ' + pluralLang(base, lang, words.base[0], words.base[1], words.base[2])];
   for (let i = 0; i < bonus.length; i++) {
     const g = bonus[i];
     const untilText = g.until === null ? str('lim.forever', lang) : str('lim.until', lang, { date: mskDate(g.until) });
-    parts.push(g.count + ' ' + (en ? 'bonus' : plural(g.count, 'бонусный', 'бонусных', 'бонусных')) + ' (' + untilText + ')');
+    parts.push(g.count + ' ' + pluralLang(g.count, lang, words.bonus[0], words.bonus[1], words.bonus[2]) + ' (' + untilText + ')');
   }
-  if (extra > 0) parts.push(extra + ' ' + (en ? 'purchased' : plural(extra, 'купленный', 'купленных', 'купленных')));
+  if (extra > 0) parts.push(extra + ' ' + pluralLang(extra, lang, words.extra[0], words.extra[1], words.extra[2]));
   return {
     total: base + bonusTotal + extra,
     base,
@@ -3278,9 +3286,12 @@ export function mskTime(ms) {
   return pad2(d.getUTCHours()) + ':' + pad2(d.getUTCMinutes());
 }
 
-/** 19.10.2026 15:00 МСК (RU) / 19.10.2026 15:00 MSK (EN). No language stays RU. */
+/** Moscow-time label per language; absent or unsupported language stays RU (МСК). */
+const MSK_LABELS = { en: 'MSK', uk: 'МСК', be: 'МСК', kk: 'МСК', ky: 'МСК', uz: 'MSK', tg: 'МСК', tk: 'MSK', hy: 'MSK', az: 'MSK', ka: 'მსკ', ro: 'MSK' };
+
+/** 19.10.2026 15:00 МСК (RU) / 19.10.2026 15:00 MSK (EN), localized. No language stays RU. */
 export function mskDateTime(ms, lang) {
-  return mskDate(ms) + ' ' + mskTime(ms) + (lang === 'en' ? ' MSK' : ' МСК');
+  return mskDate(ms) + ' ' + mskTime(ms) + ' ' + (MSK_LABELS[lang] || 'МСК');
 }
 
 /** Days before the Moscow expiry day: 3 days before, the day before, and the expiry day itself. */

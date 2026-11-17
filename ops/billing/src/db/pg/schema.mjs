@@ -799,6 +799,18 @@ CREATE TABLE seed_crowd (
 CREATE INDEX seed_crowd_reported ON seed_crowd (reported_at);
 `,
   },
+  {
+    version: '017_bot_copy_langs',
+    sql: `
+-- CIS languages for editable bot replies: uk, be, kk, ky, uz, tg, tk, hy, az, ka, ro.
+-- Additive: only the CHECK widens on bot_copy and bot_copy_versions; existing '', 'ru', 'en'
+-- rows are untouched. The named constraints replace the unnamed ones from 013.
+ALTER TABLE bot_copy DROP CONSTRAINT IF EXISTS bot_copy_lang_check;
+ALTER TABLE bot_copy ADD CONSTRAINT bot_copy_lang_check CHECK (lang IN ('', 'ru', 'en', 'uk', 'be', 'kk', 'ky', 'uz', 'tg', 'tk', 'hy', 'az', 'ka', 'ro'));
+ALTER TABLE bot_copy_versions DROP CONSTRAINT IF EXISTS bot_copy_versions_lang_check;
+ALTER TABLE bot_copy_versions ADD CONSTRAINT bot_copy_versions_lang_check CHECK (lang IN ('', 'ru', 'en', 'uk', 'be', 'kk', 'ky', 'uz', 'tg', 'tk', 'hy', 'az', 'ka', 'ro'));
+`,
+  },
 ];
 
 /** Apply pending migrations. Safe to run from several processes: they wait on the lock. */

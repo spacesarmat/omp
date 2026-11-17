@@ -1369,11 +1369,11 @@ async function finishDonate(state, applied, fetchImpl, store) {
   const chat = applied.accountId ? telegramOf(state, applied.accountId) : '';
   const rec = copyRecipient(state, applied.accountId, Date.now());
   const thanks = donateThanksText(state.settings);
-  // An EN donor gets the EN default thanks only while the admin has not customized the text.
+  // A donor gets the default thanks in their language only while the admin has not customized the text.
   const text = applied.pending
     ? copyText('donate.pending', rec.lang)
-    : rec.lang === 'en' && thanks === str('don.thanks_default', '')
-      ? str('don.thanks_default', 'en')
+    : thanks === str('don.thanks_default', '')
+      ? str('don.thanks_default', rec.lang)
       : thanks;
   const amount = applied.donation && applied.donation.amountRub ? String(applied.donation.amountRub) + ' ₽' : '';
   if (chat) {

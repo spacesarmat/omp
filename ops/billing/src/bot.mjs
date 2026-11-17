@@ -1,5 +1,5 @@
 import { CRYPTO_ASSETS } from './cryptoPay.mjs';
-import { applyBuilt, copyText, escapeHtml, normalizeLang, pickVariant, str, subscriptionCopyState } from './botCopy.mjs';
+import { applyBuilt, copyText, escapeHtml, LANG_CODES, normalizeLang, pickVariant, pluralLang, str, subscriptionCopyState } from './botCopy.mjs';
 import { customRowsSync, hasCustomSync } from './botCopyStore.mjs';
 import { donateMenu, donateOnCallback, donateOnText } from './donate.mjs';
 import { capReferralOff, referralCodeFor } from './referralAdmin.mjs';
@@ -44,20 +44,54 @@ import {
   supportReplyTarget,
 } from './logic.mjs';
 
-/** «до 2 телефонов» / "up to 2 phones". */
+/** «до 2 телефонов» / "up to 2 phones", localized. The word forms follow the case the template needs. */
+const PHONE_FORMS = {
+  ru: { tpl: 'до {n} {word}', one: 'телефона', few: 'телефонов', many: 'телефонов' },
+  en: { tpl: 'up to {n} {word}', one: 'phone', few: 'phones', many: 'phones' },
+  uk: { tpl: 'до {n} {word}', one: 'телефона', few: 'телефонів', many: 'телефонів' },
+  be: { tpl: 'да {n} {word}', one: 'тэлефона', few: 'тэлефонаў', many: 'тэлефонаў' },
+  kk: { tpl: '{n} {word}ға дейін', one: 'телефон', few: 'телефон', many: 'телефон' },
+  ky: { tpl: '{n} {word}го чейин', one: 'телефон', few: 'телефон', many: 'телефон' },
+  uz: { tpl: '{n} tagacha {word}', one: 'telefon', few: 'telefon', many: 'telefon' },
+  tg: { tpl: 'то {n} {word}', one: 'телефон', few: 'телефон', many: 'телефон' },
+  tk: { tpl: '{n} {word}a çenli', one: 'telefon', few: 'telefon', many: 'telefon' },
+  hy: { tpl: 'մինչև {n} {word}', one: 'հեռախոս', few: 'հեռախոս', many: 'հեռախոս' },
+  az: { tpl: '{n} {word}adək', one: 'telefon', few: 'telefon', many: 'telefon' },
+  ka: { tpl: '{n} {word}ამდე', one: 'ტელეფონ', few: 'ტელეფონ', many: 'ტელეფონ' },
+  ro: { tpl: 'până la {n} {word}', one: 'telefon', few: 'telefoane', many: 'de telefoane' },
+};
 function upToPhones(state, lang) {
   const n = baseDevices(state && state.settings);
-  if (lang === 'en') return 'up to ' + n + (n === 1 ? ' phone' : ' phones');
-  return 'до ' + n + (n === 1 ? ' телефона' : ' телефонов');
+  const p = PHONE_FORMS[lang] || PHONE_FORMS.ru;
+  const word = pluralLang(n, lang, p.one, p.few, p.many);
+  return p.tpl.replace('{n}', String(n)).replace('{word}', word);
 }
+
+/** «+1 устр. навсегда» / "+1 device for 30 days": the slot word and the duration wrapper per language. */
+const PROMO_SLOT_FORMS = {
+  ru: { one: 'устр.', few: 'устр.', many: 'устр.', dur: 'на {days}' },
+  en: { one: 'device', few: 'devices', many: 'devices', dur: 'for {days}' },
+  uk: { one: 'пристр.', few: 'пристр.', many: 'пристр.', dur: 'на {days}' },
+  be: { one: 'прыстр.', few: 'прыстр.', many: 'прыстр.', dur: 'на {days}' },
+  kk: { one: 'құрылғы', few: 'құрылғы', many: 'құрылғы', dur: '{days} мерзімге' },
+  ky: { one: 'түзмөк', few: 'түзмөк', many: 'түзмөк', dur: '{days} мөөнөткө' },
+  uz: { one: 'qurilma', few: 'qurilma', many: 'qurilma', dur: '{days} muddatga' },
+  tg: { one: 'дастгоҳ', few: 'дастгоҳ', many: 'дастгоҳ', dur: 'барои {days}' },
+  tk: { one: 'enjam', few: 'enjam', many: 'enjam', dur: '{days} möhletine' },
+  hy: { one: 'սարք', few: 'սարք', many: 'սարք', dur: '{days} ժամկետով' },
+  az: { one: 'cihaz', few: 'cihaz', many: 'cihaz', dur: '{days} müddətinə' },
+  ka: { one: 'მოწყობილობა', few: 'მოწყობილობა', many: 'მოწყობილობა', dur: '{days} ვადით' },
+  ro: { one: 'dispozitiv', few: 'dispozitive', many: 'de dispozitive', dur: 'pentru {days}' },
+};
 
 /** «+30 дней» / «+1 устройство навсегда» / both. */
 function promoText(p, lang) {
   const parts = [];
   if (p.days) parts.push('+' + daysText(p.days, lang));
   if (p.bonusSlots) {
-    const slots = lang === 'en' ? p.bonusSlots + (p.bonusSlots === 1 ? ' device' : ' devices') : p.bonusSlots + ' устр.';
-    parts.push('+' + slots + ' ' + (p.bonusDays ? (lang === 'en' ? 'for ' : 'на ') + daysText(p.bonusDays, lang) : str('promo.bonus_forever', lang)));
+    const f = PROMO_SLOT_FORMS[lang] || PROMO_SLOT_FORMS.ru;
+    const slots = p.bonusSlots + ' ' + pluralLang(p.bonusSlots, lang, f.one, f.few, f.many);
+    parts.push('+' + slots + ' ' + (p.bonusDays ? f.dur.replace('{days}', daysText(p.bonusDays, lang)) : str('promo.bonus_forever', lang)));
   }
   return parts.join(', ');
 }
@@ -239,16 +273,65 @@ export function plural(n, one, few, many) {
   return many;
 }
 
+/** Day words per language: one/few/many where the language declines, one form where it does not. */
+const DAY_FORMS = {
+  ru: ['день', 'дня', 'дней'],
+  en: ['day', 'days', 'days'],
+  uk: ['день', 'дні', 'днів'],
+  be: ['дзень', 'дні', 'дзён'],
+  kk: ['күн', 'күн', 'күн'],
+  ky: ['күн', 'күн', 'күн'],
+  uz: ['kun', 'kun', 'kun'],
+  tg: ['рӯз', 'рӯз', 'рӯз'],
+  tk: ['gün', 'gün', 'gün'],
+  hy: ['օր', 'օր', 'օր'],
+  az: ['gün', 'gün', 'gün'],
+  ka: ['დღე', 'დღე', 'დღე'],
+  ro: ['zi', 'zile', 'de zile'],
+};
+
 export function daysText(n, lang) {
-  if (lang === 'en') return n + ' ' + (Math.abs(Math.floor(Number(n) || 0)) === 1 ? 'day' : 'days');
-  return n + ' ' + plural(n, 'день', 'дня', 'дней');
+  const w = DAY_FORMS[lang] || DAY_FORMS.ru;
+  return n + ' ' + pluralLang(n, lang, w[0], w[1], w[2]);
 }
 
-/** «смена/смены/смен» for a number of device changes; EN change/changes. */
+/** «смена/смены/смен» for a number of device changes, localized. */
+const CHANGE_FORMS = {
+  ru: ['смена', 'смены', 'смен'],
+  en: ['change', 'changes', 'changes'],
+  uk: ['зміна', 'зміни', 'змін'],
+  be: ['змена', 'змены', 'змен'],
+  kk: ['ауыстыру', 'ауыстыру', 'ауыстыру'],
+  ky: ['алмаштыруу', 'алмаштыруу', 'алмаштыруу'],
+  uz: ['almashtirish', 'almashtirish', 'almashtirish'],
+  tg: ['иваз', 'иваз', 'иваз'],
+  tk: ['çalyşma', 'çalyşma', 'çalyşma'],
+  hy: ['փոփոխություն', 'փոփոխություն', 'փոփոխություն'],
+  az: ['dəyişiklik', 'dəyişiklik', 'dəyişiklik'],
+  ka: ['შეცვლა', 'შეცვლა', 'შეცვლა'],
+  ro: ['schimbare', 'schimbări', 'de schimbări'],
+};
 function changesWord(n, lang) {
-  if (lang === 'en') return Math.abs(Math.floor(Number(n) || 0)) === 1 ? 'change' : 'changes';
-  return plural(n, 'смена', 'смены', 'смен');
+  const w = CHANGE_FORMS[lang] || CHANGE_FORMS.ru;
+  return pluralLang(n, lang, w[0], w[1], w[2]);
 }
+
+/** Full device word for the promo bonus line («+1 устройство бесплатно навсегда»), localized. */
+const DEVICE_FORMS = {
+  ru: ['устройство', 'устройства', 'устройства'],
+  en: ['device', 'devices', 'devices'],
+  uk: ['пристрій', 'пристрої', 'пристроїв'],
+  be: ['прылада', 'прылады', 'прылад'],
+  kk: ['құрылғы', 'құрылғы', 'құрылғы'],
+  ky: ['түзмөк', 'түзмөк', 'түзмөк'],
+  uz: ['qurilma', 'qurilma', 'qurilma'],
+  tg: ['дастгоҳ', 'дастгоҳ', 'дастгоҳ'],
+  tk: ['enjam', 'enjam', 'enjam'],
+  hy: ['սարք', 'սարք', 'սարք'],
+  az: ['cihaz', 'cihaz', 'cihaz'],
+  ka: ['მოწყობილობა', 'მოწყობილობა', 'მოწყობილობა'],
+  ro: ['dispozitiv', 'dispozitive', 'de dispozitive'],
+};
 
 function accountPaid(state, account) {
   if (!account) return false;
@@ -352,7 +435,13 @@ function trialLine(state, lang) {
   return code ? str('trial.line', lang, { code }) : '';
 }
 
-/** Maps a button label or /command to an internal action. RU and EN labels are both accepted. */
+/** Every localized label of a button, so a tap in any supported language maps to the action. */
+const BTN_LABELS = {};
+for (const id of ['btn.cabinet', 'btn.pay', 'btn.devices', 'btn.promo', 'btn.price', 'btn.support', 'btn.donate', 'btn.buy', 'btn.renew', 'btn.code', 'btn.unlink', 'btn.admin_user', 'btn.admin_summary', 'btn.admin_find', 'btn.admin_grant', 'btn.admin_promo']) {
+  BTN_LABELS[id] = LANG_CODES.map((code) => str(id, code));
+}
+
+/** Maps a button label or /command to an internal action. Labels in every supported language are accepted. */
 export function parseAction(text) {
   const raw = String(text || '').trim();
   if (!raw) return { action: 'cabinet', arg: '' };
@@ -373,19 +462,19 @@ export function parseAction(text) {
   }
   const cmd = rest ? '' : head;
   const is = (...names) => names.indexOf(raw) >= 0 || (cmd && names.indexOf(cmd) >= 0);
-  if (is(BTN.cabinet, str('btn.cabinet', 'en'), '/status', '/start', '/menu', '/cabinet')) return { action: 'cabinet', arg: '' };
-  if (is(BTN.pay, str('btn.pay', 'en'), OLD_BTN.buy, str('btn.buy', 'en'), OLD_BTN.renew, str('btn.renew', 'en'), '/pay', '/buy', '/renew')) return { action: 'pay', arg: '' };
-  if (is(BTN.devices, str('btn.devices', 'en'), OLD_BTN.code, str('btn.code', 'en'), OLD_BTN.unlink, str('btn.unlink', 'en'), '/code', '/device', '/devices', '/unlink')) return { action: 'devices', arg: '' };
-  if (is(BTN.promo, str('btn.promo', 'en'), '/promo')) return { action: 'promo', arg: '' };
-  if (is(BTN.price, str('btn.price', 'en'), '/price', '/prices')) return { action: 'price', arg: '' };
-  if (is(BTN.support, str('btn.support', 'en'), '/support')) return { action: 'support', arg: '' };
-  if (is(BTN.donate, str('btn.donate', 'en'), '/donate')) return { action: 'donate', arg: '' };
+  if (is(BTN.cabinet, ...BTN_LABELS['btn.cabinet'], '/status', '/start', '/menu', '/cabinet')) return { action: 'cabinet', arg: '' };
+  if (is(BTN.pay, ...BTN_LABELS['btn.pay'], OLD_BTN.buy, ...BTN_LABELS['btn.buy'], OLD_BTN.renew, ...BTN_LABELS['btn.renew'], '/pay', '/buy', '/renew')) return { action: 'pay', arg: '' };
+  if (is(BTN.devices, ...BTN_LABELS['btn.devices'], OLD_BTN.code, ...BTN_LABELS['btn.code'], OLD_BTN.unlink, ...BTN_LABELS['btn.unlink'], '/code', '/device', '/devices', '/unlink')) return { action: 'devices', arg: '' };
+  if (is(BTN.promo, ...BTN_LABELS['btn.promo'], '/promo')) return { action: 'promo', arg: '' };
+  if (is(BTN.price, ...BTN_LABELS['btn.price'], '/price', '/prices')) return { action: 'price', arg: '' };
+  if (is(BTN.support, ...BTN_LABELS['btn.support'], '/support')) return { action: 'support', arg: '' };
+  if (is(BTN.donate, ...BTN_LABELS['btn.donate'], '/donate')) return { action: 'donate', arg: '' };
   if (is('/admin', 'Админ')) return { action: 'admin', arg: '' };
-  if (is(ADMIN_BTN.user, str('btn.admin_user', 'en'), '/user', 'В кабинет')) return { action: 'user_mode', arg: '' };
-  if (is(ADMIN_BTN.summary, str('btn.admin_summary', 'en'), '/summary')) return { action: 'admin_summary', arg: '' };
-  if (is(ADMIN_BTN.find, str('btn.admin_find', 'en'), '/find')) return { action: 'admin_find', arg: '' };
-  if (is(ADMIN_BTN.grant, str('btn.admin_grant', 'en'), '/grant')) return { action: 'admin_grant', arg: '' };
-  if (raw === ADMIN_BTN.promo || raw === str('btn.admin_promo', 'en')) return { action: 'admin_promo', arg: '' };
+  if (is(ADMIN_BTN.user, ...BTN_LABELS['btn.admin_user'], '/user', 'В кабинет')) return { action: 'user_mode', arg: '' };
+  if (is(ADMIN_BTN.summary, ...BTN_LABELS['btn.admin_summary'], '/summary')) return { action: 'admin_summary', arg: '' };
+  if (is(ADMIN_BTN.find, ...BTN_LABELS['btn.admin_find'], '/find')) return { action: 'admin_find', arg: '' };
+  if (is(ADMIN_BTN.grant, ...BTN_LABELS['btn.admin_grant'], '/grant')) return { action: 'admin_grant', arg: '' };
+  if (is(ADMIN_BTN.promo, ...BTN_LABELS['btn.admin_promo'])) return { action: 'admin_promo', arg: '' };
 
   if (head === '/promo' && rest) return { action: 'promo', arg: rest.replace(/\s+/g, '') };
   if (head === '/support' && rest) return { action: 'support', arg: rest };
@@ -1432,7 +1521,8 @@ export function botReply(state, { chatId, text, now, awaiting, replyTo, from, pa
       const parts = [];
       if (out.result.days) parts.push(str('promo.bonus_days', lang, { days: daysText(out.result.days, lang), when: mskDateTime(out.result.paidUntil, lang) }));
       if (b) {
-        const deviceWord = lang === 'en' ? (b.count === 1 ? 'device' : 'devices') : b.count === 1 ? 'устройство' : 'устройства';
+        const dw = DEVICE_FORMS[lang] || DEVICE_FORMS.ru;
+        const deviceWord = pluralLang(b.count, lang, dw[0], dw[1], dw[2]);
         const untilText = b.until ? str('promo.bonus_until', lang, { when: mskDate(b.until) }) : str('promo.bonus_forever', lang);
         parts.push(str('promo.bonus_slots', lang, { n: b.count, device: deviceWord, until: untilText }));
       }
