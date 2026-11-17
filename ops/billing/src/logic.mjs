@@ -1292,11 +1292,12 @@ function referralIndex(journal, friendId, referrerId, variant) {
 function creditHeavyPay(state, row) {
   if (!row) return false;
   let credit = Math.max(0, Math.floor(Number(row.credit) || 0));
-  let off = 0;
-  let full = 0;
+  // Frozen at acceptance: a trimmed quote must not change what this payment earned.
+  let off = Math.max(0, Math.floor(Number(row.off) || 0));
+  let full = Math.max(0, Number(row.full) || 0);
   const money = rubOfPayment(row);
   const label = String(row.label || '');
-  if (label.indexOf('buy:') === 0) {
+  if (!full && label.indexOf('buy:') === 0) {
     const quote = (state.purchases || []).find((item) => item && item.id === label.slice(4));
     if (quote) {
       off = Math.max(0, Math.floor(Number(quote.referralOff) || 0));
@@ -1658,6 +1659,9 @@ function applyPaymentUnsettled(input, { operationId, label, amount, currency, un
     }
     // Saved on the payment so a later trim of the quote cannot turn a device slot into a subscription month.
     row.kind = quote.kind;
+    // Frozen full price and friend discount: a trimmed quote must not start paying referral rewards later.
+    row.off = Math.max(0, Math.floor(Number(quote.referralOff) || 0));
+    row.full = (Number(quote.price) || 0) + (Number(quote.credit) || 0) + (Number(quote.referralOff) || 0);
   }
   const alt = quote && (quote.method === 'stars' || quote.method === 'crypto');
   if (alt) {

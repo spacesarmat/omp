@@ -466,6 +466,25 @@ describe('referral credit cover and stars guards', () => {
     expect(sub(settled.state, 's-ref').creditRub).toBe(0);
   });
 
+  it('keeps a credit-and-discount payment excluded after the quote is trimmed', () => {
+    const state = world({ referrerDays: 7, balance: true, balancePercent: 10, delayDays: 0, friendDiscount: true, friendDiscountRub: 90 });
+    state.referralBinds[0].boundAt = NOW - 100 * DAY;
+    state.subscriptions[1].creditRub = 50;
+    const quoted = quotePurchase(state, { kind: 'sub', accountId: 'friend', subscriptionId: 's-friend', now: NOW - DAY });
+    expect(quoted.result.price).toBe(60);
+    expect(quoted.result.credit).toBe(50);
+    expect(quoted.result.referralOff).toBe(90);
+    const paid = applyPayment(quoted.state, { operationId: 'op-trim', label: quoted.result.label, amount: '60.00', currency: '643', now: NOW - DAY });
+    expect(paid.result.kind).toBe('renew');
+    expect(row(settleReferrals(paid.state, NOW).state, 'days')).toBeUndefined();
+    // trimPurchases drops the paid quote: the frozen full price and discount on the payment must keep it excluded.
+    const trimmed = { ...paid.state, purchases: [] };
+    const settled = settleReferrals(trimmed, NOW);
+    expect(row(settled.state, 'days')).toBeUndefined();
+    expect(row(settled.state, 'balance')).toBeUndefined();
+    expect(sub(settled.state, 's-ref').creditRub).toBe(0);
+  });
+
   it('cancels a waiting balance award when the granted days row removes the bind', () => {
     const settings = { referrerDays: 7, balance: true, balancePercent: 10, balanceMonthlyCap: 20, delayDays: 0 };
     const first = settleReferrals(pay(world(settings)), NOW);
