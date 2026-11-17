@@ -706,8 +706,8 @@ async function scrapeJobs(jobs, opts) {
 }
 
 /**
- * DHT for every hash in the batch, beside the scrapes. Lookups run with a capped concurrency inside
- * one shared deadline; each hash races the time left, so a slow sidecar cannot hang the batch.
+ * DHT for the given hashes, beside the scrapes. Lookups run with a capped concurrency inside one
+ * shared deadline; each hash races the time left, so a slow sidecar cannot hang the batch.
  * Returns a map hash -> dhtSample (zeros for a hash that did not answer in budget). The sidecar
  * serves one lookup at a time and rate-limits the rest, so most fan-out resolves to zeros here.
  */
