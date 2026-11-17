@@ -1,6 +1,9 @@
 import { describe, expect, it, afterEach } from 'vitest';
-import { confirmAdminPanelLogin, issueCliAdminLogin, startAdminPanelLogin } from '../src/logic.mjs';
+import { confirmAdminPanelLogin, createSubscription, issueCliAdminLogin, openAccount, quotePurchase, redeemReferralCode, startAdminPanelLogin } from '../src/logic.mjs';
+import { referralCodeFor } from '../src/referralAdmin.mjs';
+import { notificationHash } from '../src/yoomoney.mjs';
 import { botCopyRepoFor, createBotCopyRepo, resetCopyCache } from '../src/botCopyStore.mjs';
+import { resetBotCopySends } from '../src/botCopyHttp.mjs';
 import { pollBot } from '../src/server.mjs';
 import { createApp } from '../src/server.mjs';
 import { emptyState } from '../src/state.mjs';
@@ -74,6 +77,7 @@ async function telegramAdmin(store: Any, app: Any, telegramId: string) {
 
 afterEach(() => {
   resetCopyCache();
+  resetBotCopySends();
   sent.length = 0;
 });
 
@@ -237,5 +241,172 @@ describe('bot copy admin API', () => {
     const after = calls.find((row) => row.url.indexOf('sendMessage') >= 0);
     expect(after && after.body.indexOf('HELLO') >= 0).toBe(true);
     expect(after && after.body.indexOf('Ann') >= 0).toBe(true);
+  });
+});
+
+describe('bot copy delivery', () => {
+  async function pollOnce(store: Any, update: Any, calls: { url: string; body: string }[]) {
+    let polls = 0;
+    const net = async (url: string, init?: { body?: string }) => {
+      calls.push({ url: String(url), body: init && init.body ? String(init.body) : '' });
+      if (String(url).indexOf('getUpdates') >= 0) {
+        polls += 1;
+        return { ok: true, status: 200, json: async () => ({ ok: true, result: polls === 1 ? [update] : [] }), text: async () => '' };
+      }
+      return { ok: true, status: 200, json: async () => ({ ok: true, result: { message_id: 3 } }), text: async () => '' };
+    };
+    await pollBot(store, net, { maxLoops: 1, sleep: async () => {}, now: () => Date.now() });
+  }
+
+  it('selects the saved devices variant by the recipient state and language, and stores the language', async () => {
+    const store = await testStore();
+    const now = Date.now();
+    let state = emptyState();
+    state.settings.botToken = 'bot-token-test';
+    const opened = openAccount(state, { telegramId: '42', email: '', now });
+    const created = createSubscription(opened.state, { accountId: opened.account.id, now, days: 30 });
+    // A settled payment makes the subscription active, not trial.
+    state = {
+      ...created.state,
+      payments: [{ accountId: opened.account.id, operationId: 'op-paid', at: now, amount: '150', currency: '643' }],
+    };
+    await writeState(store, state);
+    const repo = botCopyRepoFor(store);
+    await repo.save(
+      { id: 'devices.list', state: 'active', lang: 'en', body: 'DEVICES {devices}', buttons: null, mediaKind: '', mediaUrl: '' },
+      '777',
+      now,
+    );
+    const calls: { url: string; body: string }[] = [];
+    await pollOnce(
+      store,
+      {
+        update_id: 1,
+        message: { message_id: 1, text: 'Устройства', chat: { id: 42, type: 'private' }, from: { id: 42, first_name: 'Ann', language_code: 'en-US' } },
+      },
+      calls,
+    );
+    const list = calls.find((row) => row.url.indexOf('sendMessage') >= 0);
+    expect(list && list.body.indexOf('DEVICES') >= 0).toBe(true);
+    expect((await store.read()).accounts[0].lang).toBe('en');
+  });
+
+  it('keeps sending the in-code text when the copy lookup is down', async () => {
+    const store = await testStore();
+    const state = emptyState();
+    state.settings.botToken = 'bot-token-test';
+    await writeState(store, state);
+    const broken: Any = {
+      engine: store.engine,
+      registry: store.registry,
+      read: () => store.read(),
+      update: (fn: Any) => store.update(fn),
+      query: (sql: string, params: unknown[]) =>
+        String(sql).indexOf('bot_copy') >= 0 ? Promise.reject(new Error('copy down')) : store.query(sql, params),
+      close: () => store.close(),
+    };
+    if (typeof store.withClient === 'function') broken.withClient = (fn: Any) => store.withClient(fn);
+    const calls: { url: string; body: string }[] = [];
+    await pollOnce(
+      broken,
+      {
+        update_id: 1,
+        message: { message_id: 1, text: '/start', chat: { id: 42, type: 'private' }, from: { id: 42, first_name: 'Ann', language_code: 'ru' } },
+      },
+      calls,
+    );
+    const greeting = calls.find((row) => row.url.indexOf('sendMessage') >= 0);
+    expect(greeting && greeting.body.indexOf('Личный кабинет') >= 0).toBe(true);
+  });
+
+  it('limits save/restore/reset writes per admin', async () => {
+    const store = await testStore();
+    await writeState(store, emptyState());
+    const app = createApp(store, fetchImpl, { env: {} });
+    const admin = await cliAdmin(store, app);
+    let status = 0;
+    for (let i = 0; i < 31; i++) {
+      const res = await call(app, 'POST', '/admin/api/bot-replies/reset', {
+        headers: { cookie: admin.cookie },
+        body: { csrf: admin.csrf, id: 'promo.bad', state: '', lang: '' },
+      });
+      status = res.status;
+      if (i < 30) expect(status).toBe(200);
+    }
+    expect(status).toBe(429);
+  });
+
+  it('sends referral notices when a payment settles the grant, and the payer notice in their language', async () => {
+    const store = await testStore();
+    const now = Date.now();
+    let state = emptyState();
+    state.settings.botToken = 'bot-token-test';
+    state.settings.yoomoneySecret = 'secret';
+    state.settings.priceRub = 150;
+    state.settings.adminNotify = false;
+    state.settings.referral = { enabled: true, referrerDays: 7, friendDays: 3, delayDays: 0 };
+    const ref = openAccount(state, { telegramId: '1', email: '', now });
+    const friend = openAccount(ref.state, { telegramId: '2', email: '', now });
+    const refSub = createSubscription(friend.state, { accountId: ref.account.id, now, days: 30 });
+    const friendSub = createSubscription(refSub.state, { accountId: friend.account.id, now, days: 30 });
+    const bound = redeemReferralCode(friendSub.state, { code: referralCodeFor(ref.account.id), accountId: friend.account.id, now: now - 86400000 });
+    state = {
+      ...bound!.state,
+      accounts: bound!.state.accounts.map((a: Any) => ({ ...a, lang: a.telegramId === '2' ? 'en' : 'ru' })),
+    };
+    const q = quotePurchase(state, { kind: 'sub', accountId: friend.account.id, subscriptionId: friendSub.result.subscriptionId, now });
+    await writeState(store, q.state);
+    const repo = botCopyRepoFor(store);
+    await repo.save({ id: 'referral.referrer', state: '', lang: '', body: 'REFERRER +{days}', buttons: null, mediaKind: '', mediaUrl: '' }, '777', now);
+    await repo.save({ id: 'referral.friend', state: '', lang: '', body: 'FRIEND +{days}', buttons: null, mediaKind: '', mediaUrl: '' }, '777', now);
+    await repo.save(
+      { id: 'pay.received_renew', state: 'active', lang: 'en', body: 'RENEWED {expires_at}', buttons: null, mediaKind: '', mediaUrl: '' },
+      '777',
+      now,
+    );
+    const app = createApp(store, fetchImpl, { env: {} });
+    const fields: Record<string, string> = {
+      notification_type: 'card-incoming',
+      operation_id: 'op-ref',
+      amount: '150.00',
+      currency: '643',
+      datetime: new Date(now).toISOString(),
+      sender: '',
+      codepro: 'false',
+      label: q.result.label,
+      sha1_hash: '',
+    };
+    fields.sha1_hash = notificationHash(fields, 'secret');
+    const payload = new URLSearchParams(fields).toString();
+    const res = {
+      status: 0,
+      body: '',
+      writeHead(s: number) {
+        this.status = s;
+      },
+      setHeader() {},
+      end(b?: string) {
+        this.body = String(b || '');
+      },
+    };
+    await app(
+      {
+        method: 'POST',
+        url: '/v1/yoomoney',
+        headers: { 'content-type': 'application/x-www-form-urlencoded' },
+        socket: { remoteAddress: '127.0.0.1' },
+        async *[Symbol.asyncIterator]() {
+          yield Buffer.from(payload);
+        },
+      },
+      res,
+    );
+    expect(res.status).toBe(200);
+    const msgs = sent.filter((row) => row.url.indexOf('/sendMessage') >= 0).map((row) => JSON.parse(row.body));
+    const toRef = msgs.filter((m) => String(m.chat_id) === '1');
+    const toFriend = msgs.filter((m) => String(m.chat_id) === '2');
+    expect(toRef.some((m) => String(m.text).indexOf('REFERRER +7 дней') >= 0)).toBe(true);
+    expect(toFriend.some((m) => String(m.text).indexOf('FRIEND +3 дня') >= 0)).toBe(true);
+    expect(toFriend.some((m) => String(m.text).indexOf('RENEWED') >= 0)).toBe(true);
   });
 });

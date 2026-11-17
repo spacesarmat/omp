@@ -167,7 +167,7 @@ export function createBotCopyRepo(store, opts) {
     async apply(spec, built) {
       if (!spec || !spec.id) return applyBuilt(null, built, {});
       const row = await this.lookup(spec.id, spec.state, spec.lang);
-      return applyBuilt(row, built, spec.vars || {});
+      return applyBuilt(row, built, spec.vars || {}, spec.raw);
     },
     async history(id, state, lang) {
       const res = await query(
@@ -220,7 +220,9 @@ export function createBotCopyRepo(store, opts) {
     async restore(id, versionId, author, now) {
       const template = templateById(id);
       if (!template) return { ok: false, error: 'Неизвестный шаблон' };
-      const found = await query('SELECT * FROM bot_copy_versions WHERE id = $1', [Number(versionId)]);
+      const version = Number(versionId);
+      if (!Number.isInteger(version) || version < 1) return { ok: false, error: 'Версия не найдена' };
+      const found = await query('SELECT * FROM bot_copy_versions WHERE id = $1', [version]);
       const prev = found.rows[0];
       if (!prev || prev.template_id !== template.id) return { ok: false, error: 'Версия не найдена' };
       const who = String(author || '').slice(0, 80);

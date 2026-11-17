@@ -211,14 +211,14 @@ function commentScreen(settings, id) {
   return {
     text: 'Комментарий к донату, по желанию. До ' + cfg.commentMax + ' символов.',
     inline: { inline_keyboard: [[{ text: 'Без комментария', callback_data: 'dn:s:' + id }]] },
-    copy: { id: 'donate.comment', vars: { comment_max: String(cfg.commentMax) }, state: '', lang: '' },
+    copy: { id: 'donate.comment', vars: { comment_max: String(cfg.commentMax) } },
   };
 }
 
 function nameScreen(id) {
   return {
     text: 'Показать моё имя в списке благодарностей? Сейчас имя скрыто.',
-    copy: { id: 'donate.name', vars: {}, state: '', lang: '' },
+    copy: { id: 'donate.name', vars: {} },
     inline: {
       inline_keyboard: [[
         { text: 'Показать имя', callback_data: 'dn:n:' + id + ':1' },
@@ -260,8 +260,8 @@ function methodScreen(state, account, row) {
       buttons.push([{ text: asset + ' - ' + amount, callback_data: 'dn:p:' + row.id + ':' + asset }]);
     }
   }
-  if (!buttons.length) return { text: 'Способы оплаты доната не включены.', inline: undefined, copy: { id: 'donate.methods_off', vars: {}, state: '', lang: '' } };
-  return { text: lines.join('\n'), inline: { inline_keyboard: buttons }, copy: { id: 'donate.methods', vars: { amount: row.amountRub + ' ₽', fee: lines.slice(1).join('\n') }, state: '', lang: '' } };
+  if (!buttons.length) return { text: 'Способы оплаты доната не включены.', inline: undefined, copy: { id: 'donate.methods_off', vars: {} } };
+  return { text: lines.join('\n'), inline: { inline_keyboard: buttons }, copy: { id: 'donate.methods', vars: { amount: row.amountRub + ' ₽', fee: lines.slice(1).join('\n') } } };
 }
 
 function lockMethod(state, account, row, method) {
@@ -277,7 +277,7 @@ function lockMethod(state, account, row, method) {
       row: { ...named, method, asset: '', payAmount: up.gross, gross: up.gross, fee: up.fee, status: 'pending', step: '' },
       text: title + ' - ' + rubText(up.gross) + '. Комиссия уже в сумме.',
       inline: { inline_keyboard: [[{ text: title + ' - ' + rubText(up.gross), url }]] },
-      copy: { id: 'donate.pay', vars: { method: title, amount: rubText(up.gross) }, state: '', lang: '' },
+      copy: { id: 'donate.pay', vars: { method: title, amount: rubText(up.gross) } },
     };
   }
   if (method === 'XTR') {
@@ -286,7 +286,7 @@ function lockMethod(state, account, row, method) {
     return {
       row: { ...named, method: 'stars', asset: 'XTR', payAmount: String(stars), gross: '', fee: '', status: 'pending', step: '' },
       text: 'Счёт на ' + stars + ' звёзд. Комиссия сверху не добавляется.',
-      copy: { id: 'donate.stars', vars: { stars: String(stars), amount: named.amountRub + ' ₽' }, state: '', lang: '' },
+      copy: { id: 'donate.stars', vars: { stars: String(stars), amount: named.amountRub + ' ₽' } },
       invoice: starInvoiceBody(named.telegramId, {
         title: 'Донат OMP',
         description: 'Донат OMP, ' + named.amountRub + ' ₽',
@@ -301,7 +301,7 @@ function lockMethod(state, account, row, method) {
     return {
       row: { ...named, method: 'crypto', asset: method, payAmount: amount, gross: '', fee: '', status: 'pending', step: '' },
       text: method + ' ' + amount + '. Ссылка на оплату:',
-      copy: { id: 'donate.crypto', vars: { asset: method, pay_amount: amount }, state: '', lang: '' },
+      copy: { id: 'donate.crypto', vars: { asset: method, pay_amount: amount } },
       cryptoIssue: { donationId: named.id },
     };
   }
@@ -310,12 +310,12 @@ function lockMethod(state, account, row, method) {
 
 export function donateMenu(state, account, now) {
   const cfg = cfgOf(state);
-  if (!cfg.enabled) return { state, text: 'Поддержка проекта сейчас выключена.', copy: { id: 'donate.off', vars: {}, state: '', lang: '' } };
+  if (!cfg.enabled) return { state, text: 'Поддержка проекта сейчас выключена.', copy: { id: 'donate.off', vars: {} } };
   return {
     state,
     text: 'Поддержать проект OMP. Выберите сумму.',
     inline: amountKeyboard(cfg),
-    copy: { id: 'donate.menu', vars: { name: nameOf(account) }, state: '', lang: '' },
+    copy: { id: 'donate.menu', vars: { name: nameOf(account) } },
     now,
   };
 }
@@ -327,13 +327,13 @@ export function donateOnText(state, account, text, now) {
   const cfg = cfgOf(state);
   if (draft.step === 'amount') {
     const check = validateDonateAmount(cfg, text);
-    if (!check.ok) return { state, text: check.error, copy: { id: 'donate.amount_bad', vars: { min_rub: String(cfg.minRub), max_rub: String(cfg.maxRub), text: check.error }, state: '', lang: '' } };
+    if (!check.ok) return { state, text: check.error, copy: { id: 'donate.amount_bad', vars: { min_rub: String(cfg.minRub), max_rub: String(cfg.maxRub), text: check.error } } };
     const row = { ...draft, amountRub: check.rub, step: 'comment', displayName: nameOf(account) || draft.displayName };
     const screen = commentScreen(cfg, row.id);
     return { state: putDonation(state, row), text: screen.text, inline: screen.inline, copy: screen.copy };
   }
   const check = validateDonateComment(cfg, text);
-  if (!check.ok) return { state, text: check.error, copy: { id: 'donate.comment_bad', vars: { comment_max: String(cfg.commentMax), text: check.error }, state: '', lang: '' } };
+  if (!check.ok) return { state, text: check.error, copy: { id: 'donate.comment_bad', vars: { comment_max: String(cfg.commentMax), text: check.error } } };
   const row = { ...draft, comment: check.comment, step: 'name' };
   const screen = nameScreen(row.id);
   return { state: putDonation(state, row), text: screen.text, inline: screen.inline, copy: screen.copy };
@@ -362,6 +362,7 @@ function resendCheckout(state, row) {
     return {
       text: title + ' - ' + rubText(row.gross) + '. Комиссия уже в сумме.',
       inline: { inline_keyboard: [[{ text: title + ' - ' + rubText(row.gross), url }]] },
+      copy: { id: 'donate.pay', vars: { method: title, amount: rubText(row.gross) } },
     };
   }
   if (row.method === 'stars') {
@@ -369,6 +370,7 @@ function resendCheckout(state, row) {
     if (!Number.isInteger(stars) || stars < 1) return { error: 'Счёт не найден' };
     return {
       text: 'Счёт на ' + stars + ' звёзд. Комиссия сверху не добавляется.',
+      copy: { id: 'donate.stars', vars: { stars: String(stars), amount: row.amountRub + ' ₽' } },
       invoice: starInvoiceBody(row.telegramId, {
         title: 'Донат OMP',
         description: 'Донат OMP, ' + row.amountRub + ' ₽',
@@ -380,6 +382,7 @@ function resendCheckout(state, row) {
   if (row.method === 'crypto' && row.asset && row.payAmount) {
     return {
       text: row.asset + ' ' + row.payAmount + '. Ссылка на оплату:',
+      copy: { id: 'donate.crypto', vars: { asset: row.asset, pay_amount: row.payAmount } },
       cryptoIssue: { donationId: row.id },
     };
   }
@@ -392,10 +395,10 @@ export function donateOnCallback(state, account, data, now) {
   if (!account) return { state, answer: 'Кнопка устарела' };
   const at = now || Date.now();
   const cfg = cfgOf(state);
-  if (!cfg.enabled) return { state, text: 'Поддержка проекта сейчас выключена.', answer: 'Выключено', copy: { id: 'donate.off', vars: {}, state: '', lang: '' } };
+  if (!cfg.enabled) return { state, text: 'Поддержка проекта сейчас выключена.', answer: 'Выключено', copy: { id: 'donate.off', vars: {} } };
   if (raw.indexOf('dn:a:') === 0) {
     const check = validateDonateAmount(cfg, raw.slice(5));
-    if (!check.ok) return { state, text: check.error, answer: 'Сумма не подходит', copy: { id: 'donate.amount_bad', vars: { min_rub: String(cfg.minRub), max_rub: String(cfg.maxRub), text: check.error }, state: '', lang: '' } };
+    if (!check.ok) return { state, text: check.error, answer: 'Сумма не подходит', copy: { id: 'donate.amount_bad', vars: { min_rub: String(cfg.minRub), max_rub: String(cfg.maxRub), text: check.error } } };
     const row = freshDraft(account, at);
     row.amountRub = check.rub;
     row.step = 'comment';
@@ -407,7 +410,7 @@ export function donateOnCallback(state, account, data, now) {
     return {
       state: addDraft(state, row),
       text: 'Напишите сумму от ' + cfg.minRub + ' до ' + cfg.maxRub + ' ₽, целым числом.',
-      copy: { id: 'donate.amount', vars: { min_rub: String(cfg.minRub), max_rub: String(cfg.maxRub) }, state: '', lang: '' },
+      copy: { id: 'donate.amount', vars: { min_rub: String(cfg.minRub), max_rub: String(cfg.maxRub) } },
       answer: '',
     };
   }
@@ -422,19 +425,20 @@ export function donateOnCallback(state, account, data, now) {
       }
       const again = resendCheckout(state, pending);
       if (again.error) return { state, answer: again.error };
-      return { state, text: again.text, inline: again.inline, invoice: again.invoice, cryptoIssue: again.cryptoIssue, answer: '' };
+      return { state, text: again.text, inline: again.inline, invoice: again.invoice, cryptoIssue: again.cryptoIssue, copy: again.copy, answer: '' };
     }
     const heldRow = (state.donations || []).find((d) => d && d.id === id && d.accountId === account.id && d.status === 'pending' && d.held === true);
     if (heldRow) return { state, answer: 'Платёж уже у ЮMoney и ждёт подтверждения' };
     if (!row || row.step !== 'method') return { state, answer: 'Кнопка устарела' };
     const locked = lockMethod(state, account, row, bits[3] || '');
-    if (locked.error) return { state, text: locked.error, answer: locked.error };
+    if (locked.error) return { state, text: locked.error, answer: locked.error, copy: { id: 'donate.error', vars: { text: locked.error } } };
     return {
       state: putDonation(state, locked.row),
       text: locked.text,
       inline: locked.inline,
       invoice: locked.invoice,
       cryptoIssue: locked.cryptoIssue,
+      copy: locked.copy,
       answer: '',
     };
   }

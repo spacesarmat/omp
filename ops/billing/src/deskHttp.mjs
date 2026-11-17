@@ -31,6 +31,7 @@ import {
   usersFrom,
 } from './desk.mjs';
 import { dailySeries, redeemPromo, redeemReferralCode } from './logic.mjs';
+import { copyRecipient } from './bot.mjs';
 import { betaCohort, broadcastAudience, crashDraft, crashLogText, ingestCrash, setCrashStatus, versionSummary } from './crashIn.mjs';
 import { monitorEnv } from './monitorChecks.mjs';
 import { probeAllServices } from './services.mjs';
@@ -708,26 +709,25 @@ async function promoPost(ctx) {
   });
   const err = out && out.error;
   if (!err && out && out.kind === 'referral' && ctx.copyRepo && ctx.sendUser) {
-    const saved = await ctx.copyRepo.lookup('referral.bound', '', '');
-    if (saved) {
-      const fresh = await ctx.store.read();
-      const acc = (fresh.accounts || []).find((a) => a && a.id === sub.accountId);
-      if (acc && acc.telegramId) {
-        const applied = await ctx.copyRepo.apply(
-          {
-            id: 'referral.bound',
-            state: '',
-            lang: '',
-            vars: { ref_link: out.promoCode || '', name: acc.telegramName || acc.telegramUsername || '', promo: '' },
-          },
-          { text: '' },
-        );
-        if (applied.used === 'template' && applied.text) {
-          try {
-            await ctx.sendUser(acc.telegramId, applied);
-          } catch (e) {
-            /* the bind is already stored */
-          }
+    const fresh = await ctx.store.read();
+    const acc = (fresh.accounts || []).find((a) => a && a.id === sub.accountId);
+    const rec = copyRecipient(fresh, sub.accountId, Date.now());
+    const saved = await ctx.copyRepo.lookup('referral.bound', rec.state, rec.lang);
+    if (saved && acc && acc.telegramId) {
+      const applied = await ctx.copyRepo.apply(
+        {
+          id: 'referral.bound',
+          state: rec.state,
+          lang: rec.lang,
+          vars: { ref_link: out.promoCode || '', name: acc.telegramName || acc.telegramUsername || '', promo: '' },
+        },
+        { text: '' },
+      );
+      if (applied.used === 'template' && applied.text) {
+        try {
+          await ctx.sendUser(acc.telegramId, applied);
+        } catch (e) {
+          /* the bind is already stored */
         }
       }
     }

@@ -5,6 +5,7 @@ import {
   applyBuilt,
   copyLangOk,
   copyStateOk,
+  isFragmentTemplate,
   previewNodes,
   renderBody,
   sampleVars,
@@ -13,6 +14,7 @@ import {
 } from './botCopy.mjs';
 
 const sends = new Map();
+const writes = new Map();
 
 export function isBotCopyPath(path) {
   return path.indexOf('/admin/api/bot-replies') === 0;
@@ -20,6 +22,7 @@ export function isBotCopyPath(path) {
 
 export function resetBotCopySends() {
   sends.clear();
+  writes.clear();
 }
 
 function allowSend(id, now) {
@@ -35,6 +38,20 @@ function allowSend(id, now) {
   return true;
 }
 
+/** Save/restore/reset share one budget per admin: 30 writes a minute is far above hand editing. */
+function allowWrite(id, now) {
+  const key = String(id || '');
+  const prev = writes.get(key) || [];
+  const fresh = prev.filter((t) => now - t < 60000);
+  if (fresh.length >= 30) {
+    writes.set(key, fresh);
+    return false;
+  }
+  fresh.push(now);
+  writes.set(key, fresh);
+  return true;
+}
+
 function publicTemplate(row) {
   return {
     id: row.id,
@@ -43,6 +60,7 @@ function publicTemplate(row) {
     body: row.body,
     variables: row.variables,
     required: row.required,
+    fragment: isFragmentTemplate(row.id),
   };
 }
 
@@ -123,6 +141,12 @@ export async function routeBotCopy(req, res, deps) {
   const author = String(admin.telegramId || (admin.via === 'cli' ? 'cli' : '')).slice(0, 80);
   const now = Date.now();
 
+  if (path === '/admin/api/bot-replies/save' || path === '/admin/api/bot-replies/restore' || path === '/admin/api/bot-replies/reset') {
+    if (!allowWrite(author || admin.id, now)) {
+      json(res, 429, { ok: false, error: 'Слишком много правок подряд. Подождите минуту.' });
+      return;
+    }
+  }
   if (path === '/admin/api/bot-replies/save') {
     const out = await repo.save(body, author, now);
     json(res, out.ok ? 200 : 400, out);

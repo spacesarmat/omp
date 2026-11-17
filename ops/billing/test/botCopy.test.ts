@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   applyBuilt,
+  escapeHtml,
+  isFragmentTemplate,
   markupError,
   normalizeDashes,
   normalizeLang,
@@ -161,5 +163,57 @@ describe('referral notices', () => {
       { accountId: 'f', role: 'friend', days: 0 },
     ]);
     expect(referralNotes(after, after)).toEqual([]);
+  });
+});
+
+describe('bot copy fallback, raw fragments and safety', () => {
+  it('falls back to the in-code text when the render is blank, but keeps a media-only reply', () => {
+    const built = { text: 'из кода' };
+    const blank = applyBuilt({ body: '{trial}', buttons: null, mediaKind: '', mediaUrl: '' }, built, { trial: '' });
+    expect(blank.used).toBe('code');
+    expect(blank.text).toBe('из кода');
+    const spaces = applyBuilt({ body: '  {trial}  ', buttons: null, mediaKind: '', mediaUrl: '' }, built, { trial: '' });
+    expect(spaces.used).toBe('code');
+    const mediaOnly = applyBuilt({ body: '', buttons: null, mediaKind: 'photo', mediaUrl: 'https://omp-player.online/a.jpg' }, built, {});
+    expect(mediaOnly.used).toBe('template');
+    expect(mediaOnly.media).toEqual({ kind: 'photo', url: 'https://omp-player.online/a.jpg' });
+  });
+
+  it('inserts code-built HTML only for the listed raw keys and escapes everything else', () => {
+    expect(escapeHtml('<b>&')).toBe('&lt;b&gt;&amp;');
+    expect(renderBody('{code} {name}', { code: '<code>AB12-CD34</code>', name: '<b>Ann</b>' }, ['code'])).toBe(
+      '<code>AB12-CD34</code> &lt;b&gt;Ann&lt;/b&gt;',
+    );
+    const applied = applyBuilt({ body: '{code}', buttons: null, mediaKind: '', mediaUrl: '' }, { text: 'base' }, { code: '<code>AB12-CD34</code>' }, ['code']);
+    expect(applied.used).toBe('template');
+    expect(applied.text).toBe('<code>AB12-CD34</code>');
+    expect(applied.parseMode).toBe('HTML');
+    const notRaw = applyBuilt({ body: '{code}', buttons: null, mediaKind: '', mediaUrl: '' }, { text: 'base' }, { code: '<code>AB12-CD34</code>' });
+    expect(notRaw.text).toBe('&lt;code&gt;AB12-CD34&lt;/code&gt;');
+  });
+
+  it('rejects buttons and media on fragment templates, keeps them on regular ones', () => {
+    expect(isFragmentTemplate('renewal.quote')).toBe(true);
+    expect(isFragmentTemplate('devices.limit')).toBe(true);
+    expect(isFragmentTemplate('cabinet.home')).toBe(false);
+    const quote = templateById('renewal.quote')!;
+    const withMedia = validateCopy(quote, { body: quote.body, buttons: null, mediaKind: 'photo', mediaUrl: 'https://omp-player.online/a.jpg' });
+    expect(withMedia.ok).toBe(false);
+    const withButtons = validateCopy(quote, {
+      body: quote.body,
+      buttons: [[{ text: 'X', kind: 'url', value: 'https://omp-player.online' }]],
+      mediaKind: '',
+      mediaUrl: '',
+    });
+    expect(withButtons.ok).toBe(false);
+    const plain = validateCopy(quote, { body: quote.body, buttons: null, mediaKind: '', mediaUrl: '' });
+    expect(plain.ok).toBe(true);
+    const home = templateById('cabinet.home')!;
+    const homeMedia = validateCopy(home, { body: '{status}', buttons: null, mediaKind: 'photo', mediaUrl: 'https://omp-player.online/a.jpg' });
+    expect(homeMedia.ok).toBe(true);
+  });
+
+  it('keeps the stale-button toast out of the message catalog', () => {
+    expect(templateById('error.stale')).toBeNull();
   });
 });

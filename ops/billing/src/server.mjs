@@ -74,6 +74,7 @@ import {
   botCallback,
   botDeepLink,
   botReply,
+  copyRecipient,
   daysText,
   grantUserMessage,
   isPrivateChat,
@@ -1104,10 +1105,21 @@ async function ensureDonateCryptoLink(store, donationId, fetchImpl) {
 
 async function applyCopy(store, spec, built) {
   const repo = botCopyRepoFor(store);
-  if (!repo || !spec || !spec.id) {
-    return { text: built.text, inline: built.inline, parseMode: built.parseMode, media: null, used: 'code' };
+  const fallback = { text: built.text, inline: built.inline, parseMode: built.parseMode, media: null, used: 'code' };
+  if (!repo || !spec || !spec.id) return fallback;
+  try {
+    return await repo.apply(spec, built);
+  } catch (e) {
+    // A copy lookup outage must not drop the notice: send the in-code text.
+    return fallback;
   }
-  return repo.apply(spec, built);
+}
+
+/** Fill the recipient's subscription state and stored language into an outgoing copy spec. */
+function copyFor(state, telegramId, spec) {
+  const acc = accountByTelegram(state, telegramId);
+  const rec = acc ? copyRecipient(state, acc.id, Date.now()) : { state: '', lang: '' };
+  return { ...spec, state: rec.state, lang: rec.lang };
 }
 
 async function sendCopied(store, token, chatId, text, fetchImpl, opts) {
@@ -1127,7 +1139,15 @@ async function sendBotRow(token, row, net, timeoutMs, store) {
   if (row && row.invoice) {
     const applied = await applyCopy(store, row.copy, { text: row.text || '', parseMode: row.parseMode });
     if (applied.used === 'template') {
-      const plain = String(applied.text || '').replace(/<[^>]+>/g, '').slice(0, 255);
+      // The invoice description is plain text: drop the HTML tags and restore the escaped characters.
+      const plain = String(applied.text || '')
+        .replace(/<[^>]+>/g, '')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&quot;/g, '"')
+        .replace(/&#39;/g, "'")
+        .replace(/&amp;/g, '&')
+        .slice(0, 255);
       const invoice = { ...row.invoice };
       if (plain) invoice.description = plain;
       return telegramMethod(token, 'sendInvoice', invoice, net, timeoutMs);
@@ -1329,6 +1349,18 @@ function settleMoney(state, notice) {
   return applyPayment(state, notice);
 }
 
+/** Settle a payment and collect the referral grants made inside the same write, so notices are not lost. */
+async function settleWithNotes(store, notice) {
+  let notes = [];
+  const applied = await store.update((cur) => {
+    const before = cur.referralJournal || [];
+    const out = settleMoney(cur, notice);
+    notes = referralNotes(before, out.state.referralJournal || []);
+    return out;
+  });
+  return { applied, notes };
+}
+
 async function finishDonate(state, applied, fetchImpl, store) {
   if (!applied || applied.kind !== 'donate' || applied.duplicate) return;
   publishAdmin({ type: applied.error ? 'error' : 'payment' });
@@ -1340,13 +1372,14 @@ async function finishDonate(state, applied, fetchImpl, store) {
   const amount = applied.donation && applied.donation.amountRub ? String(applied.donation.amountRub) + ' ₽' : '';
   if (chat) {
     try {
+      const rec = copyRecipient(state, applied.accountId, Date.now());
       await sendCopied(store, state.settings.botToken, chat, text, fetchImpl, {
         keyboard: mainKeyboard(),
         copy: {
           id: applied.pending ? 'donate.pending' : 'donate.thanks',
           vars: { amount, name: '' },
-          state: '',
-          lang: '',
+          state: rec.state,
+          lang: rec.lang,
         },
       });
     } catch (e) {
@@ -1373,11 +1406,13 @@ function tellPayment(state, result, fetchImpl, store) {
   if (!chat) return Promise.resolve();
   const msg = paymentUserMessage(state, result);
   if (!msg) return Promise.resolve();
+  const rec = copyRecipient(state, accountId, Date.now());
+  const copy = msg.copy ? { ...msg.copy, state: rec.state, lang: rec.lang } : undefined;
   return sendCopied(store, state.settings.botToken, chat, msg.text, fetchImpl, {
     parseMode: msg.parseMode,
     inline: msg.inline,
     keyboard: msg.keyboard,
-    copy: msg.copy,
+    copy,
   });
 }
 
@@ -1398,11 +1433,12 @@ async function notifyReferralGrants(store, notes, state, fetchImpl) {
     const sub = subscriptionView(state, acc.id, Date.now());
     const days = note.role === 'friend' ? settings.friendDays : note.days;
     if (!(days > 0)) continue;
+    const rec = copyRecipient(state, acc.id, Date.now());
     const applied = await repo.apply(
       {
         id,
-        state: '',
-        lang: '',
+        state: rec.state,
+        lang: rec.lang,
         vars: {
           days: daysText(days),
           expires_at: sub && sub.paidUntil ? mskDateTime(sub.paidUntil) : '',
@@ -2292,7 +2328,7 @@ export function createApp(file, fetchImpl, opts) {
               '.\nВведите его в OMP на телефоне. На другом устройстве он не сработает.';
             if (body.channel === 'telegram' && result.account.telegramId) {
               await sendCopied(store, fresh.settings.botToken, result.account.telegramId, text, net, {
-                copy: { id: 'issue.code', vars: { code: result.code, until }, state: '', lang: '' },
+                copy: copyFor(fresh, result.account.telegramId, { id: 'issue.code', vars: { code: '<code>' + formatCode(result.code) + '</code>', until }, raw: ['code'] }),
               });
             }
             if (body.channel === 'email' && result.account.email) {
@@ -2326,12 +2362,13 @@ export function createApp(file, fetchImpl, opts) {
             const acc = fresh.accounts.find((a) => a.id === result.accountId);
             if (acc && acc.telegramId) {
               const note = grantUserMessage(fresh.settings.publicOrigin || '', result);
+              const rec = copyRecipient(fresh, acc.id, Date.now());
               try {
                 await sendCopied(store, fresh.settings.botToken, acc.telegramId, note.text, net, {
                   parseMode: note.parseMode,
                   inline: note.inline,
                   keyboard: note.keyboard,
-                  copy: note.copy,
+                  copy: note.copy ? { ...note.copy, state: rec.state, lang: rec.lang } : undefined,
                 });
               } catch (e) {
                 /* days are granted; the notice is best effort */
@@ -2440,7 +2477,7 @@ export function createApp(file, fetchImpl, opts) {
                   const cur = (await store.read());
                   told = (await sendCopied(store, cur.settings.botToken, out.telegramId, revokeNoticeText(out.device), net, {
                     keyboard: mainKeyboard(),
-                    copy: { id: 'error.revoke', vars: { device: out.device }, state: '', lang: '' },
+                    copy: copyFor(cur, out.telegramId, { id: 'error.revoke', vars: { device: out.device } }),
                   })).ok;
                 } catch (e) {
                   told = false;
@@ -2520,7 +2557,14 @@ export function createApp(file, fetchImpl, opts) {
           if (!confirmed(body)) flashError = 'Нужно подтверждение';
           else {
             const args = { operationId: body.operationId || '', now: Date.now(), actor: adminActor(admin) };
-            const out = await store.update((state) => (confirm ? confirmPendingPayment(state, args) : rejectPendingPayment(state, args)));
+            let referralNotesHere = [];
+            const out = await store.update((state) => {
+              if (!confirm) return rejectPendingPayment(state, args);
+              const before = state.referralJournal || [];
+              const res = confirmPendingPayment(state, args);
+              referralNotesHere = referralNotes(before, res.state.referralJournal || []);
+              return res;
+            });
             if (out.error === 'already') flashError = 'Платёж уже обработан';
             else if (out.error === 'not_found') flashError = 'Платёж не найден';
             else if (!confirm) {
@@ -2532,7 +2576,7 @@ export function createApp(file, fetchImpl, opts) {
                   const sum = String(out.amount || '').trim();
                   const told = await sendCopied(store, cur.settings.botToken, chat, rejectUserText(out.amount), net, {
                     keyboard: mainKeyboard(),
-                    copy: { id: 'pay.rejected', vars: { amount: sum ? ' ' + sum + ' ₽' : '' }, state: '', lang: '' },
+                    copy: copyFor(cur, chat, { id: 'pay.rejected', vars: { amount: sum ? ' ' + sum + ' ₽' : '' } }),
                   });
                   flashText += told.ok ? '. Пользователю отправлено сообщение' : '. Сообщение в Telegram не ушло';
                 } catch (e) {
@@ -2544,7 +2588,9 @@ export function createApp(file, fetchImpl, opts) {
             else {
               flashText = out.kind === 'renew' ? 'Платёж подтверждён: подписка до ' + mskDateTime(out.paidUntil) : 'Платёж подтверждён';
               try {
-                await tellPayment((await store.read()), out, net, store);
+                const freshConfirm = await store.read();
+                await tellPayment(freshConfirm, out, net, store);
+                await notifyReferralGrants(store, referralNotesHere, freshConfirm, net);
               } catch (e) {
                 /* the payment is applied; the Telegram notice is best effort */
               }
@@ -2748,7 +2794,7 @@ export function createApp(file, fetchImpl, opts) {
           else {
             const state = (await store.read());
             const sent = await sendCopied(store, state.settings.botToken, telegramId, text, net, {
-              copy: { id: 'support.relay', vars: { text }, state: '', lang: '' },
+              copy: copyFor(state, telegramId, { id: 'support.relay', vars: { text } }),
             });
             if (!sent.ok) flashError = 'Telegram не принял сообщение';
             else {
@@ -2769,7 +2815,7 @@ export function createApp(file, fetchImpl, opts) {
           if (!telegramId || !rows.length || (closedAt && lastAt <= closedAt)) flashError = 'Диалог уже закрыт';
           else {
             const sent = await sendCopied(store, state.settings.botToken, telegramId, SUPPORT_CLOSED_TEXT, net, {
-              copy: { id: 'support.closed', vars: {}, state: '', lang: '' },
+              copy: copyFor(state, telegramId, { id: 'support.closed', vars: {} }),
             });
             if (!sent.ok) flashError = 'Telegram не принял сообщение';
             else {
@@ -3498,16 +3544,14 @@ export function createApp(file, fetchImpl, opts) {
         }
         const paid = paidInvoice(body);
         if (!paid) return send(res, 200, 'ok');
-        const applied = await store.update((cur) =>
-          settleMoney(cur, {
-            operationId: 'crypto:' + paid.invoiceId,
-            label: paid.payload,
-            amount: paid.paidAmount,
-            currency: paid.asset,
-            now,
-            cryptoTestnet: state.settings.cryptoTestnet === true,
-          }),
-        );
+        const { applied, notes } = await settleWithNotes(store, {
+          operationId: 'crypto:' + paid.invoiceId,
+          label: paid.payload,
+          amount: paid.paidAmount,
+          currency: paid.asset,
+          now,
+          cryptoTestnet: state.settings.cryptoTestnet === true,
+        });
         const freshPay = await store.read();
         if (applied.kind === 'donate') {
           await finishDonate(freshPay, applied, net, store);
@@ -3518,6 +3562,11 @@ export function createApp(file, fetchImpl, opts) {
             await tellPayment(freshPay, applied, net, store);
           } catch (e) {
             /* the payment is stored either way */
+          }
+          try {
+            await notifyReferralGrants(store, notes, freshPay, net);
+          } catch (e) {
+            /* the grants are stored either way */
           }
         }
         if (!applied.duplicate && adminNotifyEnabled(freshPay.settings)) {
@@ -3578,26 +3627,31 @@ export function createApp(file, fetchImpl, opts) {
           await noted('bad_type');
           return send(res, 400, 'bad type');
         }
-        const applied = await store.update((cur) =>
-          settleMoney(cur, {
-            operationId: body.operation_id,
-            label: body.label,
-            amount: body.amount,
-            currency: body.currency,
-            unaccepted: body.unaccepted,
-            withdrawAmount: body.withdraw_amount,
-            notificationType: body.notification_type,
-            // `sign` is the current check. The gross (`withdraw_amount`) has to be in that notice.
-            requireWithdraw: !!body.sign,
-            now,
-          }),
-        );
+        const { applied, notes } = await settleWithNotes(store, {
+          operationId: body.operation_id,
+          label: body.label,
+          amount: body.amount,
+          currency: body.currency,
+          unaccepted: body.unaccepted,
+          withdrawAmount: body.withdraw_amount,
+          notificationType: body.notification_type,
+          // `sign` is the current check. The gross (`withdraw_amount`) has to be in that notice.
+          requireWithdraw: !!body.sign,
+          now,
+        });
         const freshPay = (await store.read());
         if (applied.kind === 'donate') {
           await finishDonate(freshPay, applied, net, store);
           return send(res, 200, 'ok');
         }
-        if (!applied.duplicate && !applied.error) await tellPayment(freshPay, applied, net, store);
+        if (!applied.duplicate && !applied.error) {
+          await tellPayment(freshPay, applied, net, store);
+          try {
+            await notifyReferralGrants(store, notes, freshPay, net);
+          } catch (e) {
+            /* the grants are stored either way */
+          }
+        }
         if (applied.pending) {
           const chat = telegramOfPayment(freshPay, applied);
           if (chat) {
@@ -3605,7 +3659,7 @@ export function createApp(file, fetchImpl, opts) {
               const sum = String(applied.amount || '').trim();
               await sendCopied(store, freshPay.settings.botToken, chat, pendingUserText(applied.amount), net, {
                 keyboard: mainKeyboard(),
-                copy: { id: 'pay.pending', vars: { amount: sum ? ' ' + sum + ' ₽' : '' }, state: '', lang: '' },
+                copy: copyFor(freshPay, chat, { id: 'pay.pending', vars: { amount: sum ? ' ' + sum + ' ₽' : '' } }),
               });
             } catch (e) {
               /* the payment is held either way; the notice is best effort */
@@ -3881,16 +3935,17 @@ export async function pollBot(file, fetchImpl, opts) {
           if (charge && payload) {
             const paidAt = Date.now();
             let applied;
+            let notes = [];
             try {
-              applied = await store.update((cur) =>
-                settleMoney(cur, {
-                  operationId: 'stars:' + charge,
-                  label: payload,
-                  amount: String(sp.total_amount),
-                  currency: 'XTR',
-                  now: paidAt,
-                }),
-              );
+              const settled = await settleWithNotes(store, {
+                operationId: 'stars:' + charge,
+                label: payload,
+                amount: String(sp.total_amount),
+                currency: 'XTR',
+                now: paidAt,
+              });
+              applied = settled.applied;
+              notes = settled.notes;
             } catch (e) {
               // The write did not commit. Do not ack the update, so the next poll retries it.
               handledUpdates.delete(u.update_id);
@@ -3907,6 +3962,11 @@ export async function pollBot(file, fetchImpl, opts) {
                 await tellPayment(freshStar, applied, net, store);
               } catch (e) {
                 /* the payment is stored either way */
+              }
+              try {
+                await notifyReferralGrants(store, notes, freshStar, net);
+              } catch (e) {
+                /* the grants are stored either way */
               }
             }
             if (!applied.duplicate && adminNotifyEnabled(freshStar.settings)) {
@@ -3949,7 +4009,7 @@ export async function pollBot(file, fetchImpl, opts) {
                 chatId,
                 'Сейчас обслуживание биллинга. Админ-вход работает; остальные команды временно недоступны.',
                 net,
-                { timeoutMs: sendTimeoutMs, copy: { id: 'error.maintenance', vars: {}, state: '', lang: '' } },
+                { timeoutMs: sendTimeoutMs, copy: copyFor(state, chatId, { id: 'error.maintenance', vars: {} }) },
               );
             } catch (e) {
               /* ignore */

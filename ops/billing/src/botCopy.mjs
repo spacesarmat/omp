@@ -160,7 +160,6 @@ export const CATALOG = [
   t('login.ask', 'Ошибки', 'Запрос входа админу', 'Подтвердите вход в админку\nIP: {arg}\nУстройство: {text}', [arg, text]),
   t('error.maintenance', 'Ошибки', 'Обслуживание', 'Сейчас обслуживание биллинга. Админ-вход работает; остальные команды временно недоступны.', []),
   t('error.revoke', 'Ошибки', 'Устройство отключено', 'Устройство {device}… отключено администратором: поиск OMP на нём больше не работает.\nЧтобы подключить устройство снова, нажмите «Код» и введите новый код в OMP. Вопросы - «Поддержка».', [device]),
-  t('error.stale', 'Ошибки', 'Кнопка устарела', 'Кнопка устарела - откройте «Устройства» ещё раз.', []),
   t('issue.code', 'Ошибки', 'Код из панели', 'Код подписки OMP: {code}\nПодписка до {until}.\nВведите его в OMP на телефоне. На другом устройстве он не сработает.', [code, until], ['code']),
   t('grant.user', 'Ошибки', 'Дни от администратора', 'Вам добавлено {days}. Подписка до {expires_at}.{code}', [days, expires, code], ['days', 'expires_at']),
 
@@ -184,6 +183,13 @@ export const CATALOG = [
 ];
 
 const BY_ID = new Map(CATALOG.map((row) => [row.id, row]));
+
+/** Fragments are embedded into a host message, so they cannot carry their own buttons or media. */
+const FRAGMENTS = new Set(['renewal.quote', 'devices.limit']);
+
+export function isFragmentTemplate(id) {
+  return FRAGMENTS.has(String(id || ''));
+}
 
 export function templateById(id) {
   return BY_ID.get(String(id || '')) || null;
@@ -219,24 +225,29 @@ export function variablesIn(body) {
   return out;
 }
 
-function htmlEscape(value) {
+export function escapeHtml(value) {
   return String(value ?? '')
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;');
 }
 
-function fill(body, vars, escape) {
+/**
+ * `raw` lists the keys whose value is already safe HTML built by the code (a rendered fragment or a
+ * <code> block). Every other value is escaped, so user and admin data never becomes markup.
+ */
+function fill(body, vars, escape, raw) {
   const bag = vars || {};
+  const rawKeys = raw && raw.length ? new Set(raw) : null;
   return String(body || '').replace(/\{([A-Za-z][A-Za-z0-9_]*)\}/g, (_, key) => {
     if (!Object.prototype.hasOwnProperty.call(bag, key) || bag[key] == null) return '';
-    const raw = String(bag[key]);
-    return escape ? htmlEscape(raw) : raw;
+    const value = String(bag[key]);
+    return escape && !(rawKeys && rawKeys.has(key)) ? escapeHtml(value) : value;
   });
 }
 
-export function renderBody(body, vars) {
-  return fill(body, vars, true);
+export function renderBody(body, vars, raw) {
+  return fill(body, vars, true, raw);
 }
 
 const ALLOWED = { b: 1, i: 1, u: 1, s: 1, code: 1, pre: 1, a: 1 };
@@ -327,8 +338,12 @@ export function validateCopy(template, input) {
   const errors = [];
   const src = input || {};
   const body = normalizeDashes(src.body);
-  const mediaKind = src.mediaKind === 'video' ? 'video' : src.mediaKind === 'photo' ? 'photo' : '';
+  let mediaKind = src.mediaKind === 'video' ? 'video' : src.mediaKind === 'photo' ? 'photo' : '';
   let mediaUrl = String(src.mediaUrl || '').trim();
+  if (template && isFragmentTemplate(template.id) && (mediaKind || src.buttons != null)) {
+    errors.push('Этот шаблон - часть другого сообщения, кнопки и медиа для него не поддерживаются');
+    mediaKind = '';
+  }
   if (!mediaKind) mediaUrl = '';
   if (mediaKind && (!/^https:\/\/\S+$/i.test(mediaUrl) || mediaUrl.length > 500)) {
     errors.push('Ссылка на фото или видео должна начинаться с https://');
@@ -394,7 +409,7 @@ function renderButtons(rows, vars) {
   return out;
 }
 
-export function applyBuilt(saved, built, vars) {
+export function applyBuilt(saved, built, vars, raw) {
   const base = {
     text: built && built.text ? built.text : '',
     inline: built && built.inline,
@@ -405,8 +420,9 @@ export function applyBuilt(saved, built, vars) {
   };
   if (!saved || !saved.body && !(saved && saved.mediaUrl)) return base;
   const limit = saved.mediaUrl ? COPY_CAPTION_LIMIT : COPY_TEXT_LIMIT;
-  const text = renderBody(saved.body || '', vars || {});
-  if (text.length > limit || markupError(text)) return base;
+  const text = renderBody(saved.body || '', vars || {}, raw);
+  // A blank render (every variable empty) must not replace the working in-code text.
+  if ((!text.trim() && !saved.mediaUrl) || text.length > limit || markupError(text)) return base;
   let inline = base.inline;
   if (Array.isArray(saved.buttons)) {
     const keyboard = renderButtons(saved.buttons, vars || {});
