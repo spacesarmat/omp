@@ -290,6 +290,34 @@ describe('donate rate timing', () => {
     expect(quotes.usd).toEqual({ rub: 91, source: 'cbr' });
   });
 
+  it('keeps a Crypto Pay price that arrives after the old 250 ms window but inside the tuned one', async () => {
+    const fetchImpl = async (url: string) => {
+      if (String(url).indexOf('getExchangeRates') >= 0) {
+        await new Promise((resolve) => setTimeout(resolve, 400));
+        return json(200, {
+          ok: true,
+          result: [
+            { is_valid: true, source: 'USDT', target: 'RUB', rate: '95' },
+            { is_valid: true, source: 'TON', target: 'RUB', rate: '210' },
+            { is_valid: true, source: 'BTC', target: 'RUB', rate: '8100000' },
+          ],
+        });
+      }
+      if (String(url).indexOf('coingecko') >= 0) {
+        return json(200, { tether: { rub: 80 }, 'the-open-network': { rub: 150 }, bitcoin: { rub: 7_000_000 } });
+      }
+      return json(200, { Valute: { USD: { Nominal: 1, Value: 91 } } });
+    };
+    const quotes = await fetchRateQuotes(fetchImpl, {
+      ready: true,
+      token: TOKEN,
+      host: 'https://pay.crypt.bot',
+      testnet: false,
+    });
+    expect(quotes.usdt).toEqual({ rub: 95, source: 'cryptopay' });
+    expect(quotes.usd).toEqual({ rub: 91, source: 'cbr' });
+  });
+
   it('returns as soon as one source has priced every asset', async () => {
     let release = () => {};
     const held = new Promise((resolve) => {
@@ -316,7 +344,8 @@ describe('donate rate timing', () => {
           host: 'https://pay.crypt.bot',
           testnet: false,
         }),
-        new Promise<never>((_, reject) => setTimeout(() => reject(new Error('waited for the slow host')), 400)),
+        // The grace window (800 ms) plus margin: the quote returns after it, never hangs on the held hosts.
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error('waited for the slow host')), 950)),
       ]);
       expect(quotes.usdt).toEqual({ rub: 90, source: 'cryptopay' });
       expect(quotes.ton).toEqual({ rub: 200, source: 'cryptopay' });
