@@ -2,7 +2,7 @@
 
 <!-- Markers [phone] [tv] [lg] [atv] [tech]: see docs/changelog-markers.md. [tech] bullets are technical or admin-only and never reach users. -->
 
-## Не выпущено
+## 0.30.1-beta.7
 
 - [phone] Приглашение: если рефереру начислен баланс, экран показывает сумму
 - [tech] Рефералка: процент на баланс, уровни, скидка другу и удержание. По умолчанию выключены. Отмена журнала снимает дни и баланс. Миграция 014
