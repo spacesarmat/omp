@@ -120,7 +120,7 @@ export function indexerSeedLine(r: SourceResult): string {
  */
 export function seedStatusLine(r: SourceResult): string {
   if (r.seedCheck === 'live') {
-    return seedCheckLine({ ok: true, seeders: r.Seed || 0, leechers: r.Peer || 0 }, null);
+    return seedCheckLine({ ok: true, seeders: r.Seed || 0, leechers: r.Peer || 0, completed: r.completed }, null);
   }
   if (r.seedCheck === 'dht') {
     const reason = r.noTracker || !trackerListed(r) ? 'notrackers' : 'timeout';

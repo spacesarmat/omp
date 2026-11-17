@@ -926,6 +926,7 @@ export const en: EnDict<typeof ru> = {
     yesterday: 'yesterday',
     seeds: { one: '{n} seed', other: '{n} seeds' },
     leechers: { one: '{n} leecher', other: '{n} leechers' },
+    downloaded: { one: 'downloaded {n} time', other: 'downloaded {n} times' },
     dhtPeers: { one: '{n} peer online', other: '{n} peers online' },
     jackettHint: 'Is the site blocked by Cloudflare? Sign in to it with the browser (the “Sign in” button next to the site in “Search sources”) or connect it through Jackett, Prowlarr or FlareSolverr - see “Questions and answers” for how.',
     cloudflareTvOne: '{name} is behind a Cloudflare check - sign in to it on the phone in “Search sources”',

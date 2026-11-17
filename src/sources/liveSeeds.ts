@@ -21,6 +21,8 @@ const MEM_MAX = 400;
 export interface ScrapeCounts {
   seeders: number;
   leechers: number;
+  /** Snatched count (BEP 48 `downloaded`, BEP 15 downloaded). Absent when the tracker did not send it. */
+  completed?: number;
 }
 
 export interface TrackerTarget {
@@ -234,8 +236,10 @@ export function infohashOf(r: { hash?: string; Hash?: string; Magnet?: string })
 /**
  * Seeders (`complete`) and leechers (`incomplete`) for this infohash. A scrape dict with a single file entry is
  * accepted even when its key does not match (one hash was requested). Failure dicts and junk are null.
+ * `withCompleted` also reads `downloaded` (the snatched count) when the tracker sent it; the scrape queue
+ * asks for it, older callers keep the seeders/leechers pair.
  */
-export function parseHttpScrape(body: string, infohashHex: string): ScrapeCounts | null {
+export function parseHttpScrape(body: string, infohashHex: string, withCompleted?: boolean): ScrapeCounts | null {
   const v = bdecode(body);
   if (!v || typeof v !== 'object' || Array.isArray(v)) return null;
   const files = (v as { [k: string]: BVal })['files'];
@@ -254,14 +258,24 @@ export function parseHttpScrape(body: string, infohashHex: string): ScrapeCounts
   const leechers = e['incomplete'];
   if (typeof seeders !== 'number' || typeof leechers !== 'number') return null;
   if (seeders < 0 || leechers < 0 || seeders !== Math.floor(seeders) || leechers !== Math.floor(leechers)) return null;
-  return { seeders: seeders, leechers: leechers };
+  const out: ScrapeCounts = { seeders: seeders, leechers: leechers };
+  if (withCompleted) {
+    const downloaded = e['downloaded'];
+    if (typeof downloaded === 'number' && downloaded >= 0 && downloaded === Math.floor(downloaded)) out.completed = downloaded;
+  }
+  return out;
 }
 
 /**
  * Max seeders across trackers that answered, with the leechers from that same tracker (a tie keeps the higher
- * leecher count). No answers: the numbers that came with the search, and live false.
+ * leecher count). The snatched count comes from that same tracker when it sent one.
+ * No answers: the numbers that came with the search, and live false.
  */
-export function mergeScrape(originalSeed: number, originalLeechers: number, answers: ScrapeCounts[]): { seeders: number; leechers: number; live: boolean } {
+export function mergeScrape(
+  originalSeed: number,
+  originalLeechers: number,
+  answers: ScrapeCounts[],
+): { seeders: number; leechers: number; live: boolean; completed?: number } {
   const seed0 = originalSeed > 0 ? originalSeed : 0;
   const leech0 = originalLeechers > 0 ? originalLeechers : 0;
   if (!answers.length) return { seeders: seed0, leechers: leech0, live: false };
@@ -270,12 +284,16 @@ export function mergeScrape(originalSeed: number, originalLeechers: number, answ
     const a = answers[i];
     if (a.seeders > best.seeders || (a.seeders === best.seeders && a.leechers > best.leechers)) best = a;
   }
-  return { seeders: best.seeders, leechers: best.leechers, live: true };
+  const out: { seeders: number; leechers: number; live: boolean; completed?: number } = { seeders: best.seeders, leechers: best.leechers, live: true };
+  if (best.completed !== undefined) out.completed = best.completed;
+  return out;
 }
 
 export interface LiveSeedEntry {
   seeders: number;
   leechers: number;
+  /** Snatched count from the winning tracker. Absent when no tracker sent it. */
+  completed?: number;
   /** False: every tracker we asked failed. The search numbers stay on screen, marked approximate. */
   live: boolean;
   at: number;
@@ -350,11 +368,14 @@ export class LiveSeedCache {
     const items = (parsed as { items?: unknown }).items;
     if (!Array.isArray(items)) return;
     for (let i = 0; i < items.length; i++) {
-      const it = items[i] as { h?: unknown; s?: unknown; l?: unknown; t?: unknown };
+      const it = items[i] as { h?: unknown; s?: unknown; l?: unknown; t?: unknown; c?: unknown };
       if (typeof it.h !== 'string' || !/^[0-9a-f]{40}$/.test(it.h)) continue;
       if (typeof it.s !== 'number' || typeof it.l !== 'number' || typeof it.t !== 'number') continue;
       if (this.now() - it.t >= this.ttlMs) continue;
-      this.mem[it.h] = { seeders: it.s, leechers: it.l, live: true, at: it.t };
+      const entry: LiveSeedEntry = { seeders: it.s, leechers: it.l, live: true, at: it.t };
+      // older saved lists have no c: the entry stays without a snatched count
+      if (typeof it.c === 'number' && it.c >= 0 && it.c === Math.floor(it.c)) entry.completed = it.c;
+      this.mem[it.h] = entry;
     }
   }
 
@@ -363,11 +384,13 @@ export class LiveSeedCache {
     const now = this.now();
     const keys = Object.keys(this.mem).filter((h) => this.mem[h].live && now - this.mem[h].at < this.ttlMs);
     keys.sort((a, b) => this.mem[b].at - this.mem[a].at);
-    const items: { h: string; s: number; l: number; t: number }[] = [];
+    const items: { h: string; s: number; l: number; t: number; c?: number }[] = [];
     const n = keys.length < DISK_MAX ? keys.length : DISK_MAX;
     for (let i = 0; i < n; i++) {
       const e = this.mem[keys[i]];
-      items.push({ h: keys[i], s: e.seeders, l: e.leechers, t: e.at });
+      const it: { h: string; s: number; l: number; t: number; c?: number } = { h: keys[i], s: e.seeders, l: e.leechers, t: e.at };
+      if (e.completed !== undefined) it.c = e.completed;
+      items.push(it);
     }
     try {
       this.store.set(DISK_KEY, JSON.stringify({ v: 1, items: items }));
@@ -519,7 +542,9 @@ export function createScrapeQueue(o: ScrapeQueueOptions): ScrapeQueue {
     if (!j.wanted || j.done) return;
     j.done = true;
     const merged = mergeScrape(j.seed, j.peer, j.answers);
-    o.cache.put(j.hash, { seeders: merged.seeders, leechers: merged.leechers, live: merged.live, at: now() });
+    const entry: LiveSeedEntry = { seeders: merged.seeders, leechers: merged.leechers, live: merged.live, at: now() };
+    if (merged.completed !== undefined) entry.completed = merged.completed;
+    o.cache.put(j.hash, entry);
     emit(j.hash);
   }
 
@@ -530,7 +555,7 @@ export function createScrapeQueue(o: ScrapeQueueOptions): ScrapeQueue {
     if (tr.kind === 'http') {
       const h = o.transport.http(tr.url, timeoutMs);
       cancel = h.cancel;
-      promise = h.promise.then((body) => (body ? parseHttpScrape(body, j.hash) : null));
+      promise = h.promise.then((body) => (body ? parseHttpScrape(body, j.hash, true) : null));
     } else {
       const h = o.transport.udp(tr.host, tr.port, j.hash, timeoutMs);
       cancel = h.cancel;

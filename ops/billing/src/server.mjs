@@ -88,6 +88,7 @@ import {
   serviceDownNotices,
   telegramOf,
 } from './bot.mjs';
+import { copyText, normalizeLang, str } from './botCopy.mjs';
 import {
   botPollDisabledLine,
   botPollEnabled,
@@ -149,7 +150,7 @@ import {
   sourceEnabled,
 } from './services.mjs';
 import { DHT_PROBE_INFOHASH, DHT_WINDOW_MS, dhtConfig, dhtPerMinute, probeDhtSidecar, queryDhtPeers, validDhtPerMinute } from './dhtPeers.mjs';
-import { createPgSeedCache } from './db/pg/seedProbeSql.mjs';
+import { createPgSeedCache, listPopularSeedProbes } from './db/pg/seedProbeSql.mjs';
 import { createPlaybackStore } from './db/pg/playbackSql.mjs';
 import { parseProgressBody, parseProgressQuery } from './playbackProgress.mjs';
 import { createCacheRepo } from './db/pg/cacheNodesSql.mjs';
@@ -167,6 +168,7 @@ import { scoreOf, watchRankEnabled } from './watchRank.mjs';
 import { startWatchFollow } from './watchFollow.mjs';
 import { defaultSeedTransport } from './seedProbeNet.mjs';
 import { SEED_DEVICE_MAX, SEED_DEVICE_WINDOW_MS, createMemorySeedCache, createTrackerGate, parseSeedRequest, runSeedCheck } from './seedProbe.mjs';
+import { startSeedRefresh } from './seedRefresh.mjs';
 import { bindDhtStats, dhtStatsView, noteDhtRequest, readyDhtStats, shutdownDhtStats } from './dhtStats.mjs';
 import { openStore, toStore } from './db/index.mjs';
 import { moveSecretsOutOfDb, secretViews, withEnvSecrets } from './envSecrets.mjs';
@@ -1156,15 +1158,17 @@ async function sendBotRow(token, row, net, timeoutMs, store) {
     }
     return telegramMethod(token, 'sendInvoice', row.invoice, net, timeoutMs);
   }
-  const failCopy = { id: 'pay.invoice_failed', vars: {}, state: '', lang: row && row.copy ? row.copy.lang || '' : '' };
+  const rowLang = row && row.copy ? row.copy.lang || '' : '';
+  const failCopy = { id: 'pay.invoice_failed', vars: {}, state: '', lang: rowLang };
+  const failText = copyText('pay.invoice_failed', rowLang);
   if (row && row.cryptoIssue && row.cryptoIssue.donationId && store) {
     const issued = await ensureDonateCryptoLink(store, row.cryptoIssue.donationId, net);
     const webUrl = issued && (issued.webUrl || issued.url);
     const botUrl = issued && issued.url;
     const buttons = [];
-    if (webUrl) buttons.push([{ text: 'Оплатить на сайте', url: webUrl }]);
-    if (botUrl && botUrl !== webUrl) buttons.push([{ text: 'Оплатить в Crypto Bot', url: botUrl }]);
-    const text = webUrl ? row.text : 'Не удалось создать счёт. Попробуйте ещё раз.';
+    if (webUrl) buttons.push([{ text: str('btn.pay_site', rowLang), url: webUrl }]);
+    if (botUrl && botUrl !== webUrl) buttons.push([{ text: str('btn.pay_crypto_bot', rowLang), url: botUrl }]);
+    const text = webUrl ? row.text : failText;
     const inline = buttons.length ? { inline_keyboard: buttons } : undefined;
     return sendCopied(store, token, row.chatId, text, net, {
       keyboard: row.keyboard,
@@ -1179,9 +1183,9 @@ async function sendBotRow(token, row, net, timeoutMs, store) {
     const webUrl = issued && (issued.webUrl || issued.url);
     const botUrl = issued && issued.url;
     const buttons = [];
-    if (webUrl) buttons.push([{ text: 'Оплатить на сайте', url: webUrl }]);
-    if (botUrl && botUrl !== webUrl) buttons.push([{ text: 'Оплатить в Crypto Bot', url: botUrl }]);
-    const text = webUrl ? row.text : 'Не удалось создать счёт. Попробуйте ещё раз.';
+    if (webUrl) buttons.push([{ text: str('btn.pay_site', rowLang), url: webUrl }]);
+    if (botUrl && botUrl !== webUrl) buttons.push([{ text: str('btn.pay_crypto_bot', rowLang), url: botUrl }]);
+    const text = webUrl ? row.text : failText;
     const inline = buttons.length ? { inline_keyboard: buttons } : undefined;
     return sendCopied(store, token, row.chatId, text, net, {
       keyboard: row.keyboard,
@@ -1356,16 +1360,20 @@ async function finishDonate(state, applied, fetchImpl, store) {
   publishAdmin({ type: applied.error ? 'error' : 'payment' });
   if (applied.error) return;
   const chat = applied.accountId ? telegramOf(state, applied.accountId) : '';
+  const rec = copyRecipient(state, applied.accountId, Date.now());
+  const thanks = donateThanksText(state.settings);
+  // An EN donor gets the EN default thanks only while the admin has not customized the text.
   const text = applied.pending
-    ? 'Донат ждёт подтверждения в ЮMoney. Он ещё не засчитан.'
-    : donateThanksText(state.settings);
+    ? copyText('donate.pending', rec.lang)
+    : rec.lang === 'en' && thanks === str('don.thanks_default', '')
+      ? str('don.thanks_default', 'en')
+      : thanks;
   const amount = applied.donation && applied.donation.amountRub ? String(applied.donation.amountRub) + ' ₽' : '';
   if (chat) {
     try {
-      const rec = copyRecipient(state, applied.accountId, Date.now());
       const donor = (state.accounts || []).find((a) => a && a.id === applied.accountId) || null;
       await sendCopied(store, state.settings.botToken, chat, text, fetchImpl, {
-        keyboard: mainKeyboard(),
+        keyboard: mainKeyboard(rec.lang),
         copy: {
           id: applied.pending ? 'donate.pending' : 'donate.thanks',
           vars: { amount, name: donateDisplayName(donor) },
@@ -1418,14 +1426,20 @@ async function sendReferralNotices(store, token, messages, fetchImpl) {
         if (acc && acc.telegramId) {
           const sub = subscriptionView(state, acc.id, Date.now());
           const rec = copyRecipient(state, acc.id, Date.now());
+          const id = msg.role === 'friend' ? 'referral.friend' : 'referral.referrer';
+          // The interpolated words follow the language of the SELECTED template, not the recipient:
+          // strict pickVariant gives an EN recipient the RU default template when no EN variant is
+          // saved, so {days} must decline in RU to stay consistent with that template body.
+          const picked = await repo.lookup(id, rec.state, rec.lang);
+          const tplLang = picked ? normalizeLang(picked.lang) : rec.lang;
           const applied = await repo.apply(
             {
-              id: msg.role === 'friend' ? 'referral.friend' : 'referral.referrer',
+              id,
               state: rec.state,
               lang: rec.lang,
               vars: {
-                days: daysText(totalDays),
-                expires_at: sub && sub.paidUntil ? mskDateTime(sub.paidUntil) : '',
+                days: daysText(totalDays, tplLang),
+                expires_at: sub && sub.paidUntil ? mskDateTime(sub.paidUntil, tplLang) : '',
                 name: telegramDisplay(acc),
                 ref_link: referralCodeFor(acc.id),
               },
@@ -1435,8 +1449,8 @@ async function sendReferralNotices(store, token, messages, fetchImpl) {
           if (applied.used === 'template' && applied.text) {
             text = applied.text;
             // A saved template must not hide the ruble award: keep the balance line after it.
-            if (Number(msg.credit) > 0) text += '\n' + Math.floor(Number(msg.credit)) + ' ₽ на баланс';
-            opts = { parseMode: applied.parseMode, inline: applied.inline, keyboard: mainKeyboard(), media: applied.media };
+            if (Number(msg.credit) > 0) text += '\n' + str('ref.credit', tplLang, { n: Math.floor(Number(msg.credit)) });
+            opts = { parseMode: applied.parseMode, inline: applied.inline, keyboard: mainKeyboard(rec.lang), media: applied.media };
           }
         }
       } catch (e) {
@@ -1505,9 +1519,9 @@ function tellPayment(state, result, fetchImpl, store) {
     : '';
   const chat = telegramOf(state, accountId);
   if (!chat) return Promise.resolve();
-  const msg = paymentUserMessage(state, result);
-  if (!msg) return Promise.resolve();
   const rec = copyRecipient(state, accountId, Date.now());
+  const msg = paymentUserMessage(state, result, rec.lang);
+  if (!msg) return Promise.resolve();
   const copy = msg.copy ? { ...msg.copy, state: rec.state, lang: rec.lang } : undefined;
   return sendCopied(store, state.settings.botToken, chat, msg.text, fetchImpl, {
     parseMode: msg.parseMode,
@@ -1573,6 +1587,37 @@ export function createApp(file, fetchImpl, opts) {
   const cryptoPayRate = createRateLimit(10, 10 * 60 * 1000);
   const thanksRate = createRateLimit(60, 10 * 60 * 1000);
   const seedCacheRead = readOnly ? { get: (hashes) => seedCache.get(hashes), touch: async () => {}, save: async () => {} } : seedCache;
+  // One DHT lookup shape shared by the endpoint and the background refresh. Null when the sidecar is off.
+  const seedDht = (cfg) =>
+    cfg.enabled
+      ? async (hash) => {
+        const found = await queryDhtPeers(cfg, hash, net);
+        if (found.status !== 200 || !found.body) return 0;
+        return {
+          peers: found.body.peers,
+          seedsEstimate: found.body.seedsEstimate,
+          peerEstimate: found.body.peerEstimate,
+          estimate: found.body.estimate === true,
+        };
+      }
+      : null;
+  // Popular hashes stay fresh without a device asking: one re-scrape a minute through the same gate
+  // and transport. PG only, never read-only, and only the startup block opts in (test apps do not schedule).
+  // The timers are unref'ed and the gate is shared, so nothing else holds the process or the tracker budget.
+  if (opts && opts.seedRefresh === true && !readOnly && typeof store.query === 'function') {
+    startSeedRefresh({
+      list: async (now) => (await listPopularSeedProbes((sql, params) => store.query(sql, params), now, 1))[0] || null,
+      // force: the row is past half its TTL but still cache-fresh for the endpoint; the refresh re-scrapes it
+      check: (item) => runSeedCheck({
+        items: [item],
+        cache: seedCache,
+        gate: seedGate,
+        transport: seedTransport,
+        dht: seedDht(dhtConfig(env)),
+        force: true,
+      }),
+    });
+  }
   const reg = store.registry;
   const backups = (opts && opts.pgBackups) || null;
   // «Мониторинг»: the scheduled runner when the server passes it, else one for «Проверить сейчас» only.
@@ -1764,10 +1809,12 @@ export function createApp(file, fetchImpl, opts) {
           copyRepo: botCopyRepoFor(store),
           sendUser: async (chatId, applied) => {
             const cur = await store.read();
+            const acc = (cur.accounts || []).find((a) => a && String(a.telegramId) === String(chatId)) || null;
+            const lang = normalizeLang(acc && acc.lang);
             await telegramSend(cur.settings.botToken, chatId, applied.text, net, {
               parseMode: applied.parseMode,
               inline: applied.inline,
-              keyboard: mainKeyboard(),
+              keyboard: mainKeyboard(lang),
               media: applied.media,
             });
           },
@@ -2407,8 +2454,9 @@ export function createApp(file, fetchImpl, opts) {
               until +
               '.\nВведите его в OMP на телефоне. На другом устройстве он не сработает.';
             if (body.channel === 'telegram' && result.account.telegramId) {
-              await sendCopied(store, fresh.settings.botToken, result.account.telegramId, text, net, {
-                copy: copyFor(fresh, result.account.telegramId, { id: 'issue.code', vars: { code: '<code>' + formatCode(result.code) + '</code>', until }, raw: ['code'] }),
+              const copy = copyFor(fresh, result.account.telegramId, { id: 'issue.code', vars: { code: '<code>' + formatCode(result.code) + '</code>', until }, raw: ['code'] });
+              await sendCopied(store, fresh.settings.botToken, result.account.telegramId, copyText('issue.code', copy.lang, { code: result.code, until }), net, {
+                copy,
               });
             }
             if (body.channel === 'email' && result.account.email) {
@@ -2441,8 +2489,8 @@ export function createApp(file, fetchImpl, opts) {
             const fresh = (await store.read());
             const acc = fresh.accounts.find((a) => a.id === result.accountId);
             if (acc && acc.telegramId) {
-              const note = grantUserMessage(fresh.settings.publicOrigin || '', result);
               const rec = copyRecipient(fresh, acc.id, Date.now());
+              const note = grantUserMessage(fresh.settings.publicOrigin || '', result, rec.lang);
               try {
                 await sendCopied(store, fresh.settings.botToken, acc.telegramId, note.text, net, {
                   parseMode: note.parseMode,
@@ -2555,9 +2603,10 @@ export function createApp(file, fetchImpl, opts) {
                 let told = false;
                 try {
                   const cur = (await store.read());
-                  told = (await sendCopied(store, cur.settings.botToken, out.telegramId, revokeNoticeText(out.device), net, {
-                    keyboard: mainKeyboard(),
-                    copy: copyFor(cur, out.telegramId, { id: 'error.revoke', vars: { device: out.device } }),
+                  const copy = copyFor(cur, out.telegramId, { id: 'error.revoke', vars: { device: out.device } });
+                  told = (await sendCopied(store, cur.settings.botToken, out.telegramId, revokeNoticeText(out.device, copy.lang), net, {
+                    keyboard: mainKeyboard(copy.lang),
+                    copy,
                   })).ok;
                 } catch (e) {
                   told = false;
@@ -2647,9 +2696,10 @@ export function createApp(file, fetchImpl, opts) {
               if (chat) {
                 try {
                   const sum = String(out.amount || '').trim();
-                  const told = await sendCopied(store, cur.settings.botToken, chat, rejectUserText(out.amount), net, {
-                    keyboard: mainKeyboard(),
-                    copy: copyFor(cur, chat, { id: 'pay.rejected', vars: { amount: sum ? ' ' + sum + ' ₽' : '' } }),
+                  const copy = copyFor(cur, chat, { id: 'pay.rejected', vars: { amount: sum ? ' ' + sum + ' ₽' : '' } });
+                  const told = await sendCopied(store, cur.settings.botToken, chat, rejectUserText(out.amount, copy.lang), net, {
+                    keyboard: mainKeyboard(copy.lang),
+                    copy,
                   });
                   flashText += told.ok ? '. Пользователю отправлено сообщение' : '. Сообщение в Telegram не ушло';
                 } catch (e) {
@@ -2898,8 +2948,9 @@ export function createApp(file, fetchImpl, opts) {
           const lastAt = rows.reduce((max, row) => Math.max(max, row.at || 0), 0);
           if (!telegramId || !rows.length || (closedAt && lastAt <= closedAt)) flashError = 'Диалог уже закрыт';
           else {
-            const sent = await sendCopied(store, state.settings.botToken, telegramId, SUPPORT_CLOSED_TEXT, net, {
-              copy: copyFor(state, telegramId, { id: 'support.closed', vars: {} }),
+            const copy = copyFor(state, telegramId, { id: 'support.closed', vars: {} });
+            const sent = await sendCopied(store, state.settings.botToken, telegramId, copyText('support.closed', copy.lang), net, {
+              copy,
             });
             if (!sent.ok) flashError = 'Telegram не принял сообщение';
             else {
@@ -3346,18 +3397,7 @@ export function createApp(file, fetchImpl, opts) {
             cache: seedCacheRead,
             gate: seedGate,
             transport: seedTransport,
-            dht: cfg.enabled
-              ? async (hash) => {
-                const found = await queryDhtPeers(cfg, hash, net);
-                if (found.status !== 200 || !found.body) return 0;
-                return {
-                  peers: found.body.peers,
-                  seedsEstimate: found.body.seedsEstimate,
-                  peerEstimate: found.body.peerEstimate,
-                  estimate: found.body.estimate === true,
-                };
-              }
-              : null,
+            dht: seedDht(cfg),
           });
           counts = out.stats;
           status = 200;
@@ -3735,9 +3775,10 @@ export function createApp(file, fetchImpl, opts) {
           if (chat) {
             try {
               const sum = String(applied.amount || '').trim();
-              await sendCopied(store, freshPay.settings.botToken, chat, pendingUserText(applied.amount), net, {
-                keyboard: mainKeyboard(),
-                copy: copyFor(freshPay, chat, { id: 'pay.pending', vars: { amount: sum ? ' ' + sum + ' ₽' : '' } }),
+              const copy = copyFor(freshPay, chat, { id: 'pay.pending', vars: { amount: sum ? ' ' + sum + ' ₽' : '' } });
+              await sendCopied(store, freshPay.settings.botToken, chat, pendingUserText(applied.amount, copy.lang), net, {
+                keyboard: mainKeyboard(copy.lang),
+                copy,
               });
             } catch (e) {
               /* the payment is held either way; the notice is best effort */
@@ -3968,7 +4009,10 @@ export async function pollBot(file, fetchImpl, opts) {
           } else {
             try {
               const snap = await store.read();
-              decision = payload.indexOf('don:') === 0 ? donateStarCheckout(snap, early) : starCheckoutDecision(snap, early);
+              const payerId = early.from && early.from.id != null ? String(early.from.id) : '';
+              const payerAcc = payerId ? (snap.accounts || []).find((a) => a && String(a.telegramId) === payerId) : null;
+              const checkoutLang = normalizeLang(payerAcc && payerAcc.lang);
+              decision = payload.indexOf('don:') === 0 ? donateStarCheckout(snap, early, checkoutLang) : starCheckoutDecision(snap, early, checkoutLang);
             } catch (e) {
               decision = { ok: false, error: 'Не получилось, попробуйте ещё раз' };
             }
@@ -4093,14 +4137,11 @@ export async function pollBot(file, fetchImpl, opts) {
           // Cutover: only /start admin_TOKEN may run; never claim a promo/unbind success without a write.
           if (parseAction(text).action !== 'admin_login') {
             try {
-              await sendCopied(
-                store,
-                token,
-                chatId,
-                'Сейчас обслуживание биллинга. Админ-вход работает; остальные команды временно недоступны.',
-                net,
-                { timeoutMs: sendTimeoutMs, copy: copyFor(state, chatId, { id: 'error.maintenance', vars: {} }) },
-              );
+              const copy = copyFor(state, chatId, { id: 'error.maintenance', vars: {} });
+              await sendCopied(store, token, chatId, copyText('error.maintenance', copy.lang), net, {
+                timeoutMs: sendTimeoutMs,
+                copy,
+              });
             } catch (e) {
               /* ignore */
             }
@@ -4516,7 +4557,8 @@ if (started) {
       const adminAuthMem = readOnly ? createAdminAuthMemory({ consumedPath }) : null;
       // «Мониторинг»: scheduled only on the instance that polls the bot (no doubled alerts), never read-only.
       const monitor = monitorFor(store, { env: process.env, backups: pgBackups, readOnly });
-      await listen(store, port, undefined, { readOnly, pgBackups, adminAuthMem, monitor });
+      // seedRefresh: the background re-scrape of popular hashes runs on this instance (PG, not read-only).
+      await listen(store, port, undefined, { readOnly, pgBackups, adminAuthMem, monitor, seedRefresh: true });
       // Docker stop is SIGTERM. Write the DHT counters before exit; do not wait forever.
       let dhtStopping = false;
       const stopDht = () => {

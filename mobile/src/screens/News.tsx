@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'preact/hooks';
+import { useEffect, useRef, useState } from 'preact/hooks';
 import { t, tp } from '../../../src/i18n';
 import { TvChip } from '../ui/TvChip';
 import { showToast } from '../ui/toast';
@@ -32,6 +32,7 @@ import { enabledSources } from '../../../src/sources/store';
 import { filterQuality, sortResults, sourceName } from '../../../src/sources/view';
 import type { SearchHandle } from '../../../src/sources/search';
 import { FEED_CATEGORIES, type FeedCategory, type SourceResult } from '../../../src/sources/types';
+import { applySeedRound, watchSeedVerify, type SeedMeasure, type SeedWatch } from '../../../src/sources/seedVerify';
 import { FEED_FRESH_MS, feedFresh, loadFeed, storeFeedRefresh } from '../../../src/monitor/feedCache';
 import { findingsOf, loadFound, loadSubs, markFindingsSeen, removeFindings, removeSubscription, subscriptionPoster, unseenCount } from '../../../src/monitor/subs';
 import { backfillSubPosters } from '../../../src/monitor/subPoster';
@@ -177,6 +178,34 @@ function Feed() {
   // while refreshing, the saved rows stay on screen; with nothing saved the answers stream in
   const list = cache && cache.results.length ? cache.results : h ? sortResults(h.results(), 'date') : [];
   const shown = filterQuality(list, hd ? '1080' : '');
+  // the catalog rows get the same server seed check as the search top: one round per category visit,
+  // the same 30-row batch and per-device rate. No session: nothing is asked and the tracker numbers stay.
+  const feedRows = dedupeFeed(shown);
+  const rowsRef = useRef<SourceResult[]>(feedRows);
+  rowsRef.current = feedRows;
+  const watchRef = useRef<SeedWatch | null>(null);
+  const [measures, setMeasures] = useState<SeedMeasure[] | null>(null);
+  useEffect(() => {
+    setMeasures(null);
+    const watch = watchSeedVerify({
+      query: '',
+      ctx: phoneSourceContext(),
+      getRows: () => rowsRef.current,
+      getPending: () => (runs[cat] ? runs[cat].pending().length : 0),
+      onApply: (m) => setMeasures(m),
+    });
+    watchRef.current = watch;
+    watch.notify();
+    return () => {
+      watch.cancel();
+      watchRef.current = null;
+    };
+  }, [cat]);
+  // rows stream in while the feed refreshes: nudge the watch after every render
+  useEffect(() => {
+    if (watchRef.current) watchRef.current.notify();
+  });
+  const checked = measures ? applySeedRound(feedRows, measures, true) : feedRows;
   const now = Date.now();
   const status: string[] = [];
   // the sites the saved rows came from; before the first answer, the switched-on ones
@@ -232,7 +261,7 @@ function Feed() {
       {names.length > 0 && !h && shown.length === 0 && (
         <div class="m-muted">{list.length ? t('news.noHd') : failed[cat] ? t('news.noAnswerLater') : t('news.empty')}</div>
       )}
-      <div class="m-results">{dedupeFeed(shown).map((r) => rows.card(r))}</div>
+      <div class="m-results">{checked.map((r) => rows.card(r))}</div>
       {rows.sheets}
     </>
   );

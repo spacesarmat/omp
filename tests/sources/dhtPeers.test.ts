@@ -49,6 +49,21 @@ describe('DHT peer line', () => {
     lang.value = 'ru';
   });
 
+  it('adds the snatched count to a tracker answer only when the tracker reported one', () => {
+    lang.value = 'ru';
+    const snatched: ProbeResult = { ok: true, seeders: 152, leechers: 3, completed: 14703 };
+    expect(seedCheckLine(snatched, null)).toBe('152 сида · 3 лича · скачано 14703 раза · сейчас');
+    expect(seedCheckLine({ ok: true, seeders: 1, leechers: 0, completed: 1 }, null)).toBe('1 сид · 0 личей · скачано 1 раз · сейчас');
+    expect(seedCheckLine({ ok: true, seeders: 2, leechers: 1, completed: 2 }, null)).toBe('2 сида · 1 лич · скачано 2 раза · сейчас');
+    // zero and absent keep the old line: nothing to show
+    expect(seedCheckLine({ ok: true, seeders: 152, leechers: 3, completed: 0 }, null)).toBe('152 сида · 3 лича · сейчас');
+    expect(seedCheckLine(trackerOk, null)).toBe('152 сида · 3 лича · сейчас');
+    lang.value = 'en';
+    expect(seedCheckLine(snatched, null)).toBe('152 seeds · 3 leechers · downloaded 14703 times · now');
+    expect(seedCheckLine({ ok: true, seeders: 1, leechers: 0, completed: 1 }, null)).toBe('1 seed · 0 leechers · downloaded 1 time · now');
+    lang.value = 'ru';
+  });
+
   it('does not call billing without a session or a hash', async () => {
     expect(await askDhtPeers('')).toEqual({ ok: false, reason: 'skip' });
     expect(await askDhtPeers('ab'.repeat(20))).toEqual({ ok: false, reason: 'skip' });

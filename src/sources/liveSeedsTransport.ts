@@ -15,7 +15,7 @@ function nextId(): string {
 }
 
 interface NativeScrape {
-  trackerScrape?(o: { kind: string; url?: string; host?: string; port?: number; infohash?: string; timeoutMs?: number; id?: string }): Promise<{ text?: unknown; seeders?: unknown; leechers?: unknown }>;
+  trackerScrape?(o: { kind: string; url?: string; host?: string; port?: number; infohash?: string; timeoutMs?: number; id?: string }): Promise<{ text?: unknown; seeders?: unknown; leechers?: unknown; completed?: unknown }>;
   trackerScrapeCancel?(o: { id: string }): Promise<unknown>;
 }
 
@@ -42,7 +42,10 @@ function nativeTransport(p: NativeScrape): ScrapeTransport {
         (r): ScrapeCounts | null => {
           if (!r || typeof r.seeders !== 'number' || typeof r.leechers !== 'number') return null;
           if (r.seeders < 0 || r.leechers < 0) return null;
-          return { seeders: r.seeders, leechers: r.leechers };
+          const out: ScrapeCounts = { seeders: r.seeders, leechers: r.leechers };
+          // BEP 15 downloaded: the native scrape sends it, older builds do not
+          if (typeof r.completed === 'number' && r.completed >= 0 && r.completed === Math.floor(r.completed)) out.completed = r.completed;
+          return out;
         },
         () => null,
       );

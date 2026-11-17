@@ -22,6 +22,7 @@ import {
   unbindCode,
 } from './logic.mjs';
 import { randomId } from './crypto.mjs';
+import { copyText } from './botCopy.mjs';
 
 const DAY = 24 * 60 * 60 * 1000;
 
@@ -182,13 +183,8 @@ export function cloneMark(state, { codeId, now }) {
 }
 
 /** Telegram notice to the owner after an admin revoked one of their devices. */
-export function revokeNoticeText(device) {
-  return (
-    'Устройство ' +
-    device +
-    '… отключено администратором: поиск OMP на нём больше не работает.\n' +
-    'Чтобы подключить устройство снова, нажмите «Код» и введите новый код в OMP. Вопросы - «Поддержка».'
-  );
+export function revokeNoticeText(device, lang) {
+  return copyText('error.revoke', lang, { device });
 }
 
 /**

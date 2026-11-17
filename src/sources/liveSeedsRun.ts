@@ -5,7 +5,7 @@ import { resolveRowMagnet } from './rowMagnet';
 import type { SourceContext, SourceResult } from './types';
 
 export type ProbeResult =
-  | { ok: true; seeders: number; leechers: number }
+  | { ok: true; seeders: number; leechers: number; completed?: number }
   | { ok: false; reason: 'nohash' | 'notrackers' | 'timeout'; note?: string };
 
 let probeContext: (() => SourceContext | null) | null = null;
@@ -22,7 +22,9 @@ function probeReady(r: SourceResult): Promise<ProbeResult> {
   if (!targets.length) return Promise.resolve({ ok: false, reason: 'notrackers' });
   return liveSeeds().check({ hash: hash, trackers: targets, seed: r.Seed || 0, peer: r.Peer || 0 }).then((e) => {
     if (!e.live) return { ok: false, reason: 'timeout' };
-    return { ok: true, seeders: e.seeders, leechers: e.leechers };
+    const out: ProbeResult = { ok: true, seeders: e.seeders, leechers: e.leechers };
+    if (e.completed !== undefined) out.completed = e.completed;
+    return out;
   });
 }
 

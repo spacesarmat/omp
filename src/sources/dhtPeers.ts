@@ -86,11 +86,15 @@ function estimateText(dht: DhtPeersResult | null): string {
 
 /**
  * One status. A tracker scrape stands alone: DHT address counts are not seeds and are not appended.
+ * The snatched count («скачано N») joins the line only when a tracker reported it.
  * No announce URL keeps that reason and, when BEP 33 answered, the seed estimate on the same line.
  */
 export function seedCheckLine(tracker: ProbeResult, dht: DhtPeersResult | null): string {
   const est = estimateText(dht);
-  if (tracker.ok) return tp('sources.seeds', tracker.seeders) + ' · ' + tp('sources.leechers', tracker.leechers) + ' · ' + t('sources.seedsNow');
+  if (tracker.ok) {
+    const snatched = tracker.completed ? ' · ' + tp('sources.downloaded', tracker.completed) : '';
+    return tp('sources.seeds', tracker.seeders) + ' · ' + tp('sources.leechers', tracker.leechers) + snatched + ' · ' + t('sources.seedsNow');
+  }
   if (!tracker.ok && (tracker.reason === 'notrackers' || tracker.reason === 'nohash')) {
     const why = tracker.note || t('sources.seedsNoTracker');
     return est ? why + ' · ' + est : why;
