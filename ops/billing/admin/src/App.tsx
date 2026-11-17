@@ -8,6 +8,7 @@ import { Alerts, Brand, FlashBox, LoadingScreen, Toast, toast } from '@/componen
 import { post, api, type PostResult } from '@/lib/api';
 import { Login } from '@/panels/Login';
 import { SupportPanel } from '@/panels/SupportPanel';
+import { BotRepliesPanel } from '@/panels/BotRepliesPanel';
 import { UserCard } from '@/panels/UserCard';
 import { PendingPayments } from '@/panels/DeviceAdmin';
 import { AdsPanel } from '@/panels/AdsPanel';
@@ -232,6 +233,7 @@ export function App() {
               </Badge>
             ) : null}
           </TabsTrigger>
+          <TabsTrigger value="replies">Ответы бота</TabsTrigger>
           <TabsTrigger value="support">
             Поддержка
             {(d.support || []).length > 0 ? (
@@ -265,6 +267,10 @@ export function App() {
           <TabsTrigger value="broadcast">Рассылка</TabsTrigger>
           <TabsTrigger value="versions">Версии</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="replies">
+          <BotRepliesPanel csrf={d.csrf || ''} />
+        </TabsContent>
 
         <TabsContent value="support">
           <SupportPanel csrf={d.csrf} threads={d.support || []} onSent={() => void reload()} initialTelegramId={supportTg} />

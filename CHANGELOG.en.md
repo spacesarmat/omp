@@ -7,8 +7,9 @@ The English translation covers the latest versions only; the full history (in Ru
 ## Unreleased
 
 - [phone] Invite: a balance credit shows the amount
-- [tech] Referral variants: balance percent, tiers, friend discount and retention. Off by default. Cancelling a journal row takes back days and balance. Migration 013
+- [tech] Referral variants: balance percent, tiers, friend discount and retention. Off by default. Cancelling a journal row takes back days and balance. Migration 014
 - [tech] Referrals: a renewal mostly covered by account credit earns no bonus; a reused friend discount is refused before Stars are charged, and a rejected Stars payment is refunded automatically
+- [tech] Admin: Bot replies. Text, buttons, a photo or video, variants by subscription and language, and history. Until a template is saved, the bot keeps the previous text. Billing was not deployed
 - [tech] Donation rates are fetched: USDT, TON and BTC from Crypto Pay (CoinGecko fallback), a star as 0.013 USD times the CBR dollar. The admin can leave auto on, type a manual rate, set a markup and a max age. A zero or too-old rate hides that method. Billing was not deployed
 - [tech] The local editor became a visual logic editor: a node canvas with triggers, conditions, actions and variables, output-input links, multi-select with a clipboard, five flow templates and a step-by-step debugger with mocks and trace comparison. Node editing is available on the desktop target and the settings page only
 - [tech] Logic flows pass validation (cycles, unreachable nodes, value types) and export together with the layout: the scoped diff shows changed rules, nodes, edges and variables. Production apps apply logic only after an explicit export through the generated module design/generated/flow.ts; autosave and preview do not change production

@@ -1,4 +1,5 @@
 import { codeHash, deviceOk, normalizeCode, randomCode, randomId, sha256 } from './crypto.mjs';
+import { normalizeLang } from './botCopy.mjs';
 import { capReferralOff, mskMonthStart, normalizeReferralSettings, offerDays, offerPercent, referralCodeFor, referralDiscountRub, retentionStreak, REFERRAL_BONUS_MAX } from './referralAdmin.mjs';
 import { CRYPTO_ASSETS } from './cryptoPay.mjs';
 import { addMethodSplit, altCovers, cryptoDue, cryptoInvoiceMatches, emptyMethodSplit, isDevicePay, labelSettled, rubOfPayment, starDue, subscriptionPaidBefore } from './payMethods.mjs';
@@ -96,8 +97,9 @@ export function telegramDisplay(account) {
   return human || id || account.email || account.id || '';
 }
 
-/** Store the Telegram @username / name seen on a message or getChat. Empty username clears a removed nick. */
-export function rememberTelegramProfile(state, { telegramId, username, name }, now) {
+/** Store the Telegram @username / name seen on a message or getChat. Empty username clears a removed nick.
+ * `lang` is optional: callers without a language_code (getChat) keep the stored one. */
+export function rememberTelegramProfile(state, { telegramId, username, name, lang }, now) {
   const id = String(telegramId || '').trim();
   if (!id) return { state, account: null };
   const ensured = ensureTelegramAccount(state, id, now || Date.now());
@@ -109,8 +111,9 @@ export function rememberTelegramProfile(state, { telegramId, username, name }, n
     .trim()
     .slice(0, 80);
   const prev = ensured.account;
-  if ((prev.telegramUsername || '') === nick && (prev.telegramName || '') === label) return ensured;
-  const account = { ...prev, telegramUsername: nick, telegramName: label };
+  const language = lang === undefined ? prev.lang || '' : normalizeLang(lang);
+  if ((prev.telegramUsername || '') === nick && (prev.telegramName || '') === label && (prev.lang || '') === language) return ensured;
+  const account = { ...prev, telegramUsername: nick, telegramName: label, lang: language };
   const accounts = ensured.state.accounts.map((a) => (a.id === account.id ? account : a));
   return { state: { ...ensured.state, accounts }, account };
 }

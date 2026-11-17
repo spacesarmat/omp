@@ -1,6 +1,8 @@
 import { CRYPTO_ASSETS } from './cryptoPay.mjs';
-import { capReferralOff } from './referralAdmin.mjs';
+import { applyBuilt, escapeHtml, normalizeLang, pickVariant, subscriptionCopyState } from './botCopy.mjs';
+import { customRowsSync, hasCustomSync } from './botCopyStore.mjs';
 import { donateMenu, donateOnCallback, donateOnText } from './donate.mjs';
+import { capReferralOff, referralCodeFor } from './referralAdmin.mjs';
 import { cryptoOffered, labelSettled, starBlurb, starInvoiceBody, starsOffered } from './payMethods.mjs';
 import { payUrl } from './yoomoney.mjs';
 import { sha256 } from './crypto.mjs';
@@ -37,6 +39,7 @@ import {
   quotePurchase,
   referralDiscountOf,
   redeemPromo,
+  redeemReferralCode,
   subscriptionView,
   supportReplyTarget,
 } from './logic.mjs';
@@ -236,6 +239,47 @@ export function daysText(n) {
   return n + ' ' + plural(n, 'день', 'дня', 'дней');
 }
 
+function accountPaid(state, account) {
+  if (!account) return false;
+  return (state.payments || []).some((p) => p && p.accountId === account.id && !p.pending && !p.error);
+}
+
+/** Subscription state and stored language of a recipient, for notices sent outside a bot reply. */
+export function copyRecipient(state, accountId, now) {
+  const account = accountId ? (state.accounts || []).find((a) => a && a.id === accountId) || null : null;
+  const sub = account ? subscriptionView(state, account.id, now || Date.now()) : null;
+  return { state: subscriptionCopyState(sub, accountPaid(state, account)), lang: normalizeLang(account && account.lang) };
+}
+
+function spec(id, vars, state, lang, raw) {
+  const copy = { id, vars: vars || {} };
+  if (state !== undefined) copy.state = state;
+  if (lang) copy.lang = lang;
+  if (raw && raw.length) copy.raw = raw;
+  return { copy };
+}
+
+function userVars(state, account, sub, now, extra) {
+  const prices = priceText(state.settings);
+  const until = sub && sub.paidUntil ? Number(sub.paidUntil) : 0;
+  const left = until > now ? Math.max(0, Math.ceil((until - now) / 86400000)) : 0;
+  const base = {
+    name: account ? telegramDisplay(account) || '' : '',
+    days_left: String(left),
+    expires_at: until ? mskDateTime(until) : '',
+    price: rub(prices.price),
+    promo: trialPromo(state),
+    ref_link: account ? referralCodeFor(account.id) : '',
+    balance: sub && sub.credit > 0 ? rub(sub.credit) : '0 ₽',
+    status: '',
+    devices: sub ? devicesLine(sub) : '',
+    days: daysText(prices.days),
+    phones: upToPhones(state),
+    trial: trialLine(state),
+  };
+  return Object.assign(base, extra || {});
+}
+
 function urlButton(text, url) {
   return url && String(url).indexOf('http') === 0 ? { text, url } : null;
 }
@@ -261,6 +305,20 @@ export function codeBlock(origin, code, head) {
     ': `' +
     dashed +
     '`\nНажмите на код, чтобы скопировать, и введите его в OMP на телефоне' +
+    (https ? ' - или кнопка «Открыть в OMP».' : ':\n' + appSchemeUrl(dashed))
+  );
+}
+
+/** The same block for saved HTML replies: a tappable <code> instead of Markdown backticks.
+ * Only the code itself is markup; it is [A-Z0-9-] by construction, the rest is plain text. */
+export function codeBlockHtml(origin, code, head) {
+  const dashed = formatCode(code);
+  const https = openAppUrl(origin, dashed).indexOf('http') === 0;
+  return (
+    (head || 'Код для нового устройства') +
+    ': <code>' +
+    dashed +
+    '</code>\nНажмите на код, чтобы скопировать, и введите его в OMP на телефоне' +
     (https ? ' - или кнопка «Открыть в OMP».' : ':\n' + appSchemeUrl(dashed))
   );
 }
@@ -404,8 +462,8 @@ function statusText(state, sub, account, opts) {
 }
 
 /**
- * Renewal breakdown for the bot: base + extra slots that still count − credit.
- * «Продление на 30 дней, до 18.11.2026 12:00 МСК:\n• подписка — 150 ₽\n• доп. устройство × 1 — 50 ₽\nИтого: 200 ₽»
+ * Renewal breakdown for the bot: base + extra slots that still count, minus credit.
+ * "Продление на 30 дней, до 18.11.2026 12:00 МСК: подписка - 150 ₽, доп. устройство x 1 - 50 ₽, итого 200 ₽"
  */
 export function renewalText(state, subRow, sub, now, opts) {
   const quote = renewalPrice(state, subRow, now, opts);
@@ -418,7 +476,25 @@ export function renewalText(state, subRow, sub, now, opts) {
   if (quote.extras > 0) lines.push('• доп. устройство × ' + quote.extras + ' - ' + rub(quote.extraSum));
   if (quote.credit > 0) lines.push('• зачёт - −' + rub(quote.credit));
   if (quote.extras > 0 || quote.credit > 0 || off > 0) lines.push('Итого: ' + rub(priced.due));
-  return { text: lines.join('\n'), quote };
+  const text = lines.join('\n');
+  const rows = customRowsSync('renewal.quote');
+  const account = subRow ? (state.accounts || []).find((a) => a && a.id === subRow.accountId) || null : null;
+  const saved = rows ? pickVariant(rows, subscriptionCopyState(sub, accountPaid(state, account)), normalizeLang(opts && opts.lang)) : null;
+  if (!saved) return { text, quote };
+  const applied = applyBuilt(saved, { text }, {
+    days: daysText(quote.days),
+    expires_at: mskDateTime(from + quote.days * 86400000),
+    price: rub(quote.base),
+    discount_line: off > 0 ? '• скидка по приглашению - ' + rub(off) + '\n' : '',
+    extra_line: quote.extras > 0 ? '• доп. устройство × ' + quote.extras + ' - ' + rub(quote.extraSum) + '\n' : '',
+    credit_line: quote.credit > 0 ? '• зачёт - ' + rub(quote.credit) + '\n' : '',
+    total_line: quote.extras > 0 || quote.credit > 0 || off > 0 ? 'Итого: ' + rub(priced.due) : '',
+    total: rub(priced.due),
+    balance: rub(quote.credit),
+  });
+  if (applied.used !== 'template') return { text, quote };
+  // The fragment is rendered HTML: the host message must keep that parse mode.
+  return { text: applied.text, quote, parseMode: 'HTML' };
 }
 
 function withInviteOff(state, subRow, quote, now) {
@@ -457,7 +533,15 @@ function graceEndMessage(state, row, subRow, grace, now) {
     lines.push('Продлите подписку, чтобы продолжить.');
   }
   lines.push('Нажмите «Оплатить» - ссылка на оплату придёт в этот чат.');
-  return { chatId: String(row.telegramId), text: lines.join('\n'), keyboard: mainKeyboard(), inline: payInline(state.settings) };
+  const priceLine = quote && quote.base > 0 ? renewalPriceLine(quote) : '';
+  const rec = copyRecipient(state, (accountByTelegram(state, row.telegramId) || {}).id, now);
+  return {
+    chatId: String(row.telegramId),
+    text: lines.join('\n'),
+    keyboard: mainKeyboard(),
+    inline: payInline(state.settings),
+    ...spec('pay.grace_end', { head: lines[0].replace(/^⚠️ /, ''), renewal: priceLine, price: '' }, rec.state, rec.lang),
+  };
 }
 
 /**
@@ -484,7 +568,20 @@ export function reminderMessage(state, row, now) {
   const quote = subRow ? withInviteOff(state, subRow, renewalPrice(state, subRow, now), now) : null;
   if (quote && quote.base > 0) lines.push(renewalPriceLine(quote));
   lines.push('Нажмите «Оплатить» - ссылка на оплату придёт в этот чат.');
-  return { chatId: String(row.telegramId), text: lines.join('\n'), keyboard: mainKeyboard(), inline: payInline(state.settings) };
+  const renewal = quote && quote.base > 0 ? '\n' + renewalPriceLine(quote) : '';
+  let copyId = 'pay.reminder_today';
+  if (row.kind === 'd3') copyId = 'pay.reminder_d3';
+  else if (row.kind === 'd1') copyId = 'pay.reminder_d1';
+  else if (!(until > now)) copyId = 'pay.reminder_ended';
+  const graceNote = head.indexOf('\n') > 0 ? head.slice(head.indexOf('\n')) : '';
+  const rec = copyRecipient(state, (accountByTelegram(state, row.telegramId) || {}).id, now);
+  return {
+    chatId: String(row.telegramId),
+    text: lines.join('\n'),
+    keyboard: mainKeyboard(),
+    inline: payInline(state.settings),
+    ...spec(copyId, { expires_at: mskDate(until) + ' в ' + mskTime(until) + ' МСК', when: mskTime(until) + ' МСК', grace: graceNote, renewal, price: '' }, rec.state, rec.lang),
+  };
 }
 
 /** Shown instead of a code when every device slot of the subscription is taken. */
@@ -552,7 +649,27 @@ export function paymentUserMessage(state, result) {
       ': сумма вычтется из следующего продления. Нажмите «Оплатить».';
   }
   if (!text || !sub) return null;
-  return { text, inline, parseMode: 'Markdown', keyboard: mainKeyboard() };
+  let copyId = '';
+  const vars = { expires_at: result.paidUntil ? mskDateTime(result.paidUntil) : '', phones: upToPhones(state), code: '', extra: '', balance: '', amount: '', head: '', until: '' };
+  if (result.kind === 'new') copyId = 'pay.received_new';
+  else if (result.kind === 'renew') {
+    copyId = 'pay.received_renew';
+    vars.extra = result.extras > 0 ? '\nДоп. устройств: ' + result.extras + ', тоже до ' + mskDate(result.paidUntil) + '.' : '';
+    vars.balance = result.credit > 0 ? '\nЗачтено: ' + rub(result.credit) + '.' : '';
+  } else if (result.kind === 'device') {
+    copyId = 'pay.received_device';
+    vars.until = result.extraUntil ? mskDate(result.extraUntil) : '';
+  } else if (result.kind === 'credit') {
+    copyId = 'pay.received_credit';
+    vars.amount = rub(result.credit);
+    vars.head = result.grace ? 'подписка сейчас в льготном периоде' : 'подписка уже закончилась';
+  }
+  if (result.code) {
+    const head = result.kind === 'device' ? 'Код для него' : result.kind === 'new' ? 'Код подписки' : undefined;
+    const lead = result.kind === 'renew' ? '\n\n' : result.kind === 'device' ? '\n' : '';
+    vars.code = lead + codeBlockHtml(origin, result.code, head);
+  }
+  return { text, inline, parseMode: 'Markdown', keyboard: mainKeyboard(), ...(copyId ? spec(copyId, vars, '', '', result.code ? ['code'] : []) : {}) };
 }
 
 /** YooMoney holds the transfer (`unaccepted`): tell the payer it arrived. */
@@ -583,7 +700,13 @@ export function grantUserMessage(origin, result) {
     text += '\n' + codeBlock(origin, result.code);
     inline = rows([codeButtonRow(origin, result.code)]);
   }
-  return { text, inline, parseMode: 'Markdown', keyboard: mainKeyboard() };
+  return {
+    text,
+    inline,
+    parseMode: 'Markdown',
+    keyboard: mainKeyboard(),
+    ...spec('grant.user', { days: daysText(result.days), expires_at: mskDateTime(result.paidUntil), code: result.code ? '\n' + codeBlockHtml(origin, result.code) : '' }, '', '', result.code ? ['code'] : []),
+  };
 }
 
 /* ---------- devices screen and unbind callbacks ---------- */
@@ -636,6 +759,7 @@ function devicesScreen(cur, { account, now, origin, checkout, info }) {
     out.push({
       text:
         'Подписки нет.\n«Оплатить» - ' + rub(prices.price) + ' за ' + daysText(prices.days) + ', ' + upToPhones(state) + '. На ТВ подписка не нужна.' + trialLine(state),
+      ...spec('devices.none', { price: rub(prices.price), days: daysText(prices.days), phones: upToPhones(state), trial: trialLine(state) }),
     });
     return { state, out };
   }
@@ -660,9 +784,33 @@ function devicesScreen(cur, { account, now, origin, checkout, info }) {
         : 'Смены устройства на 30 дней исчерпаны: следующая - с ' + mskDateTime(swap.nextAt) + '.',
     );
   }
-  if (!sub.active) lines.push('Нажмите «Оплатить» - устройства заработают сами.');
-  else if (code) lines.push('', codeBlock(origin, code));
-  else lines.push(DEVICE_LIMIT_TEXT);
+  // The tail is one of: the pay hint, the code block, or the limit line (its own template).
+  const listBody = lines.join('\n');
+  let tail = '';
+  let codeVar = '';
+  let listHtml = false;
+  let raw = [];
+  if (!sub.active) {
+    tail = '\nНажмите «Оплатить» - устройства заработают сами.';
+  } else if (code) {
+    tail = '\n\n' + codeBlock(origin, code);
+    codeVar = '\n\n' + codeBlockHtml(origin, code);
+    raw = ['code'];
+  } else {
+    const limitRows = customRowsSync('devices.limit');
+    const limitSaved = limitRows
+      ? pickVariant(limitRows, subscriptionCopyState(sub, accountPaid(state, account)), normalizeLang(account.lang))
+      : null;
+    const limitApplied = applyBuilt(limitSaved, { text: DEVICE_LIMIT_TEXT }, {});
+    tail = '\n' + limitApplied.text;
+    codeVar = tail;
+    if (limitApplied.used === 'template') {
+      listHtml = true;
+      raw = ['devices', 'code'];
+    }
+  }
+  const devicesVar = (listHtml ? escapeHtml(listBody) : listBody) + (!sub.active ? tail : '');
+  const listText = (listHtml ? escapeHtml(listBody) : listBody) + tail;
 
   const buttons = [];
   if (code) buttons.push(codeButtonRow(origin, code));
@@ -677,7 +825,12 @@ function devicesScreen(cur, { account, now, origin, checkout, info }) {
     if (row.length) buttons.push(row);
     if (bound.length > 1) buttons.push([{ text: 'Отвязать все', callback_data: 'ua' }]);
   }
-  out.push({ text: lines.join('\n'), inline: rows(buttons), parseMode: code ? 'Markdown' : undefined });
+  out.push({
+    text: listText,
+    inline: rows(buttons),
+    parseMode: code ? 'Markdown' : listHtml ? 'HTML' : undefined,
+    ...spec('devices.list', { devices: devicesVar, code: codeVar, left: String(swap.left), limit: String(swap.limit), days_left: '', expires_at: sub.paidUntil ? mskDateTime(sub.paidUntil) : '' }, undefined, undefined, raw),
+  });
 
   // One more device: only when no slot is free. Sold alone only while the subscription is paid.
   const country = account.country || '';
@@ -722,22 +875,32 @@ function devicesScreen(cur, { account, now, origin, checkout, info }) {
       const alt = collectAlt(state, { kind: 'dev', accountId: account.id, subscriptionId: sub.id }, now, country);
       state = alt.state;
       const merged = appendAlt(text, buttons, alt);
-      out.push({ text: merged.text, inline: rows(merged.buttons) });
+      out.push({ text: merged.text, inline: rows(merged.buttons), ...spec('devices.extra', { text: merged.text, price: rub(prices.price), extra: rub(prices.extra), expires_at: mskDate(sub.paidUntil) }) });
     } else {
       // Grace: a standalone slot would die with the grace period. Renewal + one more device, one purchase.
-      const r = renewalText(state, subRow, sub, now, { addExtra: 1 });
-      let text = 'Сейчас льготный период - отдельно устройство не купить. Продлите подписку вместе с ним одной оплатой:\n' + r.text;
+      const r = renewalText(state, subRow, sub, now, { addExtra: 1, lang: normalizeLang(account.lang) });
+      const opening = 'Сейчас льготный период - отдельно устройство не купить. Продлите подписку вместе с ним одной оплатой:\n';
+      let text = opening + r.text;
+      let tail = '';
       let buttons = [];
       if (deviceYo) {
         const offers = payOffers(checkout, state, { kind: 'sub', accountId: account.id, subscriptionId: sub.id, addExtra: 1 });
         state = offers.state;
         text += '\n' + offers.text;
+        tail += '\n' + offers.text;
         buttons = offers.buttons;
       }
       const alt = collectAlt(state, { kind: 'sub', accountId: account.id, subscriptionId: sub.id, addExtra: 1 }, now, country);
       state = alt.state;
+      if (alt.lines.length) tail += '\n' + alt.lines.join('\n');
       const merged = appendAlt(text, buttons, alt);
-      out.push({ text: merged.text, inline: rows(merged.buttons) });
+      const rHtml = r.parseMode === 'HTML';
+      out.push({
+        text: rHtml ? escapeHtml(opening) + r.text + escapeHtml(tail) : merged.text,
+        inline: rows(merged.buttons),
+        parseMode: rHtml ? 'HTML' : undefined,
+        ...spec('devices.extra_grace', { renewal: r.text, tail, price: rub(prices.price) }, undefined, undefined, rHtml ? ['renewal'] : []),
+      });
     }
   }
   return { state, out };
@@ -748,29 +911,52 @@ function devicesScreen(cur, { account, now, origin, checkout, info }) {
  * every step re-checks the state, so a stale button (device already gone, set changed) does nothing.
  * @returns {{ state, messages, answer: string, clearMarkup: boolean }}
  */
-export function botCallback(state, { chatId, data, now, info }) {
+export function botCallback(state, { chatId, data, now, info, lang }) {
   const rawData = String(data || '');
   if (rawData.indexOf('alin:') === 0) {
     const token = rawData.slice('alin:'.length);
     const out = confirmAdminPanelLogin(state, { token, telegramId: chatId, now });
     if (out.result && out.result.ok) {
-      return { state: out.state, answer: 'Вход подтверждён', messages: [{ chatId, text: 'Вход в админ-панель подтверждён. Вернитесь в браузер.' }], clearMarkup: true };
+      return {
+        state: out.state,
+        answer: 'Вход подтверждён',
+        messages: [{ chatId, text: 'Вход в админ-панель подтверждён. Вернитесь в браузер.', ...spec('login.ok_short', {}, '') }],
+        clearMarkup: true,
+      };
     }
     return { state: out.state, answer: 'Ссылка устарела', messages: [], clearMarkup: true };
   }
   const raw = String(data || '');
   const account = accountByTelegram(state, chatId);
   const messages = [];
-  const say = (text, extra) => messages.push({ chatId: String(chatId), text, keyboard: mainKeyboard(), ...(extra || {}) });
+  const langCode = normalizeLang(lang);
   const stale = 'Кнопка устарела - откройте «Устройства» ещё раз.';
   let cur = state;
+  // Remember the language for notices sent later (payments, reminders), not just this reply.
+  if (account && langCode && (account.lang || '') !== langCode) {
+    cur = rememberTelegramProfile(cur, { telegramId: chatId, username: account.telegramUsername || '', name: account.telegramName || '', lang: langCode }, now).state;
+  }
+  const cbState = subscriptionCopyState(account ? subscriptionView(cur, account.id, now) : null, accountPaid(cur, account));
+  const say = (text, extra) => {
+    const rest = { ...(extra || {}) };
+    if (rest.copy) {
+      rest.copy = {
+        id: rest.copy.id,
+        vars: rest.copy.vars || {},
+        state: rest.copy.state !== undefined ? rest.copy.state : cbState,
+        lang: rest.copy.lang || langCode,
+        raw: rest.copy.raw,
+      };
+    }
+    messages.push({ chatId: String(chatId), text, keyboard: mainKeyboard(), ...rest });
+  };
   const origin = cur.settings.publicOrigin || '';
   const pay = makeCheckout(cur.settings);
   const checkout = (st, opts, targets) => pay(st, { ...opts, now }, targets);
   const showDevices = () => {
     const screen = devicesScreen(cur, { account, now, origin, checkout, info });
     cur = screen.state;
-    for (const m of screen.out) say(m.text, { inline: m.inline || undefined, parseMode: m.parseMode });
+    for (const m of screen.out) say(m.text, { inline: m.inline || undefined, parseMode: m.parseMode, copy: m.copy });
   };
   if (!account) return { state, messages, answer: stale, clearMarkup: true };
 
@@ -778,7 +964,7 @@ export function botCallback(state, { chatId, data, now, info }) {
     const out = donateOnCallback(cur, account, raw, now);
     if (!out) return { state, messages, answer: stale, clearMarkup: true };
     cur = out.state;
-    if (out.text) say(out.text, { inline: out.inline, invoice: out.invoice, cryptoIssue: out.cryptoIssue });
+    if (out.text) say(out.text, { inline: out.inline, invoice: out.invoice, cryptoIssue: out.cryptoIssue, copy: out.copy });
     return { state: cur, messages, answer: out.answer || '', clearMarkup: false };
   }
 
@@ -794,6 +980,7 @@ export function botCallback(state, { chatId, data, now, info }) {
       return { state, messages, answer: 'Оплата звёздами выключена', clearMarkup: true };
     }
     say('Счёт на ' + stars + ' звёзд. Комиссия сверху не добавляется.', {
+      ...spec('pay.stars', { stars: String(stars) }),
       invoice: starInvoiceBody(chatId, {
         title: 'Подписка OMP',
         description: starBlurb(quote, cur.settings.periodDays),
@@ -816,7 +1003,10 @@ export function botCallback(state, { chatId, data, now, info }) {
       return { state, messages, answer: 'Крипта недоступна', clearMarkup: true };
     }
     if (labelSettled(cur, 'buy:' + id)) return { state, messages, answer: 'Этот счёт уже оплачен', clearMarkup: true };
-    say(asset + ' ' + quote.payAmount + '. Ссылка на оплату:', { cryptoIssue: { purchaseId: id } });
+    say(asset + ' ' + quote.payAmount + '. Ссылка на оплату:', {
+      cryptoIssue: { purchaseId: id },
+      ...spec('pay.crypto', { asset, pay_amount: String(quote.payAmount) }),
+    });
     return { state: cur, messages, answer: '', clearMarkup: false };
   }
 
@@ -834,7 +1024,8 @@ export function botCallback(state, { chatId, data, now, info }) {
     const out = confirmDeviceLink(cur, { token: link.token, telegramId: chatId, now });
     cur = out.state;
     if (out.result.error) return { state: cur, messages, answer: stale, clearMarkup: true };
-    say('Телефон привязан к этому Telegram.\n' + statusText(cur, subscriptionView(cur, account.id, now), account));
+    const linked = subscriptionView(cur, account.id, now);
+    say('Телефон привязан к этому Telegram.\n' + statusText(cur, linked, account), spec('link.ok', { status: statusText(cur, linked, account), name: telegramDisplay(account) }));
     return { state: cur, messages, answer: 'Привязано', clearMarkup: true };
   }
 
@@ -851,7 +1042,7 @@ export function botCallback(state, { chatId, data, now, info }) {
     if (!confirm) {
       const swap = swapStatus(swapSub, now, 1);
       if (swap.left < 1) {
-        say(swapLimitText(swap));
+        say(swapLimitText(swap), spec('devices.swap_limit', { limit: String(swap.limit), left: String(swap.left), when: swap.nextAt ? '\nСледующая смена - с ' + mskDateTime(swap.nextAt) + '.' : '' }));
         return { state: cur, messages, answer: '', clearMarkup: false };
       }
       say(
@@ -860,13 +1051,14 @@ export function botCallback(state, { chatId, data, now, info }) {
           inline: {
             inline_keyboard: [[{ text: 'Да, отвязать', callback_data: 'y1:' + dev.id + ':' + (dev.deviceId || '').slice(0, 8) }, { text: 'Отмена', callback_data: 'ux' }]],
           },
+          ...spec('devices.unbind_ask', { device: label.charAt(0).toLowerCase() + label.slice(1), limit: String(swap.limit), left: String(swap.left - 1) }),
         },
       );
       return { state: cur, messages, answer: '', clearMarkup: false };
     }
     const out = selfUnbind(cur, { accountId: account.id, deviceIds: [dev.deviceId], now });
     if (out.result.error === 'swap_limit') {
-      say(swapLimitText(out.result));
+      say(swapLimitText(out.result), spec('devices.swap_limit', { limit: String(out.result.limit), left: String(out.result.left), when: out.result.nextAt ? '\nСледующая смена - с ' + mskDateTime(out.result.nextAt) + '.' : '' }));
       return { state: cur, messages, answer: '', clearMarkup: true };
     }
     if (out.result.error) {
@@ -874,9 +1066,10 @@ export function botCallback(state, { chatId, data, now, info }) {
       return { state: cur, messages, answer: stale, clearMarkup: true };
     }
     cur = out.state;
+    const unboundNote = out.result.left > 0 ? swapLeftLine(out.result) : 'Это была последняя смена на 30 дней: следующая - с ' + mskDateTime(out.result.nextAt) + '.';
     say(
-      label + ' отвязано и больше не работает.\n' +
-        (out.result.left > 0 ? swapLeftLine(out.result) : 'Это была последняя смена на 30 дней: следующая - с ' + mskDateTime(out.result.nextAt) + '.'),
+      label + ' отвязано и больше не работает.\n' + unboundNote,
+      spec('devices.unbind_done', { device: label, text: unboundNote, left: String(out.result.left) }),
     );
     showDevices();
     return { state: cur, messages, answer: 'Отвязано', clearMarkup: true };
@@ -891,21 +1084,26 @@ export function botCallback(state, { chatId, data, now, info }) {
     const swap = swapStatus(swapSub, now, bound.length);
     if (!confirm) {
       if (swap.left < bound.length) {
+        const why = swapLeftLine(swap).toLowerCase() +
+          (swap.left > 0 ? '\nОтвяжите по одному кнопками «Отвязать N».' : (Number.isFinite(swap.nextAt) && swap.nextAt > 0 ? '\nСледующая смена - с ' + mskDateTime(swap.nextAt) + '.' : ''));
         say(
-          'Отвязать все устройства (' + bound.length + ') сейчас нельзя: ' + swapLeftLine(swap).toLowerCase() +
-            (swap.left > 0 ? '\nОтвяжите по одному кнопками «Отвязать N».' : (Number.isFinite(swap.nextAt) && swap.nextAt > 0 ? '\nСледующая смена - с ' + mskDateTime(swap.nextAt) + '.' : '')),
+          'Отвязать все устройства (' + bound.length + ') сейчас нельзя: ' + why,
+          spec('devices.unbind_all_block', { count: String(bound.length), text: why, left: String(swap.left), when: swap.nextAt ? mskDateTime(swap.nextAt) : '' }),
         );
         return { state: cur, messages, answer: '', clearMarkup: false };
       }
       say(
         'Отвязать все устройства (' + bound.length + ')? Они сразу перестанут работать.\nЭто ' + bound.length + ' ' + plural(bound.length, 'смена', 'смены', 'смен') + ' из ' + swap.limit + ' за 30 дней (останется ' + (swap.left - bound.length) + ').',
-        { inline: { inline_keyboard: [[{ text: 'Да, отвязать все', callback_data: 'ya:' + boundSig(bound) }, { text: 'Отмена', callback_data: 'ux' }]] } },
+        {
+          inline: { inline_keyboard: [[{ text: 'Да, отвязать все', callback_data: 'ya:' + boundSig(bound) }, { text: 'Отмена', callback_data: 'ux' }]] },
+          ...spec('devices.unbind_all_ask', { count: String(bound.length), limit: String(swap.limit), left: String(swap.left - bound.length) }),
+        },
       );
       return { state: cur, messages, answer: '', clearMarkup: false };
     }
     const out = selfUnbind(cur, { accountId: account.id, deviceIds: bound.map((d) => d.deviceId), now });
     if (out.result.error === 'swap_limit') {
-      say(swapLimitText(out.result));
+      say(swapLimitText(out.result), spec('devices.swap_limit', { limit: String(out.result.limit), left: String(out.result.left), when: out.result.nextAt ? '\nСледующая смена - с ' + mskDateTime(out.result.nextAt) + '.' : '' }));
       return { state: cur, messages, answer: '', clearMarkup: true };
     }
     if (out.result.error) {
@@ -913,9 +1111,10 @@ export function botCallback(state, { chatId, data, now, info }) {
       return { state: cur, messages, answer: stale, clearMarkup: true };
     }
     cur = out.state;
+    const allNote = out.result.left > 0 ? swapLeftLine(out.result) : 'Это была последняя смена на 30 дней: следующая - с ' + mskDateTime(out.result.nextAt) + '.';
     say(
-      'Все устройства отвязаны (' + out.result.unbound + ') и больше не работают.\n' +
-        (out.result.left > 0 ? swapLeftLine(out.result) : 'Это была последняя смена на 30 дней: следующая - с ' + mskDateTime(out.result.nextAt) + '.'),
+      'Все устройства отвязаны (' + out.result.unbound + ') и больше не работают.\n' + allNote,
+      spec('devices.unbind_all_done', { count: String(out.result.unbound), text: allNote }),
     );
     showDevices();
     return { state: cur, messages, answer: 'Отвязано', clearMarkup: true };
@@ -1041,6 +1240,7 @@ export function botReply(state, { chatId, text, now, awaiting, replyTo, from, pa
           telegramId: chatId,
           username: from.username || '',
           name: [from.firstName, from.lastName].filter(Boolean).join(' '),
+          lang: from.lang || '',
         },
         now,
       )
@@ -1066,6 +1266,9 @@ export function botReply(state, { chatId, text, now, awaiting, replyTo, from, pa
     cur = out.state;
     return out;
   };
+  const lang = normalizeLang(from && from.lang);
+  const subState = subscriptionCopyState(sub, accountPaid(cur, account));
+  const uv = (extra) => userVars(cur, account, sub, now, extra);
 
   const say = (body, extra) => {
     const forceAdmin = extra && extra.adminPad === true;
@@ -1073,6 +1276,15 @@ export function botReply(state, { chatId, text, now, awaiting, replyTo, from, pa
     const adminPad = forceUser ? false : forceAdmin || mode === 'admin';
     const rest = { ...(extra || {}) };
     delete rest.adminPad;
+    if (rest.copy) {
+      rest.copy = {
+        id: rest.copy.id,
+        vars: rest.copy.vars || {},
+        state: rest.copy.state !== undefined ? rest.copy.state : subState,
+        lang: rest.copy.lang || lang,
+        raw: rest.copy.raw,
+      };
+    }
     if (!rest.inline) delete rest.inline;
     if (!rest.parseMode) delete rest.parseMode;
     messages.push({
@@ -1114,12 +1326,14 @@ export function botReply(state, { chatId, text, now, awaiting, replyTo, from, pa
         via: 'bot',
       });
       cur = saved.state;
+      const relayRec = copyRecipient(cur, (accountByTelegram(cur, target) || {}).id, now);
       messages.push({
         chatId: String(target),
         text: 'Поддержка OMP:\n' + body,
         keyboard: mainKeyboard(),
+        ...spec('support.relay', { text: body }, relayRec.state, relayRec.lang),
       });
-      say('Ответ отправлен пользователю ' + target + '.');
+      say('Ответ отправлен пользователю ' + target + '.', spec('admin.reply_sent', { who: target }, ''));
       return { state: cur, messages, pad: mode };
     }
   }
@@ -1127,10 +1341,12 @@ export function botReply(state, { chatId, text, now, awaiting, replyTo, from, pa
   if (action === 'link') {
     const out = pendingDeviceLink(cur, { token: arg, now });
     cur = out.state;
-    if (out.result.error) say('Ссылка устарела или уже использована. В OMP нажмите «Привязать Telegram» ещё раз.');
+    if (out.result.error) say('Ссылка устарела или уже использована. В OMP нажмите «Привязать Telegram» ещё раз.', spec('link.stale', {}));
     else {
-      say('Привязать к этому Telegram устройство ' + out.result.deviceId.slice(0, 8) + '…?\nКод и доступ к поиску появятся только после подтверждения.', {
+      const device = out.result.deviceId.slice(0, 8);
+      say('Привязать к этому Telegram устройство ' + device + '…?\nКод и доступ к поиску появятся только после подтверждения.', {
         inline: { inline_keyboard: [[{ text: 'Привязать', callback_data: out.result.callback }, { text: 'Отмена', callback_data: 'ux' }]] },
+        ...spec('link.ask', { device }),
       });
     }
     return { state: cur, messages, pad: mode };
@@ -1142,83 +1358,82 @@ export function botReply(state, { chatId, text, now, awaiting, replyTo, from, pa
     if (out.result.error) {
       process.stderr.write(adminLoginFailureLine(out.result.error));
       if (out.result.error === 'wrong_user') {
-        say('Нет доступа к панели. Добавьте свой Telegram id в настройках администраторов.');
+        say('Нет доступа к панели. Добавьте свой Telegram id в настройках администраторов.', spec('login.denied', {}, ''));
       } else {
-        say('Ссылка для входа устарела. Откройте панель снова и нажмите «Войти через Telegram».');
+        say('Ссылка для входа устарела. Откройте панель снова и нажмите «Войти через Telegram».', spec('login.stale', {}, ''));
       }
     } else {
-      say('Вход в админ-панель подтверждён. Вернитесь в браузер - страница откроется сама.');
+      say('Вход в админ-панель подтверждён. Вернитесь в браузер - страница откроется сама.', spec('login.ok', {}, ''));
     }
     return { state: cur, messages, pad: mode };
   }
 
   if (action === 'admin' || action === 'admin_summary' || action === 'admin_find' || action === 'admin_grant' || action === 'admin_promo') {
     if (!admin) {
-      say('Нет доступа. Добавьте свой Telegram id в настройках панели.');
+      say('Нет доступа. Добавьте свой Telegram id в настройках панели.', spec('admin.no_access', {}, ''));
       return { state: cur, messages, pad: 'user' };
     }
   }
   if ((action === 'admin_grant' || action === 'admin_promo') && isPanelReader(cur.settings, chatId)) {
-    say('Режим только просмотра. Выдача дней и промокоды недоступны.', { adminPad: true });
+    say('Режим только просмотра. Выдача дней и промокоды недоступны.', { adminPad: true, ...spec('admin.readonly', {}, '') });
     return { state: cur, messages, pad: 'admin' };
   }
 
   if (action === 'user_mode') {
-    say(
-      (admin ? 'Режим пользователя - те же кнопки, что у подписчика. /admin - снова админ-кабинет.\n\n' : '') +
-        'Личный кабинет\n\n' +
-        statusText(cur, sub, account),
-      { adminPad: false },
-    );
+    const prefix = admin ? 'Режим пользователя - те же кнопки, что у подписчика. /admin - снова админ-кабинет.\n\n' : '';
+    const status = statusText(cur, sub, account);
+    say(prefix + 'Личный кабинет\n\n' + status, { adminPad: false, ...spec('cabinet.user_mode', uv({ prefix, status })) });
   } else if (action === 'admin') {
-    say('Админ-кабинет. Сводка, поиск, выдача дней и промокоды.\n«Как пользователь» - проверить кабинет подписчика.', { adminPad: true });
+    say('Админ-кабинет. Сводка, поиск, выдача дней и промокоды.\n«Как пользователь» - проверить кабинет подписчика.', { adminPad: true, ...spec('admin.home', {}, '') });
   } else if (action === 'admin_summary') {
     const s = adminSummary(cur, now);
-    say(
-      'Сводка:\nАккаунтов: ' + s.accounts + '\nАктивных подписок: ' + s.active + '\nПромокодов: ' + s.promos + '\nПривязанных устройств: ' + s.bound + '\nОтказов за сутки: ' + s.fails,
-      { adminPad: true },
-    );
+    const summary = 'Аккаунтов: ' + s.accounts + '\nАктивных подписок: ' + s.active + '\nПромокодов: ' + s.promos + '\nПривязанных устройств: ' + s.bound + '\nОтказов за сутки: ' + s.fails;
+    say('Сводка:\n' + summary, { adminPad: true, ...spec('admin.summary', { summary }, '') });
   } else if (action === 'admin_find' && !arg) {
-    say('Пришлите Telegram id, @ник, код XXXX-XXXX или начало device id.', { adminPad: true, await: { kind: 'admin_find' } });
+    say('Пришлите Telegram id, @ник, код XXXX-XXXX или начало device id.', { adminPad: true, await: { kind: 'admin_find' }, ...spec('admin.find_ask', {}, '') });
   } else if (action === 'admin_find' && arg) {
     const found = adminFind(cur, arg, now);
-    if (!found) say('Не найдено: ' + arg, { adminPad: true });
+    if (!found) say('Не найдено: ' + arg, { adminPad: true, ...spec('admin.find_miss', { arg }, '') });
     else {
       const who = found.account.telegramId || found.account.id;
-      let body = 'Аккаунт ' + who + '\n' + statusText(cur, found.sub, found.account, { admin: true });
-      if (found.reveal) body += '\nСвободный код: ' + formatCode(found.reveal.code);
-      say(body, { adminPad: true });
+      const status = statusText(cur, found.sub, found.account, { admin: true });
+      const code = found.reveal ? '\nСвободный код: ' + formatCode(found.reveal.code) : '';
+      const codeHtml = found.reveal ? '\nСвободный код: <code>' + formatCode(found.reveal.code) + '</code>' : '';
+      say('Аккаунт ' + who + '\n' + status + code, { adminPad: true, ...spec('admin.find_hit', { who, status, code: codeHtml }, '', '', found.reveal ? ['code'] : []) });
     }
   } else if (action === 'admin_grant' && !arg) {
-    say('Пришлите Telegram id или @ник и число дней.\nПример: 123456789 30 или @nick 30', { adminPad: true, await: { kind: 'admin_grant' } });
+    say('Пришлите Telegram id или @ник и число дней.\nПример: 123456789 30 или @nick 30', { adminPad: true, await: { kind: 'admin_grant' }, ...spec('admin.grant_ask', {}, '') });
   } else if (action === 'admin_grant' && arg) {
     const bits = arg.split(/\s+/);
     const days = Number(bits[1]);
     const target = grantTarget(cur, bits[0]);
     if (!target) {
+      const whoArg = String(bits[0] || '').slice(0, 64);
       say(
-        'Не найден пользователь «' + String(bits[0] || '').slice(0, 64) + '». Проверьте id или @ник - пользователь должен хотя бы раз написать боту. Новый аккаунт не создан.',
-        { adminPad: true },
+        'Не найден пользователь «' + whoArg + '». Проверьте id или @ник - пользователь должен хотя бы раз написать боту. Новый аккаунт не создан.',
+        { adminPad: true, ...spec('admin.grant_bad_user', { arg: whoArg }, '') },
       );
     } else if (!Number.isInteger(days) || days < 1 || days > 3650) {
-      say('Нужно целое число дней от 1 до 3650.\nПример: ' + (bits[0] || '123456789') + ' 30', { adminPad: true });
+      say('Нужно целое число дней от 1 до 3650.\nПример: ' + (bits[0] || '123456789') + ' 30', { adminPad: true, ...spec('admin.grant_bad_days', { arg: bits[0] || '123456789' }, '') });
     } else {
       const out = grantDays(cur, { accountId: target.id, days, now });
       cur = out.state;
-      if (out.result.error) say('Не вышло выдать дни.', { adminPad: true });
+      if (out.result.error) say('Не вышло выдать дни.', { adminPad: true, ...spec('admin.grant_fail', {}, '') });
       else {
         const who = telegramDisplay(target) || target.telegramId;
         const note = grantUserMessage(origin, out.result);
+        const grantRec = copyRecipient(cur, target.id, now);
+        if (note.copy) note.copy = { ...note.copy, state: grantRec.state, lang: grantRec.lang };
         messages.push({ chatId: String(target.telegramId), ...note });
+        const noteText = out.result.code ? 'Пользователю отправлены сообщение и код для свободного места.' : 'Пользователю отправлено сообщение. Свободных мест нет, новый код не выдан.';
         say(
-          'Выдано +' + daysText(out.result.days) + ' - ' + who + ', подписка до ' + mskDateTime(out.result.paidUntil) + '.\n' +
-            (out.result.code ? 'Пользователю отправлены сообщение и код для свободного места.' : 'Пользователю отправлено сообщение. Свободных мест нет, новый код не выдан.'),
-          { adminPad: true },
+          'Выдано +' + daysText(out.result.days) + ' - ' + who + ', подписка до ' + mskDateTime(out.result.paidUntil) + '.\n' + noteText,
+          { adminPad: true, ...spec('admin.grant_ok', { days: daysText(out.result.days), who, expires_at: mskDateTime(out.result.paidUntil), text: noteText }, '') },
         );
       }
     }
   } else if (action === 'admin_promo' && !arg) {
-    say('Формат: КОД дни лимит\nПример: DEMO1 1 50', { adminPad: true, await: { kind: 'admin_promo' } });
+    say('Формат: КОД дни лимит\nПример: DEMO1 1 50', { adminPad: true, await: { kind: 'admin_promo' }, ...spec('admin.promo_ask', {}, '') });
   } else if (action === 'admin_promo' && arg) {
     const bits = arg.split(/\s+/);
     // /admin_promo CODE DAYS USES [BONUS_SLOTS [BONUS_DAYS]]: bonus slots forever when BONUS_DAYS is 0 or missing
@@ -1231,19 +1446,24 @@ export function botReply(state, { chatId, text, now, awaiting, replyTo, from, pa
       now,
     });
     cur = out.state;
-    if (out.result.error === 'exists') say('Такой промокод уже есть.', { adminPad: true });
-    else if (out.result.error) say('Некорректный промокод.', { adminPad: true });
-    else say('Промокод ' + out.result.promo.code + ' (' + promoText(out.result.promo) + ', до ' + out.result.promo.maxUses + ' исп.).', { adminPad: true });
+    if (out.result.error === 'exists') say('Такой промокод уже есть.', { adminPad: true, ...spec('admin.promo_exists', {}, '') });
+    else if (out.result.error) say('Некорректный промокод.', { adminPad: true, ...spec('admin.promo_bad', {}, '') });
+    else say('Промокод ' + out.result.promo.code + ' (' + promoText(out.result.promo) + ', до ' + out.result.promo.maxUses + ' исп.).', { adminPad: true, ...spec('admin.promo_ok', { promo_code: out.result.promo.code, promo_info: promoText(out.result.promo), uses: String(out.result.promo.maxUses) }, '') });
   } else if (action === 'promo' && !arg) {
-    say('Отправьте промокод одним сообщением.\nПример: DEMO1', { await: { kind: 'promo' } });
+    say('Отправьте промокод одним сообщением.\nПример: DEMO1', { await: { kind: 'promo' }, ...spec('promo.ask', {}) });
   } else if (action === 'promo' && arg) {
     const out = redeemPromo(cur, { code: arg, accountId: account.id, now });
     cur = out.state;
-    if (out.result.error === 'bad_promo') say('Промокод не найден или уже не действует.');
-    else if (out.result.error === 'already') say('Вы уже активировали этот промокод.');
-    else if (out.result.error === 'exhausted') say('Этот промокод уже использовали все, кому можно.');
-    else if (out.result.error === 'expired') say('Срок промокода истёк.');
-    else if (out.result.error === 'needs_subscription') say('Этот промокод добавляет устройство к подписке. Сначала оформите подписку - «Оплатить».');
+    if (out.result.error === 'bad_promo') {
+      const ref = hasCustomSync('referral.bound') ? redeemReferralCode(cur, { code: arg, accountId: account.id, now }) : null;
+      if (ref && ref.result && ref.result.kind === 'referral') {
+        cur = ref.state;
+        say('Приглашение сохранено. Код ' + ref.result.promoCode + '. Дни придут после оплаты друга.', spec('referral.bound', uv({ ref_link: ref.result.promoCode })));
+      } else say('Промокод не найден или уже не действует.', spec('promo.bad', { promo_code: arg }));
+    } else if (out.result.error === 'already') say('Вы уже активировали этот промокод.', spec('promo.already', {}));
+    else if (out.result.error === 'exhausted') say('Этот промокод уже использовали все, кому можно.', spec('promo.exhausted', {}));
+    else if (out.result.error === 'expired') say('Срок промокода истёк.', spec('promo.expired', {}));
+    else if (out.result.error === 'needs_subscription') say('Этот промокод добавляет устройство к подписке. Сначала оформите подписку - «Оплатить».', spec('promo.needs_sub', {}));
     else {
       const b = out.result.bonus;
       const parts = [];
@@ -1251,44 +1471,59 @@ export function botReply(state, { chatId, text, now, awaiting, replyTo, from, pa
       if (b) parts.push('+' + b.count + ' ' + (b.count === 1 ? 'устройство' : 'устройства') + ' бесплатно ' + (b.until ? 'до ' + mskDate(b.until) : 'навсегда'));
       const head = 'Промокод принят: ' + parts.join('; ') + '.';
       if (out.result.code) {
-        say(head + '\n\n' + codeBlock(origin, out.result.code), { inline: rows([codeButtonRow(origin, out.result.code)]), parseMode: 'Markdown' });
+        say(head + '\n\n' + codeBlock(origin, out.result.code), {
+          inline: rows([codeButtonRow(origin, out.result.code)]),
+          parseMode: 'Markdown',
+          ...spec('promo.ok', { bonus: parts.join('; '), code: '\n\n' + codeBlockHtml(origin, out.result.code), promo_code: arg, days: out.result.days ? daysText(out.result.days) : '', expires_at: out.result.paidUntil ? mskDateTime(out.result.paidUntil) : '' }, undefined, undefined, ['code']),
+        });
       } else {
-        say(head + '\nПривязанные устройства продолжают работать.');
+        say(head + '\nПривязанные устройства продолжают работать.', spec('promo.ok', { bonus: parts.join('; ') + '\nПривязанные устройства продолжают работать', code: '', promo_code: arg, days: out.result.days ? daysText(out.result.days) : '', expires_at: out.result.paidUntil ? mskDateTime(out.result.paidUntil) : '' }));
       }
     }
   } else if (action === 'price') {
     const grace = graceDays(cur.settings);
-    say(
+    const priceTextBody =
       'Подписка OMP - ' + rub(prices.price) + ' за ' + daysText(prices.days) + ', ' + upToPhones(cur) + ': поиск в Jackett и JacRed.' +
-        '\nПодписка нужна только на телефоне - на ТВ она не нужна.' +
-        (prices.extra ? '\nДоп. устройство - ' + rub(prices.extra) + ' в месяц, продлевается вместе с подпиской.' : '') +
-        (grace > 0 ? '\nПосле окончания ещё ' + daysText(grace) + ' поиск работает - можно спокойно продлить.' : '') +
-        trialLine(cur),
-    );
+      '\nПодписка нужна только на телефоне - на ТВ она не нужна.' +
+      (prices.extra ? '\nДоп. устройство - ' + rub(prices.extra) + ' в месяц, продлевается вместе с подпиской.' : '') +
+      (grace > 0 ? '\nПосле окончания ещё ' + daysText(grace) + ' поиск работает - можно спокойно продлить.' : '') +
+      trialLine(cur);
+    say(priceTextBody, spec('pay.price', uv({
+      extra: prices.extra ? '\nДоп. устройство - ' + rub(prices.extra) + ' в месяц, продлевается вместе с подпиской.' : '',
+      grace: grace > 0 ? '\nПосле окончания ещё ' + daysText(grace) + ' поиск работает - можно спокойно продлить.' : '',
+    })));
   } else if (action === 'pay') {
     const country = account.country || '';
     const yo = !!(wallet && prices.price);
     const altOn = starsOffered(cur.settings, 'new') || cryptoOffered(cur.settings, country);
-    if (!yo && !altOn) say('Оплата ещё не настроена.' + trialLine(cur));
+    if (!yo && !altOn) say('Оплата ещё не настроена.' + trialLine(cur), spec('pay.unavailable', uv()));
     else if (!sub) {
       const inviteOff = referralDiscountOf(cur, account.id, prices.price, now);
       let text =
         'Подписка OMP - ' + rub(Math.max(0, prices.price - inviteOff)) + ' за ' + daysText(prices.days) + ', ' + upToPhones(cur) + '. На ТВ подписка не нужна.';
-      if (inviteOff > 0) text += '\nСкидка по приглашению: ' + rub(inviteOff) + '.';
+      let details = '';
+      if (inviteOff > 0) {
+        const offLine = 'Скидка по приглашению: ' + rub(inviteOff) + '.';
+        text += '\n' + offLine;
+        details += offLine;
+      }
       let buttons = [];
       if (yo) {
         const offers = payOffers(pay, cur, { kind: 'new', accountId: account.id, now });
         cur = offers.state;
         text += '\n' + offers.text;
+        details += (details ? '\n' : '') + offers.text;
         buttons = offers.buttons;
       }
       const alt = collectAlt(cur, { kind: 'new', accountId: account.id }, now, country);
       cur = alt.state;
+      if (alt.lines.length) details += (details ? '\n' : '') + alt.lines.join('\n');
       const merged = appendAlt(text, buttons, alt);
-      say(merged.text + '\nПосле оплаты в этот чат придёт код - введите его в OMP на телефоне.', { inline: rows(merged.buttons) });
+      const payNew = merged.text + '\nПосле оплаты в этот чат придёт код - введите его в OMP на телефоне.';
+      say(payNew, { inline: rows(merged.buttons), ...spec('pay.new', uv({ details, price: rub(Math.max(0, prices.price - inviteOff)) })) });
     } else {
       const subRow = cur.subscriptions.find((s) => s.id === sub.id);
-      const renewal = renewalText(cur, subRow, sub, now);
+      const renewal = renewalText(cur, subRow, sub, now, { lang });
       const head = sub.active ? (sub.inGrace ? subscriptionHead(sub) + '\n\n' : '') : subscriptionHead(sub) + '\n\n';
       let buttons = [];
       let tail = '';
@@ -1331,49 +1566,60 @@ export function botReply(state, { chatId, text, now, awaiting, replyTo, from, pa
         }
         tail += note;
       }
-      say(head + renewal.text + tail, { inline: rows(buttons) });
+      // A saved renewal.quote renders HTML: keep that parse mode and escape the code-built parts.
+      const renewalHtml = renewal.parseMode === 'HTML';
+      say(renewalHtml ? escapeHtml(head) + renewal.text + escapeHtml(tail) : head + renewal.text + tail, {
+        inline: rows(buttons),
+        parseMode: renewalHtml ? 'HTML' : undefined,
+        ...spec('pay.renew', uv({ head, renewal: renewal.text, tail }), undefined, undefined, renewalHtml ? ['renewal'] : []),
+      });
     }
   } else if (action === 'devices') {
     const screen = devicesScreen(cur, { account, now, origin, checkout: (st, opts, targets) => pay(st, { ...opts, now }, targets), info });
     cur = screen.state;
-    for (const m of screen.out) say(m.text, { inline: m.inline || undefined, parseMode: m.parseMode });
+    for (const m of screen.out) say(m.text, { inline: m.inline || undefined, parseMode: m.parseMode, copy: m.copy });
   } else if (action === 'support' && !arg) {
-    say('Напишите сообщение для администратора одним текстом.', { await: { kind: 'support' } });
+    say('Напишите сообщение для администратора одним текстом.', { await: { kind: 'support' }, ...spec('support.ask', {}) });
   } else if (action === 'support' && arg) {
     if (supportTooFast(cur, chatId, now)) {
-      say('Слишком много сообщений подряд - подождите 10 минут. Предыдущие сообщения администратор уже получил.');
+      say('Слишком много сообщений подряд - подождите 10 минут. Предыдущие сообщения администратор уже получил.', spec('support.fast', {}));
       return { state: cur, messages, pad: mode };
     }
     const saved = appendSupportMessage(cur, { telegramId: String(chatId), text: arg, direction: 'in', now, via: 'bot' });
     cur = saved.state;
     const admins = adminChatIds(cur.settings);
     const notify = adminNotifyEnabled(cur.settings);
-    say(
-      admins.length
-        ? notify
-          ? 'Сообщение передано администратору. Ответ придёт в этот чат.'
-          : 'Сообщение сохранено. Уведомления администраторам выключены.'
-        : 'Сообщение сохранено. Администраторы в панели ещё не указаны.',
-    );
+    const supportReply = admins.length
+      ? notify
+        ? 'Сообщение передано администратору. Ответ придёт в этот чат.'
+        : 'Сообщение сохранено. Уведомления администраторам выключены.'
+      : 'Сообщение сохранено. Администраторы в панели ещё не указаны.';
+    const supportId = admins.length ? (notify ? 'support.sent' : 'support.saved_off') : 'support.saved_no_admin';
+    say(supportReply, spec(supportId, {}, ''));
     if (notify) {
-      const note = 'Поддержка · ' + (telegramDisplay(account) || chatId) + '\n' + arg + '\n\nОтветьте на это сообщение - текст уйдёт пользователю.';
+      const who = telegramDisplay(account) || chatId;
+      const note = 'Поддержка · ' + who + '\n' + arg + '\n\nОтветьте на это сообщение - текст уйдёт пользователю.';
       for (let i = 0; i < admins.length; i++) {
-        messages.push({ chatId: admins[i], text: note, keyboard: adminKeyboard(), supportNotify: String(chatId) });
+        messages.push({ chatId: admins[i], text: note, keyboard: adminKeyboard(), supportNotify: String(chatId), ...spec('support.note', { who, text: arg }, '') });
       }
     }
   } else if (action === 'donate') {
     const out = donateMenu(cur, account, now);
     cur = out.state;
-    say(out.text, { inline: out.inline });
+    say(out.text, { inline: out.inline, copy: out.copy });
   } else if (action === 'unknown') {
     const drafted = donateOnText(cur, account, String(text || ''), now);
     if (drafted) {
       cur = drafted.state;
-      say(drafted.text, { inline: drafted.inline });
-    } else say('Не понял. Выберите кнопку ниже или «Поддержка».\n\n' + statusText(cur, sub, account));
+      say(drafted.text, { inline: drafted.inline, copy: drafted.copy });
+    } else {
+      const status = statusText(cur, sub, account);
+      say('Не понял. Выберите кнопку ниже или «Поддержка».\n\n' + status, spec('cabinet.unknown', uv({ status })));
+    }
   } else {
     const hint = admin && mode === 'user' ? '\n\nВы админ. /admin - админ-кабинет.' : '';
-    say('Личный кабинет\n\n' + statusText(cur, sub, account) + hint);
+    const status = statusText(cur, sub, account);
+    say('Личный кабинет\n\n' + status + hint, spec('cabinet.home', uv({ status, admin_hint: hint })));
   }
   return { state: cur, messages, pad: mode };
 }

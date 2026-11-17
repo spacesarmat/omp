@@ -371,7 +371,16 @@ export function claimReferralNotices(state) {
     if (bucket.retention) parts.push('удержание ' + bucket.retention + ' дн.');
     if (bucket.credit) parts.push(bucket.credit + ' ₽ на баланс');
     if (chatId && parts.length) {
-      messages.push({ chatId, text: 'Друг оплатил подписку. Вам начислено ' + parts.join(' и ') + '.', restore: bucket.restore });
+      messages.push({
+        chatId,
+        text: 'Друг оплатил подписку. Вам начислено ' + parts.join(' и ') + '.',
+        restore: bucket.restore,
+        accountId: id,
+        role: 'referrer',
+        days: bucket.days,
+        credit: bucket.credit,
+        retention: bucket.retention,
+      });
     }
   }
   for (let i = 0; i < rows.length; i++) {
@@ -383,6 +392,9 @@ export function claimReferralNotices(state) {
         chatId,
         text: 'По приглашению вам начислено ' + row.friendDays + ' дн.',
         restore: [{ id: row.id, noticePending: false, friendNoticePending: true }],
+        accountId: row.friendId,
+        role: 'friend',
+        days: row.friendDays,
       });
     }
   }
