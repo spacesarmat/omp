@@ -1,4 +1,5 @@
 import { amountCovers, CRYPTO_ASSETS, formatAsset } from './cryptoPay.mjs';
+import { str } from './botCopy.mjs';
 
 /**
  * Telegram Stars and Crypto Pay prices. Both stay off until an admin turns the switch on.
@@ -212,40 +213,40 @@ export function starInvoiceBody(chatId, { title, description, payload, stars }) 
  * pre_checkout_query. ok false does not extend anything.
  * The payer must own the order, the amount must be the quoted stars, and the switch must still be on.
  */
-export function starCheckoutDecision(state, query) {
+export function starCheckoutDecision(state, query, lang) {
   const q = query || {};
   if (!starsOffered(state && state.settings, 'new') && !starsOffered(state && state.settings, 'dev')) {
-    return { ok: false, error: 'Оплата звёздами выключена' };
+    return { ok: false, error: str('pm.err_stars_off', lang) };
   }
   const payload = String(q.invoice_payload || '');
-  if (payload.indexOf('buy:') !== 0) return { ok: false, error: 'Счёт не найден' };
+  if (payload.indexOf('buy:') !== 0) return { ok: false, error: str('pm.err_no_invoice', lang) };
   const quote = ((state && state.purchases) || []).find((p) => p && p.id === payload.slice(4));
-  if (!quote || quote.method !== 'stars') return { ok: false, error: 'Счёт не найден' };
+  if (!quote || quote.method !== 'stars') return { ok: false, error: str('pm.err_no_invoice', lang) };
   if (!starsOffered(state.settings, quote.kind === 'dev' ? 'dev' : 'new')) {
-    return { ok: false, error: 'Оплата звёздами выключена' };
+    return { ok: false, error: str('pm.err_stars_off', lang) };
   }
   const owner = ((state && state.accounts) || []).find((a) => a && a.id === quote.accountId);
   const fromId = q.from && q.from.id != null ? String(q.from.id) : '';
   if (!owner || !owner.telegramId || String(owner.telegramId) !== fromId) {
-    return { ok: false, error: 'Счёт выставлен другому аккаунту' };
+    return { ok: false, error: str('pm.err_other_account', lang) };
   }
-  if (labelSettled(state, payload)) return { ok: false, error: 'Этот счёт уже оплачен' };
+  if (labelSettled(state, payload)) return { ok: false, error: str('pm.err_already', lang) };
   // The one-time referral discount must still be open before Telegram takes the Stars:
   // a charge that arrives after the first payment is rejected and has to be refunded.
   if (Number(quote.referralOff) > 0) {
     const payer =
       quote.accountId || (((state && state.subscriptions) || []).find((s) => s && s.id === quote.subscriptionId) || {}).accountId;
-    if (payer && subscriptionPaidBefore(state, payer, '')) return { ok: false, error: 'Скидка по приглашению уже использована' };
+    if (payer && subscriptionPaidBefore(state, payer, '')) return { ok: false, error: str('pm.err_discount_used', lang) };
   }
-  if (String(q.currency || '') !== 'XTR') return { ok: false, error: 'Неверная валюта' };
-  if (!altCovers(q.total_amount, 'XTR', quote)) return { ok: false, error: 'Сумма не сходится' };
+  if (String(q.currency || '') !== 'XTR') return { ok: false, error: str('pm.err_currency', lang) };
+  if (!altCovers(q.total_amount, 'XTR', quote)) return { ok: false, error: str('pm.err_amount', lang) };
   return { ok: true };
 }
 
-export function starBlurb(quote, days) {
-  if (quote && quote.kind === 'dev') return 'Доп. устройство OMP';
+export function starBlurb(quote, days, lang) {
+  if (quote && quote.kind === 'dev') return str('pm.blurb_dev', lang);
   const n = Math.max(1, Math.floor(Number(days) || 30));
-  return 'Подписка OMP, ' + n + ' дн.';
+  return str('pm.blurb_sub', lang, { n });
 }
 
 /** Rubles this payment adds to the revenue split. Stars and crypto use the ruble figure frozen on the order. */

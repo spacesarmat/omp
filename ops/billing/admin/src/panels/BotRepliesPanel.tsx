@@ -5,12 +5,13 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { api } from '@/lib/api';
 
-type Variable = { key: string; label: string; sample: string };
+type Variable = { key: string; label: string; sample: string; sampleEn?: string };
 type Template = {
   id: string;
   category: string;
   title: string;
   body: string;
+  bodyEn?: string;
   variables: Variable[];
   required: string[];
   fragment?: boolean;
@@ -447,7 +448,8 @@ export function BotRepliesPanel({ csrf }: { csrf: string }) {
   const livePreview = open
     ? body.replace(/\{([A-Za-z][A-Za-z0-9_]*)\}/g, (_, key: string) => {
         const found = open.variables.find((item) => item.key === key);
-        return found ? found.sample : '{' + key + '}';
+        if (!found) return '{' + key + '}';
+        return lang === 'en' && found.sampleEn !== undefined ? found.sampleEn : found.sample;
       })
     : preview;
 

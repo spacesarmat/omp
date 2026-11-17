@@ -3,6 +3,7 @@ import { roleOf } from './desk.mjs';
 import {
   CATALOG,
   applyBuilt,
+  bodyFor,
   copyLangOk,
   copyStateOk,
   isFragmentTemplate,
@@ -59,6 +60,7 @@ function publicTemplate(row) {
     category: row.category,
     title: row.title,
     body: row.body,
+    bodyEn: row.bodyEn || '',
     variables: row.variables,
     required: row.required,
     fragment: isFragmentTemplate(row.id),
@@ -103,8 +105,8 @@ export async function routeBotCopy(req, res, deps) {
     }
     const rows = await repo.saved(id);
     const picked = rows.find((row) => row.subState === state && row.lang === lang) || null;
-    const body = picked ? picked.body : template.body;
-    const preview = renderBody(body, sampleVars(template));
+    const body = picked ? picked.body : bodyFor(template, lang);
+    const preview = renderBody(body, sampleVars(template, lang));
     json(res, 200, {
       template: publicTemplate(template),
       variant: {
@@ -188,7 +190,7 @@ export async function routeBotCopy(req, res, deps) {
       json(res, 400, { ok: false, error: 'Токен бота не задан' });
       return;
     }
-    const applied = applyBuilt(checked.value, { text: '' }, sampleVars(template));
+    const applied = applyBuilt(checked.value, { text: '' }, sampleVars(template, String(body.lang || '')));
     const sent = await deps.telegramSend(settings.botToken, chat, applied.text, {
       parseMode: applied.parseMode,
       inline: applied.inline,

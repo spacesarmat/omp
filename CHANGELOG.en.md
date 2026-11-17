@@ -7,6 +7,7 @@ The English translation covers the latest versions only; the full history (in Ru
 ## Unreleased
 
 - [tech] bitmagnet on the NUC stays permanently with the DHT crawler: the compose in ops/vps/bitmagnet mirrors the server (--keys=dht_crawler, ports 3334 tcp+udp, TMDB_API_KEY), README and test updated for the new policy. Web 3333 still binds only to BITMAGNET_BIND, never through Caddy; the Postgres volume is ~8 GB per 1 million torrents
+- [tech] Bot: full English for replies, buttons, reminders and donations. The template catalog and UI strings carry ru/en, the language comes from the Telegram account; an unsupported language stays Russian. The constructor shows the base text and samples in the variant language. CIS language infrastructure follows in later PRs
 
 ## 0.30.1-beta.7
 
