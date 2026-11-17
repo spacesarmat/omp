@@ -1717,7 +1717,7 @@ function applyPaymentUnsettled(input, { operationId, label, amount, currency, un
         const subscriptions = state.subscriptions.map((s) => (s.id === target.id ? { ...s, creditRub: total } : s));
         return {
           state: { ...state, payments: state.payments.concat([stampPayment(state, { ...row, credited: credit })]), subscriptions },
-          result: { kind: 'credit', subscriptionId: target.id, credit, creditTotal: total },
+          result: { kind: 'credit', reason: 'repeat_discount', subscriptionId: target.id, credit, creditTotal: total, paidUntil: target.paidUntil },
         };
       }
       return rejectAmount(state, row);

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { applyPayment, phoneBill, quotePurchase, redeemReferralCode, settleReferrals } from '../src/logic.mjs';
-import { renewalText } from '../src/bot.mjs';
+import { paymentUserMessage, renewalText } from '../src/bot.mjs';
+import { templateById } from '../src/botCopy.mjs';
 import { nextTierFriends } from '../admin/src/lib/nextTierFriends';
 import { starCheckoutDecision } from '../src/payMethods.mjs';
 import { applyReferralPost, claimReferralNotices, normalizeReferralSettings, referralCodeFor, restoreReferralNotices } from '../src/referralAdmin.mjs';
@@ -513,6 +514,22 @@ describe('referral credit cover and stars guards', () => {
     expect(sub(settled.state, 's-ref').creditRub).toBe(15);
     const short = applyPayment(p1.state, { operationId: 'op-short', label: q2.result.label, amount: '1.00', currency: '643', now: NOW - DAY });
     expect(short.result.error).toBe('amount');
+  });
+
+  it('tells a repeat-discount payer the money is credited, not that the subscription ended', () => {
+    const state = world({ friendDiscount: true, friendDiscountRub: 50, delayDays: 0 });
+    state.referralBinds[0].boundAt = NOW - 100 * DAY;
+    const q1 = quotePurchase(state, { kind: 'sub', accountId: 'friend', subscriptionId: 's-friend', now: NOW - 2 * DAY });
+    const q2 = quotePurchase(q1.state, { kind: 'sub', accountId: 'friend', subscriptionId: 's-friend', now: NOW - 2 * DAY });
+    const p1 = applyPayment(q2.state, { operationId: 'op-msg-one', label: q1.result.label, amount: q1.result.price + '.00', currency: '643', now: NOW - 2 * DAY });
+    const p2 = applyPayment(p1.state, { operationId: 'op-msg-two', label: q2.result.label, amount: q2.result.price + '.00', currency: '643', now: NOW - DAY });
+    expect(p2.result.reason).toBe('repeat_discount');
+    const note = paymentUserMessage(p2.state, p2.result)!;
+    expect(note.text).toContain('зачтена кредитом');
+    expect(note.text).toContain('Подписка до');
+    expect(note.text).not.toContain('Доп. устройство');
+    expect(note.text).not.toContain('подписка уже закончилась');
+    expect(templateById('pay.received_credit_repeat')).toBeTruthy();
   });
 
   it('cancels a waiting balance award when the granted days row removes the bind', () => {

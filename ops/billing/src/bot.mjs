@@ -637,6 +637,15 @@ export function paymentUserMessage(state, result) {
       text += '\n' + codeBlock(origin, result.code, 'Код для него');
       inline = rows([codeButtonRow(origin, result.code)]);
     } else text += '\nКод для него - в «Устройства».';
+  } else if (result.kind === 'credit' && result.reason === 'repeat_discount') {
+    text =
+      '✅ Оплата ' +
+      rub(result.credit) +
+      ' получена и зачтена кредитом: скидка по приглашению одноразовая, а заказ уже был оплачен.\n' +
+      rub(result.credit) +
+      (result.creditTotal > result.credit ? ' (всего зачёт ' + rub(result.creditTotal) + ')' : '') +
+      ' вычтется из следующего продления.' +
+      (result.paidUntil ? ' Подписка до ' + mskDateTime(result.paidUntil) + '.' : '');
   } else if (result.kind === 'credit') {
     text =
       '✅ Оплата ' +
@@ -659,6 +668,10 @@ export function paymentUserMessage(state, result) {
   } else if (result.kind === 'device') {
     copyId = 'pay.received_device';
     vars.until = result.extraUntil ? mskDate(result.extraUntil) : '';
+  } else if (result.kind === 'credit' && result.reason === 'repeat_discount') {
+    copyId = 'pay.received_credit_repeat';
+    vars.amount = rub(result.credit);
+    vars.balance = result.creditTotal > result.credit ? ' (всего зачёт ' + rub(result.creditTotal) + ')' : '';
   } else if (result.kind === 'credit') {
     copyId = 'pay.received_credit';
     vars.amount = rub(result.credit);
