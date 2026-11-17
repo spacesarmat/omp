@@ -8,6 +8,7 @@ The English translation covers the latest versions only; the full history (in Ru
 
 - [phone] Invite: a balance credit shows the amount
 - [tech] Referral variants: balance percent, tiers, friend discount and retention. Off by default. Cancelling a journal row takes back days and balance. Migration 013
+- [tech] Referrals: a renewal mostly covered by account credit earns no bonus; a reused friend discount is refused before Stars are charged, and a rejected Stars payment is refunded automatically
 
 ## 0.30.1-beta.6
 

@@ -1,7 +1,7 @@
 import { codeHash, deviceOk, normalizeCode, randomCode, randomId, sha256 } from './crypto.mjs';
 import { capReferralOff, mskMonthStart, normalizeReferralSettings, offerDays, offerPercent, referralCodeFor, referralDiscountRub, retentionStreak, REFERRAL_BONUS_MAX } from './referralAdmin.mjs';
 import { CRYPTO_ASSETS } from './cryptoPay.mjs';
-import { addMethodSplit, altCovers, cryptoDue, cryptoInvoiceMatches, emptyMethodSplit, labelSettled, rubOfPayment, starDue } from './payMethods.mjs';
+import { addMethodSplit, altCovers, cryptoDue, cryptoInvoiceMatches, emptyMethodSplit, isDevicePay, labelSettled, rubOfPayment, starDue, subscriptionPaidBefore } from './payMethods.mjs';
 import { grossUp, settledCovers, transferCovers } from './yoomoney.mjs';
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -1276,28 +1276,6 @@ function referralRowSame(a, b) {
   );
 }
 
-function isDevicePay(state, row) {
-  const label = String((row && row.label) || '');
-  if (label.indexOf('dev:') === 0) return true;
-  if (label.indexOf('buy:') === 0) {
-    const quote = (state.purchases || []).find((item) => item && item.id === label.slice(4));
-    return !!(quote && quote.kind === 'dev');
-  }
-  return false;
-}
-
-function subscriptionPaidBefore(state, accountId, operationId) {
-  const rows = state.payments || [];
-  for (let i = 0; i < rows.length; i++) {
-    const row = rows[i];
-    if (!row || row.accountId !== accountId || row.pending || row.error) continue;
-    if (operationId && row.operationId === operationId) continue;
-    if (isDevicePay(state, row)) continue;
-    return true;
-  }
-  return false;
-}
-
 function referralIndex(journal, friendId, referrerId, variant) {
   return journal.findIndex((row) => {
     if (!row || row.friendId !== friendId || row.referrerId !== referrerId) return false;
@@ -1306,6 +1284,31 @@ function referralIndex(journal, friendId, referrerId, variant) {
   });
 }
 
+/**
+ * A renewal the promo credit mostly covered is not a paid month for referrals: the money part
+ * must reach at least half of the full order price. The credit used is saved on the payment at
+ * acceptance; an old row falls back to its quote, which may already be trimmed.
+ */
+function creditHeavyPay(state, row) {
+  if (!row) return false;
+  let credit = Math.max(0, Math.floor(Number(row.credit) || 0));
+  let full = 0;
+  const label = String(row.label || '');
+  if (label.indexOf('buy:') === 0) {
+    const quote = (state.purchases || []).find((item) => item && item.id === label.slice(4));
+    if (quote) {
+      full = (Number(quote.price) || 0) + (Number(quote.credit) || 0) + (Number(quote.referralOff) || 0);
+      const quoted = Math.max(0, Math.floor(Number(quote.credit) || 0));
+      // No saved credit: the quote froze it, unless the payer covered the missing part in money.
+      if (!credit && quoted > 0 && rubOfPayment(row) <= (Number(quote.price) || 0) + 0.01) credit = quoted;
+    }
+  }
+  if (!(credit > 0)) return false;
+  if (!(full > 0)) full = rubOfPayment(row) + credit;
+  return credit * 2 > full;
+}
+
+/** Accepted subscription payments of one friend since the bind: no device slots, no credit-covered renewals. */
 function friendPayments(state, friendId, boundAt) {
   const from = Number(boundAt) || 0;
   const out = [];
@@ -1313,6 +1316,7 @@ function friendPayments(state, friendId, boundAt) {
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
     if (!row || row.accountId !== friendId || row.pending || row.error) continue;
+    if (isDevicePay(state, row) || creditHeavyPay(state, row)) continue;
     const t = Number(row.at) || 0;
     if (t >= from) out.push(row);
   }
@@ -1648,6 +1652,8 @@ function applyPaymentUnsettled(input, { operationId, label, amount, currency, un
       const payments = state.payments.concat([stampPayment(state, { ...row, error: 'bad_label' })]);
       return { state: { ...state, payments }, result: { error: 'bad_label' } };
     }
+    // Saved on the payment so a later trim of the quote cannot turn a device slot into a subscription month.
+    row.kind = quote.kind;
   }
   const alt = quote && (quote.method === 'stars' || quote.method === 'crypto');
   if (alt) {
@@ -1708,7 +1714,11 @@ function applyPaymentUnsettled(input, { operationId, label, amount, currency, un
     if (!coversNeed(need)) return rejectAmount(state, row);
     const next = extendPaid(state, sub, days, now, quotedExtras);
     const took = Math.min(usedCredit, haveCredit);
-    if (took > 0) next.creditRub = haveCredit - took;
+    if (took > 0) {
+      next.creditRub = haveCredit - took;
+      // Saved on the payment: a renewal mostly covered by this credit earns no referral bonus.
+      row.credit = took;
+    }
     let paid = {
       ...state,
       payments: state.payments.concat([stampPayment(state, row)]),

@@ -1320,6 +1320,37 @@ async function flushReferralNotices(store, fetchImpl) {
   if (failed.length) await store.update((state) => ({ state: restoreReferralNotices(state, failed) }));
 }
 
+/**
+ * A Stars charge that arrived but could not be applied (error amount, e.g. the one-time referral
+ * discount was already used) is returned at once. The row then reads refunded, so a retry of the
+ * same charge is a duplicate and the admin button does not offer it again.
+ */
+async function refundRejectedStars(store, state, token, charge, fetchImpl) {
+  const operationId = 'stars:' + charge;
+  const payment = (state.payments || []).find((p) => p && p.operationId === operationId);
+  const account = payment ? (state.accounts || []).find((a) => a && a.id === payment.accountId) : null;
+  if (!payment || payment.error !== 'amount' || !account || !account.telegramId) return;
+  let sent;
+  try {
+    sent = await telegramMethod(token, 'refundStarPayment', { user_id: Number(account.telegramId), telegram_payment_charge_id: charge }, fetchImpl);
+  } catch (e) {
+    return;
+  }
+  const already = /already refunded|CHARGE_ALREADY_REFUNDED/i.test((sent && sent.description) || '');
+  if (!sent.ok && !already) return;
+  const id = randomId();
+  await store.update((cur) => ({
+    state: logAudit(
+      {
+        ...cur,
+        payments: cur.payments.map((p) => (p.operationId === operationId ? { ...p, error: 'refunded', refundedAt: Date.now() } : p)),
+      },
+      { id, action: 'stars_refund', detail: operationId + ': платёж не применён, звёзды возвращены', now: Date.now(), actor: { kind: 'system', id: '', label: 'бот' } },
+    ),
+  }));
+  publishAdmin({ type: 'audit', action: 'stars_refund', id });
+}
+
 function tellPayment(state, result, fetchImpl) {
   const accountId = result.subscriptionId
     ? (state.subscriptions.find((s) => s.id === result.subscriptionId) || {}).accountId
@@ -2430,7 +2461,8 @@ export function createApp(file, fetchImpl, opts) {
             const charge = operationId.indexOf('stars:') === 0 ? operationId.slice(6) : '';
             if (!payment || payment.provider !== 'stars' || !charge || !account || !account.telegramId) flashError = 'Это не оплата звёздами';
             else if (payment.error === 'refunded') flashError = 'Звёзды уже возвращены';
-            else if (payment.error) flashError = 'Этот платёж не возвратить';
+            // amount / bad_label: the Stars were taken but nothing was applied, so they can still be returned.
+            else if (payment.error && payment.error !== 'amount' && payment.error !== 'bad_label') flashError = 'Этот платёж не возвратить';
             else {
               const sent = await telegramMethod(
                 cur.settings.botToken,
@@ -3757,6 +3789,10 @@ export async function pollBot(file, fetchImpl, opts) {
             if (applied.kind === 'donate') {
               await finishDonate(freshStar, applied, net);
               continue;
+            }
+            // The charge already happened: a rejected Stars payment is returned, not left on the account.
+            if (!applied.duplicate && applied.error === 'amount') {
+              await refundRejectedStars(store, freshStar, token, charge, net);
             }
             if (!applied.duplicate && !applied.error) {
               try {

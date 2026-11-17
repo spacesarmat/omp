@@ -114,6 +114,34 @@ export function countryCode(value) {
   return code;
 }
 
+/**
+ * True when this payment bought an extra device slot, not subscription time.
+ * The kind saved at acceptance wins: an old buy: quote may already be trimmed.
+ */
+export function isDevicePay(state, row) {
+  if (row && row.kind) return row.kind === 'dev';
+  const label = String((row && row.label) || '');
+  if (label.indexOf('dev:') === 0) return true;
+  if (label.indexOf('buy:') === 0) {
+    const quote = (state.purchases || []).find((item) => item && item.id === label.slice(4));
+    return !!(quote && quote.kind === 'dev');
+  }
+  return false;
+}
+
+/** True when the account already has an accepted subscription payment. Device slots do not count. */
+export function subscriptionPaidBefore(state, accountId, operationId) {
+  const rows = state.payments || [];
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    if (!row || row.accountId !== accountId || row.pending || row.error) continue;
+    if (operationId && row.operationId === operationId) continue;
+    if (isDevicePay(state, row)) continue;
+    return true;
+  }
+  return false;
+}
+
 /** True when this buy: order already extended a subscription. */
 export function labelSettled(state, label) {
   const mark = String(label || '');
@@ -202,6 +230,13 @@ export function starCheckoutDecision(state, query) {
     return { ok: false, error: 'Счёт выставлен другому аккаунту' };
   }
   if (labelSettled(state, payload)) return { ok: false, error: 'Этот счёт уже оплачен' };
+  // The one-time referral discount must still be open before Telegram takes the Stars:
+  // a charge that arrives after the first payment is rejected and has to be refunded.
+  if (Number(quote.referralOff) > 0) {
+    const payer =
+      quote.accountId || (((state && state.subscriptions) || []).find((s) => s && s.id === quote.subscriptionId) || {}).accountId;
+    if (payer && subscriptionPaidBefore(state, payer, '')) return { ok: false, error: 'Скидка по приглашению уже использована' };
+  }
   if (String(q.currency || '') !== 'XTR') return { ok: false, error: 'Неверная валюта' };
   if (!altCovers(q.total_amount, 'XTR', quote)) return { ok: false, error: 'Сумма не сходится' };
   return { ok: true };

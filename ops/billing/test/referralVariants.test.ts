@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { applyPayment, phoneBill, quotePurchase, redeemReferralCode, settleReferrals } from '../src/logic.mjs';
 import { renewalText } from '../src/bot.mjs';
 import { nextTierFriends } from '../admin/src/lib/nextTierFriends';
+import { starCheckoutDecision } from '../src/payMethods.mjs';
 import { applyReferralPost, claimReferralNotices, normalizeReferralSettings, referralCodeFor, restoreReferralNotices } from '../src/referralAdmin.mjs';
 import { grossUp } from '../src/yoomoney.mjs';
 
@@ -404,5 +405,93 @@ describe('referral variants', () => {
     const daysId = String(row(back, 'days')!.id);
     const cancelled = applyReferralPost({ cancelId: daysId, settings: back.settings.referral }, back, { now: NOW, actor: { kind: 'admin', id: '9', label: '9' } });
     expect(claimReferralNotices(cancelled.state).messages).toEqual([]);
+  });
+});
+
+describe('referral credit cover and stars guards', () => {
+  it('gives no bonus for a renewal mostly covered by promo credit, but gives one for a money renewal', () => {
+    const state = world({ balance: true, balancePercent: 10, referrerDays: 7, delayDays: 0 });
+    state.referralBinds[0].boundAt = NOW - 100 * DAY;
+    state.subscriptions[1].creditRub = 190;
+    const quoted = quotePurchase(state, { kind: 'sub', accountId: 'friend', subscriptionId: 's-friend', now: NOW - 40 * DAY });
+    expect(quoted.result.price).toBe(10);
+    expect(quoted.result.credit).toBe(190);
+    const paid = applyPayment(quoted.state, { operationId: 'op-credit', label: quoted.result.label, amount: '10.00', currency: '643', now: NOW - 40 * DAY });
+    expect(paid.result.kind).toBe('renew');
+    expect(paid.result.credit).toBe(190);
+    const stored = paid.state.payments.find((item: { operationId?: string }) => item.operationId === 'op-credit')!;
+    expect(stored).toMatchObject({ kind: 'sub', credit: 190 });
+    const settled = settleReferrals(paid.state, NOW);
+    expect(row(settled.state, 'days')).toBeUndefined();
+    expect(row(settled.state, 'balance')).toBeUndefined();
+    expect(sub(settled.state, 's-ref').paidUntil).toBe(NOW + 100 * DAY);
+    expect(sub(settled.state, 's-ref').creditRub).toBe(0);
+
+    const moneyQuote = quotePurchase(settled.state, { kind: 'sub', accountId: 'friend', subscriptionId: 's-friend', now: NOW - 5 * DAY });
+    expect(moneyQuote.result.price).toBe(200);
+    const money = applyPayment(moneyQuote.state, { operationId: 'op-money', label: moneyQuote.result.label, amount: '200.00', currency: '643', now: NOW - 5 * DAY });
+    expect(money.result.kind).toBe('renew');
+    const done = settleReferrals(money.state, NOW);
+    expect(row(done.state, 'days')).toMatchObject({ status: 'granted', days: 7 });
+    expect(row(done.state, 'balance')).toMatchObject({ status: 'granted', credit: 20 });
+    expect(sub(done.state, 's-ref').creditRub).toBe(20);
+  });
+
+  it('still counts a renewal whose money part reaches half of the full price', () => {
+    const state = world({ referrerDays: 7, balance: true, balancePercent: 10, delayDays: 0 });
+    state.referralBinds[0].boundAt = NOW - 100 * DAY;
+    state.subscriptions[1].creditRub = 50;
+    const quoted = quotePurchase(state, { kind: 'sub', accountId: 'friend', subscriptionId: 's-friend', now: NOW - DAY });
+    expect(quoted.result.price).toBe(150);
+    const paid = applyPayment(quoted.state, { operationId: 'op-half', label: quoted.result.label, amount: '150.00', currency: '643', now: NOW - DAY });
+    expect(paid.result.credit).toBe(50);
+    const settled = settleReferrals(paid.state, NOW);
+    expect(row(settled.state, 'days')).toMatchObject({ status: 'granted', days: 7 });
+    expect(row(settled.state, 'balance')).toMatchObject({ status: 'granted', credit: 15 });
+  });
+
+  it('recognizes an old credit-covered payment by its quote, unless the missing credit was paid in money', () => {
+    const state = world({ referrerDays: 7, delayDays: 0 });
+    state.referralBinds[0].boundAt = NOW - 100 * DAY;
+    state.purchases = [{ id: 'q1', kind: 'sub', price: 10, credit: 190, accountId: 'friend', subscriptionId: 's-friend' }];
+    state.payments = [{ id: 'p1', accountId: 'friend', at: NOW - DAY, amount: '10.00', label: 'buy:q1', operationId: 'op-old' }];
+    expect(row(settleReferrals(state, NOW).state, 'days')).toBeUndefined();
+    const cash = { ...state, payments: [{ id: 'p2', accountId: 'friend', at: NOW - DAY, amount: '200.00', label: 'buy:q1', operationId: 'op-cash' }] };
+    expect(row(settleReferrals(cash, NOW).state, 'days')).toMatchObject({ status: 'granted', days: 7 });
+  });
+
+  it('does not grant days for a device purchase, even after the quote is trimmed', () => {
+    const state = world({ referrerDays: 7, delayDays: 0, tiers: true, tierList: [{ friends: 1, days: 14, percent: 0 }] });
+    state.settings.extraDeviceRub = 50;
+    state.referralBinds[0].boundAt = NOW - 100 * DAY;
+    const dev = quotePurchase(state, { kind: 'dev', accountId: 'friend', subscriptionId: 's-friend', now: NOW - 60 * DAY });
+    const paid = applyPayment(dev.state, { operationId: 'op-dev', label: dev.result.label, amount: '50.00', currency: '643', now: NOW - 60 * DAY });
+    expect(paid.result.kind).toBe('device');
+    const trimmed = { ...paid.state, purchases: [] };
+    const settled = settleReferrals(trimmed, NOW);
+    expect(row(settled.state, 'days')).toBeUndefined();
+    expect(sub(settled.state, 's-ref').paidUntil).toBe(NOW + 100 * DAY);
+  });
+
+  it('refuses a second discounted Stars checkout and rejects the charge that still arrives', () => {
+    const state = world({ friendDiscount: true, friendDiscountPercent: 10 });
+    state.settings.starsEnabled = true;
+    state.settings.starsPrice = 100;
+    const first = quotePurchase(state, { kind: 'sub', accountId: 'friend', subscriptionId: 's-friend', now: NOW, method: 'stars' });
+    const second = quotePurchase(first.state, { kind: 'new', accountId: 'friend', now: NOW, method: 'stars' });
+    expect(second.result.id).not.toBe(first.result.id);
+    expect(second.result.referralOff).toBe(20);
+    const query = (id: string) => ({ invoice_payload: 'buy:' + id, from: { id: '2' }, currency: 'XTR', total_amount: 90 });
+    expect(starCheckoutDecision(second.state, query(second.result.id)).ok).toBe(true);
+    const paid = applyPayment(second.state, { operationId: 'stars:c1', label: first.result.label, amount: '90', currency: 'XTR', now: NOW });
+    expect(paid.result.kind).toBe('renew');
+    const refused = starCheckoutDecision(paid.state, query(second.result.id));
+    expect(refused.ok).toBe(false);
+    // The race: checkout was approved before the first payment, the charge arrives after it.
+    const late = applyPayment(paid.state, { operationId: 'stars:c2', label: second.result.label, amount: '90', currency: 'XTR', now: NOW + 1 });
+    expect(late.result.error).toBe('amount');
+    const stored = late.state.payments.find((item: { operationId?: string }) => item.operationId === 'stars:c2')!;
+    expect(stored).toMatchObject({ provider: 'stars', error: 'amount' });
+    expect(sub(late.state, 's-friend').paidUntil).toBe(sub(paid.state, 's-friend').paidUntil);
   });
 });
