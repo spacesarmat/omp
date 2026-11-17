@@ -310,104 +310,124 @@ export function BotRepliesPanel({ csrf }: { csrf: string }) {
     const target = { id: open.id, state, lang };
     setBusy(true);
     setError('');
-    const res = await api<{ ok?: boolean; error?: string; auth?: boolean }>('/admin/api/bot-replies/save', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        csrf,
-        id: target.id,
-        state: target.state,
-        lang: target.lang,
-        body: dashes(body),
-        mediaKind,
-        mediaUrl,
-        buttons: ownButtons ? buttons : null,
-      }),
-    });
-    setBusy(false);
-    if (res.auth === false) return;
-    if (!res.ok) {
-      setError(res.error || 'Не сохранилось');
-      return;
+    try {
+      const res = await api<{ ok?: boolean; error?: string; auth?: boolean }>('/admin/api/bot-replies/save', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          csrf,
+          id: target.id,
+          state: target.state,
+          lang: target.lang,
+          body: dashes(body),
+          mediaKind,
+          mediaUrl,
+          buttons: ownButtons ? buttons : null,
+        }),
+      });
+      if (res.auth === false) return;
+      if (!res.ok) {
+        setError(res.error || 'Не сохранилось');
+        return;
+      }
+      setNote('Сохранено. Бот уже использует этот текст.');
+      const cur = selection.current;
+      if (cur.id === target.id && cur.state === target.state && cur.lang === target.lang) {
+        await loadVariant(open, target.state, target.lang);
+      }
+      await loadList();
+    } catch {
+      setError('Сеть недоступна. Попробуйте ещё раз.');
+    } finally {
+      setBusy(false);
     }
-    setNote('Сохранено. Бот уже использует этот текст.');
-    const cur = selection.current;
-    if (cur.id === target.id && cur.state === target.state && cur.lang === target.lang) {
-      await loadVariant(open, target.state, target.lang);
-    }
-    await loadList();
   }
 
   async function reset() {
     if (!open || loading) return;
     const target = { id: open.id, state, lang };
     setBusy(true);
-    const res = await api<{ ok?: boolean; error?: string }>('/admin/api/bot-replies/reset', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ csrf, id: target.id, state: target.state, lang: target.lang }),
-    });
-    setBusy(false);
-    if (!res.ok) {
-      setError(res.error || 'Не сбросилось');
-      return;
+    try {
+      const res = await api<{ ok?: boolean; error?: string }>('/admin/api/bot-replies/reset', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ csrf, id: target.id, state: target.state, lang: target.lang }),
+      });
+      if (!res.ok) {
+        setError(res.error || 'Не сбросилось');
+        return;
+      }
+      setNote('Снова текст из кода.');
+      const cur = selection.current;
+      if (cur.id === target.id && cur.state === target.state && cur.lang === target.lang) {
+        await loadVariant(open, target.state, target.lang);
+      }
+      await loadList();
+    } catch {
+      setError('Сеть недоступна. Попробуйте ещё раз.');
+    } finally {
+      setBusy(false);
     }
-    setNote('Снова текст из кода.');
-    const cur = selection.current;
-    if (cur.id === target.id && cur.state === target.state && cur.lang === target.lang) {
-      await loadVariant(open, target.state, target.lang);
-    }
-    await loadList();
   }
 
   async function restore(row: HistoryRow) {
     if (!open || loading) return;
     const targetId = open.id;
     setBusy(true);
-    const res = await api<{ ok?: boolean; error?: string; state?: string; lang?: string }>('/admin/api/bot-replies/restore', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ csrf, id: targetId, versionId: row.id }),
-    });
-    setBusy(false);
-    if (!res.ok) {
-      setError(res.error || 'Не вернулось');
-      return;
-    }
-    if (selection.current.id !== targetId) {
+    try {
+      const res = await api<{ ok?: boolean; error?: string; state?: string; lang?: string }>('/admin/api/bot-replies/restore', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ csrf, id: targetId, versionId: row.id }),
+      });
+      if (!res.ok) {
+        setError(res.error || 'Не вернулось');
+        return;
+      }
+      if (selection.current.id !== targetId) {
+        await loadList();
+        return;
+      }
+      const nextState = res.state || state;
+      const nextLang = res.lang || lang;
+      setState(nextState);
+      setLang(nextLang);
+      setNote('Версия восстановлена.');
+      await loadVariant(open, nextState, nextLang);
       await loadList();
-      return;
+    } catch {
+      setError('Сеть недоступна. Попробуйте ещё раз.');
+    } finally {
+      setBusy(false);
     }
-    const nextState = res.state || state;
-    const nextLang = res.lang || lang;
-    setState(nextState);
-    setLang(nextLang);
-    setNote('Версия восстановлена.');
-    await loadVariant(open, nextState, nextLang);
-    await loadList();
   }
 
   async function sendSelf() {
     if (!open || loading) return;
     setBusy(true);
     setError('');
-    const res = await api<{ ok?: boolean; error?: string }>('/admin/api/bot-replies/send', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        csrf,
-        id: open.id,
-        state,
-        lang,
-        body: dashes(body),
-        mediaKind,
-        mediaUrl,
-        buttons: ownButtons ? buttons : null,
-      }),
-    });
-    setBusy(false);
-    if (!res.ok) setError(res.error || 'Не отправилось');
-    else setNote('Отправлено в ваш Telegram.');
+    try {
+      const res = await api<{ ok?: boolean; error?: string }>('/admin/api/bot-replies/send', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          csrf,
+          id: open.id,
+          state,
+          lang,
+          body: dashes(body),
+          mediaKind,
+          mediaUrl,
+          buttons: ownButtons ? buttons : null,
+        }),
+      });
+      if (!res.ok) setError(res.error || 'Не отправилось');
+      else setNote('Отправлено в ваш Telegram.');
+    } catch {
+      setError('Сеть недоступна. Попробуйте ещё раз.');
+    } finally {
+      setBusy(false);
+    }
   }
 
   const groups = useMemo(() => {

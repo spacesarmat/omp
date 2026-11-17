@@ -126,6 +126,21 @@ describe('bot copy variants and fallback', () => {
     expect(pickVariant([], 'active', 'en')).toBeNull();
   });
 
+  it('treats an unsupported or absent language as the default language in the chain', () => {
+    // Documented semantics: normalizeLang maps everything but ru/en to '', and the chain
+    // "exact, language, state, default" then runs within the default language. Whether an
+    // unsupported language should skip state variants entirely is a product question (needs_human).
+    const rows = [
+      { subState: '', lang: '', body: 'default' },
+      { subState: 'active', lang: '', body: 'active-default-lang' },
+      { subState: '', lang: 'ru', body: 'ru' },
+    ];
+    expect(normalizeLang('de')).toBe('');
+    expect(pickVariant(rows, 'active', '')?.body).toBe('active-default-lang');
+    expect(pickVariant(rows, 'expired', '')?.body).toBe('default');
+    expect(pickVariant(rows, 'active', 'ru')?.body).toBe('ru');
+  });
+
   it('keeps the in-code message until a saved template applies', () => {
     const built = { text: 'из кода', inline: { inline_keyboard: [[{ text: 'Оплатить', url: 'https://t.me/x' }]] }, parseMode: 'Markdown' };
     const same = applyBuilt(null, built, {});

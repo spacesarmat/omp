@@ -181,6 +181,7 @@ import {
   donateCryptoLinkLive,
   donateCsv,
   donateNoticeText,
+  donateDisplayName,
   donateReport,
   donateStarCheckout,
   donateThanksText,
@@ -1375,11 +1376,12 @@ async function finishDonate(state, applied, fetchImpl, store) {
   if (chat) {
     try {
       const rec = copyRecipient(state, applied.accountId, Date.now());
+      const donor = (state.accounts || []).find((a) => a && a.id === applied.accountId) || null;
       await sendCopied(store, state.settings.botToken, chat, text, fetchImpl, {
         keyboard: mainKeyboard(),
         copy: {
           id: applied.pending ? 'donate.pending' : 'donate.thanks',
-          vars: { amount, name: '' },
+          vars: { amount, name: donateDisplayName(donor) },
           state: rec.state,
           lang: rec.lang,
         },

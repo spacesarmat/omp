@@ -146,6 +146,8 @@ function nameOf(account) {
   return String((account && (account.telegramName || account.telegramUsername)) || '').trim().slice(0, 80);
 }
 
+export { nameOf as donateDisplayName };
+
 function freshDraft(account, now) {
   return {
     id: randomId(),
@@ -216,10 +218,10 @@ function commentScreen(settings, id) {
   };
 }
 
-function nameScreen(id) {
+function nameScreen(id, account) {
   return {
     text: 'Показать моё имя в списке благодарностей? Сейчас имя скрыто.',
-    copy: { id: 'donate.name', vars: {} },
+    copy: { id: 'donate.name', vars: { name: nameOf(account) } },
     inline: {
       inline_keyboard: [[
         { text: 'Показать имя', callback_data: 'dn:n:' + id + ':1' },
@@ -344,7 +346,7 @@ export function donateOnText(state, account, text, now) {
   const check = validateDonateComment(cfg, text);
   if (!check.ok) return { state, text: check.error, copy: { id: 'donate.comment_bad', vars: { comment_max: String(cfg.commentMax), text: check.error } } };
   const row = { ...draft, comment: check.comment, step: 'name' };
-  const screen = nameScreen(row.id);
+  const screen = nameScreen(row.id, account);
   return { state: putDonation(state, row), text: screen.text, inline: screen.inline, copy: screen.copy };
 }
 
@@ -455,7 +457,7 @@ export function donateOnCallback(state, account, data, now) {
   if (bits[1] === 's') {
     if (row.step !== 'comment') return { state, answer: 'Кнопка устарела' };
     const next = { ...row, comment: '', step: 'name' };
-    const screen = nameScreen(next.id);
+    const screen = nameScreen(next.id, account);
     return { state: putDonation(state, next), text: screen.text, inline: screen.inline, answer: '', copy: screen.copy };
   }
   if (bits[1] === 'n') {
