@@ -99,11 +99,11 @@ describe('bilingual catalog completeness', () => {
 });
 
 describe('strict language default is preserved', () => {
-  it('normalizeLang still maps only ru/en, everything else to empty', () => {
+  it('normalizeLang maps ru/en prefixes and unsupported codes to empty', () => {
     expect(normalizeLang('en-US')).toBe('en');
     expect(normalizeLang('ru')).toBe('ru');
-    expect(normalizeLang('uk')).toBe('');
     expect(normalizeLang('de')).toBe('');
+    expect(normalizeLang('fr')).toBe('');
   });
 
   it('an unsupported language uses only the default variant, never a state-only one', () => {
@@ -112,7 +112,7 @@ describe('strict language default is preserved', () => {
       { subState: 'active', lang: '', body: 'active-default-lang' },
       { subState: '', lang: 'ru', body: 'ru' },
     ];
-    expect(pickVariant(rows, 'active', normalizeLang('uk'))?.body).toBe('default');
+    expect(pickVariant(rows, 'active', normalizeLang('de'))?.body).toBe('default');
     expect(pickVariant(rows, 'active', '')?.body).toBe('default');
     expect(pickVariant(rows, 'active', 'ru')?.body).toBe('ru');
   });
@@ -121,7 +121,7 @@ describe('strict language default is preserved', () => {
     expect(str('btn.pay', 'en')).toBe('Pay');
     expect(str('btn.pay', 'ru')).toBe('Оплатить');
     expect(str('btn.pay', '')).toBe('Оплатить');
-    expect(str('btn.pay', 'uk')).toBe('Оплатить');
+    expect(str('btn.pay', 'de')).toBe('Оплатить');
   });
 });
 
@@ -246,8 +246,8 @@ describe('EN base fallback without a saved template', () => {
   });
 
   it('an unsupported language falls back to the RU cabinet', () => {
-    const f = setup('uk');
-    const cab = botReply(f.state, { chatId: '42', text: 'Кабинет', now: NOW, from: { lang: 'uk' } });
+    const f = setup('de');
+    const cab = botReply(f.state, { chatId: '42', text: 'Кабинет', now: NOW, from: { lang: 'de' } });
     expect(cab.messages[0].text).toContain('Личный кабинет');
     expect(cab.messages[0].text).toContain('Подписка до 18.11.2026 12:00 МСК');
     expect(cab.messages[0].keyboard.keyboard.flat().map((b: { text: string }) => b.text)).toContain('Кабинет');
@@ -388,6 +388,6 @@ describe('referral notice words follow the selected template language', () => {
       { subState: '', lang: '', body: 'FRIEND +{days}' },
       { subState: 'active', lang: '', body: 'ACTIVE +{days}' },
     ];
-    expect(renderNotice(rows, normalizeLang('uk'), 3)).toBe('FRIEND +3 дня');
+    expect(renderNotice(rows, normalizeLang('de'), 3)).toBe('FRIEND +3 дня');
   });
 });

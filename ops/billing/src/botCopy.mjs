@@ -2,13 +2,17 @@
  * Bot reply templates. The catalog is the in-code text. A saved row replaces it at send time.
  * With no saved row the caller keeps the string it already built.
  */
+import { LANG_PACKS } from './botCopyLangs/index.mjs';
 
 export const COPY_TEXT_LIMIT = 4096;
 export const COPY_CAPTION_LIMIT = 1024;
 
 const STATES = new Set(['', 'active', 'expired', 'trial']);
-const LANGS = new Set(['', 'ru', 'en']);
+/** Supported recipient languages, RU first. '' (absent or unsupported) stays RU everywhere. */
+export const LANG_CODES = ['ru', 'en', 'uk', 'be', 'kk', 'ky', 'uz', 'tg', 'tk', 'hy', 'az', 'ka', 'ro'];
+const LANGS = new Set(['', ...LANG_CODES]);
 
+/** `samples` (per-language preview values) is merged in from the CIS language packs below. */
 function v(key, label, sample, sampleEn) {
   const row = { key, label, sample };
   if (sampleEn !== undefined) row.sampleEn = sampleEn;
@@ -18,6 +22,7 @@ function v(key, label, sample, sampleEn) {
 /**
  * `body` is either a RU string (legacy) or a { ru, en } pair. The RU text stays in `body` so every
  * existing consumer keeps working; the EN text lives in `bodyEn` and is picked by bodyFor(lang).
+ * The CIS texts attach as `bodyI18n` from the language packs, keeping the RU/EN fields untouched.
  */
 function t(id, category, title, body, variables, required) {
   const ru = body && typeof body === 'object' ? String(body.ru || '') : String(body || '');
@@ -215,17 +220,22 @@ export function templateById(id) {
 /** Default (in-code) template body for a recipient language. No language, or unsupported, stays RU. */
 export function bodyFor(template, lang) {
   if (!template) return '';
-  return lang === 'en' && template.bodyEn ? template.bodyEn : template.body;
+  if (lang === 'en' && template.bodyEn) return template.bodyEn;
+  const i18n = template.bodyI18n;
+  if (lang && lang !== 'ru' && i18n && i18n[lang]) return i18n[lang];
+  return template.body;
 }
 
 export function normalizeDashes(value) {
   return String(value == null ? '' : value).replace(/\u2014|\u2013/g, '-');
 }
 
+/** Prefix match so regional variants (uk-UA, kk-KZ, en-US, ...) map to the base code. Unsupported stays ''. */
 export function normalizeLang(code) {
   const c = String(code || '').toLowerCase();
-  if (c.indexOf('en') === 0) return 'en';
-  if (c.indexOf('ru') === 0) return 'ru';
+  for (let i = 0; i < LANG_CODES.length; i++) {
+    if (c.indexOf(LANG_CODES[i]) === 0) return LANG_CODES[i];
+  }
   return '';
 }
 
@@ -234,6 +244,27 @@ export function subscriptionCopyState(sub, paid) {
   if (!sub.active || sub.inGrace) return 'expired';
   if (!paid) return 'trial';
   return 'active';
+}
+
+/**
+ * Plural form for a count in a recipient language: ru/uk/be decline one/few/many, EN one/many,
+ * RO one/few/many (the many form carries "de"), the other CIS languages keep one form after a
+ * numeral. Absent or unsupported language declines like RU.
+ */
+export function pluralLang(n, lang, one, few, many) {
+  const a = Math.abs(Math.floor(Number(n) || 0));
+  if (lang === 'en') return a === 1 ? one : many;
+  if (lang === 'ro') {
+    if (a === 1) return one;
+    const d100 = a % 100;
+    return a === 0 || (d100 >= 2 && d100 <= 19) ? few : many;
+  }
+  if (lang && lang !== 'ru' && lang !== 'uk' && lang !== 'be' && LANGS.has(lang)) return one;
+  const d10 = a % 10;
+  const d100 = a % 100;
+  if (d10 === 1 && d100 !== 11) return one;
+  if (d10 >= 2 && d10 <= 4 && (d100 < 12 || d100 > 14)) return few;
+  return many;
 }
 
 export function variablesIn(body) {
@@ -473,7 +504,9 @@ export function sampleVars(template, lang) {
   const list = (template && template.variables) || [];
   for (let i = 0; i < list.length; i++) {
     const item = list[i];
-    out[item.key] = lang === 'en' && item.sampleEn !== undefined ? item.sampleEn : item.sample;
+    if (lang === 'en' && item.sampleEn !== undefined) out[item.key] = item.sampleEn;
+    else if (lang && lang !== 'ru' && item.samples && item.samples[lang] !== undefined) out[item.key] = item.samples[lang];
+    else out[item.key] = item.sample;
   }
   return out;
 }
@@ -815,12 +848,18 @@ const STRINGS = {
 export function str(id, lang, vars) {
   const row = STRINGS[String(id || '')];
   if (!row) return '';
-  const body = lang === 'en' && row.en != null ? row.en : row.ru;
+  const alt = lang && lang !== 'ru' && LANGS.has(lang) ? row[lang] : undefined;
+  const body = alt != null ? alt : row.ru;
   return fill(body, vars, false, null);
 }
 
 export function hasString(id) {
   return Object.prototype.hasOwnProperty.call(STRINGS, String(id || ''));
+}
+
+/** Raw plain-string row with every language text, for the completeness test and tools. */
+export function stringRow(id) {
+  return STRINGS[String(id || '')] || null;
 }
 
 /** In-code base text of a catalog template for a recipient language, with {key} vars filled (no escaping).
@@ -834,4 +873,25 @@ export function copyText(id, lang, vars) {
 /** Every plain string id, for the catalog completeness test. */
 export function stringIds() {
   return Object.keys(STRINGS);
+}
+
+/**
+ * Attach the CIS language packs (botCopyLangs/<code>.mjs) to the existing rows. RU stays in
+ * `body`/`ru`, EN in `bodyEn`/`en`; the new codes live in `bodyI18n`, in the string rows and in
+ * `samples` on the shared variable rows. A missing entry keeps the RU text via the fallbacks above.
+ */
+for (const code of Object.keys(LANG_PACKS)) {
+  const pack = LANG_PACKS[code];
+  for (const row of CATALOG) {
+    const text = pack.catalog[row.id];
+    if (text) (row.bodyI18n || (row.bodyI18n = {}))[code] = String(text);
+    for (const item of row.variables) {
+      const sample = pack.samples[item.key];
+      if (sample != null) (item.samples || (item.samples = {}))[code] = String(sample);
+    }
+  }
+  for (const id of Object.keys(STRINGS)) {
+    const text = pack.strings[id];
+    if (text != null) STRINGS[id][code] = String(text);
+  }
 }

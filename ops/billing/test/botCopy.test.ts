@@ -127,7 +127,7 @@ describe('bot copy variants and fallback', () => {
   });
 
   it('uses only the default variant for an unsupported or absent language', () => {
-    // Product decision: normalizeLang maps everything but ru/en to '', and an unsupported
+    // Product decision: normalizeLang maps unsupported codes to '', and an unsupported
     // language skips state variants entirely - only the default applies. Supported languages
     // keep the chain exact, language, state, default.
     const rows = [
