@@ -17,6 +17,7 @@ import {
   parseCryptoPayRates,
   rateAdminView,
   rateAuditText,
+  ratePinError,
 } from '../src/rates.mjs';
 
 const NOW = Date.UTC(2026, 10, 12, 12, 0, 0);
@@ -418,6 +419,15 @@ describe('donate rate admin', () => {
     const cleared = applyRateSettings(next, { pinUsdt: '0' }, NOW);
     expect(cleared.pins.usdt).toBeUndefined();
     expect(rateAuditText(next, next)).toBe('');
+    const bare = applyRateSettings(prev, { pinUsdt: '80', pinHours: '0' }, NOW);
+    expect(bare.pins.usdt).toBeUndefined();
+    expect(ratePinError({ pinUsdt: '80', pinHours: '0', pinReason: 'выходные' })).toBe('Закрепление курса: срок от 1 до 168 часов');
+    expect(ratePinError({ pinUsdt: '80', pinHours: '2' })).toBe('Закрепление курса: нужна причина');
+    const pinned = {
+      settings: { rates: { pins: { usdt: { rub: 80, until: NOW + 60 * 60 * 1000, at: NOW, reason: 'выходные' }, ton: { rub: 200, until: NOW + 60 * 60 * 1000, at: NOW, reason: 'a' }, btc: { rub: 8_000_000, until: NOW + 60 * 60 * 1000, at: NOW, reason: 'a' }, star: { rub: 1.2, until: NOW + 60 * 60 * 1000, at: NOW, reason: 'a' } } } },
+      donations: [{ id: 'row1', status: 'draft', step: 'name' }],
+    };
+    expect(donateRateWait('dn:n:row1:0', pinned, NOW)).toBe('background');
   });
 });
 

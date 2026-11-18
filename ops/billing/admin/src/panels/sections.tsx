@@ -677,6 +677,13 @@ export function BackupLine({ backup }: { backup?: BackupStatus | null }) {
 
 type BaseImpact = { from: number; to: number; lowering: boolean; subscriptions: number; devices: number };
 
+function rateStatusLine(label: string, row?: { value: number; source: string; usable: boolean; pin?: { rub: number; until: number; reason: string; live: boolean } | null }) {
+  if (!row) return label + ': нет данных';
+  const value = row.usable ? String(row.value) : 'скрыт';
+  const pin = row.pin && row.pin.live ? ', закреп до ' + when(row.pin.until) + (row.pin.reason ? ' (' + row.pin.reason + ')' : '') : '';
+  return label + ': ' + value + (row.source ? ', ' + row.source : '') + pin;
+}
+
 function FieldLine({
   name,
   label,
@@ -799,6 +806,7 @@ export function SettingsCard({
                   ? ' Сейчас: подписка ' + rates.sub.stars + '★ / ' + (rates.sub.usdt || '-') + ' USDT / ' + (rates.sub.ton || '-') + ' TON / ' + (rates.sub.btc || '-') + ' BTC; доп. устройство ' + rates.sub.starsExtra + '★.'
                   : ''}
                 {rates?.yoo && rates.yoo.wallet ? ' К оплате ЮMoney: кошелёк ' + rates.yoo.wallet + ' ₽, карта ' + rates.yoo.card + ' ₽.' : ''}
+                {rates?.rows ? ' ' + rateStatusLine('Звезда', rates.rows.star) + '. ' + rateStatusLine('USDT', rates.rows.usdt) + '. ' + rateStatusLine('TON', rates.rows.ton) + '. ' + rateStatusLine('BTC', rates.rows.btc) + '.' : ''}
               </CardDescription>
             ) : null}
             {group.title === 'Звёзды' ? <CardDescription>Включается здесь. Сумма в звёздах берётся из рублёвой цены и курса. Если курс старше срока, кнопка скрыта.</CardDescription> : null}

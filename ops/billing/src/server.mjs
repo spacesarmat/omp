@@ -103,7 +103,7 @@ import { createChangelogSource } from './changelog.mjs';
 import { ALLOWED_UPDATES, channelFromEnv, pinNotice, pinNoticeFailedLine } from './channelPins.mjs';
 import { codeHash, normalizeCode, randomId, sha256 } from './crypto.mjs';
 import { createCryptoInvoice, cryptoPayCredentials, cryptoPaySignatureMode, paidInvoice } from './cryptoPay.mjs';
-import { applyRateSettings, donateRateWait, ensureRates, normalizeRateSettings, rateAuditText } from './rates.mjs';
+import { applyRateSettings, donateRateWait, ensureRates, normalizeRateSettings, rateAuditText, ratePinError } from './rates.mjs';
 import { countryCode, cryptoOffered, starCheckoutDecision } from './payMethods.mjs';
 import { quotePurchase } from './logic.mjs';
 import { goPage } from './go.mjs';
@@ -2432,6 +2432,10 @@ export function createApp(file, fetchImpl, opts) {
         }
         if (path === '/admin/settings' && !lowerBlocked && badDhtSetting(body)) {
           const msg = 'DHT: целое число от 0 до 1000 - оставлено прежнее значение';
+          flashError = flashError ? flashError + ' ' + msg : msg;
+        }
+        if ((path === '/admin/settings' || path === '/admin/donate') && ratePinError(body)) {
+          const msg = ratePinError(body);
           flashError = flashError ? flashError + ' ' + msg : msg;
         }
         if (lowerBlocked) {

@@ -22,6 +22,7 @@ export type DonateRateRow = {
   at: number;
   usable: boolean;
   last: number;
+  pin?: { rub: number; until: number; reason: string; live: boolean } | null;
 };
 
 export type DonateRates = {

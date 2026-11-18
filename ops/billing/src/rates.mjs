@@ -364,14 +364,20 @@ export function applyRateSettings(prev, body, now) {
     const n = Number(String(b.refreshMin).trim());
     if (Number.isInteger(n) && n >= 5 && n <= 60) next.refreshMin = n;
   }
-  let hours = 24;
+  let hours = 0;
   if (b.pinHours !== undefined && String(b.pinHours).trim() !== '') {
     const n = Number(String(b.pinHours).trim());
     if (Number.isInteger(n) && n >= 1 && n <= 168) hours = n;
   }
   const reason = String(b.pinReason || '').trim().slice(0, 200);
+  const creating = ['pinStar', 'pinUsdt', 'pinTon', 'pinBtc'].some((field) => {
+    if (b[field] === undefined) return false;
+    const text = String(b[field]).trim();
+    return text !== '' && text !== '0';
+  });
+  const pinOk = !creating || (reason !== '' && hours >= 1);
   const setPin = (key, field) => {
-    if (b[field] === undefined) return;
+    if (!pinOk || b[field] === undefined) return;
     const text = String(b[field]).trim();
     if (text === '') return;
     if (text === '0') {
@@ -409,6 +415,21 @@ export function rateAuditText(prev, next) {
     bits.push('закреп ' + key + ' ' + was + ' -> ' + now + (right && right.reason ? ' (' + right.reason + ')' : ''));
   }
   return bits.join('; ');
+}
+
+/** Why a pin was not saved. Empty when the form is not creating a pin, or the pin is valid. */
+export function ratePinError(body) {
+  const b = body || {};
+  const creating = ['pinStar', 'pinUsdt', 'pinTon', 'pinBtc'].some((field) => {
+    if (b[field] === undefined) return false;
+    const text = String(b[field]).trim();
+    return text !== '' && text !== '0';
+  });
+  if (!creating) return '';
+  if (!String(b.pinReason || '').trim()) return 'Закрепление курса: нужна причина';
+  const n = Number(String(b.pinHours == null ? '' : b.pinHours).trim());
+  if (!Number.isInteger(n) || n < 1 || n > 168) return 'Закрепление курса: срок от 1 до 168 часов';
+  return '';
 }
 
 async function getJson(fetchImpl, url, headers, label) {
@@ -515,11 +536,12 @@ export async function fetchRateQuotes(fetchImpl, creds) {
 }
 
 function bookCovers(book, now) {
-  if (!fresh(book.cache.usdt, now, book.maxAgeMin)) return false;
-  if (!fresh(book.cache.ton, now, book.maxAgeMin)) return false;
-  if (!fresh(book.cache.btc, now, book.maxAgeMin)) return false;
-  if (!fresh(book.cache.usd, now, book.maxAgeMin)) return false;
-  return true;
+  const covered = (key) => {
+    if (livePin(book, key, now)) return true;
+    if (key === 'star') return fresh(book.cache.usd, now, book.maxAgeMin);
+    return fresh(book.cache[key], now, book.maxAgeMin);
+  };
+  return covered('usdt') && covered('ton') && covered('btc') && covered('star');
 }
 
 /**
