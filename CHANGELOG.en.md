@@ -4,6 +4,10 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## Unreleased
+
+- [tech] TV: the journal records which launch params arrived from the phone (presence of server/action/open, no secrets) - diagnostics for "Watch on TV" when the TV opens the catalog instead of the player
+
 ## 0.30.1-beta.10
 
 - [phone] When the TV refuses a launch and OMP is absent from the TV's app list (webOS purges dev apps when the developer mode expires), the phone shows "No OMP on the TV" and offers the install assistant instead of a generic error
