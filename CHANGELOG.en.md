@@ -6,6 +6,7 @@ The English translation covers the latest versions only; the full history (in Ru
 
 ## Unreleased
 
+- [phone] "Update OMP on the TV": when the TV runs an older version, the install assistant offers "Update from the phone" - the same installer (LG - Developer Mode passphrase, Android TV - adb); "Update on the TV" stays next to it. Updating does not reset the developer mode reminder
 - [tech] TV boot regression test: the phone launch must open the player even on the old WebView (SVG without dataset) and when the design runtime fails. The test reproduces the beta.11 incident and fails on pre-#431 code
 
 ## 0.30.1-beta.12

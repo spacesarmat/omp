@@ -181,8 +181,24 @@ describe('installPlan - LG', () => {
     const p = installPlan(lg({ ompVersion: '0.13.1', latest: '0.13.1' }));
     expect(p.needsUpdate).toBe(false);
     expect(p.actions).toEqual([]);
+    expect(p.install).toBeUndefined();
     expect(p.steps[0].text).toBe('Версия 0.13.1 - последняя версия');
     expect(installPlan(lg({ ompVersion: '0.13.1', latest: null })).steps[0].text).toBe('Версия 0.13.1');
+  });
+
+  it('OMP outdated with SSH open: update from the phone, the TV update stays next to it', () => {
+    const p = installPlan(lg({ ompVersion: '0.12.1', latest: '0.13.1', apps: [LG_OMP_APP_ID], openPorts: [LG_SSH_PORT, LG_KEY_SERVER_PORT] }));
+    expect(p.actions).toEqual([
+      { id: 'install', label: 'Обновить с телефона', primary: true },
+      { id: 'update-on-tv', label: 'Обновить на ТВ', primary: false },
+    ]);
+    expect(p.install).toEqual({ method: 'lg-devmode', ip: '192.168.1.5', withHbc: false });
+  });
+
+  it('OMP outdated without SSH: only the TV update, no phone install', () => {
+    const p = installPlan(lg({ ompVersion: '0.12.1', latest: '0.13.1', apps: [LG_OMP_APP_ID] }));
+    expect(p.actions).toEqual([{ id: 'update-on-tv', label: 'Обновить на ТВ', primary: true }]);
+    expect(p.install).toBeUndefined();
   });
 
   it('OMP via Developer Mode without HBC reminds about the 1000 hours', () => {
@@ -248,13 +264,17 @@ describe('installPlan - LG', () => {
 });
 
 describe('installPlan - Android TV', () => {
-  it('OMP installed: version and update', () => {
+  it('OMP installed: version and update from the phone over adb', () => {
     const p = installPlan(atv({ ompVersion: '0.12.0', latest: '0.13.1' }));
     expect(p.kind).toBe('atv-installed');
     expect(p.needsUpdate).toBe(true);
-    expect(ids(p)).toEqual(['update-on-tv']);
+    expect(ids(p)).toEqual(['install', 'update-on-tv']);
+    expect(p.actions[0]).toEqual({ id: 'install', label: 'Обновить с телефона', primary: true });
+    expect(p.install).toEqual({ method: 'atv-adb', ip: '192.168.1.9', wireless: null });
     expect(p.subtitle).toBe('Google TV · OMP 0.12.0');
-    expect(installPlan(atv({ ompVersion: '0.13.1', latest: '0.13.1' })).actions).toEqual([]);
+    const fresh = installPlan(atv({ ompVersion: '0.13.1', latest: '0.13.1' }));
+    expect(fresh.actions).toEqual([]);
+    expect(fresh.install).toBeUndefined();
   });
 
   it('no OMP and nothing known: network debugging, with the Android 11+ hint and the arm64 note', () => {

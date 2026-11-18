@@ -319,7 +319,7 @@ function join(parts: Array<string | null | undefined>): string {
   return parts.filter((p) => !!p).join(' · ');
 }
 
-function needsUpdate(installed: string, latest: string | null | undefined): boolean {
+export function needsUpdate(installed: string, latest: string | null | undefined): boolean {
   return !!latest && compareVersions(latest, installed) > 0;
 }
 
@@ -390,11 +390,17 @@ function lgPlan(f: LgFacts): InstallPlan {
       steps: [
         { id: 'omp', title: t('install.plan.ompInstalled'), text: installed ? versionText(installed, f.latest) : t('install.plan.versionUnknown'), state: 'done' },
       ],
-      actions: old ? [{ id: 'update-on-tv', label: t('install.plan.updateOnTv'), primary: true }] : [],
+      actions: old
+        ? [
+            ...(ssh ? [{ id: 'install' as const, label: t('install.plan.updateFromPhone'), primary: true }] : []),
+            { id: 'update-on-tv', label: t('install.plan.updateOnTv'), primary: !ssh },
+          ]
+        : [],
       notes,
       installed: installed || undefined,
       latest: f.latest,
       needsUpdate: old,
+      install: old && ssh ? { method: 'lg-devmode', ip: f.ip, withHbc: false } : undefined,
     };
   }
 
@@ -555,11 +561,17 @@ function atvPlan(f: AtvFacts): InstallPlan {
       title: f.name,
       subtitle: join([model, android, 'OMP ' + installed]),
       steps: [{ id: 'omp', title: t('install.plan.ompInstalled'), text: versionText(installed, f.latest), state: 'done' }],
-      actions: old ? [{ id: 'update-on-tv', label: t('install.plan.updateOnTv'), primary: true }] : [],
+      actions: old
+        ? [
+            { id: 'install', label: t('install.plan.updateFromPhone'), primary: true },
+            { id: 'update-on-tv', label: t('install.plan.updateOnTv') },
+          ]
+        : [],
       notes: f.abi && !isArm64(f.abi) ? [abiNote(f.abi)] : [],
       installed,
       latest: f.latest,
       needsUpdate: old,
+      install: old ? { method: 'atv-adb', ip: f.ip, wireless: typeof f.sdkInt === 'number' ? f.sdkInt >= WIRELESS_DEBUG_SDK : null } : undefined,
     };
   }
 

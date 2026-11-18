@@ -274,7 +274,7 @@ describe('Install assistant - LG steps', () => {
     const el = mount(<InstallAssistant ip={LG_IP} kind="lg" />);
     await flush();
     expect(el.textContent).toContain('Версия 0.12.1 - есть 0.13.1');
-    expect(probed).toEqual([]);
+    expect(probed).toEqual([{ ip: LG_IP, ports: [9922, 9991] }]);
     click(button(el, 'Обновить на ТВ'));
     await flush();
     expect(lg.launches()).toEqual([{ id: 'com.spacesarmat.torrplayer', params: { open: 'update', lang: 'ru' } }]);
@@ -744,6 +744,43 @@ describe('Install assistant - install from the phone', () => {
     expect(el.textContent).toContain('OMP 0.14.0 установлен');
     expect(el.textContent).toContain('не 64-битная (armeabi-v7a)');
     expect(el.querySelector('[data-reminder]')).toBeNull();
+  });
+
+  it('LG outdated with SSH open: update from the phone, update texts, the reminder is not reset', async () => {
+    clearLog();
+    openPorts = [9922, 9991];
+    lg.answers['ssap://com.webos.applicationManager/listApps'] = apps({ id: 'com.spacesarmat.torrplayer', version: '0.12.1' });
+    const inst = fakeInstaller();
+    const el = mount(<InstallAssistant ip={LG_IP} kind="lg" />);
+    await flush();
+    const upd = button(el, 'Обновить с телефона')!;
+    expect(upd.disabled).toBe(false);
+    expect(button(el, 'Обновить на ТВ')).toBeDefined();
+    type(el.querySelector<HTMLInputElement>('#install-pass')!, 'A1B2C3');
+    click(upd);
+    expect(inst.reqs).toEqual([{ method: 'lg-devmode', ip: LG_IP, passphrase: 'A1B2C3', withHbc: false }]);
+    expect(el.textContent).toContain('Обновляю OMP');
+    await act(async () => inst.resolve({ version: '0.13.1' }));
+    await flush();
+    expect(el.querySelector('[data-install="done"]')!.textContent).toContain('OMP обновлён до 0.13.1');
+    expect(el.querySelector('[data-reminder]')).toBeNull();
+    expect(inst.reminders).toEqual([]);
+    const logs = JSON.stringify(logEntries());
+    expect(logs).toContain('Обновление с телефона: LG, режим разработчика');
+    expect(logs).toContain('OMP обновлён с телефона');
+  });
+
+  it('Android TV outdated: update over adb with the update texts', async () => {
+    const inst = fakeInstaller();
+    const el = mount(<InstallAssistant ip="192.168.1.20" kind="atv" />);
+    await flush();
+    expect(el.textContent).toContain('Версия 0.12.1 - есть 0.13.1');
+    click(button(el, 'Обновить с телефона'));
+    expect(inst.reqs).toEqual([{ method: 'atv-adb', ip: '192.168.1.20' }]);
+    expect(el.textContent).toContain('Обновляю OMP');
+    await act(async () => inst.resolve({ version: '0.13.1', sdkInt: 30, abi: 'arm64-v8a' }));
+    await flush();
+    expect(el.querySelector('[data-install="done"]')!.textContent).toContain('OMP обновлён до 0.13.1');
   });
 });
 

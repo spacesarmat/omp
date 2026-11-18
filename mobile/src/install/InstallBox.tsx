@@ -59,6 +59,8 @@ export function InstallBox(p: { plan: InstallPlan; onRecheck: () => void; action
   const native = installerNative();
   const lg = t.method === 'lg-devmode';
   const withHbc = lg && t.withHbc && hbc;
+  // the same installer updates an existing OMP: the plan only offers it when a newer version exists
+  const isUpdate = !!p.plan.needsUpdate;
 
   async function start() {
     if (running.current) return;
@@ -71,15 +73,15 @@ export function InstallBox(p: { plan: InstallPlan; onRecheck: () => void; action
     setFormError('');
     running.current = true;
     const progress = createProgress(t.method, withHbc);
-    setState({ kind: 'running', view: { percent: 0, title: tr('install.run.title'), text: lg ? tr('install.run.checkCode') : tr('install.run.connecting') } });
+    setState({ kind: 'running', view: { percent: 0, title: tr(isUpdate ? 'install.run.updateTitle' : 'install.run.title'), text: lg ? tr('install.run.checkCode') : tr('install.run.connecting') } });
     // the code is passed once and not kept in the screen
     setPass('');
-    log('info', 'install', tr('install.run.logStart', { what: tr(START_TEXT[t.method]) }));
+    log('info', 'install', tr(isUpdate ? 'install.run.logStartUpdate' : 'install.run.logStart', { what: tr(START_TEXT[t.method]) }));
     try {
       const result = await native.start(lg ? { method: t.method, ip: t.ip, passphrase: code, withHbc } : { method: t.method, ip: t.ip }, (e) => {
         if (alive.current) setState({ kind: 'running', view: progress(e) });
       });
-      log('info', 'install', tr(result.hbcError ? 'install.run.logDoneNoHbc' : 'install.run.logDone'));
+      log('info', 'install', tr(isUpdate ? 'install.run.logDoneUpdate' : result.hbcError ? 'install.run.logDoneNoHbc' : 'install.run.logDone'));
       if (alive.current) setState({ kind: 'done', result });
     } catch (e) {
       const c = e instanceof InstallError ? e.code : 'unknown';
@@ -113,7 +115,7 @@ export function InstallBox(p: { plan: InstallPlan; onRecheck: () => void; action
   }
 
   if (state.kind === 'done') {
-    return <Done lg={lg} tv={t.ip} tvName={p.plan.title} result={state.result} onRecheck={() => (setState({ kind: 'form' }), p.onRecheck())} />;
+    return <Done lg={lg} update={isUpdate} tv={t.ip} tvName={p.plan.title} result={state.result} onRecheck={() => (setState({ kind: 'form' }), p.onRecheck())} />;
   }
 
   if (state.kind === 'error') {
@@ -180,7 +182,7 @@ export function InstallBox(p: { plan: InstallPlan; onRecheck: () => void; action
       {p.actions({
         install: () => void start(),
         disabled: !native.available,
-        label: lg && t.withHbc && !hbc ? tr('install.plan.installOmp') : undefined,
+        label: !isUpdate && lg && t.withHbc && !hbc ? tr('install.plan.installOmp') : undefined,
       })}
     </>
   );
@@ -192,7 +194,7 @@ function dayText(at: number): string {
   return tr('date.day', { d: d.getDate(), month: tr('date.monthsFull').split(' ')[d.getMonth()] });
 }
 
-function Done(p: { lg: boolean; tv: string; tvName: string; result: InstallResult; onRecheck: () => void }) {
+function Done(p: { lg: boolean; update?: boolean; tv: string; tvName: string; result: InstallResult; onRecheck: () => void }) {
   const r = p.result;
   const [remind, setRemind] = useState(false);
   const [remindNote, setRemindNote] = useState('');
@@ -201,9 +203,10 @@ function Done(p: { lg: boolean; tv: string; tvName: string; result: InstallResul
   // the saved TV's MAC is stable across DHCP changes; without one the reminder is keyed by the address
   const stableId = tvs.value.find((t) => t.ip === p.tv)?.mac;
 
-  // a reminder for this TV may already be scheduled (an earlier install): the box shows it
+  // a reminder for this TV may already be scheduled (an earlier install): the box shows it;
+  // an app update does not touch the Developer Mode window, so the reminder is left as is
   useEffect(() => {
-    if (!p.lg) return;
+    if (!p.lg || p.update) return;
     let alive = true;
     void installerNative()
       .reminderState(p.tv, stableId)
@@ -243,7 +246,9 @@ function Done(p: { lg: boolean; tv: string; tvName: string; result: InstallResul
   return (
     <div class="m-install-run" data-install="done">
       <div class="m-install-done" role="status">
-        <span class="m-ok">✓</span> {r.version ? tr('install.run.doneOmpVersion', { version: r.version }) : tr('install.run.doneOmp')}
+        <span class="m-ok">✓</span> {p.update
+          ? r.version ? tr('install.run.doneUpdateVersion', { version: r.version }) : tr('install.run.doneUpdate')
+          : r.version ? tr('install.run.doneOmpVersion', { version: r.version }) : tr('install.run.doneOmp')}
       </div>
       <div class="m-muted m-note">
         {p.lg ? tr('install.run.openLg') : tr('install.run.openAtv')}
@@ -265,11 +270,15 @@ function Done(p: { lg: boolean; tv: string; tvName: string; result: InstallResul
             {tr('install.plan.timerNote')}
           </div>
           <div class="m-muted m-small">{tr('install.run.keyServerOff')}</div>
-          <label class="m-send-check">
-            <input type="checkbox" checked={remind} data-reminder onChange={(e) => void toggle((e.target as HTMLInputElement).checked)} />
-            {tr('install.run.remindLabel')}
-          </label>
-          {remindNote && <div class="m-muted m-small">{remindNote}</div>}
+          {!p.update && (
+            <>
+              <label class="m-send-check">
+                <input type="checkbox" checked={remind} data-reminder onChange={(e) => void toggle((e.target as HTMLInputElement).checked)} />
+                {tr('install.run.remindLabel')}
+              </label>
+              {remindNote && <div class="m-muted m-small">{remindNote}</div>}
+            </>
+          )}
         </>
       )}
       <button type="button" class="m-btn m-btn-secondary" onClick={p.onRecheck}>
