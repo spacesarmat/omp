@@ -5,7 +5,10 @@ import {
   evaluateHealth,
   evaluateHttp,
   issueAction,
+  ISSUE_LOOKUP_ATTEMPTS,
+  ISSUE_LOOKUP_GAP_MS,
   monitorMaxAgeSec,
+  retryCall,
   PUBLIC_ENDPOINTS,
   runWatchdog,
   shouldRetry,
@@ -144,6 +147,39 @@ describe('billing watchdog', () => {
     const up = { checks: { site: { ok: true, since: 2, reason: '' }, health: { ok: true, since: 1, reason: '' } } };
     expect(issueAction(open, up)).toEqual({ action: 'close', number: 7 });
     expect(issueAction(null, up).action).toBe('noop');
+    // a failed lookup is not "no issue": do not open a second one, and do not close one we could not see
+    expect(issueAction(null, down, { lookupFailed: true })).toEqual({ action: 'skip' });
+    expect(issueAction(open, up, { lookupFailed: true })).toEqual({ action: 'skip' });
+    expect(ISSUE_LOOKUP_ATTEMPTS).toBe(3);
+    expect(ISSUE_LOOKUP_GAP_MS).toBe(2_000);
+  });
+
+  it('retries a failing issue lookup, and a resolved null is not a failure', async () => {
+    const sleeps: number[] = [];
+    let n = 0;
+    const recovered = await retryCall(
+      async () => {
+        n += 1;
+        if (n < 3) throw new Error('gh down');
+        return null;
+      },
+      3,
+      5,
+      async (ms: number) => {
+        sleeps.push(ms);
+      },
+    );
+    expect(recovered).toEqual({ ok: true, value: null });
+    expect(sleeps).toEqual([5, 5]);
+    const givenUp = await retryCall(
+      async () => {
+        throw new Error('still down');
+      },
+      2,
+      1,
+      async () => {},
+    );
+    expect(givenUp.ok).toBe(false);
   });
 
   describe('one run', () => {

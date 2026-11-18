@@ -3,6 +3,8 @@ export const WATCHDOG_ATTEMPTS: number;
 export const WATCHDOG_GAP_MS: number;
 export const ISSUE_TITLE: string;
 export const ISSUE_LABEL: string;
+export const ISSUE_LOOKUP_ATTEMPTS: number;
+export const ISSUE_LOOKUP_GAP_MS: number;
 
 export interface PublicEndpoint {
   id: string;
@@ -63,10 +65,17 @@ export interface OpenIssue {
 }
 export type IssuePlan =
   | { action: 'noop' }
+  | { action: 'skip' }
   | { action: 'close'; number: number }
   | { action: 'create'; title: string; body: string }
   | { action: 'update'; number: number; body: string };
-export function issueAction(openIssue: OpenIssue | null, nextState: WatchdogState): IssuePlan;
+export function issueAction(openIssue: OpenIssue | null, nextState: WatchdogState, opts?: { lookupFailed?: boolean }): IssuePlan;
+export function retryCall<T>(
+  fn: () => Promise<T>,
+  attempts: number,
+  gapMs: number,
+  sleep: (ms: number) => Promise<void>,
+): Promise<{ ok: true; value: T } | { ok: false }>;
 
 export interface WatchdogDeps {
   probe(url: string): Promise<ProbeResult>;

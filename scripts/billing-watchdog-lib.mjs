@@ -18,6 +18,9 @@ export const PUBLIC_ENDPOINTS = [
 
 export const ISSUE_TITLE = 'OMP: внешняя проверка - простой';
 export const ISSUE_LABEL = 'outage';
+/** Reading the outage issue is not the probe. Three short tries, then alert anyway and do not touch issues. */
+export const ISSUE_LOOKUP_ATTEMPTS = 3;
+export const ISSUE_LOOKUP_GAP_MS = 2_000;
 
 /** The monitor is late when its last scheduled run is older than two intervals, and at least 30 minutes. */
 export function monitorMaxAgeSec(intervalMin) {
@@ -168,8 +171,28 @@ export function decodeIssueBody(body) {
   }
 }
 
+/**
+ * Run `fn` up to `attempts` times, `gapMs` apart, until it resolves.
+ * A thrown call is a failure. A resolved null is success (no open issue).
+ * Returns { ok: true, value } or { ok: false }.
+ */
+export async function retryCall(fn, attempts, gapMs, sleep) {
+  const tries = attempts > 0 ? attempts : 1;
+  for (let i = 0; i < tries; i++) {
+    if (i) await sleep(gapMs);
+    try {
+      return { ok: true, value: await fn() };
+    } catch {
+      /* the next try, or give up */
+    }
+  }
+  return { ok: false };
+}
+
 /** What to do with the open outage issue after a run. `openIssue` is { number, body } or null. */
-export function issueAction(openIssue, nextState) {
+export function issueAction(openIssue, nextState, opts) {
+  // Lookup failed: not the same as "no issue". Do not create a second one and do not close a hidden one.
+  if (opts && opts.lookupFailed) return { action: 'skip' };
   const checks = (nextState && nextState.checks) || {};
   const values = Object.values(checks);
   const allOk = values.length > 0 && values.every((c) => c && c.ok === true);

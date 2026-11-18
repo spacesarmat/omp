@@ -10,7 +10,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { decodeIssueBody, issueAction, ISSUE_LABEL, runWatchdog } from './billing-watchdog-lib.mjs';
+import { decodeIssueBody, issueAction, ISSUE_LABEL, ISSUE_LOOKUP_ATTEMPTS, ISSUE_LOOKUP_GAP_MS, retryCall, runWatchdog } from './billing-watchdog-lib.mjs';
 
 const CLOSE_COMMENT = 'Снова в порядке. Внешняя проверка из GitHub Actions.';
 
@@ -23,15 +23,27 @@ function gh(args) {
   }
 }
 
-function findOpenIssue() {
-  const raw = gh(['issue', 'list', '--label', ISSUE_LABEL, '--state', 'open', '--limit', '20', '--json', 'number,body']);
-  const rows = JSON.parse(raw || '[]');
-  return (Array.isArray(rows) ? rows : []).find((row) => decodeIssueBody(row && row.body)) || null;
+async function findOpenIssue() {
+  const result = await retryCall(
+    () => {
+      const raw = gh(['issue', 'list', '--label', ISSUE_LABEL, '--state', 'open', '--limit', '20', '--json', 'number,body']);
+      const rows = JSON.parse(raw || '[]');
+      return (Array.isArray(rows) ? rows : []).find((row) => decodeIssueBody(row && row.body)) || null;
+    },
+    ISSUE_LOOKUP_ATTEMPTS,
+    ISSUE_LOOKUP_GAP_MS,
+    (ms) => new Promise((r) => setTimeout(r, ms)),
+  );
+  if (!result.ok) {
+    console.log('::warning::outage issue lookup failed after ' + ISSUE_LOOKUP_ATTEMPTS + ' tries, Telegram still sends, no issue is opened or closed');
+    return { failed: true, issue: null };
+  }
+  return { failed: false, issue: result.value };
 }
 
-function applyIssue(openIssue, next) {
-  const plan = issueAction(openIssue, next);
-  if (plan.action === 'noop') return;
+function applyIssue(openIssue, next, lookupFailed) {
+  const plan = issueAction(openIssue, next, { lookupFailed });
+  if (plan.action === 'noop' || plan.action === 'skip') return;
   if (plan.action === 'close') {
     gh(['issue', 'close', String(plan.number), '--reason', 'completed', '--comment', CLOSE_COMMENT]);
     return;
@@ -93,16 +105,20 @@ async function send(text) {
 }
 
 let openIssue = null;
+let lookupFailed = false;
 
 process.exitCode = await runWatchdog({
   probe,
   send,
   readState: async () => {
-    openIssue = findOpenIssue();
+    const found = await findOpenIssue();
+    lookupFailed = found.failed;
+    openIssue = found.issue;
+    // A failed lookup is unknown state, same as no saved state: a current failure is still told.
     return openIssue ? decodeIssueBody(openIssue.body) : null;
   },
   writeState: async (state) => {
-    applyIssue(openIssue, state);
+    applyIssue(openIssue, state, lookupFailed);
   },
   sleep: (ms) => new Promise((r) => setTimeout(r, ms)),
   log: (line) => console.log(line),
