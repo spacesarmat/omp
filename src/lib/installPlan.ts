@@ -383,6 +383,8 @@ function lgPlan(f: LgFacts): InstallPlan {
     const installed = f.ompVersion;
     const old = !!installed && needsUpdate(installed, f.latest);
     if (devApp && !hbc) notes.push(devmodeTimerNote());
+    // the phone update fetches the SSH key from Key Server: if it is off, say how to enable it before the attempt
+    if (old && ssh && !keyServer) notes.push(t('install.plan.keyServerOff'));
     return {
       ...base,
       kind: 'lg-update',
@@ -556,6 +558,8 @@ function atvPlan(f: AtvFacts): InstallPlan {
   if (typeof f.ompVersion === 'string' && f.ompVersion) {
     const installed = f.ompVersion;
     const old = needsUpdate(installed, f.latest);
+    // Yandex (YaOS) has no network adb (see sideloadPlan): OMP may be there by USB, so only the TV update is offered
+    const adbUpdate = f.brand !== 'yandex';
     return {
       kind: 'atv-installed',
       title: f.name,
@@ -563,15 +567,15 @@ function atvPlan(f: AtvFacts): InstallPlan {
       steps: [{ id: 'omp', title: t('install.plan.ompInstalled'), text: versionText(installed, f.latest), state: 'done' }],
       actions: old
         ? [
-            { id: 'install', label: t('install.plan.updateFromPhone'), primary: true },
-            { id: 'update-on-tv', label: t('install.plan.updateOnTv') },
+            ...(adbUpdate ? [{ id: 'install' as const, label: t('install.plan.updateFromPhone'), primary: true }] : []),
+            { id: 'update-on-tv', label: t('install.plan.updateOnTv'), primary: !adbUpdate },
           ]
         : [],
       notes: f.abi && !isArm64(f.abi) ? [abiNote(f.abi)] : [],
       installed,
       latest: f.latest,
       needsUpdate: old,
-      install: old ? { method: 'atv-adb', ip: f.ip, wireless: typeof f.sdkInt === 'number' ? f.sdkInt >= WIRELESS_DEBUG_SDK : null } : undefined,
+      install: old && adbUpdate ? { method: 'atv-adb', ip: f.ip, wireless: typeof f.sdkInt === 'number' ? f.sdkInt >= WIRELESS_DEBUG_SDK : null } : undefined,
     };
   }
 

@@ -72,7 +72,7 @@ export function InstallBox(p: { plan: InstallPlan; onRecheck: () => void; action
     }
     setFormError('');
     running.current = true;
-    const progress = createProgress(t.method, withHbc);
+    const progress = createProgress(t.method, withHbc, isUpdate);
     setState({ kind: 'running', view: { percent: 0, title: tr(isUpdate ? 'install.run.updateTitle' : 'install.run.title'), text: lg ? tr('install.run.checkCode') : tr('install.run.connecting') } });
     // the code is passed once and not kept in the screen
     setPass('');

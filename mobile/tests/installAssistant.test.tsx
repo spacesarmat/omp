@@ -760,6 +760,10 @@ describe('Install assistant - install from the phone', () => {
     click(upd);
     expect(inst.reqs).toEqual([{ method: 'lg-devmode', ip: LG_IP, passphrase: 'A1B2C3', withHbc: false }]);
     expect(el.textContent).toContain('Обновляю OMP');
+    act(() => inst.emit({ phase: 'download', item: 'omp', percent: 40 }));
+    expect(el.querySelector('[data-install="running"]')!.textContent).toContain('Обновляю OMP');
+    act(() => inst.emit({ phase: 'install', item: 'omp', version: '0.13.1' }));
+    expect(el.querySelector('[data-install="running"]')!.textContent).toContain('Обновляю OMP 0.13.1');
     await act(async () => inst.resolve({ version: '0.13.1' }));
     await flush();
     expect(el.querySelector('[data-install="done"]')!.textContent).toContain('OMP обновлён до 0.13.1');
@@ -778,6 +782,8 @@ describe('Install assistant - install from the phone', () => {
     click(button(el, 'Обновить с телефона'));
     expect(inst.reqs).toEqual([{ method: 'atv-adb', ip: '192.168.1.20' }]);
     expect(el.textContent).toContain('Обновляю OMP');
+    act(() => inst.emit({ phase: 'install', item: 'omp', version: '0.13.1' }));
+    expect(el.querySelector('[data-install="running"]')!.textContent).toContain('Обновляю OMP 0.13.1');
     await act(async () => inst.resolve({ version: '0.13.1', sdkInt: 30, abi: 'arm64-v8a' }));
     await flush();
     expect(el.querySelector('[data-install="done"]')!.textContent).toContain('OMP обновлён до 0.13.1');

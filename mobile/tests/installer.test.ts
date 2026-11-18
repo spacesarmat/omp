@@ -160,6 +160,16 @@ describe('progress', () => {
     expect(p({ phase: 'download', item: 'omp', percent: 10 }).percent).toBe(72);
     expect(p({ phase: 'install', item: 'omp' }).text).toBe('Телевизор устанавливает OMP');
   });
+
+  it('update keeps the «Обновляю OMP» title through the progress events', () => {
+    const p = createProgress('lg-devmode', false, true);
+    expect(p({ phase: 'connect', item: 'omp' }).title).toBe('Обновляю OMP');
+    expect(p({ phase: 'download', item: 'omp', percent: 40 }).title).toBe('Обновляю OMP');
+    expect(p({ phase: 'download', item: 'omp', percent: 100, version: '0.13.1' }).title).toBe('Обновляю OMP 0.13.1');
+    expect(p({ phase: 'install', item: 'omp', version: '0.13.1' }).title).toBe('Обновляю OMP 0.13.1');
+    const a = createProgress('atv-adb', false, true);
+    expect(a({ phase: 'install', item: 'omp', version: '0.13.1' }).title).toBe('Обновляю OMP 0.13.1');
+  });
 });
 
 describe('texts', () => {

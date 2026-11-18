@@ -741,6 +741,7 @@ export const ru = {
       doneOmp: 'OMP установлен',
       doneOmpVersion: 'OMP {version} установлен',
       updateTitle: 'Обновляю OMP',
+      updateTitleVersion: 'Обновляю OMP {version}',
       logStartUpdate: 'Обновление с телефона: {what}',
       logDoneUpdate: 'OMP обновлён с телефона',
       doneUpdate: 'OMP обновлён',

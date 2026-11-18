@@ -191,7 +191,7 @@ export interface ProgressView {
 }
 
 /** Folds the plugin events into one progress bar and a line of text (mockup AssistInstall). */
-export function createProgress(method: InstallMethod, withHbc: boolean): (e: InstallEvent) => ProgressView {
+export function createProgress(method: InstallMethod, withHbc: boolean, update = false): (e: InstallEvent) => ProgressView {
   const list = stages(method, withHbc);
   const total = list.reduce((s, x) => s + x.weight, 0);
   let downloaded = false;
@@ -208,7 +208,10 @@ export function createProgress(method: InstallMethod, withHbc: boolean): (e: Ins
       const within = (list[i].weight * (e.percent ?? 0)) / 100;
       best = Math.max(best, Math.round(((before + within) / total) * 100));
     }
-    return { percent: Math.min(best, 100), title: version ? t('install.run.titleVersion', { version: version }) : t('install.run.title'), text: phaseText(method, e, late) };
+    const title = version
+      ? t(update ? 'install.run.updateTitleVersion' : 'install.run.titleVersion', { version: version })
+      : t(update ? 'install.run.updateTitle' : 'install.run.title');
+    return { percent: Math.min(best, 100), title: title, text: phaseText(method, e, late) };
   };
 }
 

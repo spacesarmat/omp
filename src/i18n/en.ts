@@ -724,6 +724,7 @@ export const en: EnDict<typeof ru> = {
       doneOmp: 'OMP installed',
       doneOmpVersion: 'OMP {version} installed',
       updateTitle: 'Updating OMP',
+      updateTitleVersion: 'Updating OMP {version}',
       logStartUpdate: 'Phone update: {what}',
       logDoneUpdate: 'OMP updated from the phone',
       doneUpdate: 'OMP updated',

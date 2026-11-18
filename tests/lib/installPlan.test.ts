@@ -195,6 +195,14 @@ describe('installPlan - LG', () => {
     expect(p.install).toEqual({ method: 'lg-devmode', ip: '192.168.1.5', withHbc: false });
   });
 
+  it('OMP outdated with SSH open but Key Server off: the setup hint is shown before the attempt', () => {
+    const p = installPlan(lg({ ompVersion: '0.12.1', latest: '0.13.1', apps: [LG_OMP_APP_ID], openPorts: [LG_SSH_PORT] }));
+    expect(p.install).toEqual({ method: 'lg-devmode', ip: '192.168.1.5', withHbc: false });
+    expect(p.notes.join(' ')).toContain('включите Key Server');
+    const both = installPlan(lg({ ompVersion: '0.12.1', latest: '0.13.1', apps: [LG_OMP_APP_ID], openPorts: [LG_SSH_PORT, LG_KEY_SERVER_PORT] }));
+    expect(both.notes.join(' ')).not.toContain('включите Key Server');
+  });
+
   it('OMP outdated without SSH: only the TV update, no phone install', () => {
     const p = installPlan(lg({ ompVersion: '0.12.1', latest: '0.13.1', apps: [LG_OMP_APP_ID] }));
     expect(p.actions).toEqual([{ id: 'update-on-tv', label: 'Обновить на ТВ', primary: true }]);
@@ -275,6 +283,14 @@ describe('installPlan - Android TV', () => {
     const fresh = installPlan(atv({ ompVersion: '0.13.1', latest: '0.13.1' }));
     expect(fresh.actions).toEqual([]);
     expect(fresh.install).toBeUndefined();
+  });
+
+  it('Yandex with OMP outdated: only the TV update, no adb update from the phone', () => {
+    const p = installPlan(atv({ brand: 'yandex', model: undefined, cast: undefined, ompVersion: '0.12.0', latest: '0.13.1' }));
+    expect(p.kind).toBe('atv-installed');
+    expect(p.needsUpdate).toBe(true);
+    expect(p.actions).toEqual([{ id: 'update-on-tv', label: 'Обновить на ТВ', primary: true }]);
+    expect(p.install).toBeUndefined();
   });
 
   it('no OMP and nothing known: network debugging, with the Android 11+ hint and the arm64 note', () => {
