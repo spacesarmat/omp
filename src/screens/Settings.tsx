@@ -20,8 +20,10 @@ import { confirmDialog } from '../ui/dialog';
 import { toast } from '../ui/toast';
 import { latestUpdate, checkForUpdate } from '../store/updates';
 import { openHbChannel } from '../platform/hbchannel';
+import { extendDevMode } from '../platform/devmode';
 import { HB_REPO_URL, updateTitle } from '../lib/updateInfo';
 import { platformKind } from '../platform/env';
+import { STORE_BUILD } from '../storeMode';
 import { logEntries, clearLog, logVersion, logTime, levelLabel, areaLabel } from '../lib/log';
 import { cacheOptions, preloadOptions, readaheadOptions, connsOptions, rateOptions, disconnectOptions, withCurrent } from '../lib/serverSettingsOptions';
 import { t, LANGS, type LanguageSetting } from '../i18n';
@@ -243,11 +245,12 @@ export function SettingsScreen() {
   const tail = [
     ['set-subBackground'],
     ['set-server', 'set-pair'],
-    ['set-sources'],
-    ['set-live-seeds'],
-    ['set-update-check'],
-    ['set-update'].concat(platformKind() === 'androidtv' ? [] : ['set-addHbRepo']).concat(['set-faq', 'set-advanced']),
-    ['set-onboarding'],
+    ...(STORE_BUILD ? [] : [['set-sources'], ['set-live-seeds']]),
+    ...(STORE_BUILD ? [] : [['set-update-check']]),
+    STORE_BUILD
+      ? ['set-faq', 'set-advanced']
+      : ['set-update'].concat(platformKind() === 'androidtv' ? [] : ['set-addHbRepo']).concat(['set-faq', 'set-advanced']),
+    platformKind() === 'androidtv' || STORE_BUILD ? ['set-onboarding'] : ['set-devmode-extend', 'set-onboarding'],
   ];
   if (isBetaBuild()) tail.push(['set-test-mode'], ['set-test-size']);
   const nav = (key: string) => rowArrow(tail, key);
@@ -290,15 +293,19 @@ export function SettingsScreen() {
         <Button focusKey="set-pair" label={t('pair.title')} onPress={() => navigate({ name: 'pairPhone' })} onArrow={nav('set-pair')} />
       </div>
 
-      <h2>{t('settings.search')}</h2>
-      <div class="row">
-        <div class="grow muted">{platformKind() === 'androidtv' ? t('tvSettings.sourcesNote') : t('phoneSources.settingsNote')}</div>
-        <Button focusKey="set-sources" label={t('settings.whereSearch')} onPress={() => navigate({ name: 'sources' })} onArrow={nav('set-sources')} />
-      </div>
-      <ChoiceRow focusKey="set-live-seeds" label={t('settings.liveSeeds')} value={s.liveSeeds} options={onOff()} onChange={(v) => updateSettings({ liveSeeds: v })} onArrow={nav('set-live-seeds')} />
-      <div class="muted">{t('settings.liveSeedsHint')}</div>
-      <ChoiceRow focusKey="set-help-rank" label={t('settings.helpRank')} value={s.helpRank !== false} options={onOff()} onChange={(v) => updateSettings({ helpRank: v })} onArrow={nav('set-help-rank')} />
-      <div class="muted">{t('settings.helpRankHint')}</div>
+      {!STORE_BUILD && (
+        <>
+          <h2>{t('settings.search')}</h2>
+          <div class="row">
+            <div class="grow muted">{platformKind() === 'androidtv' ? t('tvSettings.sourcesNote') : t('phoneSources.settingsNote')}</div>
+            <Button focusKey="set-sources" label={t('settings.whereSearch')} onPress={() => navigate({ name: 'sources' })} onArrow={nav('set-sources')} />
+          </div>
+          <ChoiceRow focusKey="set-live-seeds" label={t('settings.liveSeeds')} value={s.liveSeeds} options={onOff()} onChange={(v) => updateSettings({ liveSeeds: v })} onArrow={nav('set-live-seeds')} />
+          <div class="muted">{t('settings.liveSeedsHint')}</div>
+          <ChoiceRow focusKey="set-help-rank" label={t('settings.helpRank')} value={s.helpRank !== false} options={onOff()} onChange={(v) => updateSettings({ helpRank: v })} onArrow={nav('set-help-rank')} />
+          <div class="muted">{t('settings.helpRankHint')}</div>
+        </>
+      )}
 
       <h2>{t('settings.app')}</h2>
       {platformKind() === 'androidtv' && <OpenOnStartupSection />}
@@ -319,19 +326,21 @@ export function SettingsScreen() {
           {t('tvSettings.aboutLine', { version: APP_VERSION })}
           {latestUpdate.value ? t('tvSettings.availableVersion', { version: latestUpdate.value.version }) : ''}
         </div>
-        <Button
-          focusKey="set-update-check"
-          label={t('updateScreen.check')}
-          onArrow={nav('set-update-check')}
-          onPress={() => checkForUpdate({ manual: true }).then((r) => {
-            if (r === 'error') toast(t('updateScreen.checkFailed'), 'error');
-            else if (r === 'latest') toast(t('updateScreen.latest'));
-          })}
-        />
+        {!STORE_BUILD && (
+          <Button
+            focusKey="set-update-check"
+            label={t('updateScreen.check')}
+            onArrow={nav('set-update-check')}
+            onPress={() => checkForUpdate({ manual: true }).then((r) => {
+              if (r === 'error') toast(t('updateScreen.checkFailed'), 'error');
+              else if (r === 'latest') toast(t('updateScreen.latest'));
+            })}
+          />
+        )}
       </div>
       <div class="row" style={{ marginTop: '16px' }}>
-        <Button focusKey="set-update" label={latestUpdate.value ? updateTitle(latestUpdate.value.version, APP_VERSION) : t('tvSettings.update')} onPress={() => navigate({ name: 'update' })} onArrow={nav('set-update')} />
-        {platformKind() !== 'androidtv' && (
+        {!STORE_BUILD && <Button focusKey="set-update" label={latestUpdate.value ? updateTitle(latestUpdate.value.version, APP_VERSION) : t('tvSettings.update')} onPress={() => navigate({ name: 'update' })} onArrow={nav('set-update')} />}
+        {!STORE_BUILD && platformKind() !== 'androidtv' && (
           <Button
             focusKey="set-addHbRepo"
             label={t('tvSettings.addHbRepo')}
@@ -343,6 +352,19 @@ export function SettingsScreen() {
         <Button focusKey="set-advanced" label={t('settings.advanced')} onPress={() => navigate({ name: 'advanced' })} onArrow={nav('set-advanced')} />
       </div>
       <div class="row">
+        {!STORE_BUILD && platformKind() !== 'androidtv' && (
+          <Button
+            focusKey="set-devmode-extend"
+            label={t('tvSettings.devmodeExtend')}
+            onArrow={nav('set-devmode-extend')}
+            onPress={() => {
+              extendDevMode(Date.now()).then(
+                () => toast(t('tvSettings.devmodeOpened')),
+                () => toast(t('tvSettings.devmodeOpenFailed'), 'error'),
+              );
+            }}
+          />
+        )}
         <Button focusKey="set-onboarding" label={t('settings.showOnboarding')} onPress={() => openOnboarding()} onArrow={nav('set-onboarding')} />
       </div>
       {isBetaBuild() && (
@@ -476,11 +498,15 @@ export function AdvancedSettingsScreen() {
         </div>
       )}
 
-      <ChoiceRow focusKey="set-updateOnStart" label={t('tvSettings.updateOnStart')} value={s.updateCheck} options={onOff()} onChange={(v) => updateSettings({ updateCheck: v })} />
-      <ChoiceRow focusKey="adv-beta" label={t('settings.betaTitle')} value={s.betaUpdates} options={onOff()} onChange={(v) => updateSettings({ betaUpdates: v })} />
-      <div class="muted">{t('settings.betaHint')}</div>
-      <ChoiceRow focusKey="adv-diagnostics" label={t('settings.diagnosticsTitle')} value={s.diagnostics} options={onOff()} onChange={(v) => updateSettings({ diagnostics: v })} />
-      <div class="muted">{t('settings.diagnosticsHint')}</div>
+      {!STORE_BUILD && (
+        <>
+          <ChoiceRow focusKey="set-updateOnStart" label={t('tvSettings.updateOnStart')} value={s.updateCheck} options={onOff()} onChange={(v) => updateSettings({ updateCheck: v })} />
+          <ChoiceRow focusKey="adv-beta" label={t('settings.betaTitle')} value={s.betaUpdates} options={onOff()} onChange={(v) => updateSettings({ betaUpdates: v })} />
+          <div class="muted">{t('settings.betaHint')}</div>
+        </>
+      )}
+      <ChoiceRow focusKey="adv-diagnostics" label={t('settings.diagnosticsTitle')} value={s.diagnostics} options={onOff()} onChange={(v) => updateSettings(STORE_BUILD ? { diagnostics: v, diagnosticsTouched: true } : { diagnostics: v })} />
+      <div class="muted">{STORE_BUILD ? t('settings.diagnosticsHintStore') : t('settings.diagnosticsHint')}</div>
 
       <h2>{t('tvSettings.log')}</h2>
       <LogBrief />

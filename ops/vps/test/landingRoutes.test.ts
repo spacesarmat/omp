@@ -36,9 +36,17 @@ describe.each(FILES)('$file landing routes', ({ file, apex, www }) => {
     expect(site).toContain('rewrite @pair /pair/index.html');
     expect(site).toContain('@referral path_regexp invite ^/r/OMP-[A-Za-z0-9]+/?$');
     expect(site).toContain('rewrite @referral /r/index.html');
+    expect(site).toContain('@privacy_en path /privacy/en /privacy/en/');
+    expect(site).toContain('rewrite @privacy_en /privacy/en/index.html');
+    expect(site).toContain('@privacy path /privacy /privacy/');
+    expect(site).toContain('rewrite @privacy /privacy/index.html');
+    expect(site.indexOf('rewrite @privacy_en /privacy/en/index.html')).toBeLessThan(
+      site.indexOf('rewrite @privacy /privacy/index.html'),
+    );
     expect(site.indexOf('rewrite @title')).toBeLessThan(site.indexOf('file_server'));
     expect(site.indexOf('rewrite @pair')).toBeLessThan(site.indexOf('file_server'));
     expect(site.indexOf('rewrite @referral')).toBeLessThan(site.indexOf('file_server'));
+    expect(site.indexOf('rewrite @privacy')).toBeLessThan(site.indexOf('file_server'));
   });
 
   it('has no SPA fallback, so unknown paths are a real 404 with site/404.html', () => {

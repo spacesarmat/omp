@@ -8,6 +8,7 @@ import {
   LG_OMP_APP_ID,
   LG_SSH_PORT,
   LG_KEY_SERVER_PORT,
+  needsUpdate,
   type LgFacts,
   type AtvFacts,
   type DeviceFacts,
@@ -48,8 +49,9 @@ export async function lgFacts(d: InstallDevice): Promise<LgFacts> {
     // '' = in the list without a version
     facts.ompVersion = omp ? omp.version || '' : null;
   }
-  // Dev Mode ports only matter when OMP is missing
-  if (facts.ompVersion === null || facts.ompVersion === undefined) {
+  // Dev Mode ports matter when OMP is missing or outdated: the phone install/update goes over SSH
+  const outdated = !!facts.ompVersion && needsUpdate(facts.ompVersion, latest);
+  if (facts.ompVersion === null || facts.ompVersion === undefined || outdated) {
     facts.openPorts = await installNative()
       .probePorts(d.ip, [LG_SSH_PORT, LG_KEY_SERVER_PORT], PROBE_MS)
       .catch(() => {

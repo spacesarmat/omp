@@ -1,11 +1,16 @@
 import { Resvg } from '@resvg/resvg-js';
 import { readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync } from 'node:fs';
+import { flattenToOpaquePng, ICON_BG } from './png-opaque.mjs';
 
 const svg = readFileSync('assets/icon.svg', 'utf8');
+// LG store icons: a full-bleed #181B22 tile, then the rounded mark. Corners stay the brand color, not transparent.
+const ICON_HEX = '#181B22';
+const webosSvg = svg.replace(/(<svg\b[^>]*>)/, `$1<rect width="100" height="100" fill="${ICON_HEX}"/>`);
 for (const [file, size] of [['webos/icon.png', 80], ['webos/largeIcon.png', 130]]) {
-  const png = new Resvg(svg, { fitTo: { mode: 'width', value: size } }).render().asPng();
-  writeFileSync(file, png);
-  console.log('wrote', file, size + 'x' + size);
+  const rendered = new Resvg(webosSvg, { fitTo: { mode: 'width', value: size } }).render().asPng();
+  const flat = flattenToOpaquePng(Buffer.from(rendered), ICON_BG);
+  writeFileSync(file, flat.png);
+  console.log('wrote', file, size + 'x' + size, 'transparent-before-flatten', flat.transparent);
 }
 
 // Android launcher icons (Capacitor project in android/)

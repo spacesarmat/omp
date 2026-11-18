@@ -6,6 +6,30 @@ The English translation covers the latest versions only; the full history (in Ru
 
 ## Unreleased
 
+- [tech] LG store build: the ipk appinfo sets requiredACG to network.query (the TV address, used to find the user's TorrServer). Homebrew Channel, Developer Mode and the settingsservice device-name call are left out of the store bundle. ipk icons are opaque on #181B22. Diagnostics, crash reports and ranking stats stay off in the store build until diagnostics are turned on in Settings. The settings hint says logs may still contain media titles. The site privacy policy and docs/lg-store-submission say the same. Drafts: Self Checklist and UX Scenario. A real TV smoke test is still required
+- [tech] The GitHub Actions check, every 15 minutes, probes billing.omp-player.online (the root and /health) and omp-player.online. HTTP 5xx, including 530, and timeouts count as down; the billing root answers 404, which means the process is up. Three tries, 20s apart. Telegram only when a check goes down or recovers. State is stored in a GitHub issue labeled outage (the Actions cache was evicted, so dedupe did not hold). If the issue list cannot be read after 3 tries, Telegram is still sent and no new issue is opened
+- [tech] LG Content Store build: the __STORE_BUILD__ flag (npm run build:store / package:store) disables public search and discovery - a player for the user's own TorrServer (catalog, M3U/HLS, playback) remains; regular builds are unchanged
+- [tech] The developer mode expiry banner test is no longer flaky: after fake timers it deterministically waits for Preact's deferred rAF render, which had failed the full release test run
+
+## 0.30.1-beta.13
+
+- [lg] "Extend mode" button in the TV settings and a catalog banner 3 days before the 1000-hour Developer Mode ends: they open Developer Mode, where Extend completes the renewal; the banner rechecks the deadline while the catalog is open so OMP stays on the TV
+- [phone] "Update OMP on the TV": when the TV runs an older version, the install assistant offers "Update from the phone" - the same installer (LG - Developer Mode passphrase, Android TV - adb); "Update on the TV" stays next to it. Updating does not reset the developer mode reminder
+- [tech] TV boot regression test: the phone launch must open the player even on the old WebView (SVG without dataset) and when the design runtime fails. The test reproduces the beta.11 incident and fails on pre-#431 code
+- [tech] omp-player.online: a permanent privacy policy at /privacy (Russian) and /privacy/en (English), linked from the footer. Contact: ompplayerandroid@gmail.com and the Telegram links already in the footer. Deploy of site/ and both Caddyfiles is separate and needs approval
+
+## 0.30.1-beta.12
+
+- [lg] "Watch on TV" from the phone works again on old webOS (WebView 53): the design runtime DOM walk threw on SVG icons without dataset and aborted app start before launch params applied, so the TV opened the catalog instead of the player. Launch params now apply before the design runtime, and a design runtime failure no longer aborts start
+- [tech] TV: the old WebView no longer logs a reader.closed error on every periodic request (Chrome 53 rejects closed on releaseLock); the layout walk skips elements without dataset while path indices still count every child, so node ids match modern browsers
+
+## 0.30.1-beta.11
+
+- [tech] TV: the journal records which launch params arrived from the phone (presence of server/action/open, no secrets) - diagnostics for "Watch on TV" when the TV opens the catalog instead of the player
+
+## 0.30.1-beta.10
+
+- [phone] When the TV refuses a launch and OMP is absent from the TV's app list (webOS purges dev apps when the developer mode expires), the phone shows "No OMP on the TV" and offers the install assistant instead of a generic error
 - [tech] Admin panel: prices and rates tidied. The "Prices and rates (ruble base)" group shows the effective subscription and extra-device prices in stars and crypto derived from the ruble base; "Stars" and "Crypto" are labelled as manual fallback tariffs. The auto rate on the "Donations" tab is now shared by subscriptions, devices and donations and shows a subscription preview. The server returns the preview in settings.rates.sub
 - [tech] The auto rate applies to every payment, not only donations: the ruble tariffs (subscription and extra device) are the base. Stars and crypto (USDT/TON/BTC) are derived from rubles through the same rate book (CryptoPay/CBR/CoinGecko) with the same markup, max age and starUsd; manual tariffs and rates stay the fallback while auto is off or the rate is stale. Explicit asset prices no longer override a fresh auto rate. The book refreshes on the periodic tick and on donate taps; an unsupported or stale rate hides the method as before. donatePricing/ensureDonateRates renamed to paymentPricing/ensureRates
 - [tech] Bot: CIS languages - uk, be, kk, ky, uz, tg, tk, hy, az, ka, ro (11 codes, prefix normalizeLang with regional variants). The template catalog and the UI strings are translated into all 13 languages with variable parity kept; the strict pickVariant default and the RU/EN identity are unchanged. Migration 017 widens the bot_copy.lang CHECK to 13 values. Admin panel: the reply constructor language list carries 13 languages, preview and variable samples follow the variant language. A new billing image is needed; deployment by agreement

@@ -464,10 +464,9 @@ describe('Torrent', () => {
     expect(currentRoute.value.name).toBe('settings');
   });
 
-  it('shows the install guide button when the TV has no OMP', async () => {
+  it('shows the install assistant button when the TV has no OMP', async () => {
     saveTv({ ip: '192.168.1.5', name: 'LG OLED' });
     launch.mockRejectedValueOnce(new Error(tvNoOmp()));
-    const open = vi.spyOn(window, 'open').mockReturnValue(null);
     mount();
     await flush();
     click(el.querySelectorAll('.m-ep')[3]);
@@ -476,8 +475,7 @@ describe('Torrent', () => {
     const b = byText('Как установить OMP на телевизор')!;
     expect(b).toBeTruthy();
     click(b);
-    expect(open).toHaveBeenCalledWith('https://github.com/spacesarmat/omp#readme', '_system');
-    open.mockRestore();
+    expect(currentRoute.value).toMatchObject({ name: 'install', ip: '192.168.1.5', kind: 'lg' });
   });
 
   it('main button error with no OMP offers the guide too', async () => {

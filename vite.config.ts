@@ -26,6 +26,8 @@ export default defineConfig({
     __TORRSERVER_VERSION__: JSON.stringify(torrserverVersion),
     // Vitest must not bake a leaked TMDB_API_KEY into the bundle. `vite build` still injects it.
     __TMDB_FALLBACK_KEY__: JSON.stringify(process.env.VITEST ? '' : (process.env.TMDB_API_KEY || '')),
+    // the LG Content Store variant (vite.store.config.ts) turns this on; regular builds keep the full feature set
+    __STORE_BUILD__: JSON.stringify(false),
   },
   plugins: [
     preact(),

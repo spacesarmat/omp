@@ -4,6 +4,7 @@ import { formatDuration } from './format';
 import { t, fmtDuration } from '../i18n';
 import { deriveName, displayTitle, fileSeasons, isPlaceholderTitle, torrentFiles, yearOf } from './torrentName';
 import { parseEpisodeRange, SEASON_WORDS } from '../monitor/episodes';
+import { STORE_BUILD } from '../storeMode';
 
 export type LibraryView = 'one' | 'large' | 'small' | 'list' | 'compact';
 
@@ -76,6 +77,8 @@ export const libraryTabs = (): { id: LibraryTab; label: string }[] =>
 /** The TV tabs: «История», «Новое», «Обзор», then the categories. */
 export const tvLibraryTabs = (): { id: LibraryTab; label: string }[] => {
   const list = libraryTabs();
+  // store build: no discovery - «Новое» and «Обзор» lead to public torrent search, so only history + categories stay
+  if (STORE_BUILD) return list;
   const own: { id: LibraryTab; label: string }[] = [
     { id: 'news', label: t('tv.news.tab') },
     { id: 'discover', label: t('discover.browse') },

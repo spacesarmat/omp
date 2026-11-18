@@ -1,10 +1,15 @@
-name: Billing watchdog
+name: Public uptime
 
-# External check of https://billing.omp-player.online/health every 15 minutes, independent of the NUC and Andy's PC.
-# A problem (no answer, bot not polling, «Мониторинг» not running) and its fix are told once each to Telegram
-# by @OMPBILLINGBOT with sendMessage only: this workflow never polls the bot and never touches its webhook.
-# Secrets (names only): TELEGRAM_BOT_TOKEN (the @OMPBILLINGBOT token, already used by the release posts) and
-# WATCHDOG_TELEGRAM_CHAT_ID (the chat for alerts, the same as BILLING_MONITOR_CHAT_ID on the NUC).
+# External check every 15 minutes from a GitHub-hosted runner, so an alert still goes out when the
+# NUC and its local monitoring are fully down.
+# URLs: https://billing.omp-player.online (404 is up: the process has no page on /),
+# https://billing.omp-player.online/health, https://omp-player.online.
+# 5xx (including 530) and timeouts are down. Three tries, 20s apart.
+# Telegram is sendMessage only, on the transition to down and on recovery.
+# State is the open GitHub issue labeled outage (the Actions cache is evicted by CI caches).
+# Secrets (names only): TELEGRAM_BOT_TOKEN (the @OMPBILLINGBOT token, already used by the release
+# posts) and WATCHDOG_TELEGRAM_CHAT_ID (the alert chat, the same as BILLING_MONITOR_CHAT_ID on the
+# NUC). vars.TELEGRAM_CHAT_ID is the public release channel and is not used here.
 
 on:
   schedule:
@@ -17,6 +22,7 @@ concurrency:
 
 permissions:
   contents: read
+  issues: write
 
 jobs:
   check:
@@ -26,21 +32,9 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           sparse-checkout: scripts
-      # the last state ({ ok, since, reason }), so only a change is told; a fresh cache key per run, restored by prefix
-      - name: Restore the last state
-        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
-        with:
-          path: watchdog-state.json
-          key: billing-watchdog-${{ github.run_id }}-${{ github.run_attempt }}
-          restore-keys: billing-watchdog-
-      - name: Check billing
+      - name: Check public endpoints
         env:
+          GH_TOKEN: ${{ github.token }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.WATCHDOG_TELEGRAM_CHAT_ID }}
-        run: node scripts/billing-watchdog.mjs watchdog-state.json
-      - name: Save the state
-        if: always()
-        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
-        with:
-          path: watchdog-state.json
-          key: billing-watchdog-${{ github.run_id }}-${{ github.run_attempt }}
+        run: node scripts/billing-watchdog.mjs

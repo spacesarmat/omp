@@ -85,27 +85,32 @@ function start(): void {
   if (activeServer.value) resetTo({ name: 'library' });
 
   render(<App />, document.getElementById('app')!);
-  const productionTarget = platformKind() === 'androidtv' ? 'android-tv' as const : 'lg-webos' as const;
-  const stopProductionLayout = installProductionDesign(document.body, {
-    target: productionTarget,
-    screenOf: () => currentRoute.value.name,
-    subscribeScreen: (notify) => routeStack.subscribe(notify),
-  });
-  window.addEventListener('pagehide', stopProductionLayout, { once: true });
-  // Exported logic flows run through the typed dispatcher on top of the existing shell APIs;
-  // the empty generated document keeps this a no-op until an explicit export.
-  const stopProductionFlow = installProductionFlow(document.body, {
-    target: productionTarget,
-    screenOf: () => currentRoute.value.name,
-    subscribeScreen: (notify) => routeStack.subscribe(notify),
-    environment: () => ({ serverConnected: Boolean(activeServer.value), networkOnline: navigator.onLine }),
-    publishers: createTvFlowPublishers(),
-    dispatcher: createTvFlowDispatcher(),
-  });
-  window.addEventListener('pagehide', stopProductionFlow, { once: true });
-
+  // The phone launch command applies before the design runtime: a layout or flow failure
+  // on an old WebView must never swallow it (the beta.11 incident aborted start here).
   runLaunchParams(readLaunchParams());
   onRelaunch(runLaunchParams);
+  const productionTarget = platformKind() === 'androidtv' ? 'android-tv' as const : 'lg-webos' as const;
+  try {
+    const stopProductionLayout = installProductionDesign(document.body, {
+      target: productionTarget,
+      screenOf: () => currentRoute.value.name,
+      subscribeScreen: (notify) => routeStack.subscribe(notify),
+    });
+    window.addEventListener('pagehide', stopProductionLayout, { once: true });
+    // Exported logic flows run through the typed dispatcher on top of the existing shell APIs;
+    // the empty generated document keeps this a no-op until an explicit export.
+    const stopProductionFlow = installProductionFlow(document.body, {
+      target: productionTarget,
+      screenOf: () => currentRoute.value.name,
+      subscribeScreen: (notify) => routeStack.subscribe(notify),
+      environment: () => ({ serverConnected: Boolean(activeServer.value), networkOnline: navigator.onLine }),
+      publishers: createTvFlowPublishers(),
+      dispatcher: createTvFlowDispatcher(),
+    });
+    window.addEventListener('pagehide', stopProductionFlow, { once: true });
+  } catch (e) {
+    log('warn', 'app', 'design runtime disabled: ' + (e instanceof Error ? e.message : String(e)));
+  }
   if (platformKind() === 'androidtv') installTvTitleLinks();
 }
 

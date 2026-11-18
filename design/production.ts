@@ -87,6 +87,9 @@ function registerDesktopShellIdentity(root: HTMLElement, stamped: Set<HTMLElemen
 function registerComponentIdentity(root: HTMLElement, stamped: Set<HTMLElement>): void {
   const elements = [root, ...root.querySelectorAll<HTMLElement>('*')];
   for (const element of elements) {
+    // SVGElement.dataset exists only since Chrome 55; the LG WebView 53 renders SVG icons
+    // without it, and a throw here would abort the app start before launch params apply.
+    if (!element.dataset) continue;
     if (element.dataset.designId || element.dataset.key || element.dataset.designComponent) continue;
     const id = componentIdOf(element);
     if (!id) continue;

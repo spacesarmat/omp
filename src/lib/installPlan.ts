@@ -7,6 +7,10 @@ export const LG_OMP_APP_ID = 'com.spacesarmat.torrplayer';
 export const LG_HBC_APP_ID = 'org.webosbrew.hbchannel';
 export const LG_DEVMODE_APP_ID = 'com.palmdts.devmode';
 
+/** Developer Mode lasts 1000 hours; the reminder comes 3 days before the end. */
+export const DEVMODE_HOURS = 1000;
+export const REMINDER_BEFORE_HOURS = 72;
+
 /** Developer Mode ports on an LG TV: SSH (open while Dev Mode Status is on) and Key Server. */
 export const LG_SSH_PORT = 9922;
 export const LG_KEY_SERVER_PORT = 9991;
@@ -319,7 +323,7 @@ function join(parts: Array<string | null | undefined>): string {
   return parts.filter((p) => !!p).join(' · ');
 }
 
-function needsUpdate(installed: string, latest: string | null | undefined): boolean {
+export function needsUpdate(installed: string, latest: string | null | undefined): boolean {
   return !!latest && compareVersions(latest, installed) > 0;
 }
 
@@ -383,6 +387,8 @@ function lgPlan(f: LgFacts): InstallPlan {
     const installed = f.ompVersion;
     const old = !!installed && needsUpdate(installed, f.latest);
     if (devApp && !hbc) notes.push(devmodeTimerNote());
+    // the phone update fetches the SSH key from Key Server: if it is off, say how to enable it before the attempt
+    if (old && ssh && !keyServer) notes.push(t('install.plan.keyServerOff'));
     return {
       ...base,
       kind: 'lg-update',
@@ -390,11 +396,17 @@ function lgPlan(f: LgFacts): InstallPlan {
       steps: [
         { id: 'omp', title: t('install.plan.ompInstalled'), text: installed ? versionText(installed, f.latest) : t('install.plan.versionUnknown'), state: 'done' },
       ],
-      actions: old ? [{ id: 'update-on-tv', label: t('install.plan.updateOnTv'), primary: true }] : [],
+      actions: old
+        ? [
+            ...(ssh ? [{ id: 'install' as const, label: t('install.plan.updateFromPhone'), primary: true }] : []),
+            { id: 'update-on-tv', label: t('install.plan.updateOnTv'), primary: !ssh },
+          ]
+        : [],
       notes,
       installed: installed || undefined,
       latest: f.latest,
       needsUpdate: old,
+      install: old && ssh ? { method: 'lg-devmode', ip: f.ip, withHbc: false } : undefined,
     };
   }
 
@@ -550,16 +562,46 @@ function atvPlan(f: AtvFacts): InstallPlan {
   if (typeof f.ompVersion === 'string' && f.ompVersion) {
     const installed = f.ompVersion;
     const old = needsUpdate(installed, f.latest);
+    // Yandex (YaOS) has no network adb (see sideloadPlan): OMP may be there by USB, so only the TV update is offered
+    const adbUpdate = f.brand !== 'yandex';
+    const xiaomi = f.brand === 'xiaomi';
+    const sber = f.brand === 'sber';
+    const wireless = typeof f.sdkInt === 'number' ? f.sdkInt >= WIRELESS_DEBUG_SDK : null;
+    // the phone update goes over adb: OMP may have been installed by USB, so show the debugging setup first
+    const setup =
+      old && adbUpdate
+        ? [
+            { id: 'devopts', title: t('install.plan.devOptsTitle'), text: xiaomi ? t('install.plan.xiaomiDevOpts') : t('install.plan.devOptsText'), done: false },
+            {
+              id: 'debug',
+              title: t('install.plan.debugTitle'),
+              text: wireless === true ? t('install.plan.debugWireless') : wireless === false ? t('install.plan.debugPlain') : t('install.plan.debugUnknown'),
+              done: false,
+            },
+          ]
+        : [];
+    const faq = sber
+      ? { id: 'faq' as const, label: t('install.plan.sberFaq'), faq: FAQ_SBER }
+      : xiaomi
+        ? { id: 'faq' as const, label: t('install.plan.xiaomiFaq'), faq: FAQ_XIAOMI }
+        : { id: 'faq' as const, label: t('install.plan.adbFaq'), faq: FAQ_ATV_ADB };
     return {
       kind: 'atv-installed',
       title: f.name,
       subtitle: join([model, android, 'OMP ' + installed]),
-      steps: [{ id: 'omp', title: t('install.plan.ompInstalled'), text: versionText(installed, f.latest), state: 'done' }],
-      actions: old ? [{ id: 'update-on-tv', label: t('install.plan.updateOnTv'), primary: true }] : [],
-      notes: f.abi && !isArm64(f.abi) ? [abiNote(f.abi)] : [],
+      steps: withProgress([{ id: 'omp', title: t('install.plan.ompInstalled'), text: versionText(installed, f.latest), done: true }, ...setup]),
+      actions: old
+        ? [
+            ...(adbUpdate ? [{ id: 'install' as const, label: t('install.plan.updateFromPhone'), primary: true }] : []),
+            { id: 'update-on-tv', label: t('install.plan.updateOnTv'), primary: !adbUpdate },
+            ...(adbUpdate ? [faq] : []),
+          ]
+        : [],
+      notes: (old && adbUpdate && sber ? [t('install.plan.sberAdbNote')] : []).concat(f.abi && !isArm64(f.abi) ? [abiNote(f.abi)] : []),
       installed,
       latest: f.latest,
       needsUpdate: old,
+      install: old && adbUpdate ? { method: 'atv-adb', ip: f.ip, wireless } : undefined,
     };
   }
 
