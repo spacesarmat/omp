@@ -6,8 +6,7 @@ import { Label } from '@/components/ui/label';
 import { api, type PostResult } from '@/lib/api';
 import { askConfirm } from '@/components/confirm';
 import { donateSaveFailed, formFromDonateSettings, keepOrRefreshForm, stillDirtyAfterSave, takeFilterRows, type DonateForm } from '@/lib/donateForm';
-import { when } from '@/lib/text';
-import type { DonateRateRow, DonateRates } from '@/lib/types';
+import type { DonateRates } from '@/lib/types';
 
 type Settings = {
   enabled?: boolean;
@@ -54,31 +53,6 @@ const STATUS: Record<string, string> = { paid: 'оплачен', pending: 'жд�
 
 function money(n: number) {
   return String(n) + ' ₽';
-}
-
-function sourceName(source: string) {
-  if (source === 'cryptopay') return 'Crypto Pay';
-  if (source === 'coingecko') return 'CoinGecko';
-  if (source === 'cbr') return 'ЦБ';
-  if (source === 'manual') return 'вручную';
-  return source;
-}
-
-function rubRate(n: number) {
-  if (!(n > 0)) return '0 ₽';
-  const digits = n >= 100 ? 2 : 4;
-  const text = n.toFixed(digits).replace(/0+$/, '').replace(/\.$/, '');
-  return text.replace('.', ',') + ' ₽';
-}
-
-function rateStatus(row?: DonateRateRow) {
-  if (!row) return 'Нет данных';
-  if (!row.auto) return row.manual > 0 ? 'Сейчас вручную, ' + rubRate(row.value) : 'Вручную, курс не задан, кнопка скрыта';
-  if (row.usable) return 'Сейчас ' + rubRate(row.value) + ', ' + sourceName(row.source) + (row.at ? ', ' + when(row.at) : '');
-  if (row.last > 0) {
-    return 'Скрыто: курс старше срока. Последний ' + rubRate(row.last) + (row.source ? ', ' + sourceName(row.source) : '') + (row.at ? ', ' + when(row.at) : '');
-  }
-  return 'Скрыто: свежего курса нет';
 }
 
 export function DonationsPanel({
@@ -170,27 +144,13 @@ export function DonationsPanel({
             <Field label="Комментарий, символов" value={form.commentMax} onChange={(v) => edit({ commentMax: v })} />
             <Field label="Порог уведомления, ₽" value={form.notifyMin} onChange={(v) => edit({ notifyMin: v })} />
           </div>
-          <div className="space-y-3 rounded-md border p-3">
-            <p className="text-sm">Автокурс - общий для подписок, доп. устройств и донатов: все суммы считаются от рублёвой базы (вкладка «Настройки»). Донат без свежего курса скрывает способ, подписка берёт запасной ручной тариф.</p>
+          <div className="space-y-2 rounded-md border p-3">
+            <p className="text-sm">Суммы в звёздах и крипте считаются от рублёвой цены в Настройках. Если курс старше срока, способ скрывается и у доната, и у подписки.</p>
             {rates?.sub ? (
               <p className="text-xs text-muted-foreground">
-                Подписка сейчас: {rates.sub.stars}★ / {rates.sub.usdt} USDT / {rates.sub.ton} TON / {rates.sub.btc} BTC; доп. устройство {rates.sub.starsExtra}★.
+                Подписка сейчас: {rates.sub.stars}★ / {rates.sub.usdt || '-'} USDT / {rates.sub.ton || '-'} TON / {rates.sub.btc || '-'} BTC; доп. устройство {rates.sub.starsExtra}★.
               </p>
             ) : null}
-            <div className="grid gap-3 md:grid-cols-3">
-              <Field label="USD за 1 звезду" value={form.starUsd} onChange={(v) => edit({ starUsd: v })} />
-              <Field label="Наценка, %" value={form.markupPercent} onChange={(v) => edit({ markupPercent: v })} />
-              <Field label="Прятать курс старше, часов" value={form.maxAgeHours} onChange={(v) => edit({ maxAgeHours: v })} />
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Звезда: проект получает около 0,013 USD по условиям Telegram (вывод через Fragment). Покупка звезды пользователем ближе к 0,02. Рубли для звезды берутся из курса ЦБ, запасной - USDT/RUB. Крипта: Crypto Pay, запасной CoinGecko. Обновление примерно каждые 12 минут и перед счётом. Наценка 10 значит донор отправляет на 10% больше. Ручной курс работает, когда авто выключено.
-            </p>
-            <div className="grid gap-3 md:grid-cols-2">
-              <RateBox title="Звёзды" auto={form.autoStar} onAuto={(v) => edit({ autoStar: v })} manual={form.rubPerStar} onManual={(v) => edit({ rubPerStar: v })} status={rateStatus(rates && rates.rows.star)} />
-              <RateBox title="USDT" auto={form.autoUsdt} onAuto={(v) => edit({ autoUsdt: v })} manual={form.cryptoRateUsdt} onManual={(v) => edit({ cryptoRateUsdt: v })} status={rateStatus(rates && rates.rows.usdt)} />
-              <RateBox title="TON" auto={form.autoTon} onAuto={(v) => edit({ autoTon: v })} manual={form.cryptoRateTon} onManual={(v) => edit({ cryptoRateTon: v })} status={rateStatus(rates && rates.rows.ton)} />
-              <RateBox title="BTC" auto={form.autoBtc} onAuto={(v) => edit({ autoBtc: v })} manual={form.cryptoRateBtc} onManual={(v) => edit({ cryptoRateBtc: v })} status={rateStatus(rates && rates.rows.btc)} />
-            </div>
           </div>
           <div>
             <Label>Текст благодарности</Label>
@@ -214,16 +174,6 @@ export function DonationsPanel({
                 thanksText: sent.thanksText,
                 rubPerStar: sent.rubPerStar,
                 notifyMin: sent.notifyMin,
-                rateAutoStar: sent.autoStar ? 'true' : 'false',
-                rateAutoUsdt: sent.autoUsdt ? 'true' : 'false',
-                rateAutoTon: sent.autoTon ? 'true' : 'false',
-                rateAutoBtc: sent.autoBtc ? 'true' : 'false',
-                starUsd: sent.starUsd,
-                markupPercent: sent.markupPercent,
-                maxAgeHours: sent.maxAgeHours,
-                cryptoRateUsdt: sent.cryptoRateUsdt,
-                cryptoRateTon: sent.cryptoRateTon,
-                cryptoRateBtc: sent.cryptoRateBtc,
               }).then((res) => {
                 setDirty(stillDirtyAfterSave(formRef.current, sent, donateSaveFailed(res)));
               });
@@ -377,36 +327,6 @@ export function DonationsPanel({
           </div>
         </CardContent>
       </Card>
-    </div>
-  );
-}
-
-function RateBox({
-  title,
-  auto,
-  onAuto,
-  manual,
-  onManual,
-  status,
-}: {
-  title: string;
-  auto: boolean;
-  onAuto: (v: boolean) => void;
-  manual: string;
-  onManual: (v: string) => void;
-  status: string;
-}) {
-  return (
-    <div className="space-y-2 rounded-md border p-3">
-      <div className="flex items-center justify-between">
-        <span className="text-sm font-medium">{title}</span>
-        <label className="flex items-center gap-2 text-sm">
-          <input type="checkbox" checked={auto} onChange={(e) => onAuto(e.target.checked)} />
-          Авто
-        </label>
-      </div>
-      <p className="text-xs text-muted-foreground">{status}</p>
-      <Field label="Ручной, ₽ за 1" value={manual} onChange={onManual} />
     </div>
   );
 }

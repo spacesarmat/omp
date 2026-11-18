@@ -4,10 +4,9 @@ import { paymentPricing } from './rates.mjs';
 
 /**
  * Telegram Stars and Crypto Pay prices. Both stay off until an admin turns the switch on.
- * The ruble tariff is the base: with a fresh auto rate the star and crypto amounts are derived
- * from it (same book, markup and max age as donations); manual tariffs/rates are the fallback
- * while auto is off or the rate is stale. Stars are a whole number per tariff. No fee is added
- * on top. Crypto rounds to the asset scale.
+ * The ruble tariff is the base. Stars and crypto amounts come only from the rate book
+ * (or a live admin pin). A stale book hides the method. Stars are a whole number.
+ * No fee is added on top. Crypto rounds to the asset scale.
  */
 
 const STAR_MAX = 1000000;
@@ -27,20 +26,13 @@ function assetKey(asset) {
 
 /** Stars for one order before a ruble credit is scaled off. 0 when that tariff has no star price. */
 export function starList(settings, kind, extras, rubGross, now) {
-  const s = settings || {};
-  const n = Math.max(0, Math.floor(Number(extras) || 0));
-  const rate = paymentPricing(s, now).rubPerStar;
+  const rate = paymentPricing(settings || {}, now).rubPerStar;
   const gross = Number(rubGross) || 0;
   if (rate > 0 && gross > 0) {
     const stars = Math.ceil(gross / rate - 1e-9);
     return wholeStars(stars);
   }
-  const base = wholeStars(s.starsPrice);
-  const extra = wholeStars(s.starsExtra);
-  if (kind === 'dev') return extra > 0 ? extra * Math.max(1, n || 1) : 0;
-  if (!(base > 0)) return 0;
-  if (n > 0 && !(extra > 0)) return 0;
-  return base + extra * n;
+  return 0;
 }
 
 /**
@@ -62,27 +54,12 @@ export function starsOffered(settings, kind, now) {
   if (!settings || settings.starsEnabled !== true) return false;
   const tariff = kind === 'dev' ? Number(settings.extraDeviceRub) : Number(settings.priceRub);
   if (paymentPricing(settings, now).rubPerStar > 0 && tariff > 0) return true;
-  if (kind === 'dev') return wholeStars(settings.starsExtra) >= 1;
-  return wholeStars(settings.starsPrice) >= 1;
-}
-
-/** Floor to the asset scale so a credit discount never rounds up into an extra charge. */
-function formatAssetFloor(asset, value) {
-  const scale = asset === 'USDT' ? 2 : asset === 'TON' ? 4 : asset === 'BTC' ? 8 : 0;
-  if (!scale) return '';
-  const n = Number(value);
-  if (!Number.isFinite(n) || !(n > 0)) return '';
-  const factor = 10 ** scale;
-  const units = Math.floor(n * factor + 1e-9);
-  if (!(units > 0) || !Number.isSafeInteger(units)) return '';
-  return Math.floor(units / factor) + '.' + String(units % factor).padStart(scale, '0');
+  return false;
 }
 
 /**
  * Crypto amount string for one order, or ''.
- * A fresh auto rate derives the amount from the ruble figure (already after credit), the same
- * book as donations. Otherwise an explicit asset price wins and a ruble credit scales it down
- * (floor); with neither, rubPay / manual rate, rounded to the asset scale (half up).
+ * The amount is the ruble figure divided by the live rate (or a live pin).
  */
 export function cryptoDue(settings, asset, kind, extras, rubGross, rubPay, now) {
   const key = assetKey(asset);
@@ -91,29 +68,7 @@ export function cryptoDue(settings, asset, kind, extras, rubGross, rubPay, now) 
   const autoRate = Number(paymentPricing(s, now)['cryptoRate' + key]) || 0;
   const rubNow = Number(rubPay == null ? rubGross : rubPay) || 0;
   if (autoRate > 0 && rubNow > 0) return formatAsset(asset, rubNow / autoRate);
-  const base = Number(s['crypto' + key]) || 0;
-  const extra = Number(s['cryptoExtra' + key]) || 0;
-  const n = Math.max(0, Math.floor(Number(extras) || 0));
-  let explicit = 0;
-  if (kind === 'dev') {
-    if (extra > 0) explicit = extra * Math.max(1, n || 1);
-  } else if (base > 0 && (n <= 0 || extra > 0)) {
-    explicit = base + extra * n;
-  }
-  if (explicit > 0) {
-    const gross = Number(rubGross) || 0;
-    const pay = rubPay == null ? gross : Number(rubPay) || 0;
-    let scaled = explicit;
-    if (gross > 0 && pay < gross - 1e-9) {
-      if (!(pay > 0)) return '';
-      scaled = (explicit * pay) / gross;
-    }
-    return formatAssetFloor(asset, scaled);
-  }
-  const rate = Number(s['cryptoRate' + key]) || 0;
-  const rub = Number(rubPay == null ? rubGross : rubPay) || 0;
-  if (!(rate > 0) || !(rub > 0)) return '';
-  return formatAsset(asset, rub / rate);
+  return '';
 }
 
 /** Country is a Cloudflare CF-IPCountry code. The non-RU switch hides crypto when the code is missing or RU. */
@@ -230,16 +185,13 @@ export function starInvoiceBody(chatId, { title, description, payload, stars }) 
  */
 export function starCheckoutDecision(state, query, lang) {
   const q = query || {};
-  if (!starsOffered(state && state.settings, 'new') && !starsOffered(state && state.settings, 'dev')) {
+  if (!state || !state.settings || state.settings.starsEnabled !== true) {
     return { ok: false, error: str('pm.err_stars_off', lang) };
   }
   const payload = String(q.invoice_payload || '');
   if (payload.indexOf('buy:') !== 0) return { ok: false, error: str('pm.err_no_invoice', lang) };
   const quote = ((state && state.purchases) || []).find((p) => p && p.id === payload.slice(4));
   if (!quote || quote.method !== 'stars') return { ok: false, error: str('pm.err_no_invoice', lang) };
-  if (!starsOffered(state.settings, quote.kind === 'dev' ? 'dev' : 'new')) {
-    return { ok: false, error: str('pm.err_stars_off', lang) };
-  }
   const owner = ((state && state.accounts) || []).find((a) => a && a.id === quote.accountId);
   const fromId = q.from && q.from.id != null ? String(q.from.id) : '';
   if (!owner || !owner.telegramId || String(owner.telegramId) !== fromId) {

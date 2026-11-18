@@ -599,24 +599,11 @@ const SETTING_GROUPS: { title: string; fields: [string, string][] }[] = [
   },
   {
     title: 'Звёзды',
-    fields: [
-      ['starsPrice', 'Подписка, звёзд'],
-      ['starsExtra', 'Доп. устройство, звёзд'],
-    ],
+    fields: [],
   },
   {
     title: 'Крипта',
-    fields: [
-      ['cryptoUsdt', 'Подписка, USDT'],
-      ['cryptoExtraUsdt', 'Доп. устройство, USDT'],
-      ['cryptoRateUsdt', 'Курс USDT, ₽ за 1'],
-      ['cryptoTon', 'Подписка, TON'],
-      ['cryptoExtraTon', 'Доп. устройство, TON'],
-      ['cryptoRateTon', 'Курс TON, ₽ за 1'],
-      ['cryptoBtc', 'Подписка, BTC'],
-      ['cryptoExtraBtc', 'Доп. устройство, BTC'],
-      ['cryptoRateBtc', 'Курс BTC, ₽ за 1'],
-    ],
+    fields: [],
   },
   {
     title: 'SMTP',
@@ -690,6 +677,41 @@ export function BackupLine({ backup }: { backup?: BackupStatus | null }) {
 
 type BaseImpact = { from: number; to: number; lowering: boolean; subscriptions: number; devices: number };
 
+function rateStatusLine(label: string, row?: { value: number; source: string; usable: boolean; pin?: { rub: number; until: number; reason: string; live: boolean } | null }) {
+  if (!row) return label + ': нет данных';
+  const value = row.usable ? String(row.value) : 'скрыт';
+  const pin = row.pin && row.pin.live ? ', закреп до ' + when(row.pin.until) + (row.pin.reason ? ' (' + row.pin.reason + ')' : '') : '';
+  return label + ': ' + value + (row.source ? ', ' + row.source : '') + pin;
+}
+
+function FieldLine({
+  name,
+  label,
+  form,
+  setForm,
+  dirty,
+}: {
+  name: string;
+  label: string;
+  form: Record<string, string>;
+  setForm: (v: Record<string, string>) => void;
+  dirty: { current: boolean };
+}) {
+  return (
+    <div className="space-y-1">
+      <Label htmlFor={name}>{label}</Label>
+      <Input
+        id={name}
+        value={form[name] || ''}
+        onChange={(e) => {
+          dirty.current = true;
+          setForm({ ...form, [name]: e.target.value });
+        }}
+      />
+    </div>
+  );
+}
+
 export function SettingsCard({
   run,
   settings,
@@ -733,13 +755,23 @@ export function SettingsCard({
     for (const group of SETTING_GROUPS) {
       for (const [k] of group.fields) if (!SECRET_KEYS.has(k)) o[k] = String(settings[k] ?? '');
     }
+    o.refreshMin = rates ? String(rates.refreshMin) : '';
+    o.starUsd = rates ? String(rates.starUsd) : '';
+    o.markupPercent = rates ? String(rates.markupPercent) : '';
+    o.maxAgeHours = rates ? String(Math.round(rates.maxAgeMin / 60)) : '';
+    o.pinHours = '24';
+    o.pinReason = '';
+    o.pinStar = '';
+    o.pinUsdt = '';
+    o.pinTon = '';
+    o.pinBtc = '';
     setForm(o);
     setNotify(settings.adminNotify !== false);
     setStarsOn(settings.starsEnabled === true);
     setCryptoOn(settings.cryptoEnabled === true);
     setCryptoTest(settings.cryptoTestnet === true);
     setCryptoAbroad(settings.cryptoNonRu === true);
-  }, [settings]);
+  }, [settings, rates]);
   return (
     <form
       className="space-y-4"
@@ -769,14 +801,16 @@ export function SettingsCard({
             {group.title === 'Платежи' ? <CardDescription>Кошелёк показывается частично. Чтобы сменить, введите новый номер целиком.</CardDescription> : null}
             {group.title === 'Цены и курсы (база - рубли)' ? (
               <CardDescription>
-                Рублёвая база для всех способов оплаты. Звёзды и крипта при включённом автокурсе считаются от неё (общий автокурс - вкладка «Донаты»).
+                Единственная цена - рубли. Звёзды, крипта и комиссия ЮMoney считаются от неё.
                 {rates?.sub
-                  ? ' Сейчас: подписка ' + rates.sub.stars + '★ / ' + rates.sub.usdt + ' USDT / ' + rates.sub.ton + ' TON / ' + rates.sub.btc + ' BTC; доп. устройство ' + rates.sub.starsExtra + '★.'
+                  ? ' Сейчас: подписка ' + rates.sub.stars + '★ / ' + (rates.sub.usdt || '-') + ' USDT / ' + (rates.sub.ton || '-') + ' TON / ' + (rates.sub.btc || '-') + ' BTC; доп. устройство ' + rates.sub.starsExtra + '★.'
                   : ''}
+                {rates?.yoo && rates.yoo.wallet ? ' К оплате ЮMoney: кошелёк ' + rates.yoo.wallet + ' ₽, карта ' + rates.yoo.card + ' ₽.' : ''}
+                {rates?.rows ? ' ' + rateStatusLine('Звезда', rates.rows.star) + '. ' + rateStatusLine('USDT', rates.rows.usdt) + '. ' + rateStatusLine('TON', rates.rows.ton) + '. ' + rateStatusLine('BTC', rates.rows.btc) + '.' : ''}
               </CardDescription>
             ) : null}
-            {group.title === 'Звёзды' ? <CardDescription>Ручной тариф - запасной: применяется, когда автокурс звёзд выключен или устарел.</CardDescription> : null}
-            {group.title === 'Крипта' ? <CardDescription>Ручные цены и курсы - запасные: при свежем автокурсе суммы считаются от рублёвой базы.</CardDescription> : null}
+            {group.title === 'Звёзды' ? <CardDescription>Включается здесь. Сумма в звёздах берётся из рублёвой цены и курса. Если курс старше срока, кнопка скрыта.</CardDescription> : null}
+            {group.title === 'Крипта' ? <CardDescription>Включается здесь. Сумма в монете берётся из рублёвой цены и курса. Если курс старше срока, ссылка не выдаётся.</CardDescription> : null}
             {group.title === 'Бэкапы Postgres' ? <BackupLine backup={backup} /> : null}
             {group.title === 'DHT' ? (
               <CardDescription>
@@ -802,6 +836,20 @@ export function SettingsCard({
                 </div>
               ),
             )}
+            {group.title === 'Цены и курсы (база - рубли)' ? (
+              <>
+                <FieldLine name="refreshMin" label="Обновлять курс, минут (5-60)" form={form} setForm={setForm} dirty={dirty} />
+                <FieldLine name="starUsd" label="USD за 1 звезду (получение, обычно 0,013)" form={form} setForm={setForm} dirty={dirty} />
+                <FieldLine name="markupPercent" label="Наценка курса, %" form={form} setForm={setForm} dirty={dirty} />
+                <FieldLine name="maxAgeHours" label="Прятать курс старше, часов" form={form} setForm={setForm} dirty={dirty} />
+                <FieldLine name="pinHours" label="Закрепить курс на часов (1-168)" form={form} setForm={setForm} dirty={dirty} />
+                <FieldLine name="pinReason" label="Причина закрепления" form={form} setForm={setForm} dirty={dirty} />
+                <FieldLine name="pinStar" label="Закрепить ₽ за 1 звезду (0 снимает)" form={form} setForm={setForm} dirty={dirty} />
+                <FieldLine name="pinUsdt" label="Закрепить ₽ за 1 USDT (0 снимает)" form={form} setForm={setForm} dirty={dirty} />
+                <FieldLine name="pinTon" label="Закрепить ₽ за 1 TON (0 снимает)" form={form} setForm={setForm} dirty={dirty} />
+                <FieldLine name="pinBtc" label="Закрепить ₽ за 1 BTC (0 снимает)" form={form} setForm={setForm} dirty={dirty} />
+              </>
+            ) : null}
             {group.title === 'Бот' ? (
               <label className="flex items-center gap-2 text-sm md:col-span-2">
                 <input
@@ -830,9 +878,6 @@ export function SettingsCard({
             ) : null}
             {group.title === 'Крипта' ? (
               <div className="space-y-2 md:col-span-2">
-                <p className="text-xs text-muted-foreground">
-                  Ручной курс ниже нужен подписке, если сумма в монете не задана, и донату, когда авто выключено. Автокурс доната настраивается на вкладке Донаты.
-                </p>
                 <label className="flex items-center gap-2 text-sm">
                   <input
                     type="checkbox"

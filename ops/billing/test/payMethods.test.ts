@@ -58,15 +58,21 @@ function signedBody(obj: unknown, token = TOKEN) {
 }
 
 describe('stars and crypto prices', () => {
-  it('charges the configured stars and does not add a fee', () => {
-    expect(starDue({ starsPrice: 100, starsExtra: 40 }, 'new', 0, 150, 150)).toBe(100);
-    expect(starDue({ starsPrice: 100, starsExtra: 40 }, 'sub', 2, 250, 250)).toBe(180);
-    // A ruble credit scales stars down. Floor, so the payer is not asked for an extra star.
-    expect(starDue({ starsPrice: 100 }, 'sub', 0, 150, 135)).toBe(90);
+  it('charges stars from the ruble price and the rate book, with no fee on top', () => {
+    const rates = mergeRateBook({ starUsd: 0.015 }, {
+      usd: { rub: 100, source: 'cbr' },
+      usdt: { rub: 75, source: 'cryptopay' },
+      ton: { rub: 200, source: 'coingecko' },
+      btc: { rub: 8_000_000, source: 'coingecko' },
+    }, 1);
+    expect(starDue({ rates }, 'new', 0, 150, 150, 1)).toBe(100);
+    expect(starDue({ rates }, 'sub', 2, 250, 250, 1)).toBe(167);
+    expect(starDue({ rates }, 'sub', 0, 150, 135, 1)).toBe(90);
+    expect(starDue({ starsPrice: 100 }, 'new', 0, 150, 150, 1)).toBe(0);
     const state = emptyState();
     state.settings.starsEnabled = true;
-    state.settings.starsPrice = 100;
     state.settings.priceRub = 150;
+    state.settings.rates = rates;
     const opened = openAccount(state, { telegramId: '42', email: '', now: 1 });
     const quoted = quotePurchase(opened.state, { kind: 'new', accountId: opened.account.id, now: 1, method: 'stars' });
     expect(quoted.result.payAmount).toBe('100');
@@ -134,9 +140,13 @@ describe('one order, one extension', () => {
     state.settings.priceRub = 150;
     state.settings.periodDays = 30;
     state.settings.starsEnabled = true;
-    state.settings.starsPrice = 100;
     state.settings.cryptoEnabled = true;
-    state.settings.cryptoUsdt = 2;
+    state.settings.rates = mergeRateBook({ starUsd: 0.015 }, {
+      usd: { rub: 100, source: 'cbr' },
+      usdt: { rub: 75, source: 'cryptopay' },
+      ton: { rub: 200, source: 'coingecko' },
+      btc: { rub: 8_000_000, source: 'coingecko' },
+    }, now);
     return { state, accountId: opened.account.id, now };
   }
 
@@ -278,9 +288,8 @@ describe('one order, one extension', () => {
 
   it('credits the ruble value when a crypto device is paid after the subscription ended', () => {
     const b = boot();
-    b.state.settings.extraDeviceRub = 0;
-    b.state.settings.cryptoExtraUsdt = 2;
-    b.state.settings.cryptoRateUsdt = 90;
+    b.state.settings.extraDeviceRub = 180;
+    b.state.settings.rates.cache.usdt = { rub: 90, source: 'cryptopay', at: b.now };
     const opened = applyPayment(b.state, {
       operationId: 'ym-new',
       label: 'new:' + b.accountId,
@@ -343,9 +352,14 @@ describe('crypto pay webhook', () => {
     state.settings.priceRub = 150;
     state.settings.periodDays = 30;
     state.settings.cryptoEnabled = true;
-    state.settings.cryptoUsdt = 2;
     state.settings.cryptoPayToken = TOKEN;
     state.settings.botToken = '123456:fake';
+    state.settings.rates = mergeRateBook({ starUsd: 0.015 }, {
+      usd: { rub: 100, source: 'cbr' },
+      usdt: { rub: 75, source: 'cryptopay' },
+      ton: { rub: 200, source: 'coingecko' },
+      btc: { rub: 8_000_000, source: 'coingecko' },
+    }, now);
     const quoted = quotePurchase(state, { kind: 'new', accountId: opened.account.id, now, method: 'crypto', asset: 'USDT' });
     const row = quoted.state.purchases.find((p: { id: string }) => p.id === quoted.result.id);
     row.invoiceId = '55';
@@ -519,8 +533,13 @@ describe('crypto pay invoice host', () => {
       priceRub: 150,
       periodDays: 30,
       cryptoEnabled: true,
-      cryptoUsdt: 2,
       botToken: BOT,
+      rates: mergeRateBook({ starUsd: 0.015 }, {
+        usd: { rub: 100, source: 'cbr' },
+        usdt: { rub: 75, source: 'cryptopay' },
+        ton: { rub: 200, source: 'coingecko' },
+        btc: { rub: 8_000_000, source: 'coingecko' },
+      }, now),
       ...settings,
     });
     const quote = quotePurchase(state, { kind: 'new', accountId: opened.account.id, now, method: 'crypto', asset: 'USDT' });
@@ -852,8 +871,13 @@ describe('stars checkout is answered first', () => {
     const opened = openAccount(emptyState(), { telegramId: '42', email: '', now });
     opened.state.settings.priceRub = 150;
     opened.state.settings.starsEnabled = true;
-    opened.state.settings.starsPrice = 100;
     opened.state.settings.botToken = '123456:poll';
+    opened.state.settings.rates = mergeRateBook({ starUsd: 0.015 }, {
+      usd: { rub: 100, source: 'cbr' },
+      usdt: { rub: 75, source: 'cryptopay' },
+      ton: { rub: 200, source: 'coingecko' },
+      btc: { rub: 8_000_000, source: 'coingecko' },
+    }, now);
     const quoted = quotePurchase(opened.state, { kind: 'new', accountId: opened.account.id, now, method: 'stars' });
     let state = quoted.state;
     const label = String(quoted.result.label);
@@ -916,8 +940,13 @@ describe('stars checkout is answered first', () => {
     const opened = openAccount(emptyState(), { telegramId: '42', email: '', now });
     opened.state.settings.priceRub = 150;
     opened.state.settings.starsEnabled = true;
-    opened.state.settings.starsPrice = 100;
     opened.state.settings.botToken = '123456:poll';
+    opened.state.settings.rates = mergeRateBook({ starUsd: 0.015 }, {
+      usd: { rub: 100, source: 'cbr' },
+      usdt: { rub: 75, source: 'cryptopay' },
+      ton: { rub: 200, source: 'coingecko' },
+      btc: { rub: 8_000_000, source: 'coingecko' },
+    }, now);
     const quoted = quotePurchase(opened.state, { kind: 'new', accountId: opened.account.id, now, method: 'stars' });
     const state = quoted.state;
     const label = String(quoted.result.label);
@@ -954,9 +983,14 @@ describe('bot stars invoice', () => {
     const now = 1;
     const opened = openAccount(emptyState(), { telegramId: '42', email: '', now });
     opened.state.settings.priceRub = 150;
-    opened.state.settings.starsPrice = 100;
     opened.state.settings.starsEnabled = false;
     opened.state.settings.yoomoneyWallet = '4100';
+    opened.state.settings.rates = mergeRateBook({ starUsd: 0.015 }, {
+      usd: { rub: 100, source: 'cbr' },
+      usdt: { rub: 75, source: 'cryptopay' },
+      ton: { rub: 200, source: 'coingecko' },
+      btc: { rub: 8_000_000, source: 'coingecko' },
+    }, now);
     const off = botReply(opened.state, { chatId: '42', text: 'Оплатить', now });
     expect(JSON.stringify(off.messages)).not.toContain('st:');
     off.state.settings.starsEnabled = true;
@@ -1005,15 +1039,15 @@ describe('subscription prices follow the auto rate from the ruble base', () => {
     expect(starDue(settings, 'new', 0, 150, 75, NOW)).toBe(58);
   });
 
-  it('a stale auto rate falls back to the manual star tariffs', () => {
-    expect(starDue(settings, 'new', 0, 150, 150, STALE)).toBe(999);
-    expect(starDue(settings, 'dev', 1, 50, 50, STALE)).toBe(99);
-    expect(starsOffered(settings, 'new', STALE)).toBe(true);
+  it('a stale rate hides stars instead of a stored manual tariff', () => {
+    expect(starDue(settings, 'new', 0, 150, 150, STALE)).toBe(0);
+    expect(starDue(settings, 'dev', 1, 50, 50, STALE)).toBe(0);
+    expect(starsOffered(settings, 'new', STALE)).toBe(false);
   });
 
-  it('auto off keeps the manual star tariffs', () => {
+  it('turning the old auto switch off does not restore a manual tariff', () => {
     const off = { ...settings, rates: { ...book, auto: { usdt: false, ton: false, btc: false, star: false } } };
-    expect(starDue(off, 'new', 0, 150, 150, NOW)).toBe(999);
+    expect(starDue(off, 'new', 0, 150, 150, NOW)).toBe(116);
   });
 
   it('crypto derives from rubles with a fresh auto rate, ignoring the explicit asset price', () => {
@@ -1021,10 +1055,10 @@ describe('subscription prices follow the auto rate from the ruble base', () => {
     expect(cryptoDue(settings, 'TON', 'new', 0, 150, 150, NOW)).toBe('0.7500');
   });
 
-  it('a stale auto rate falls back to the explicit asset price, then the manual rate', () => {
-    expect(cryptoDue(settings, 'USDT', 'new', 0, 150, 150, STALE)).toBe('9.00');
+  it('a stale rate hides crypto instead of the old asset price or manual rate', () => {
+    expect(cryptoDue(settings, 'USDT', 'new', 0, 150, 150, STALE)).toBe('');
     const noExplicit = { ...settings, cryptoUsdt: 0 };
-    expect(cryptoDue(noExplicit, 'USDT', 'new', 0, 150, 150, STALE)).toBe('3.00');
+    expect(cryptoDue(noExplicit, 'USDT', 'new', 0, 150, 150, STALE)).toBe('');
   });
 
   it('quotePurchase freezes the derived star and crypto amounts', () => {

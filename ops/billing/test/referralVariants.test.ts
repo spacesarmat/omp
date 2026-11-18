@@ -6,6 +6,7 @@ import { nextTierFriends } from '../admin/src/lib/nextTierFriends';
 import { starCheckoutDecision } from '../src/payMethods.mjs';
 import { applyReferralPost, claimReferralNotices, normalizeReferralSettings, referralCodeFor, restoreReferralNotices } from '../src/referralAdmin.mjs';
 import { grossUp } from '../src/yoomoney.mjs';
+import { mergeRateBook } from '../src/rates.mjs';
 
 const DAY = 24 * 60 * 60 * 1000;
 const NOW = Date.UTC(2026, 0, 15);
@@ -311,8 +312,12 @@ describe('referral variants', () => {
   it('scales stars and crypto by the referral discount and keeps the ruble reference', () => {
     const state = world({ friendDiscount: true, friendDiscountPercent: 10 });
     state.settings.starsEnabled = true;
-    state.settings.starsPrice = 100;
-    state.settings.cryptoUsdt = 2;
+    state.settings.rates = mergeRateBook({ starUsd: 0.02 }, {
+      usd: { rub: 100, source: 'cbr' },
+      usdt: { rub: 100, source: 'cryptopay' },
+      ton: { rub: 200, source: 'coingecko' },
+      btc: { rub: 8_000_000, source: 'coingecko' },
+    }, NOW);
     const stars = quotePurchase(state, { kind: 'sub', accountId: 'friend', subscriptionId: 's-friend', now: NOW, method: 'stars' });
     expect(stars.result.price).toBe(180);
     expect(stars.result.payAmount).toBe('90');
@@ -579,7 +584,12 @@ describe('referral credit cover and stars guards', () => {
   it('refuses a second discounted Stars checkout and rejects the charge that still arrives', () => {
     const state = world({ friendDiscount: true, friendDiscountPercent: 10 });
     state.settings.starsEnabled = true;
-    state.settings.starsPrice = 100;
+    state.settings.rates = mergeRateBook({ starUsd: 0.02 }, {
+      usd: { rub: 100, source: 'cbr' },
+      usdt: { rub: 100, source: 'cryptopay' },
+      ton: { rub: 200, source: 'coingecko' },
+      btc: { rub: 8_000_000, source: 'coingecko' },
+    }, NOW);
     const first = quotePurchase(state, { kind: 'sub', accountId: 'friend', subscriptionId: 's-friend', now: NOW, method: 'stars' });
     const second = quotePurchase(first.state, { kind: 'new', accountId: 'friend', now: NOW, method: 'stars' });
     expect(second.result.id).not.toBe(first.result.id);

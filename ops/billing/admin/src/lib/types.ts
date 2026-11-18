@@ -22,6 +22,7 @@ export type DonateRateRow = {
   at: number;
   usable: boolean;
   last: number;
+  pin?: { rub: number; until: number; reason: string; live: boolean } | null;
 };
 
 export type DonateRates = {
@@ -31,6 +32,7 @@ export type DonateRates = {
   starUsd: number;
   rows: { star: DonateRateRow; usdt: DonateRateRow; ton: DonateRateRow; btc: DonateRateRow };
   sub: { stars: number; starsExtra: number; usdt: string; ton: string; btc: string };
+  yoo?: { wallet: string; card: string };
 };
 
 export type PaymentRow = {

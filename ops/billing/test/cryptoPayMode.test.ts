@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 import { createCryptoInvoice, cryptoPayCredentials, cryptoPaySign, cryptoPaySignatureMode } from '../src/cryptoPay.mjs';
 import { applyPayment, openAccount, quotePurchase } from '../src/logic.mjs';
 import { cryptoInvoiceMatches } from '../src/payMethods.mjs';
+import { mergeRateBook } from '../src/rates.mjs';
 import { ENV_SECRETS, secretViews } from '../src/envSecrets.mjs';
 import { mergeSettings, publicAdminSettings } from '../src/services.mjs';
 import { emptyState } from '../src/state.mjs';
@@ -138,7 +139,12 @@ describe('crypto invoice id across modes', () => {
     state.settings.priceRub = 150;
     state.settings.periodDays = 30;
     state.settings.cryptoEnabled = true;
-    state.settings.cryptoUsdt = 2;
+    state.settings.rates = mergeRateBook({}, {
+      usdt: { rub: 75, source: 'cryptopay' },
+      usd: { rub: 100, source: 'cbr' },
+      ton: { rub: 200, source: 'coingecko' },
+      btc: { rub: 8_000_000, source: 'coingecko' },
+    }, 1);
     state.settings.cryptoTestnet = false;
     const opened = openAccount(state, { telegramId: '42', email: '', now: 1 });
     const quoted = quotePurchase(opened.state, { kind: 'new', accountId: opened.account.id, now: 1, method: 'crypto', asset: 'USDT' });
@@ -171,7 +177,12 @@ describe('crypto invoice id across modes', () => {
     state.settings.priceRub = 150;
     state.settings.periodDays = 30;
     state.settings.cryptoEnabled = true;
-    state.settings.cryptoUsdt = 2;
+    state.settings.rates = mergeRateBook({}, {
+      usdt: { rub: 75, source: 'cryptopay' },
+      usd: { rub: 100, source: 'cbr' },
+      ton: { rub: 200, source: 'coingecko' },
+      btc: { rub: 8_000_000, source: 'coingecko' },
+    }, 1);
     state.settings.cryptoTestnet = true;
     const opened = openAccount(state, { telegramId: '42', email: '', now: 1 });
     const quoted = quotePurchase(opened.state, { kind: 'new', accountId: opened.account.id, now: 1, method: 'crypto', asset: 'USDT' });

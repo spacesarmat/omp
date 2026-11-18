@@ -922,7 +922,7 @@ function devicesScreen(cur, { account, now, origin, checkout, info, lang }) {
   // One more device: only when no slot is free. Sold alone only while the subscription is paid.
   const country = account.country || '';
   const deviceYo = !!(wallet && prices.extra && prices.price);
-  const deviceAlt = starsOffered(state.settings, 'dev') || cryptoOffered(state.settings, country);
+  const deviceAlt = starsOffered(state.settings, 'dev', now) || cryptoOffered(state.settings, country);
   if (sub.active && !code && (deviceYo || deviceAlt)) {
     const subRow = state.subscriptions.find((s) => s.id === sub.id);
     if (sub.paid) {
@@ -1046,7 +1046,7 @@ export function botCallback(state, { chatId, data, now, info, lang }) {
     }
     if (labelSettled(cur, 'buy:' + id)) return { state, messages, answer: str('toast.already_paid', langCode), clearMarkup: true };
     const stars = Number(quote.payAmount);
-    if (!starsOffered(cur.settings, quote.kind === 'dev' ? 'dev' : 'new') || !Number.isInteger(stars) || stars < 1) {
+    if (cur.settings.starsEnabled !== true || !Number.isInteger(stars) || stars < 1) {
       return { state, messages, answer: str('toast.stars_off', langCode), clearMarkup: true };
     }
     say(str('don.stars', langCode, { stars: String(stars) }), {
@@ -1187,7 +1187,7 @@ function collectAlt(state, opts, now, country, prefix, lang) {
   const lines = [];
   const lead = prefix ? prefix + ' ' : '';
   const note = prefix ? prefix + '. ' : '';
-  if (starsOffered(cur.settings, opts.kind)) {
+  if (starsOffered(cur.settings, opts.kind, now)) {
     const quoted = quotePurchase(cur, { ...opts, now, method: 'stars' });
     cur = quoted.state;
     if (!quoted.result.error) {
@@ -1546,7 +1546,7 @@ export function botReply(state, { chatId, text, now, awaiting, replyTo, from, pa
   } else if (action === 'pay') {
     const country = account.country || '';
     const yo = !!(wallet && prices.price);
-    const altOn = starsOffered(cur.settings, 'new') || cryptoOffered(cur.settings, country);
+    const altOn = starsOffered(cur.settings, 'new', now) || cryptoOffered(cur.settings, country);
     if (!yo && !altOn) say(copyText('pay.unavailable', lang, { trial: trialLine(cur, lang) }), spec('pay.unavailable', uv()));
     else if (!sub) {
       const inviteOff = referralDiscountOf(cur, account.id, prices.price, now);

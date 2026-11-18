@@ -103,7 +103,7 @@ import { createChangelogSource } from './changelog.mjs';
 import { ALLOWED_UPDATES, channelFromEnv, pinNotice, pinNoticeFailedLine } from './channelPins.mjs';
 import { codeHash, normalizeCode, randomId, sha256 } from './crypto.mjs';
 import { createCryptoInvoice, cryptoPayCredentials, cryptoPaySignatureMode, paidInvoice } from './cryptoPay.mjs';
-import { applyRateSettings, donateRateWait, ensureRates, normalizeRateSettings } from './rates.mjs';
+import { applyRateSettings, donateRateWait, ensureRates, normalizeRateSettings, rateAuditText, ratePinError } from './rates.mjs';
 import { countryCode, cryptoOffered, starCheckoutDecision } from './payMethods.mjs';
 import { quotePurchase } from './logic.mjs';
 import { goPage } from './go.mjs';
@@ -2398,17 +2398,20 @@ export function createApp(file, fetchImpl, opts) {
         if ((path === '/admin/settings' || path === '/admin/services') && !lowerBlocked) {
           const beforeSnap = snapshotSettings((await store.read()).settings);
           const baseBefore = baseDevices((await store.read()).settings);
-          await store.update((state) => ({
-            state: { ...state, settings: mergeSettings(state.settings, body) },
-          }));
+          const beforeRates = (await store.read()).settings.rates;
+          await store.update((state) => {
+            const merged = mergeSettings(state.settings, body);
+            return { state: { ...state, settings: { ...merged, rates: applyRateSettings(merged.rates, body, Date.now()) } } };
+          });
           const baseAfter = baseDevices((await store.read()).settings);
+          const rateNote = rateAuditText(beforeRates, (await store.read()).settings.rates);
           await audit(
             file,
             path === '/admin/services' ? 'services_save' : 'settings_save',
-            baseAfter !== baseBefore
+            (baseAfter !== baseBefore
               ? 'Базовых устройств: ' + baseBefore + ' → ' + baseAfter +
                   (baseImpact && baseImpact.lowering ? ' (подписок затронуто: ' + baseImpact.subscriptions + ', устройств отключено: ' + baseImpact.devices + ')' : '')
-              : 'ok',
+              : 'ok') + (rateNote ? '; ' + rateNote : ''),
             admin,
             { before: beforeSnap },
           );
@@ -2429,6 +2432,10 @@ export function createApp(file, fetchImpl, opts) {
         }
         if (path === '/admin/settings' && !lowerBlocked && badDhtSetting(body)) {
           const msg = 'DHT: целое число от 0 до 1000 - оставлено прежнее значение';
+          flashError = flashError ? flashError + ' ' + msg : msg;
+        }
+        if ((path === '/admin/settings' || path === '/admin/donate') && ratePinError(body)) {
+          const msg = ratePinError(body);
           flashError = flashError ? flashError + ' ' + msg : msg;
         }
         if (lowerBlocked) {
@@ -2801,6 +2808,7 @@ export function createApp(file, fetchImpl, opts) {
           redirectTo = '/admin/?tab=ads';
         }
         if (path === '/admin/donate') {
+          const beforeRates = (await store.read()).settings.rates;
           await store.update((state) => ({
             state: {
               ...state,
@@ -2811,16 +2819,17 @@ export function createApp(file, fetchImpl, opts) {
                   cryptoRateBtc: body.cryptoRateBtc,
                 }),
                 donate: applyDonateSettings(state.settings.donate, body),
-                rates: applyRateSettings(state.settings.rates, body),
+                rates: applyRateSettings(state.settings.rates, body, Date.now()),
               },
             },
           }));
           try {
             await ensureRates(store, net, Date.now());
           } catch (e) {
-            /* a rate host can fail; the saved manual rate and the last good auto rate stay */
+            /* a rate host can fail; the saved pin and the last good rate stay */
           }
-          await audit(file, 'donate_settings', 'Донат', admin);
+          const rateNote = rateAuditText(beforeRates, (await store.read()).settings.rates);
+          await audit(file, 'donate_settings', rateNote || 'Донат', admin);
           flashText = 'Настройки доната сохранены';
           redirectTo = '/admin/?tab=donations';
         }

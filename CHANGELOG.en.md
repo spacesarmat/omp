@@ -4,6 +4,10 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## Unreleased
+
+- [tech] Admin and billing: the only price is rubles in Settings. Stars, crypto and the YooMoney fee are computed from it by one rate book. A stale rate hides the method for donations and subscriptions. A rate can be pinned for a limited time with a reason, and the audit stores the old and new numbers. The refresh interval is set in Settings. Stored starsPrice and crypto* fields remain but new invoices ignore them. /v1/pay/crypto and bot invoices keep their shape, so no new app release is required
+
 ## 0.30.1-beta.14
 
 - [tech] Admin: the section stays in the address, one search covers Finance, Donations, Bot replies, donations, promos and referrals. Destructive actions share one confirm dialog. Referral statuses and audit labels are Russian. Narrow screens use a drawer. Empty NUC and Crashes screens explain themselves

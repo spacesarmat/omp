@@ -27,6 +27,7 @@
  */
 import { cryptoPayCredentials } from './cryptoPay.mjs';
 import { cryptoDue, starList } from './payMethods.mjs';
+import { grossUp } from './yoomoney.mjs';
 
 export const STAR_USD_DEFAULT = 0.013;
 export const COINGECKO_URL = 'https://api.coingecko.com/api/v3/simple/price?ids=tether,the-open-network,bitcoin&vs_currencies=rub';
@@ -104,6 +105,7 @@ export function normalizeRateSettings(raw) {
       star: onFlag(auto.star, true),
     },
     cache: normalizeCache(src.cache),
+    pins: normalizePins(src.pins),
     fetchedAt: Number.isFinite(fetchedAt) && fetchedAt > 0 ? fetchedAt : 0,
   };
 }
@@ -202,6 +204,44 @@ function fresh(entry, now, maxAgeMin) {
   return age <= maxAgeMin * 60 * 1000;
 }
 
+const PIN_KEYS = ['star', 'usdt', 'ton', 'btc'];
+
+function pinRub(key, value) {
+  if (key === 'star') {
+    const n = Number(String(value == null ? '' : value).trim().replace(',', '.'));
+    if (!Number.isFinite(n) || n < 0.01 || n > 100) return 0;
+    return Math.round(n * 10000) / 10000;
+  }
+  return acceptRub(key, value);
+}
+
+function normalizePins(raw) {
+  const src = raw && typeof raw === 'object' ? raw : {};
+  const out = {};
+  for (let i = 0; i < PIN_KEYS.length; i++) {
+    const key = PIN_KEYS[i];
+    const row = src[key];
+    if (!row || typeof row !== 'object') continue;
+    const rub = pinRub(key, row.rub);
+    const until = Number(row.until);
+    const at = Number(row.at);
+    if (!(rub > 0) || !Number.isFinite(until) || until <= 0) continue;
+    out[key] = {
+      rub,
+      until,
+      at: Number.isFinite(at) && at > 0 ? at : until,
+      reason: String(row.reason || '').trim().slice(0, 200),
+    };
+  }
+  return out;
+}
+
+function livePin(book, key, now) {
+  const pin = book.pins && book.pins[key];
+  if (!pin || !(pin.rub > 0) || !(pin.until > now)) return 0;
+  return pin.rub;
+}
+
 function starRaw(book, now) {
   const usd = book.cache.usd;
   if (!fresh(usd, now, book.maxAgeMin)) return 0;
@@ -210,23 +250,24 @@ function starRaw(book, now) {
   return rub;
 }
 
-function effective(book, key, manual, now) {
-  if (!book.auto[key]) return manual;
+function effective(book, key, now) {
+  const pinned = livePin(book, key, now);
+  if (pinned > 0) return pinned;
   const raw = key === 'star' ? starRaw(book, now) : fresh(book.cache[key], now, book.maxAgeMin) ? book.cache[key].rub : 0;
   if (!(raw > 0)) return 0;
   return applyMarkup(raw, book.markupPercent);
 }
 
-/** Ruble rates the donate menu uses. 0 hides that method. Manual wins only while auto is off. */
+/** Ruble per unit. 0 hides that method. A live pin wins. A stale book hides the method. */
 export function paymentPricing(settings, now) {
   const s = settings || {};
   const book = normalizeRateSettings(s.rates);
   const at = Number(now) > 0 ? Number(now) : Date.now();
   return {
-    rubPerStar: effective(book, 'star', positive(s.donate && s.donate.rubPerStar), at),
-    cryptoRateUsdt: effective(book, 'usdt', positive(s.cryptoRateUsdt), at),
-    cryptoRateTon: effective(book, 'ton', positive(s.cryptoRateTon), at),
-    cryptoRateBtc: effective(book, 'btc', positive(s.cryptoRateBtc), at),
+    rubPerStar: effective(book, 'star', at),
+    cryptoRateUsdt: effective(book, 'usdt', at),
+    cryptoRateTon: effective(book, 'ton', at),
+    cryptoRateBtc: effective(book, 'btc', at),
   };
 }
 
@@ -249,32 +290,35 @@ export function rateAdminView(settings, now) {
   };
   const row = (key) => {
     const entry = key === 'star' ? book.cache.usd : book.cache[key];
-    const auto = book.auto[key];
+    const pin = book.pins[key];
+    const pinned = livePin(book, key, at);
     let last = 0;
     if (entry && entry.rub > 0) {
       const raw = key === 'star' ? book.starUsd * entry.rub : entry.rub;
       if (raw > 0 && (key !== 'star' || raw <= 1000)) last = applyMarkup(raw, book.markupPercent);
     }
     return {
-      auto,
+      auto: true,
       manual: manual[key],
-      value: auto ? valueOf[key] : manual[key],
-      source: auto ? (entry && entry.source) || '' : 'manual',
-      at: auto && entry ? entry.at : 0,
-      usable: auto ? valueOf[key] > 0 : manual[key] > 0,
+      value: valueOf[key],
+      source: pinned > 0 ? 'pin' : (entry && entry.source) || '',
+      at: pinned > 0 && pin ? pin.at : entry ? entry.at : 0,
+      usable: valueOf[key] > 0,
       last,
+      pin: pin ? { rub: pin.rub, until: pin.until, reason: pin.reason, live: pinned > 0 } : null,
     };
   };
   const priceRub = positive(s.priceRub);
   const extraRub = positive(s.extraDeviceRub);
+  const wallet = grossUp(priceRub, 'PC');
+  const card = grossUp(priceRub, 'AC');
   return {
     refreshMin: book.refreshMin,
     maxAgeMin: book.maxAgeMin,
     markupPercent: book.markupPercent,
     starUsd: book.starUsd,
     rows: { star: row('star'), usdt: row('usdt'), ton: row('ton'), btc: row('btc') },
-    // The invoice computation itself (starList/cryptoDue): ruble base, manual fallback,
-    // star cap and asset rounding included, so the admin sees what a customer pays.
+    yoo: { wallet: wallet ? wallet.gross : '', card: card ? card.gross : '' },
     sub: {
       stars: starList(s, 'sub', 0, priceRub, at),
       starsExtra: starList(s, 'dev', 0, extraRub, at),
@@ -286,9 +330,10 @@ export function rateAdminView(settings, now) {
 }
 
 /** Admin form. A bad number keeps the current one. The cache is not cleared. */
-export function applyRateSettings(prev, body) {
+export function applyRateSettings(prev, body, now) {
   const cur = normalizeRateSettings(prev);
   const b = body || {};
+  const nowMs = Number(now) > 0 ? Number(now) : Date.now();
   const next = {
     refreshMin: cur.refreshMin,
     maxAgeMin: cur.maxAgeMin,
@@ -296,6 +341,7 @@ export function applyRateSettings(prev, body) {
     starUsd: cur.starUsd,
     auto: { ...cur.auto },
     cache: cur.cache,
+    pins: { ...cur.pins },
     fetchedAt: cur.fetchedAt,
   };
   if (b.rateAutoStar !== undefined) next.auto.star = onFlag(b.rateAutoStar, cur.auto.star);
@@ -314,7 +360,76 @@ export function applyRateSettings(prev, body) {
     const n = Number(String(b.maxAgeHours).trim());
     if (Number.isInteger(n) && n >= 1 && n <= 168) next.maxAgeMin = n * 60;
   }
+  if (b.refreshMin !== undefined && String(b.refreshMin).trim() !== '') {
+    const n = Number(String(b.refreshMin).trim());
+    if (Number.isInteger(n) && n >= 5 && n <= 60) next.refreshMin = n;
+  }
+  let hours = 0;
+  if (b.pinHours !== undefined && String(b.pinHours).trim() !== '') {
+    const n = Number(String(b.pinHours).trim());
+    if (Number.isInteger(n) && n >= 1 && n <= 168) hours = n;
+  }
+  const reason = String(b.pinReason || '').trim().slice(0, 200);
+  const creating = ['pinStar', 'pinUsdt', 'pinTon', 'pinBtc'].some((field) => {
+    if (b[field] === undefined) return false;
+    const text = String(b[field]).trim();
+    return text !== '' && text !== '0';
+  });
+  const pinOk = !creating || (reason !== '' && hours >= 1);
+  const setPin = (key, field) => {
+    if (!pinOk || b[field] === undefined) return;
+    const text = String(b[field]).trim();
+    if (text === '') return;
+    if (text === '0') {
+      delete next.pins[key];
+      return;
+    }
+    const rub = pinRub(key, text);
+    if (!rub) return;
+    next.pins[key] = { rub, until: nowMs + hours * 60 * 60 * 1000, at: nowMs, reason };
+  };
+  setPin('star', 'pinStar');
+  setPin('usdt', 'pinUsdt');
+  setPin('ton', 'pinTon');
+  setPin('btc', 'pinBtc');
   return normalizeRateSettings(next);
+}
+
+/** What changed in the rate book, for the audit row. Empty when nothing rate-related moved. */
+export function rateAuditText(prev, next) {
+  const a = normalizeRateSettings(prev);
+  const b = normalizeRateSettings(next);
+  const bits = [];
+  if (a.refreshMin !== b.refreshMin) bits.push('интервал ' + a.refreshMin + ' -> ' + b.refreshMin + ' мин');
+  if (a.markupPercent !== b.markupPercent) bits.push('наценка ' + a.markupPercent + ' -> ' + b.markupPercent);
+  if (a.starUsd !== b.starUsd) bits.push('USD за звезду ' + a.starUsd + ' -> ' + b.starUsd);
+  if (a.maxAgeMin !== b.maxAgeMin) bits.push('срок ' + a.maxAgeMin + ' -> ' + b.maxAgeMin + ' мин');
+  for (let i = 0; i < PIN_KEYS.length; i++) {
+    const key = PIN_KEYS[i];
+    const left = a.pins[key];
+    const right = b.pins[key];
+    const same = !!left === !!right && (!left || (left.rub === right.rub && left.until === right.until));
+    if (same) continue;
+    const was = left ? String(left.rub) : 'нет';
+    const now = right ? String(right.rub) : 'нет';
+    bits.push('закреп ' + key + ' ' + was + ' -> ' + now + (right && right.reason ? ' (' + right.reason + ')' : ''));
+  }
+  return bits.join('; ');
+}
+
+/** Why a pin was not saved. Empty when the form is not creating a pin, or the pin is valid. */
+export function ratePinError(body) {
+  const b = body || {};
+  const creating = ['pinStar', 'pinUsdt', 'pinTon', 'pinBtc'].some((field) => {
+    if (b[field] === undefined) return false;
+    const text = String(b[field]).trim();
+    return text !== '' && text !== '0';
+  });
+  if (!creating) return '';
+  if (!String(b.pinReason || '').trim()) return 'Закрепление курса: нужна причина';
+  const n = Number(String(b.pinHours == null ? '' : b.pinHours).trim());
+  if (!Number.isInteger(n) || n < 1 || n > 168) return 'Закрепление курса: срок от 1 до 168 часов';
+  return '';
 }
 
 async function getJson(fetchImpl, url, headers, label) {
@@ -421,11 +536,12 @@ export async function fetchRateQuotes(fetchImpl, creds) {
 }
 
 function bookCovers(book, now) {
-  if (book.auto.usdt && !fresh(book.cache.usdt, now, book.maxAgeMin)) return false;
-  if (book.auto.ton && !fresh(book.cache.ton, now, book.maxAgeMin)) return false;
-  if (book.auto.btc && !fresh(book.cache.btc, now, book.maxAgeMin)) return false;
-  if (book.auto.star && !fresh(book.cache.usd, now, book.maxAgeMin)) return false;
-  return true;
+  const covered = (key) => {
+    if (livePin(book, key, now)) return true;
+    if (key === 'star') return fresh(book.cache.usd, now, book.maxAgeMin);
+    return fresh(book.cache[key], now, book.maxAgeMin);
+  };
+  return covered('usdt') && covered('ton') && covered('btc') && covered('star');
 }
 
 /**
@@ -453,8 +569,8 @@ export function donateRateWait(data, state, now) {
   return 'background';
 }
 
-function anyAuto(book) {
-  return !!(book.auto.usdt || book.auto.ton || book.auto.btc || book.auto.star);
+function anyAuto() {
+  return true;
 }
 
 let inflight = null;
