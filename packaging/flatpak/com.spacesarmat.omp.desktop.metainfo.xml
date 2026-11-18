@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>com.spacesarmat.omp.desktop</id>
+  <name>OMP</name>
+  <summary>Media player for TorrServer</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-only</project_license>
+  <developer id="com.spacesarmat">
+    <name>spacesarmat</name>
+  </developer>
+  <description>
+    <p>OMP plays movies and series from a TorrServer on the home network. This package is the Linux desktop app, installed from the GitHub release.</p>
+  </description>
+  <launchable type="desktop-id">com.spacesarmat.omp.desktop.desktop</launchable>
+  <url type="homepage">https://omp-player.online</url>
+  <url type="bugtracker">https://github.com/spacesarmat/omp/issues</url>
+  <url type="vcs-browser">https://github.com/spacesarmat/omp</url>
+  <content_rating type="oars-1.1"/>
+  <releases>
+    <release version="0.30.0" date="2026-11-11"/>
+  </releases>
+</component>

@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=OMP
+Comment=Media player for TorrServer
+Exec=omp-desktop
+Icon=com.spacesarmat.omp.desktop
+Terminal=false
+Categories=AudioVideo;Video;Player;
+StartupWMClass=omp-desktop

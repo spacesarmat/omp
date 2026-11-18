@@ -1,0 +1,214 @@
+name: Stores
+
+# Lint on pull requests that touch store files.
+# A stable release queues this workflow with workflow_dispatch. Missing secrets skip.
+# This workflow is not part of the Release or Desktop job graph, so a store failure
+# does not fail the release that already published the assets.
+
+permissions:
+  contents: read
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/stores.yml
+      - .github/workflows/release.yml
+      - .github/workflows/desktop.yml
+      - packaging/**
+      - bucket/**
+      - fastlane/**
+      - scripts/stores/**
+      - docs/stores/**
+      - tests/scripts/stores.test.ts
+      - tests/fixtures/stores/**
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Stable release tag (vX.Y.Z or desktop-X.Y.Z)
+        required: true
+        type: string
+
+jobs:
+  lint:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24
+      - name: Validate store manifests
+        run: node scripts/stores/validate.mjs
+      - name: actionlint
+        run: |
+          set -eu
+          version=1.7.7
+          archive="actionlint_${version}_linux_amd64.tar.gz"
+          curl -fsSL -o "/tmp/${archive}" "https://github.com/rhysd/actionlint/releases/download/v${version}/${archive}"
+          echo "023070a287cd8cccd71515fedc843f1985bf96c436b7effaecce67290e7e0757  /tmp/${archive}" | sha256sum -c
+          tar -C /tmp -xzf "/tmp/${archive}" actionlint
+          /tmp/actionlint -color .github/workflows/stores.yml
+
+  update:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    outputs:
+      version: ${{ steps.plan.outputs.version }}
+      tag: ${{ steps.plan.outputs.tag }}
+      desktop: ${{ steps.plan.outputs.desktop }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24
+      - name: Update in-repo manifests
+        id: plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: node scripts/stores/update.mjs
+
+  winget:
+    needs: update
+    if: needs.update.outputs.desktop == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: Skip without a token or before the first listing
+        id: gate
+        env:
+          WINGET_TOKEN: ${{ secrets.WINGET_TOKEN }}
+          WINGET_LISTED: ${{ vars.WINGET_LISTED }}
+          CHANNEL_TOKEN: ${{ secrets.WINGET_TOKEN }}
+          CHANNEL_LISTED: ${{ vars.WINGET_LISTED }}
+        run: |
+          if [ -z "$WINGET_TOKEN" ]; then
+            echo "::notice::WINGET_TOKEN is not set. Winget update PR skipped."
+          elif [ "$WINGET_LISTED" != "true" ]; then
+            echo "::notice::WINGET_LISTED is not true. The first winget-pkgs PR stays manual."
+          fi
+          node scripts/stores/gate.mjs winget
+      - uses: vedantmgoyal9/winget-releaser@b7370d4d152efdce803a26cc6ca9eee58cb2ad54 # v2
+        if: steps.gate.outputs.skip != 'true'
+        with:
+          identifier: Spacesarmat.OMP
+          version: ${{ needs.update.outputs.version }}
+          release-tag: ${{ needs.update.outputs.tag }}
+          installers-regex: '-setup\.exe$'
+          token: ${{ secrets.WINGET_TOKEN }}
+
+  snap:
+    needs: update
+    if: needs.update.outputs.desktop == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24
+      - name: Skip without store credentials
+        id: gate
+        env:
+          SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
+          CHANNEL_TOKEN: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
+        run: |
+          if [ -z "$SNAPCRAFT_STORE_CREDENTIALS" ]; then
+            echo "::notice::SNAPCRAFT_STORE_CREDENTIALS is not set. Snap build and upload skipped."
+          fi
+          node scripts/stores/gate.mjs snap
+      - name: Render snapcraft.yaml for this release
+        if: steps.gate.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.update.outputs.tag }}
+        run: node scripts/stores/render-snap.mjs
+      - name: Build and upload
+        if: steps.gate.outputs.skip != 'true'
+        env:
+          SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
+        run: |
+          sudo snap install snapcraft --classic
+          cd packaging/snap
+          snapcraft
+          snapcraft upload --release=stable ./*.snap
+
+  homebrew-tap:
+    needs: update
+    if: needs.update.outputs.desktop == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24
+      - name: Skip without a tap
+        id: gate
+        env:
+          CHANNEL_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          CHANNEL_REPO: ${{ vars.HOMEBREW_TAP_REPO }}
+        run: node scripts/stores/gate.mjs homebrew-tap
+      - name: Push cask
+        if: steps.gate.outputs.skip != 'true'
+        env:
+          CHANNEL_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          CHANNEL_REPO: ${{ vars.HOMEBREW_TAP_REPO }}
+          TAG: ${{ needs.update.outputs.tag }}
+        run: node scripts/stores/push-external.mjs homebrew-tap
+
+  scoop-bucket:
+    needs: update
+    if: needs.update.outputs.desktop == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24
+      - name: Skip without a bucket repo
+        id: gate
+        env:
+          CHANNEL_TOKEN: ${{ secrets.SCOOP_BUCKET_TOKEN }}
+          CHANNEL_REPO: ${{ vars.SCOOP_BUCKET_REPO }}
+        run: node scripts/stores/gate.mjs scoop-bucket
+      - name: Push bucket
+        if: steps.gate.outputs.skip != 'true'
+        env:
+          CHANNEL_TOKEN: ${{ secrets.SCOOP_BUCKET_TOKEN }}
+          CHANNEL_REPO: ${{ vars.SCOOP_BUCKET_REPO }}
+          TAG: ${{ needs.update.outputs.tag }}
+        run: node scripts/stores/push-external.mjs scoop-bucket
+
+  flathub:
+    needs: update
+    if: needs.update.outputs.desktop == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24
+      - name: Skip without a Flathub token
+        id: gate
+        env:
+          CHANNEL_TOKEN: ${{ secrets.FLATHUB_TOKEN }}
+          CHANNEL_REPO: ${{ vars.FLATHUB_REPO }}
+        run: node scripts/stores/gate.mjs flathub
+      - name: Push Flathub manifest
+        if: steps.gate.outputs.skip != 'true'
+        env:
+          CHANNEL_TOKEN: ${{ secrets.FLATHUB_TOKEN }}
+          CHANNEL_REPO: ${{ vars.FLATHUB_REPO }}
+          CHANNEL_BASE: master
+          TAG: ${{ needs.update.outputs.tag }}
+        run: node scripts/stores/push-external.mjs flathub

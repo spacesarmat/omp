@@ -211,10 +211,12 @@ jobs:
           mkdir -p build
           cp "$OUT/app-universal-release.apk" "build/OMP-${VERSION}.apk"
           cp "$OUT/app-arm64-v8a-release.apk" "build/OMP-${VERSION}-arm64.apk"
+          cp "$OUT/app-arm64-v8a-release.apk" "build/OMP-${VERSION}-arm64-v8a.apk"
           cp "$OUT/app-armeabi-v7a-release.apk" "build/OMP-${VERSION}-armv7.apk"
+          cp "$OUT/app-armeabi-v7a-release.apk" "build/OMP-${VERSION}-armeabi-v7a.apk"
           rm -f "$RUNNER_TEMP/omp.jks"
           echo "APK sizes (bytes):"
-          ls -l "build/OMP-${VERSION}-arm64.apk" "build/OMP-${VERSION}-armv7.apk" "build/OMP-${VERSION}.apk"
+          ls -l "build/OMP-${VERSION}-arm64.apk" "build/OMP-${VERSION}-armv7.apk" "build/OMP-${VERSION}.apk" "build/OMP-${VERSION}-arm64-v8a.apk" "build/OMP-${VERSION}-armeabi-v7a.apk"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: release-apk
@@ -229,6 +231,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      actions: write
     env:
       TAG: ${{ inputs.tag || github.ref_name }}
     steps:
@@ -270,13 +273,15 @@ jobs:
           APK="build/OMP-${VERSION}.apk"
           APK64="build/OMP-${VERSION}-arm64.apk"
           APK32="build/OMP-${VERSION}-armv7.apk"
+          APK64ABI="build/OMP-${VERSION}-arm64-v8a.apk"
+          APK32ABI="build/OMP-${VERSION}-armeabi-v7a.apk"
           # short bilingual body: Russian and English changes, downloads, two screenshots; checksums, Homebrew and the
           # compare link folded under «Подробнее». No generated PR list (it repeated every beta).
           node scripts/release-notes.mjs "$TAG" build > notes.md
           # a beta (vX.Y.Z-beta.N) is a pre-release: never «latest», never the Homebrew repository
           EXTRA=""
           case "$TAG" in *-beta.*) EXTRA="--prerelease --latest=false" ;; esac
-          gh release create "$TAG" "$IPK" "$APK64" "$APK32" "$APK" "build/hb/com.spacesarmat.torrplayer.manifest.json" --title "OMP $TAG" --notes-file notes.md $EXTRA
+          gh release create "$TAG" "$IPK" "$APK64" "$APK32" "$APK" "$APK64ABI" "$APK32ABI" "build/hb/com.spacesarmat.torrplayer.manifest.json" --title "OMP $TAG" --notes-file notes.md $EXTRA
       - name: Publish update feed to gh-pages
         env:
           GH_TOKEN: ${{ github.token }}
@@ -309,4 +314,25 @@ jobs:
             node scripts/telegram-post.mjs "$TAG" --notice "$NOTICE"
           else
             node scripts/telegram-post.mjs "$TAG"
+          fi
+      # Stable store channels. A beta, a missing script, or a stores workflow that is not on main yet exits 0.
+      - name: Queue store updates
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ ! -f scripts/stores/queue-stores.mjs ]; then
+            echo "::notice::scripts/stores/queue-stores.mjs is not in this checkout. Store update skipped."
+            exit 0
+          fi
+          if ! decision=$(node scripts/stores/queue-stores.mjs "$TAG"); then
+            echo "::notice::store queue script failed. Release publish continues."
+            exit 0
+          fi
+          printf '%s\n' "$decision"
+          tag=$(printf '%s\n' "$decision" | sed -n 's/^QUEUE //p')
+          if [ -z "$tag" ]; then
+            exit 0
+          fi
+          if ! gh workflow run stores.yml --ref main -f tag="$tag"; then
+            echo "::notice::stores.yml did not start. It runs from the default branch after this workflow is merged."
           fi
