@@ -1,12 +1,27 @@
 import { signal } from '@preact/signals';
 import { ru } from './ru';
 import { en } from './en';
+import { uk } from './uk';
+import { be } from './be';
+import { kk } from './kk';
+import { ky } from './ky';
+import { uz } from './uz';
+import { tg } from './tg';
+import { tk } from './tk';
+import { hy } from './hy';
+import { az } from './az';
+import { ka } from './ka';
+import { ro } from './ro';
 import type { StringKeys, PluralKeys } from './types';
 
 export type { Plural, EnPlural, EnDict, StringKeys, PluralKeys } from './types';
 
-export type Lang = 'ru' | 'en';
-export type LanguageSetting = 'system' | 'ru' | 'en';
+export type Lang = 'ru' | 'en' | 'uk' | 'be' | 'kk' | 'ky' | 'uz' | 'tg' | 'tk' | 'hy' | 'az' | 'ka' | 'ro';
+export type LanguageSetting = 'system' | Lang;
+/** Supported UI languages, the same codes as the bot (botCopy LANG_CODES). */
+export const LANGS: readonly Lang[] = ['ru', 'en', 'uk', 'be', 'kk', 'ky', 'uz', 'tg', 'tk', 'hy', 'az', 'ka', 'ro'];
+/** Languages written in Cyrillic: native player/OS messages in that script pass through untranslated. */
+export const CYRILLIC_LANGS: readonly Lang[] = ['ru', 'uk', 'be', 'kk', 'ky', 'tg'];
 /** Dot path of a string in the dictionaries: 'common.signInTo'. */
 export type Key = StringKeys<typeof ru>;
 /** Dot path of a plural in the dictionaries: 'common.torrents'. */
@@ -16,14 +31,22 @@ export type Params = { [k: string]: string | number };
 /** The current UI language. t() reads it with peek(): the app roots re-mount the UI (key={lang.value}) when it changes. */
 export const lang = signal<Lang>('ru');
 
-/** System languages that get the Russian UI. */
-const RUSSIAN_SYSTEM = ['ru', 'uk', 'be', 'kk'];
+/** Translated packs plug in here as they land; a missing pack or key falls back to Russian. */
+export const DICTS: Partial<Record<Lang, unknown>> = { ru, en, uk, be, kk, ky, uz, tg, tk, hy, az, ka, ro };
 
-/** 'system' → the first browser language: ru/uk/be/kk (any region) → Russian, anything else (or none) → English. */
+/** Prefix match so regional variants (uk-UA, kk-KZ, en-US, ...) map to the base code. Unsupported stays ''. */
+export function normalizeLang(code: string): Lang | '' {
+  const c = String(code || '').toLowerCase();
+  for (let i = 0; i < LANGS.length; i++) {
+    if (c.indexOf(LANGS[i]) === 0) return LANGS[i];
+  }
+  return '';
+}
+
+/** 'system' → the first browser language normalized to a supported code; unsupported (or none) → English. */
 export function resolveLanguage(setting: LanguageSetting, nav: string[]): Lang {
-  if (setting === 'ru' || setting === 'en') return setting;
-  const first = (nav[0] || '').toLowerCase().split(/[-_]/)[0];
-  return RUSSIAN_SYSTEM.indexOf(first) >= 0 ? 'ru' : 'en';
+  if (setting !== 'system') return setting;
+  return normalizeLang(nav[0] || '') || 'en';
 }
 
 function navLangs(): string[] {
@@ -58,7 +81,7 @@ function fill(s: string, params?: Params): string {
 }
 
 function entry(key: string): unknown {
-  const v = lang.peek() === 'en' ? lookup(en, key) : undefined;
+  const v = lookup(DICTS[lang.peek()] || ru, key);
   return v !== undefined ? v : lookup(ru, key);
 }
 
@@ -77,12 +100,20 @@ function ruForm(n: number): 'one' | 'few' | 'many' {
   return 'many';
 }
 
+/** Romanian: one, few for 0 and 2-19, many otherwise (the same rule as the bot). */
+function roForm(n: number): 'one' | 'few' | 'many' {
+  const a = Math.abs(Math.floor(n));
+  if (a === 1) return 'one';
+  const d100 = a % 100;
+  return a === 0 || (d100 >= 2 && d100 <= 19) ? 'few' : 'many';
+}
+
 /** The plural form for n in the current language, {n} filled with the number. */
 export function tp(key: PluralKey, n: number, params?: Params): string {
   const v = entry(key);
   if (!v || typeof v !== 'object') return key;
   const forms = v as { [k: string]: string };
-  const form = 'other' in forms ? (n === 1 ? 'one' : 'other') : ruForm(n);
+  const form = 'other' in forms ? (n === 1 ? 'one' : 'other') : lang.peek() === 'ro' ? roForm(n) : ruForm(n);
   const s = forms[form];
   if (typeof s !== 'string') return key;
   const all: Params = {};
@@ -91,10 +122,10 @@ export function tp(key: PluralKey, n: number, params?: Params): string {
   return fill(s, all);
 }
 
-/** «7,4» in Russian, «7.4» in English; digits = fixed decimals. */
+/** «7,4» in most languages, «7.4» in English; digits = fixed decimals. */
 export function fmtNumber(n: number, digits?: number): string {
   const s = digits === undefined ? String(n) : n.toFixed(digits);
-  return lang.peek() === 'ru' ? s.replace('.', ',') : s;
+  return lang.peek() === 'en' ? s : s.replace('.', ',');
 }
 
 const MIB = 1024 * 1024;

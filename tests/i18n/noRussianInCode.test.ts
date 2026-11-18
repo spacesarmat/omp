@@ -10,6 +10,17 @@ const PENDING: string[] = [
 /** Not copy: tracker parsers and patterns (reason each). */
 const ALLOWLIST: { [file: string]: string } = {
   'src/i18n/ru.ts': 'the Russian dictionary',
+  'src/i18n/uk.ts': 'the Ukrainian dictionary',
+  'src/i18n/be.ts': 'the Belarusian dictionary',
+  'src/i18n/kk.ts': 'the Kazakh dictionary',
+  'src/i18n/ky.ts': 'the Kyrgyz dictionary',
+  'src/i18n/uz.ts': 'the Uzbek dictionary',
+  'src/i18n/tg.ts': 'the Tajik dictionary',
+  'src/i18n/tk.ts': 'the Turkmen dictionary',
+  'src/i18n/hy.ts': 'the Armenian dictionary',
+  'src/i18n/az.ts': 'the Azerbaijani dictionary',
+  'src/i18n/ka.ts': 'the Georgian dictionary',
+  'src/i18n/ro.ts': 'the Romanian dictionary',
   'src/i18n/languageNames.ts': 'language names in their own language',
   'src/faq/faq.ru.ts': 'Russian FAQ texts',
   'src/testmode/registry.ts': 'stable TV screen-code catalog (Russian and English names, source of docs/screen-codes.md)',

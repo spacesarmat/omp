@@ -26,7 +26,7 @@ import { clearHealth, getHealth, isCloudflareBypassOn, isSourceOn, setCloudflare
 import { normalizeFlareUrl, setFlareSolverrUrl } from './flareStore';
 import type { SecretStore, Source, SourceContext, SourceHealth } from './types';
 import { updateSettings } from '../store/settings';
-import { fmtDay, t } from '../i18n';
+import { fmtDay, normalizeLang, t } from '../i18n';
 import type { Lang } from '../i18n';
 
 export const TRANSFER_PATH = '/omp/sources';
@@ -210,14 +210,11 @@ export function validateTransferPayload(v: unknown): TransferPayload | null {
     out.logins = l;
   }
   if (v.language !== undefined) {
-    if (!isLang(v.language)) return null;
-    out.language = v.language;
+    const lang = typeof v.language === 'string' ? normalizeLang(v.language) : '';
+    if (!lang) return null;
+    out.language = lang;
   }
   return out;
-}
-
-function isLang(v: unknown): v is Lang {
-  return v === 'ru' || v === 'en';
 }
 
 const PAYLOAD_KEYS = ['v', 'sources', 'rutracker', 'indexers', 'flaresolverr', 'cloudflare', 'logins', 'language'];
@@ -428,7 +425,8 @@ export function parseRemoteSources(d: unknown): RemoteSources | null {
     if (ids.length) out.sessions = sessions;
   }
   // an unknown language is ignored: the switches still apply
-  if (isLang(d.language)) out.language = d.language;
+  const lang = typeof d.language === 'string' ? normalizeLang(d.language) : '';
+  if (lang) out.language = lang;
   return out;
 }
 

@@ -3,7 +3,7 @@ import { activeServer } from '../store/servers';
 import { buildPairUri } from '../lib/pairing';
 import { goBack, resetTo } from '../ui/nav';
 import { toast } from '../ui/toast';
-import { t, lang } from '../i18n';
+import { t, lang, CYRILLIC_LANGS } from '../i18n';
 import { phoneAttachCount } from '../phone/link';
 import { FocusGroup, Button } from '../ui/components';
 import { Qr } from '../ui/Qr';
@@ -26,10 +26,10 @@ interface CodeState {
   error: string | null;
 }
 
-/** The native rejection when it is Russian (e.g. «Сервер управления не запустился»), else a generic text. */
+/** The native rejection when it is in the UI's Cyrillic script (e.g. «Сервер управления не запустился»), else a generic text. */
 function codeError(e: unknown): string {
   const m = e && typeof e === 'object' && typeof (e as { message?: unknown }).message === 'string' ? (e as { message: string }).message : '';
-  return lang.peek() === 'ru' && /[\u0400-\u04FF]/.test(m) ? m : t('pair.noCode');
+  return CYRILLIC_LANGS.indexOf(lang.peek()) >= 0 && /[\u0400-\u04FF]/.test(m) ? m : t('pair.noCode');
 }
 
 /**

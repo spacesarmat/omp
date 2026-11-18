@@ -1,4 +1,5 @@
 import { sanitizePhoneLink } from '../phone/phoneStore';
+import { normalizeLang, type Lang } from '../i18n';
 
 export type LaunchAction =
   | { kind: 'play'; url: string; title: string }
@@ -21,7 +22,7 @@ export interface LaunchPlan {
   /** a screen to open: `update` (sent by the phone when the TV has an old OMP) */
   open?: 'update';
   /** The phone's resolved UI language: the TV stores it as its own language setting. */
-  lang?: 'ru' | 'en';
+  lang?: Lang;
   /** Where the TV reaches the phone's site search (its OMP app with the TV search switch on). */
   phone?: PhoneAddress;
   invalid: boolean;
@@ -123,7 +124,8 @@ export function parseLaunchParams(raw: unknown): LaunchPlan | null {
   // unknown screens are ignored, so a newer phone does not break an older TV
   if (o.open === 'update') plan.open = 'update';
   // an unknown language is ignored the same way
-  if (o.lang === 'ru' || o.lang === 'en') plan.lang = o.lang;
+  const lang = typeof o.lang === 'string' ? normalizeLang(o.lang) : '';
+  if (lang) plan.lang = lang;
   // a bad phone address is dropped without invalidating the launch: an older or newer phone must never break it
   if (has('phone')) {
     const ph = sanitizePhoneLink(o.phone, 0);

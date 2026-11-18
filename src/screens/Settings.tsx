@@ -26,7 +26,7 @@ import { platformKind } from '../platform/env';
 import { STORE_BUILD } from '../storeMode';
 import { logEntries, clearLog, logVersion, logTime, levelLabel, areaLabel } from '../lib/log';
 import { cacheOptions, preloadOptions, readaheadOptions, connsOptions, rateOptions, disconnectOptions, withCurrent } from '../lib/serverSettingsOptions';
-import { t, type LanguageSetting } from '../i18n';
+import { t, LANGS, type LanguageSetting } from '../i18n';
 import { openOnboarding } from '../onboarding/gate';
 import { LANGUAGE_NAMES } from '../i18n/languageNames';
 import { clampLabelPx, isBetaBuild, TV_LABEL_PX } from '../testmode/active';
@@ -39,12 +39,11 @@ const subColorOptions = (): { value: 'white' | 'yellow'; label: string }[] => [
 
 const LOG_BRIEF = 20;
 
-/** «Язык»: a press cycles Как в системе → Русский → English (read at render: the labels follow the language). */
+/** «Язык»: a press cycles Как в системе → the 13 supported languages (read at render: the labels follow the language). */
 function languageOptions(): { value: LanguageSetting; label: string }[] {
   return [
     { value: 'system', label: t('settings.language.system') },
-    { value: 'ru', label: LANGUAGE_NAMES.ru },
-    { value: 'en', label: LANGUAGE_NAMES.en },
+    ...LANGS.map((l) => ({ value: l, label: LANGUAGE_NAMES[l] })),
   ];
 }
 
