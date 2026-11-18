@@ -27,7 +27,8 @@ const NODE_ID = /^[a-f0-9]{16}$/;
 const ERRORS = { '': true, add_failed: true, no_metadata: true, prefix_short: true, torrserver: true };
 
 export function isCachePath(path) {
-  return path.indexOf('/v1/cache') === 0 || path.indexOf('/admin/api/cache') === 0 || path.indexOf('/admin/cache') === 0;
+  // /admin/cache itself is the admin page. The API lives under /admin/cache/ and /admin/api/cache.
+  return path.indexOf('/v1/cache') === 0 || path.indexOf('/admin/api/cache') === 0 || path.indexOf('/admin/cache/') === 0;
 }
 
 function reply(res, json, status, body) {

@@ -6,6 +6,7 @@ The English translation covers the latest versions only; the full history (in Ru
 
 ## Unreleased
 
+- [tech] Admin: Playwright checks login, every section, that a promo revoke is not sent before Yes, and that saving the rate still shows the subscription number. Donation and referral forms have component tests
 - [tech] The developer mode banner test no longer waits on a requestAnimationFrame under fake timers: the render runs in the same turn as setState
 - [tech] Admin: a person's card has one timeline of the subscription, devices, payments, donations, referrals and audit. The journal can filter price and rate changes and shows the old value, the new value, the source and who changed it. Selected people can be granted days or messaged, and selected promos can be revoked, after a confirm that states the count
 - [tech] Admin: sections open through TanStack Router at /admin/<section>. Old ?tab= links move to the new address. The server serves the same page for every section

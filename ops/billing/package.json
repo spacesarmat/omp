@@ -7,10 +7,14 @@
     "admin-login-link": "node src/adminLoginLink.mjs",
     "build:admin": "npm --prefix admin ci && npm --prefix admin run build",
     "test": "cd ../.. && npx vitest run --config ops/billing/vitest.config.ts",
+    "test:e2e": "playwright test",
     "migrate:pg": "node tools/migrateToPostgres.mjs"
   },
   "dependencies": {
     "nodemailer": "^10.5.0",
     "pg": "8.23.1"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.57.0"
   }
 }
