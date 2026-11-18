@@ -2,23 +2,13 @@ import { describe, expect, it } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { readdirSync, readFileSync } from 'node:fs';
 // @ts-ignore plain .mjs script
-import {
-  androidVersionCode,
-  channelSkip,
-  fastlaneChangelog,
-  matchingFixtures,
-  parseReleaseTag,
-  planRelease,
-  releaseFixture,
-  renderRelease,
-  userBullets,
-} from '../../scripts/stores/lib.mjs';
+import { androidVersionCode, channelSkip, fastlaneChangelog, matchingFixtures, parseReleaseTag, planRelease, releaseFixture, renderRelease, userBullets } from '../../scripts/stores/lib.mjs';
 
 const releaseYml = readFileSync('.github/workflows/release.yml', 'utf8').replace(/\r\n/g, '\n');
 const desktopYml = readFileSync('.github/workflows/desktop.yml', 'utf8').replace(/\r\n/g, '\n');
 const storesYml = readFileSync('.github/workflows/stores.yml', 'utf8').replace(/\r\n/g, '\n');
 
-const v030 = JSON.parse(readFileSync('tests/fixtures/stores/v0.30.0.json', 'utf8'));
+const v030 = JSON.parse(readFileSync('tests/fixtures/stores/0.30.0.json', 'utf8'));
 
 describe('parseReleaseTag', () => {
   it('accepts a stable v tag and a stable desktop tag', () => {
@@ -154,8 +144,10 @@ describe('store update scripts', () => {
   });
 
   it('continues an existing external branch instead of recreating it', () => {
+    execFileSync('node', ['--check', 'scripts/stores/push-external.mjs']);
     expect(external).toContain("['fetch', 'origin', branch]");
     expect(external).toContain('origin/${branch}');
+    expect(external).not.toMatch(/^\s*return;/m);
     const dirtyAt = external.indexOf('if (!dirty)');
     const prAt = external.indexOf("['pr', 'create'");
     expect(prAt).toBeGreaterThan(dirtyAt);

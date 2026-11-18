@@ -1,5 +1,5 @@
 // Rewrite in-repo store manifests for one stable release and open a PR. Never force-pushes.
-import { appendFileSync, existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -67,9 +67,22 @@ for (const [path, body] of Object.entries(plan.files)) {
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, body);
 }
-const fixturePath = `tests/fixtures/stores/${parsed.tag}.json`;
-mkdirSync(dirname(fixturePath), { recursive: true });
+const fixtureDir = 'tests/fixtures/stores';
+const fixturePath = `${fixtureDir}/${plan.version}.json`;
+mkdirSync(fixtureDir, { recursive: true });
 writeFileSync(fixturePath, `${JSON.stringify(releaseFixture(release, plan.version), null, 2)}\n`);
+if (existsSync(fixtureDir)) {
+  for (const name of readdirSync(fixtureDir)) {
+    if (!name.endsWith('.json') || name === `${plan.version}.json`) continue;
+    let otherTag = '';
+    try {
+      otherTag = JSON.parse(readFileSync(join(fixtureDir, name), 'utf8')).tag || '';
+    } catch {
+      otherTag = '';
+    }
+    if (parseReleaseTag(otherTag).version === plan.version) rmSync(join(fixtureDir, name));
+  }
+}
 const wingetRoot = 'packaging/winget/manifests/s/Spacesarmat/OMP';
 if (existsSync(wingetRoot)) {
   for (const name of readdirSync(wingetRoot)) {

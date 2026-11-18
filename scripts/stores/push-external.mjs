@@ -87,18 +87,19 @@ try {
     ], { cwd: dir, env, stdio: 'inherit' });
     run('git', ['push', 'origin', `HEAD:${branch}`], { cwd: dir, env, stdio: 'inherit' });
   }
-  if (!dirty && !hasBranch) return;
-  const body = join(dir, 'pr.md');
-  writeFileSync(body, `Update OMP ${parsed.tag} from the GitHub release assets.\n`);
-  let existing = '';
-  try {
-    existing = run('gh', ['pr', 'view', branch, '--repo', repo, '--json', 'url', '--jq', '.url'], { env }).trim();
-  } catch {
-    existing = '';
-  }
-  if (existing) console.log(existing);
-  else {
-    run('gh', ['pr', 'create', '--repo', repo, '--base', base, '--head', branch, '--title', `OMP ${parsed.tag}`, '--body-file', body], { env, stdio: 'inherit' });
+  if (dirty || hasBranch) {
+    const body = join(dir, 'pr.md');
+    writeFileSync(body, `Update OMP ${parsed.tag} from the GitHub release assets.\n`);
+    let existing = '';
+    try {
+      existing = run('gh', ['pr', 'view', branch, '--repo', repo, '--json', 'url', '--jq', '.url'], { env }).trim();
+    } catch {
+      existing = '';
+    }
+    if (existing) console.log(existing);
+    else {
+      run('gh', ['pr', 'create', '--repo', repo, '--base', base, '--head', branch, '--title', `OMP ${parsed.tag}`, '--body-file', body], { env, stdio: 'inherit' });
+    }
   }
 } finally {
   rmSync(dir, { recursive: true, force: true });
