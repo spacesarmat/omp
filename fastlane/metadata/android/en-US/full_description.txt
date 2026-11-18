@@ -1,0 +1,7 @@
+OMP plays movies and series from a TorrServer on your home network.
+
+The phone app browses the catalog, searches releases, and sends playback to an LG webOS TV or an Android TV box. The same APK runs on the phone and on Android TV. Android 8 or newer is required.
+
+OMP is free software, GPL-3.0-only. Source code: https://github.com/spacesarmat/omp
+
+This listing uses the arm64-v8a build. A 32-bit build is published beside it for older TV boxes.

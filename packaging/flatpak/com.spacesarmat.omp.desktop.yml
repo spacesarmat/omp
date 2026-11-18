@@ -1,0 +1,41 @@
+app-id: com.spacesarmat.omp.desktop
+runtime: org.gnome.Platform
+runtime-version: '47'
+sdk: org.gnome.Sdk
+command: omp-desktop
+finish-args:
+  - --share=network
+  - --share=ipc
+  - --socket=fallback-x11
+  - --socket=wayland
+  - --socket=pulseaudio
+  - --device=dri
+  - --filesystem=home
+  - --talk-name=org.kde.StatusNotifierWatcher
+modules:
+  - name: omp
+    buildsystem: simple
+    build-commands:
+      - bsdtar -xf omp.deb data.tar.gz
+      - tar -xzf data.tar.gz
+      - install -Dm755 usr/bin/omp-desktop /app/bin/omp-desktop
+      - install -Dm644 com.spacesarmat.omp.desktop.desktop /app/share/applications/com.spacesarmat.omp.desktop.desktop
+      - install -Dm644 com.spacesarmat.omp.desktop.metainfo.xml /app/share/metainfo/com.spacesarmat.omp.desktop.metainfo.xml
+      - install -Dm644 usr/share/icons/hicolor/512x512/apps/omp-desktop.png /app/share/icons/hicolor/512x512/apps/com.spacesarmat.omp.desktop.png
+      - install -Dm644 usr/share/icons/hicolor/512x512/apps/omp-desktop.png /app/share/icons/hicolor/512x512/apps/omp-desktop.png
+    sources:
+      - type: file
+        path: com.spacesarmat.omp.desktop.desktop
+      - type: file
+        path: com.spacesarmat.omp.desktop.metainfo.xml
+      - type: file
+        dest-filename: omp.deb
+        url: https://github.com/spacesarmat/omp/releases/download/v0.30.0/OMP-0.30.0-linux-x64.deb
+        sha256: 567e10c5c64191b492848cf5b1e2ba3f6ea3a359562dd5801050c5fa06165778
+        size: 5917264
+        x-checker-data:
+          type: json
+          url: https://api.github.com/repos/spacesarmat/omp/releases/latest
+          version-query: .tag_name | sub("^v"; "")
+          url-query: .assets[] | select(.name | test("-linux-x64.deb$")) | .browser_download_url
+          timestamp-query: .published_at

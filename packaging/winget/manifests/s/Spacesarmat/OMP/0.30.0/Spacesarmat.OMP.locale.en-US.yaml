@@ -1,0 +1,24 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.10.0.schema.json
+PackageIdentifier: Spacesarmat.OMP
+PackageVersion: 0.30.0
+PackageLocale: en-US
+Publisher: spacesarmat
+PublisherUrl: https://github.com/spacesarmat
+PublisherSupportUrl: https://github.com/spacesarmat/omp/issues
+PrivacyUrl: https://omp-player.online/privacy/en
+Author: spacesarmat
+PackageName: OMP
+PackageUrl: https://omp-player.online
+License: GPL-3.0
+LicenseUrl: https://github.com/spacesarmat/omp/blob/v0.30.0/LICENSE
+ShortDescription: Media player for TorrServer on the home network
+Description: |-
+  OMP plays movies and series from a TorrServer on the home network. This package installs the Windows desktop app for Windows 10 and 11 (x64).
+Moniker: omp
+Tags:
+  - media-player
+  - torrserver
+  - video
+ReleaseNotesUrl: https://github.com/spacesarmat/omp/releases/tag/v0.30.0
+ManifestType: defaultLocale
+ManifestVersion: 1.10.0

@@ -1,0 +1,1 @@
+The remote can turn a TV or a box on. OMP remembers the MAC and broadcast address of a paired device, and a device can be added by MAC. Turn on sends Wake-on-LAN. LG, Samsung and Android TV get power, volume and input commands. A phone with an IR blaster offers brands and a code test, and a button can be learned with an ESP receiver or pasted as Flipper, Pronto or raw

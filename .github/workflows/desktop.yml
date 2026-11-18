@@ -596,3 +596,39 @@ jobs:
             gh api --method PUT "repos/${{ github.repository }}/contents/update-linux.json" -f message="Update Linux desktop feed" -f content="$content" -f sha="$lookup" -f branch="gh-pages"
           fi
 
+  # Stable store manifests after NSIS, DMG and the Linux packages are on the release.
+  # A missing stores workflow on main is a notice. This job does not fail the desktop publish.
+  queue-stores:
+    needs: [package-windows, package-macos, package-linux]
+    if: ${{ !cancelled() && github.event.inputs.publish == 'true' && needs.package-windows.result == 'success' && needs.package-macos.result == 'success' && needs.package-linux.result == 'success' }}
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24
+      - name: Queue store updates
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.inputs.tag }}
+        run: |
+          if [ ! -f scripts/stores/queue-stores.mjs ]; then
+            echo "::notice::scripts/stores/queue-stores.mjs is not in this checkout. Store update skipped."
+            exit 0
+          fi
+          if ! decision=$(node scripts/stores/queue-stores.mjs "$TAG"); then
+            echo "::notice::store queue script failed. Desktop publish continues."
+            exit 0
+          fi
+          printf '%s\n' "$decision"
+          tag=$(printf '%s\n' "$decision" | sed -n 's/^QUEUE //p')
+          if [ -z "$tag" ]; then
+            exit 0
+          fi
+          if ! gh workflow run stores.yml --ref main -f tag="$tag"; then
+            echo "::notice::stores.yml did not start. It runs from the default branch after this workflow is merged."
+          fi
+

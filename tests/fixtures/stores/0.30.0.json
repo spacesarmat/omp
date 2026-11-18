@@ -1,0 +1,32 @@
+{
+  "tag": "v0.30.0",
+  "prerelease": false,
+  "publishedAt": "2026-11-11T03:32:44Z",
+  "assets": [
+    {
+      "name": "OMP-0.30.0-setup.exe",
+      "digest": "sha256:efa559bb0929a6c675801edbf276dbe04b628bd4d0a35f0278378e157e2491b1",
+      "size": 4107085
+    },
+    {
+      "name": "OMP-0.30.0-macos-arm64.dmg",
+      "digest": "sha256:706c7966376f27117e07a34589403292258ec5e9f734755dee805bbcb82ffde0",
+      "size": 5389199
+    },
+    {
+      "name": "OMP-0.30.0-macos-x64.dmg",
+      "digest": "sha256:b3a93a261f55c38c056d2d43e7d68366d569920a42e178976961df8c3f15e5c4",
+      "size": 5802232
+    },
+    {
+      "name": "OMP-0.30.0-linux-x64.deb",
+      "digest": "sha256:567e10c5c64191b492848cf5b1e2ba3f6ea3a359562dd5801050c5fa06165778",
+      "size": 5917264
+    },
+    {
+      "name": "OMP-0.30.0-linux-x64.AppImage",
+      "digest": "sha256:d450783d9f5cb99fa31a5e5a5d54f8cf2a6884191d24aff000694aa5173478f0",
+      "size": 89438712
+    }
+  ]
+}

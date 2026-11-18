@@ -1,0 +1,42 @@
+name: omp-player
+title: OMP
+base: core24
+version: '0.30.0'
+summary: Media player for TorrServer
+description: |
+  OMP plays movies and series from a TorrServer on the home network.
+  This snap packages the Linux desktop build from GitHub Releases.
+grade: stable
+confinement: strict
+license: GPL-3.0
+platforms:
+  amd64:
+    build-on: [amd64]
+    build-for: [amd64]
+apps:
+  omp:
+    command: usr/bin/omp-desktop
+    extensions:
+      - gnome
+    plugs:
+      - network
+      - home
+      - removable-media
+      - audio-playback
+      - desktop
+      - desktop-legacy
+      - wayland
+      - x11
+      - opengl
+parts:
+  omp:
+    plugin: nil
+    source: https://github.com/spacesarmat/omp/releases/download/v0.30.0/OMP-0.30.0-linux-x64.deb
+    source-type: deb
+    stage-packages:
+      - libwebkit2gtk-4.1-0
+      - libgtk-3-0
+      - libayatana-appindicator3-1
+    override-build: |
+      craftctl default
+      cp -a usr "$CRAFT_PART_INSTALL/"

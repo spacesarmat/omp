@@ -11,7 +11,7 @@ describe('release workflow asset names', () => {
     paths.forEach((p: string) => {
       if (p.indexOf('com.spacesarmat') >= 0) return; // the packager's own output name
       if (p.indexOf('*') >= 0) return; // artifact upload glob, not a published name
-      expect(p).toMatch(/^build\/OMP-\$\{VERSION\}(-webOS|-arm64|-armv7)?\.(apk|ipk)$/);
+      expect(p).toMatch(/^build\/OMP-\$\{VERSION\}(-webOS|-arm64|-arm64-v8a|-armv7|-armeabi-v7a)?\.(apk|ipk)$/);
     });
   });
 
@@ -39,7 +39,7 @@ describe('release workflow asset names', () => {
     const step = yml.slice(yml.indexOf('Create GitHub release'), yml.indexOf('Publish update feed'));
     expect(step).toContain('APK64="build/OMP-${VERSION}-arm64.apk"');
     expect(step).toContain('APK32="build/OMP-${VERSION}-armv7.apk"');
-    expect(step).toMatch(/gh release create "\$TAG" "\$IPK" "\$APK64" "\$APK32" "\$APK" /);
+    expect(step).toMatch(/gh release create "\$TAG" "\$IPK" "\$APK64" "\$APK32" "\$APK" "\$APK64ABI" "\$APK32ABI" /);
   });
 });
 
