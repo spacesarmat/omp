@@ -20,6 +20,7 @@ import { confirmDialog } from '../ui/dialog';
 import { toast } from '../ui/toast';
 import { latestUpdate, checkForUpdate } from '../store/updates';
 import { openHbChannel } from '../platform/hbchannel';
+import { extendDevMode } from '../platform/devmode';
 import { HB_REPO_URL, updateTitle } from '../lib/updateInfo';
 import { platformKind } from '../platform/env';
 import { logEntries, clearLog, logVersion, logTime, levelLabel, areaLabel } from '../lib/log';
@@ -344,6 +345,19 @@ export function SettingsScreen() {
         <Button focusKey="set-advanced" label={t('settings.advanced')} onPress={() => navigate({ name: 'advanced' })} onArrow={nav('set-advanced')} />
       </div>
       <div class="row">
+        {platformKind() !== 'androidtv' && (
+          <Button
+            focusKey="set-devmode-extend"
+            label={t('tvSettings.devmodeExtend')}
+            onArrow={nav('set-devmode-extend')}
+            onPress={() => {
+              extendDevMode(Date.now()).then(
+                () => toast(t('tvSettings.devmodeExtended')),
+                () => toast(t('tvSettings.devmodeOpenFailed'), 'error'),
+              );
+            }}
+          />
+        )}
         <Button focusKey="set-onboarding" label={t('settings.showOnboarding')} onPress={() => openOnboarding()} onArrow={nav('set-onboarding')} />
       </div>
       {isBetaBuild() && (

@@ -1550,6 +1550,7 @@ export const ru = {
     off: 'Выкл',
     exitAsk: 'Выйти из приложения?',
     exit: 'Выйти',
+    devmodeBanner: 'Скоро истечёт режим разработчика - продлите его, чтобы OMP не пропал с телевизора',
     marks: {
       hint: '◀ ▶ - шаг 5 с, удерживайте для 30 с. Точнее - из плеера: меню → «Отметить начало заставки».',
       from: 'Заставка с',
@@ -2371,6 +2372,9 @@ export const ru = {
     availableVersion: ' · доступна {version}',
     update: 'Обновление',
     addHbRepo: 'Добавить репозиторий OMP в Homebrew Channel',
+    devmodeExtend: 'Продлить режим',
+    devmodeExtended: 'Режим продлён - отсчёт 1000 часов пошёл заново',
+    devmodeOpenFailed: 'Не удалось открыть Developer Mode на телевизоре',
     resetApp: 'Сбросить настройки приложения',
     resetAppAsk: 'Сбросить настройки приложения?',
     updateOnStart: 'Проверять обновления при запуске',
