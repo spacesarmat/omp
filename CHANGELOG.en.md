@@ -4,6 +4,10 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## Unreleased
+
+- [tech] The developer mode expiry banner test is no longer flaky: after fake timers it deterministically waits for Preact's deferred rAF render, which had failed the full release test run
+
 ## 0.30.1-beta.13
 
 - [lg] "Extend mode" button in the TV settings and a catalog banner 3 days before the 1000-hour Developer Mode ends: they open Developer Mode, where Extend completes the renewal; the banner rechecks the deadline while the catalog is open so OMP stays on the TV
