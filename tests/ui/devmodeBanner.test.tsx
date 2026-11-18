@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from 'vitest';
-import { render, h } from 'preact';
+import { options, render, h } from 'preact';
 import { act } from 'preact/test-utils';
 import { init, setFocus, getCurrentFocusKey } from '@noriginmedia/norigin-spatial-navigation';
 import { LibraryScreen } from '../../src/screens/Library';
@@ -83,6 +83,10 @@ describe('Developer Mode expiry banner', () => {
     expect(document.body.textContent).toContain('нажмите в нём Extend');
   });
   it('rechecks the expiry while the catalog stays open', async () => {
+    const prevRender = options.debounceRendering;
+    // Preact paints on requestAnimationFrame. Under fake timers that frame is not a reliable 16ms
+    // timer, so the banner sometimes never appears. Render in the same turn as setState.
+    options.debounceRendering = (cb) => cb();
     vi.useFakeTimers();
     try {
       const start = Date.now();
@@ -91,14 +95,12 @@ describe('Developer Mode expiry banner', () => {
       await act(async () => { vi.advanceTimersByTime(50); });
       expect(host.querySelector('[data-fk="lib-devmode-extend"]')).toBeNull();
       vi.setSystemTime(start + LEAD + 1000);
-      // advance past the 10s recheck: the interval sets the flag, but Preact defers the render to an rAF
-      // frame that lands after exactly 10000ms, so give it room to fire too
       await act(async () => {
-        vi.advanceTimersByTime(10100);
-        for (let i = 0; i < 8; i++) await Promise.resolve();
+        vi.advanceTimersByTime(10000);
       });
       expect(host.querySelector('[data-fk="lib-devmode-extend"]')).toBeTruthy();
     } finally {
+      options.debounceRendering = prevRender;
       vi.useRealTimers();
     }
   });
