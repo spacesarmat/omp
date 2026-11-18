@@ -6,6 +6,7 @@ The English translation covers the latest versions only; the full history (in Ru
 
 ## Unreleased
 
+- [tech] Admin: sections open through TanStack Router at /admin/<section>. Old ?tab= links move to the new address. The server serves the same page for every section
 - [tech] Admin and billing: the only price is rubles in Settings. Stars, crypto and the YooMoney fee are computed from it by one rate book. A stale rate hides the method for donations and subscriptions. A rate can be pinned for a limited time with a reason, and the audit stores the old and new numbers. The refresh interval is set in Settings. Stored starsPrice and crypto* fields remain but new invoices ignore them. /v1/pay/crypto and bot invoices keep their shape, so no new app release is required
 
 ## 0.30.1-beta.14

@@ -6,6 +6,7 @@ import { isIP } from 'node:net';
 import { existsSync, readFileSync } from 'node:fs';
 import { extname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { ADMIN_SECTIONS } from './adminSections.mjs';
 import { readCappedBody } from './httpBody.mjs';
 import { applyReferralPost, claimReferralNotices, publicReferral, referralCodeFor, restoreReferralNotices } from './referralAdmin.mjs';
 import { homePayload, userPayload } from './adminApi.mjs';
@@ -252,6 +253,11 @@ function serveSpa(res) {
   if (!existsSync(SPA_INDEX)) return false;
   send(res, 200, readFileSync(SPA_INDEX), { 'content-type': 'text/html; charset=utf-8' });
   return true;
+}
+
+function adminSectionPage(path) {
+  const section = path.match(/^\/admin\/([a-z0-9-]+)$/);
+  return !!(section && ADMIN_SECTIONS.indexOf(section[1]) >= 0 && section[1] !== 'home');
 }
 
 function servePublic(path, res) {
@@ -2120,7 +2126,7 @@ export function createApp(file, fetchImpl, opts) {
         if (!payload) return json(res, 404, { error: 'not_found' });
         return json(res, 200, payload);
       }
-      if (req.method === 'GET' && (path === '/admin' || path === '/admin/')) {
+      if (req.method === 'GET' && (path === '/admin' || path === '/admin/' || adminSectionPage(path))) {
         if (existsSync(SPA_INDEX)) return serveSpa(res);
         return send(res, 200, loginPage(adminOf(req) ? '' : ''), { 'content-type': 'text/html; charset=utf-8' });
       }
