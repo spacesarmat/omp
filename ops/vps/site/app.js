@@ -1,16 +1,24 @@
 const OMP_LANG_KEY = "omp-lang";
+const SITE_LANGS = ["ru", "en", "uk", "be", "kk", "ky", "uz", "tg", "tk", "hy", "az", "ka", "ro"];
+
+function langPath(lang) {
+  return lang === "ru" ? "/" : "/" + lang + "/";
+}
 
 function decideLangRedirect(state) {
   const choice = state.choice;
-  if (choice === "ru" || choice === "en") return null;
+  if (SITE_LANGS.includes(choice)) return null;
   let path = state.pathname || "/";
   if (path.length > 1 && path.endsWith("/")) path = path.slice(0, -1);
   if (path !== "/" && path !== "/index.html") return null;
   const primary = String(state.language || "")
     .toLowerCase()
     .split(/[-_]/)[0];
-  if (primary === "ru" || primary === "uk" || primary === "be" || primary === "kk") return null;
-  return "/en/" + (state.search || "") + (state.hash || "");
+  const target = SITE_LANGS.includes(primary) ? langPath(primary) : "/en/";
+  let norm = target;
+  if (norm.length > 1 && norm.endsWith("/")) norm = norm.slice(0, -1);
+  if (norm === path) return null;
+  return target + (state.search || "") + (state.hash || "");
 }
 // end decideLangRedirect
 
@@ -63,7 +71,7 @@ redirectIfNeeded();
 document.querySelectorAll("[data-set-lang]").forEach((a) => {
   a.addEventListener("click", () => {
     const lang = a.getAttribute("data-set-lang");
-    if (lang === "ru" || lang === "en") rememberLang(lang);
+    if (SITE_LANGS.includes(lang)) rememberLang(lang);
   });
 });
 syncLangLinks();
