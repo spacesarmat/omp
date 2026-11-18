@@ -1521,6 +1521,7 @@ export const en: EnDict<typeof ru> = {
     off: 'Off',
     exitAsk: 'Exit the app?',
     exit: 'Exit',
+    devmodeBanner: 'Developer Mode is about to expire - extend it so OMP stays on the TV',
     marks: {
       hint: '◀ ▶ - 5 s step, hold for 30 s. More precise - from the player: menu → "Mark intro start".',
       from: 'Intro from',
@@ -2325,6 +2326,9 @@ export const en: EnDict<typeof ru> = {
     availableVersion: ' · {version} available',
     update: 'Update',
     addHbRepo: 'Add the OMP repository to Homebrew Channel',
+    devmodeExtend: 'Extend mode',
+    devmodeOpened: 'Developer Mode is open - press Extend there to renew the mode',
+    devmodeOpenFailed: 'Could not open Developer Mode on the TV',
     resetApp: 'Reset the app settings',
     resetAppAsk: 'Reset the app settings?',
     updateOnStart: 'Check for updates on start',
