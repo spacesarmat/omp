@@ -1,7 +1,7 @@
 // TMDB v3 for «Обзор»: the endpoint (the active TorrServer's TMDB settings, else OMP's built-in key), URL builders,
 // strict sanitizers of the answers and the torrent query rule. Pure; the requests are made by client.ts.
 import type { TmdbConfig } from '../api/types';
-import { lang } from '../i18n';
+import { lang, type Lang } from '../i18n';
 import { ru } from '../i18n/ru';
 import { discoverParams, type DiscoverQuery } from './discoverQuery';
 import { isTmdbV4Token } from './tmdbToken';
@@ -79,8 +79,26 @@ function q(params: { [k: string]: string | number }): string {
   return Object.keys(params).map((k) => k + '=' + encodeURIComponent(String(params[k]))).join('&');
 }
 
+/** TMDB locale and home region of each UI language; TMDB falls back to English where it has no translation. */
+const TMDB_LOCALE: Record<Lang, string> = {
+  ru: 'ru-RU', en: 'en-US', uk: 'uk-UA', be: 'be-BY', kk: 'kk-KZ', ky: 'ky-KG', uz: 'uz-UZ',
+  tg: 'tg-TJ', tk: 'tk-TM', hy: 'hy-AM', az: 'az-AZ', ka: 'ka-GE', ro: 'ro-RO',
+};
+const UI_REGION: Record<Lang, string> = {
+  ru: 'RU', en: 'US', uk: 'UA', be: 'BY', kk: 'KZ', ky: 'KG', uz: 'UZ',
+  tg: 'TJ', tk: 'TM', hy: 'AM', az: 'AZ', ka: 'GE', ro: 'RO',
+};
+
+/** Poster/text image languages: the UI language first, then no-text, then English (Russian also keeps its order). */
+function imageLangs(): string {
+  const l = lang.peek();
+  if (l === 'en') return 'en,null';
+  if (l === 'ru') return 'ru,null,en';
+  return l + ',null,en';
+}
+
 function url(e: TmdbEndpoint, path: string, params: { [k: string]: string | number }): string {
-  const p: { [k: string]: string | number } = { language: lang.peek() === 'en' ? 'en-US' : 'ru-RU' };
+  const p: { [k: string]: string | number } = { language: TMDB_LOCALE[lang.peek()] };
   if (!e.bearer) p.api_key = e.key;
   Object.keys(params).forEach((k) => { p[k] = params[k]; });
   return e.base + path + '?' + q(p);
@@ -169,13 +187,14 @@ export function cardUrl(e: TmdbEndpoint, kind: Kind, id: number): string {
   return url(e, kind + '/' + id, {
     // translations: the English title of a title with no Russian (or Latin) one, in the request made anyway
     append_to_response: kind === 'movie' ? 'credits,release_dates,translations' : 'credits,translations',
-    include_image_language: lang.peek() === 'en' ? 'en,null' : 'ru,null,en',
+    include_image_language: imageLangs(),
   });
 }
 
-/** The regions whose release dates count, in order: the Russian UI takes Russia's and then the US', English the US'. */
+/** The regions whose release dates count, in order: the UI language's own region first, then the US'. */
 export function releaseRegions(uiLang: string = lang.peek()): string[] {
-  return uiLang === 'en' ? ['US'] : ['RU', 'US'];
+  const l = (uiLang in UI_REGION ? uiLang : 'ru') as Lang;
+  return l === 'en' ? ['US'] : [UI_REGION[l], 'US'];
 }
 
 /** The TMDB discover region of the UI language. */
@@ -204,7 +223,7 @@ export function similarUrl(e: TmdbEndpoint, kind: Kind, id: number): string {
 /** Poster file paths of a title, or of one season when `season` is set. */
 export function postersUrl(e: TmdbEndpoint, kind: Kind, id: number, season?: number): string {
   const path = season ? 'tv/' + id + '/season/' + season + '/images' : kind + '/' + id + '/images';
-  return url(e, path, { include_image_language: lang.peek() === 'en' ? 'en,null' : 'ru,null,en' });
+  return url(e, path, { include_image_language: imageLangs() });
 }
 
 export type ImageSize = 'w185' | 'w300' | 'w500' | 'w780' | 'w1280' | 'original';

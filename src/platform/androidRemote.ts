@@ -10,7 +10,7 @@ import { activeServer } from '../store/servers';
 import { updateSettings } from '../store/settings';
 import { resetTo } from '../ui/nav';
 import { log } from '../lib/log';
-import { t } from '../i18n';
+import { normalizeLang, t } from '../i18n';
 import { allSources } from '../sources/registry';
 import {
   applyRemoteIndexers,
@@ -156,7 +156,8 @@ export function applyRemoteAttach(d: unknown): void {
   const r = isObj(d) && typeof d.report === 'string' ? d.report.trim() : '';
   // the phone's resolved language (an older phone sends none, an unknown one is ignored)
   const l = isObj(d) ? d.lang : undefined;
-  if (l === 'ru' || l === 'en') updateSettings({ language: l });
+  const nl = typeof l === 'string' ? normalizeLang(l) : '';
+  if (nl) updateSettings({ language: nl });
   if (/^http:\/\//i.test(r) && r.length <= 200) attachPhone(r);
 }
 

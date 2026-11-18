@@ -20,7 +20,7 @@ import { episodeLabel } from '../lib/episodes';
 import { torrents } from '../store/library';
 import { openAnotherRelease } from '../player/anotherRelease';
 import { toast } from '../ui/toast';
-import { t, lang } from '../i18n';
+import { t, lang, CYRILLIC_LANGS } from '../i18n';
 import { donateCardEnabled } from '../player/DonateCard';
 import { journalSupportActive } from '../store/support';
 import { getTrackPref } from '../store/trackPrefs';
@@ -44,7 +44,7 @@ interface Props {
 
 function failText(e: unknown): string {
   const m = e && typeof e === 'object' && typeof (e as { message?: unknown }).message === 'string' ? (e as { message: string }).message : '';
-  return lang.peek() === 'ru' && /[\u0400-\u04FF]/.test(m) ? m : t('nativePlayer.openFailed');
+  return CYRILLIC_LANGS.indexOf(lang.peek()) >= 0 && /[\u0400-\u04FF]/.test(m) ? m : t('nativePlayer.openFailed');
 }
 
 /** ffprobe for chapters and skips: only when the server has ffprobe (checked once), only for torrent files. */

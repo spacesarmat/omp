@@ -310,7 +310,7 @@ export interface OmpNativeApi {
    */
   shareMessage(o: { text: string; title?: string; subject?: string }): Promise<'sheet' | 'copied'>;
   /** The page's resolved UI language for the native copy (SharedPreferences `omp.lang`); never rejects, no-op off-device. */
-  setLanguage(lang: 'ru' | 'en'): Promise<void>;
+  setLanguage(lang: string): Promise<void>;
   /** Phone only: lock Activity to portrait or restore sensor; never rejects, no-op off-device / TV / old APK. */
   setOrientation(mode: 'portrait' | 'unlock'): Promise<void>;
   /** Phone only: while the remote is open, volume keys go to the TV instead of the phone. */

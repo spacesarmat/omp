@@ -4,13 +4,16 @@ import { lang, resolveLanguage, applyLanguageSetting, t, tp, fmtNumber, fmtSize,
 afterEach(() => applyLanguageSetting('ru'));
 
 describe('language', () => {
-  it('system: Russian for ru/uk/be/kk, English otherwise', () => {
+  it('system: the first supported browser language, English otherwise', () => {
     expect(resolveLanguage('system', ['ru-RU'])).toBe('ru');
-    expect(resolveLanguage('system', ['uk'])).toBe('ru');
-    expect(resolveLanguage('system', ['kk-KZ', 'en'])).toBe('ru');
+    expect(resolveLanguage('system', ['uk'])).toBe('uk');
+    expect(resolveLanguage('system', ['kk-KZ', 'en'])).toBe('kk');
+    expect(resolveLanguage('system', ['be-BY'])).toBe('be');
+    expect(resolveLanguage('system', ['ro-RO'])).toBe('ro');
     expect(resolveLanguage('system', ['de-DE', 'ru'])).toBe('en');
     expect(resolveLanguage('system', [])).toBe('en');
     expect(resolveLanguage('en', ['ru-RU'])).toBe('en');
+    expect(resolveLanguage('uk', ['en'])).toBe('uk');
   });
 });
 

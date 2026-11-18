@@ -7,7 +7,7 @@ import { guessCategory } from './categoryGuess';
 import { displayTitle, torrentFiles } from './torrentName';
 import { parseEpisode, playableFiles } from './episodes';
 import { filterTorrents } from './librarySearch';
-import { lang, tp } from '../i18n';
+import { lang, tp, CYRILLIC_LANGS } from '../i18n';
 import { fileEpisodes, filesHaveEpisodes, hasMainVideo, titleHasEpisodes } from './categoryCheck';
 
 function filesOf(t: Torrent) {
@@ -158,10 +158,15 @@ function makeGroup(key: string, members: Torrent[]): SeriesGroup {
   return { kind: 'series', key, members, seasons, lead, named };
 }
 
-/** The torrent's first name is in the script of the UI language (Cyrillic for Russian, Latin for English). */
+/** The torrent's first name is in the script of the UI language (Cyrillic, Latin, Armenian or Georgian). */
 function ownScript(tor: Torrent): boolean {
-  const first = namesOf(tor)[0] || '';
-  return lang.value === 'ru' ? /[а-я]/.test(first) : /[a-z]/.test(first);
+  const first = (namesOf(tor)[0] || '').trim();
+  const c = first.charCodeAt(0);
+  const l = lang.value;
+  if (l === 'hy') return c >= 0x530 && c <= 0x58f;
+  if (l === 'ka') return c >= 0x10a0 && c <= 0x10ff;
+  if (CYRILLIC_LANGS.indexOf(l) >= 0) return c >= 0x400 && c <= 0x4ff;
+  return /[a-z]/i.test(first);
 }
 
 /** Every name variant of a series torrent («Звёздный путь…», «Star Trek…»); [] for a film. */
