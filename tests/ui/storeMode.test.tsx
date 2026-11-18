@@ -16,9 +16,13 @@ vi.mock('../../src/storeMode', () => ({
 import { tvLibraryTabs } from '../../src/lib/libraryView';
 import { TopBar } from '../../src/ui/TopBar';
 import { SettingsScreen } from '../../src/screens/Settings';
+import { canUpgrade } from '../../src/ui/BetterDialog';
+import { checkForUpdate } from '../../src/store/updates';
 import { servers, activeServerId, addServer, setActiveServer } from '../../src/store/servers';
 import { torrents } from '../../src/store/library';
 import { mockFetch } from '../helpers/fetchMock';
+
+const FILM = { hash: 'f'.repeat(40), title: 'Северный ветер (2026) WEB-DL 1080p', category: 'movie' } as any;
 
 beforeAll(() => {
   init({ debug: false, visualDebug: false });
@@ -91,6 +95,28 @@ describe('store build: public search and discovery are off', () => {
     // playback/server settings stay
     expect(host.querySelector('[data-fk="set-server"]')).toBeTruthy();
   });
+
+  it('settings hide the sideload update path (check, update, Homebrew repo)', async () => {
+    flag.store = true;
+    const host = mount(h(SettingsScreen, {}));
+    await flush();
+    expect(host.querySelector('[data-fk="set-update-check"]')).toBeNull();
+    expect(host.querySelector('[data-fk="set-update"]')).toBeNull();
+    expect(host.querySelector('[data-fk="set-addHbRepo"]')).toBeNull();
+    // help and advanced stay
+    expect(host.querySelector('[data-fk="set-faq"]')).toBeTruthy();
+    expect(host.querySelector('[data-fk="set-advanced"]')).toBeTruthy();
+  });
+
+  it('no better-quality upgrade search', () => {
+    flag.store = true;
+    expect(canUpgrade(FILM, [])).toBe(false);
+  });
+
+  it('update check reports latest without touching the sideload feed', async () => {
+    flag.store = true;
+    expect(await checkForUpdate({ manual: true })).toBe('latest');
+  });
 });
 
 describe('regular build: unchanged', () => {
@@ -111,5 +137,16 @@ describe('regular build: unchanged', () => {
     await flush();
     expect(host.querySelector('[data-fk="set-sources"]')).toBeTruthy();
     expect(host.querySelector('[data-fk="set-live-seeds"]')).toBeTruthy();
+  });
+
+  it('settings keep the update path', async () => {
+    const host = mount(h(SettingsScreen, {}));
+    await flush();
+    expect(host.querySelector('[data-fk="set-update-check"]')).toBeTruthy();
+    expect(host.querySelector('[data-fk="set-update"]')).toBeTruthy();
+  });
+
+  it('better-quality upgrade search is offered for a film', () => {
+    expect(canUpgrade(FILM, [])).toBe(true);
   });
 });

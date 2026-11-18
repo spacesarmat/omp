@@ -36,6 +36,7 @@ import { tvSourceContext } from '../sources/tvContext';
 import { loadQualityWatch, rememberTrackerSeeds, saveQualityWatch } from '../store/journal';
 import { watchesBetterQuality } from '../lib/journal';
 import { phoneLink } from '../phone/phoneStore';
+import { STORE_BUILD } from '../storeMode';
 import type { SourceResult } from '../sources/types';
 
 /** The torrent as the upgrade search sees it. */
@@ -45,6 +46,8 @@ export function upgradeTarget(tor: Torrent, files: TorrentFile[]): LibraryTorren
 
 /** True when «В лучшем качестве» is offered for the torrent (a film, or a series with a known season). */
 export function canUpgrade(tor: Torrent, files: TorrentFile[]): boolean {
+  // the upgrade search queries public trackers; the store build plays the user's own media only
+  if (STORE_BUILD) return false;
   return upgradeKind(upgradeTarget(tor, files)) !== null;
 }
 

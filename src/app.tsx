@@ -65,8 +65,9 @@ function LazySources() {
 }
 
 function renderRoute(r: Route) {
-  // store build: public search / discovery routes fall back to the catalog of the user's own TorrServer
-  if (STORE_BUILD && (r.name === 'add' || r.name === 'title' || r.name === 'person' || r.name === 'sources' || r.name === 'tsSources')) {
+  // store build: public search / discovery routes fall back to the catalog of the user's own TorrServer; the update
+  // screen leads to the sideload package, and the store app is updated through the LG Content Store instead
+  if (STORE_BUILD && (r.name === 'add' || r.name === 'title' || r.name === 'person' || r.name === 'sources' || r.name === 'tsSources' || r.name === 'update')) {
     return <LibraryScreen />;
   }
   switch (r.name) {

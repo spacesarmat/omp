@@ -9,8 +9,9 @@ if (html.includes('crossorigin')) throw new Error('dist-store/index.html contain
 if (html.includes('type="module"')) throw new Error('dist-store/index.html contains type="module" - not supported by Chrome 53');
 const { version } = JSON.parse(readFileSync('package.json', 'utf8'));
 const appinfo = JSON.parse(readFileSync('webos/appinfo.json', 'utf8'));
-// the id is registered in LG Seller Lounge; keep it distinct from the dev-mode com.spacesarmat.torrplayer
-const storeInfo = { ...appinfo, id: 'com.spacesarmat.omp', version: version.split('-')[0] };
+// Keep the existing OMP app id: the phone launches/detects com.spacesarmat.torrplayer and attaches its player
+// controls by that id, so the store build must reuse it (a new id would be invisible to the phone/remote).
+const storeInfo = { ...appinfo, version: version.split('-')[0] };
 writeFileSync('dist-store/appinfo.json', JSON.stringify(storeInfo, null, 2));
 for (const f of ['icon.png', 'largeIcon.png']) cpSync(`webos/${f}`, `dist-store/${f}`);
 mkdirSync('build', { recursive: true });

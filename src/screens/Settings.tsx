@@ -247,8 +247,10 @@ export function SettingsScreen() {
     ['set-subBackground'],
     ['set-server', 'set-pair'],
     ...(STORE_BUILD ? [] : [['set-sources'], ['set-live-seeds']]),
-    ['set-update-check'],
-    ['set-update'].concat(platformKind() === 'androidtv' ? [] : ['set-addHbRepo']).concat(['set-faq', 'set-advanced']),
+    ...(STORE_BUILD ? [] : [['set-update-check']]),
+    STORE_BUILD
+      ? ['set-faq', 'set-advanced']
+      : ['set-update'].concat(platformKind() === 'androidtv' ? [] : ['set-addHbRepo']).concat(['set-faq', 'set-advanced']),
     platformKind() === 'androidtv' ? ['set-onboarding'] : ['set-devmode-extend', 'set-onboarding'],
   ];
   if (isBetaBuild()) tail.push(['set-test-mode'], ['set-test-size']);
@@ -325,19 +327,21 @@ export function SettingsScreen() {
           {t('tvSettings.aboutLine', { version: APP_VERSION })}
           {latestUpdate.value ? t('tvSettings.availableVersion', { version: latestUpdate.value.version }) : ''}
         </div>
-        <Button
-          focusKey="set-update-check"
-          label={t('updateScreen.check')}
-          onArrow={nav('set-update-check')}
-          onPress={() => checkForUpdate({ manual: true }).then((r) => {
-            if (r === 'error') toast(t('updateScreen.checkFailed'), 'error');
-            else if (r === 'latest') toast(t('updateScreen.latest'));
-          })}
-        />
+        {!STORE_BUILD && (
+          <Button
+            focusKey="set-update-check"
+            label={t('updateScreen.check')}
+            onArrow={nav('set-update-check')}
+            onPress={() => checkForUpdate({ manual: true }).then((r) => {
+              if (r === 'error') toast(t('updateScreen.checkFailed'), 'error');
+              else if (r === 'latest') toast(t('updateScreen.latest'));
+            })}
+          />
+        )}
       </div>
       <div class="row" style={{ marginTop: '16px' }}>
-        <Button focusKey="set-update" label={latestUpdate.value ? updateTitle(latestUpdate.value.version, APP_VERSION) : t('tvSettings.update')} onPress={() => navigate({ name: 'update' })} onArrow={nav('set-update')} />
-        {platformKind() !== 'androidtv' && (
+        {!STORE_BUILD && <Button focusKey="set-update" label={latestUpdate.value ? updateTitle(latestUpdate.value.version, APP_VERSION) : t('tvSettings.update')} onPress={() => navigate({ name: 'update' })} onArrow={nav('set-update')} />}
+        {!STORE_BUILD && platformKind() !== 'androidtv' && (
           <Button
             focusKey="set-addHbRepo"
             label={t('tvSettings.addHbRepo')}
@@ -495,9 +499,13 @@ export function AdvancedSettingsScreen() {
         </div>
       )}
 
-      <ChoiceRow focusKey="set-updateOnStart" label={t('tvSettings.updateOnStart')} value={s.updateCheck} options={onOff()} onChange={(v) => updateSettings({ updateCheck: v })} />
-      <ChoiceRow focusKey="adv-beta" label={t('settings.betaTitle')} value={s.betaUpdates} options={onOff()} onChange={(v) => updateSettings({ betaUpdates: v })} />
-      <div class="muted">{t('settings.betaHint')}</div>
+      {!STORE_BUILD && (
+        <>
+          <ChoiceRow focusKey="set-updateOnStart" label={t('tvSettings.updateOnStart')} value={s.updateCheck} options={onOff()} onChange={(v) => updateSettings({ updateCheck: v })} />
+          <ChoiceRow focusKey="adv-beta" label={t('settings.betaTitle')} value={s.betaUpdates} options={onOff()} onChange={(v) => updateSettings({ betaUpdates: v })} />
+          <div class="muted">{t('settings.betaHint')}</div>
+        </>
+      )}
       <ChoiceRow focusKey="adv-diagnostics" label={t('settings.diagnosticsTitle')} value={s.diagnostics} options={onOff()} onChange={(v) => updateSettings({ diagnostics: v })} />
       <div class="muted">{t('settings.diagnosticsHint')}</div>
 
