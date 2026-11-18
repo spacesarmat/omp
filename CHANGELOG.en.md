@@ -4,7 +4,7 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
-## Unreleased
+## 0.30.1-beta.10
 
 - [phone] When the TV refuses a launch and OMP is absent from the TV's app list (webOS purges dev apps when the developer mode expires), the phone shows "No OMP on the TV" and offers the install assistant instead of a generic error
 - [tech] Admin panel: prices and rates tidied. The "Prices and rates (ruble base)" group shows the effective subscription and extra-device prices in stars and crypto derived from the ruble base; "Stars" and "Crypto" are labelled as manual fallback tariffs. The auto rate on the "Donations" tab is now shared by subscriptions, devices and donations and shows a subscription preview. The server returns the preview in settings.rates.sub
