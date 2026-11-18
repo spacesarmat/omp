@@ -6,6 +6,7 @@ The English translation covers the latest versions only; the full history (in Ru
 
 ## Unreleased
 
+- [tech] Monitoring: tracker site checks no longer probe non-public addresses - an indexer URL must be a public http(s) host; loopback, LAN, link-local, CGN and internal names are rejected. Prevents SSRF via a configured indexer
 - [tech] Billing: sending codes over SMTP no longer allows an unencrypted fallback - ports other than 465 require STARTTLS (requireTLS), 465 uses implicit TLS. Prevents downgrade and sending the password/code in plaintext
 - [tech] Billing: replaying an already-rotated refresh token inside the 60 s lost-response window no longer revokes the device's live token - the grace retry is allowed once, further replays are treated as a suspected clone. Hardens against hijack and DoS with a stolen old token
 - [tech] Store channels: winget, Scoop, a Homebrew cask, Flatpak and Snap manifests, IzzyOnDroid metadata, and CI on a stable release. A step with a missing secret skips with a notice. First store submissions are not sent

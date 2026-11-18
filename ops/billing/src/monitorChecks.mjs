@@ -80,6 +80,7 @@ const ERROR_TEXT = {
   tls: 'ошибка TLS',
   unreachable: 'сеть недоступна',
   bad_url: 'неверный адрес',
+  private_address: 'адрес ведёт во внутреннюю сеть',
   down: 'нет ответа',
 };
 
@@ -122,6 +123,51 @@ function hostOf(url) {
 
 function baseHost(h) {
   return String(h || '').toLowerCase().replace(/^www\./, '');
+}
+
+function isPrivateIp(h) {
+  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(h)) {
+    const [a, b] = h.split('.').map(Number);
+    if (a === 0 || a === 10 || a === 127 || a >= 224) return true;
+    if (a === 169 && b === 254) return true;
+    if (a === 172 && b >= 16 && b <= 31) return true;
+    if (a === 192 && (b === 168 || b === 0)) return true;
+    if (a === 100 && b >= 64 && b <= 127) return true;
+    if (a === 198 && (b === 18 || b === 19)) return true;
+    return false;
+  }
+  if (h.indexOf(':') >= 0) {
+    const x = h.toLowerCase();
+    if (x === '::' || x === '::1') return true;
+    if (/^f[cd]/.test(x) || /^fe[89ab]/.test(x)) return true;
+    if (x.indexOf('::ffff:') === 0) {
+      // URL normalizes IPv4-mapped addresses to hex (::ffff:c0a8:101); fold back to dotted IPv4.
+      const tail = x.slice(7);
+      if (/^\d{1,3}(\.\d{1,3}){3}$/.test(tail)) return isPrivateIp(tail);
+      const m = tail.match(/^([0-9a-f]{1,4}):([0-9a-f]{1,4})$/);
+      if (!m) return true;
+      const n = (parseInt(m[1], 16) << 16) | parseInt(m[2], 16);
+      return isPrivateIp([(n >>> 24) & 255, (n >>> 16) & 255, (n >>> 8) & 255, n & 255].join('.'));
+    }
+    return false;
+  }
+  return false;
+}
+
+/** Tracker sites must be public http(s) hosts: a misconfigured indexer link must not make the monitor probe the LAN/loopback. */
+export function isPublicSiteUrl(url) {
+  let u;
+  try {
+    u = new URL(url);
+  } catch (e) {
+    return false;
+  }
+  if (u.protocol !== 'http:' && u.protocol !== 'https:') return false;
+  const h = u.hostname.toLowerCase().replace(/^\[|\]$/g, '').replace(/\.+$/, '');
+  if (!h || isPrivateIp(h)) return false;
+  if (h === 'localhost' || /\.(localhost|local|internal|lan|home|corp)$/.test(h)) return false;
+  if (h.indexOf('.') < 0 && h.indexOf(':') < 0) return false;
+  return true;
 }
 
 /** A redirect that looks like an ISP block page: an IP literal or a host named like a block notice. */
@@ -335,6 +381,10 @@ function sitePair(out, group, idBase, name, url, cfg, get) {
     out.push({ id: idBase + ':site', group, name, path: 'direct', alert: false, run: info('адрес сайта неизвестен') });
     return;
   }
+  if (!isPublicSiteUrl(url)) {
+    out.push({ id: idBase + ':site', group, name, path: 'direct', alert: false, run: info('адрес сайта недопустим (не публичный http(s))') });
+    return;
+  }
   const target = hostOf(url);
   out.push({
     id: idBase + ':direct',
@@ -344,7 +394,7 @@ function sitePair(out, group, idBase, name, url, cfg, get) {
     target,
     alert: false,
     pair: idBase,
-    run: timed(async () => siteVerdict(await get(url, { timeoutMs: SITE_TIMEOUT_MS, headersOnly: true, ...SITE_PEEK }), url)),
+    run: timed(async () => siteVerdict(await get(url, { publicOnly: true, timeoutMs: SITE_TIMEOUT_MS, headersOnly: true, ...SITE_PEEK }), url)),
   });
   out.push({
     id: idBase + ':warp',
@@ -355,7 +405,7 @@ function sitePair(out, group, idBase, name, url, cfg, get) {
     alert: false,
     pairAlert: true,
     pair: idBase,
-    run: timed(async () => siteVerdict(await get(url, { proxy: cfg.warpProxy, timeoutMs: SITE_TIMEOUT_MS, headersOnly: true, ...SITE_PEEK }), url)),
+    run: timed(async () => siteVerdict(await get(url, { publicOnly: true, proxy: cfg.warpProxy, timeoutMs: SITE_TIMEOUT_MS, headersOnly: true, ...SITE_PEEK }), url)),
   });
 }
 
