@@ -1,24 +1,26 @@
 {
-  "version": "0.30.1-beta.9",
-  "ipkUrl": "https://github.com/spacesarmat/omp/releases/download/v0.30.1-beta.9/OMP-0.30.1-beta.9.apk",
-  "ipkHash": "4437f94914ef8688a2270af5c34b8ebe1d88573ca0b27151fdc407577f41644e",
-  "ipkSize": 93570385,
+  "version": "0.30.1-beta.10",
+  "ipkUrl": "https://github.com/spacesarmat/omp/releases/download/v0.30.1-beta.10/OMP-0.30.1-beta.10.apk",
+  "ipkHash": "49ad5420bcebd1aa41067377f3f64bc2b305aab31664788269fec0a8a55f6f96",
+  "ipkSize": 93573533,
   "apks": {
     "arm64": {
-      "url": "https://github.com/spacesarmat/omp/releases/download/v0.30.1-beta.9/OMP-0.30.1-beta.9-arm64.apk",
-      "sha256": "1a7e98f0c3fa808925c05b135489c593772e9792ecd1bfe30800d0428e88ca2e",
-      "size": 59022119
+      "url": "https://github.com/spacesarmat/omp/releases/download/v0.30.1-beta.10/OMP-0.30.1-beta.10-arm64.apk",
+      "sha256": "1462e363ae979788abbf2037986b9e0abbea694cc74147190c312228736628a7",
+      "size": 59025267
     },
     "armv7": {
-      "url": "https://github.com/spacesarmat/omp/releases/download/v0.30.1-beta.9/OMP-0.30.1-beta.9-armv7.apk",
-      "sha256": "dddac539716df792f013a813df08bd3ab57d36380abb8f0252f119376fa95aae",
-      "size": 54841147
+      "url": "https://github.com/spacesarmat/omp/releases/download/v0.30.1-beta.10/OMP-0.30.1-beta.10-armv7.apk",
+      "sha256": "5d289c5be09a254150b2c466ec80ac78969ec18121b9420ef738a3ac5ed33e57",
+      "size": 54844295
     }
   },
   "notes": [
     "Исправления и улучшения"
   ],
   "notesTv": [],
-  "notesPhone": [],
-  "releaseUrl": "https://github.com/spacesarmat/omp/releases/tag/v0.30.1-beta.9"
+  "notesPhone": [
+    "Если ТВ отклоняет запуск, а OMP нет в списке приложений телевизора (webOS удаляет dev-приложение после истечения режима разработчика), телефон показывает «На телевизоре нет OMP» и предлагает ассистент установки вместо общей ошибки"
+  ],
+  "releaseUrl": "https://github.com/spacesarmat/omp/releases/tag/v0.30.1-beta.10"
 }
