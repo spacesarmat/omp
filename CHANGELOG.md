@@ -2,7 +2,7 @@
 
 <!-- Markers [phone] [tv] [lg] [atv] [tech]: see docs/changelog-markers.md. [tech] bullets are technical or admin-only and never reach users. -->
 
-## Не выпущено
+## 0.30.1-beta.14
 
 - [tech] Мониторинг: проверки сайтов трекеров больше не ходят по непубличным адресам - URL индексера обязан быть публичным http(s); loopback, LAN, link-local, CGN и internal-имена отклоняются. Защита от SSRF через настроенный индексер
 - [tech] Биллинг: отправка кодов по SMTP больше не допускает незашифрованный fallback - на портах кроме 465 требуется STARTTLS (requireTLS), на 465 - implicit TLS. Защита от downgrade и отправки пароля/кода открытым текстом

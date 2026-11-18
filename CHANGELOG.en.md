@@ -4,7 +4,7 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
-## Unreleased
+## 0.30.1-beta.14
 
 - [tech] Monitoring: tracker site checks no longer probe non-public addresses - an indexer URL must be a public http(s) host; loopback, LAN, link-local, CGN and internal names are rejected. Prevents SSRF via a configured indexer
 - [tech] Billing: sending codes over SMTP no longer allows an unencrypted fallback - ports other than 465 require STARTTLS (requireTLS), 465 uses implicit TLS. Prevents downgrade and sending the password/code in plaintext

@@ -1,6 +1,6 @@
 [package]
 name = "omp-desktop"
-version = "0.30.1-beta.13"
+version = "0.30.1-beta.14"
 edition = "2021"
 build = "build.rs"
 
