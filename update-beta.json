@@ -1,12 +1,14 @@
 {
-  "version": "0.30.1-beta.11",
-  "ipkUrl": "https://github.com/spacesarmat/omp/releases/download/v0.30.1-beta.11/OMP-0.30.1-beta.11-webOS.ipk",
-  "ipkHash": "166793225d70490e592b699abe38f86561b1b891cd308e85c692f74078de1dfe",
-  "ipkSize": 622376,
+  "version": "0.30.1-beta.12",
+  "ipkUrl": "https://github.com/spacesarmat/omp/releases/download/v0.30.1-beta.12/OMP-0.30.1-beta.12-webOS.ipk",
+  "ipkHash": "b569588b2c59408583e0d110d9c60d79f02d83c838e0b94e0a76db8fa5a0c6e7",
+  "ipkSize": 622934,
   "notes": [
-    "Исправления и улучшения"
+    "«Смотреть на ТВ» с телефона снова работает на старых webOS (WebView 53): обход DOM в design-runtime падал на SVG-иконках без dataset и обрывал старт приложения до применения параметров запуска - ТВ открывал каталог вместо плеера. Теперь параметры применяются до design-runtime, а его сбой не роняет старт"
   ],
-  "releaseUrl": "https://github.com/spacesarmat/omp/releases/tag/v0.30.1-beta.11",
-  "notesTv": [],
+  "releaseUrl": "https://github.com/spacesarmat/omp/releases/tag/v0.30.1-beta.12",
+  "notesTv": [
+    "«Смотреть на ТВ» с телефона снова работает на старых webOS (WebView 53): обход DOM в design-runtime падал на SVG-иконках без dataset и обрывал старт приложения до применения параметров запуска - ТВ открывал каталог вместо плеера. Теперь параметры применяются до design-runtime, а его сбой не роняет старт"
+  ],
   "notesPhone": []
 }
