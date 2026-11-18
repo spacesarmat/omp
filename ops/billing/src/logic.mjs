@@ -2501,23 +2501,26 @@ export function revealableCode(state, accountId) {
   return row ? { code: row.plain, codeId: row.id } : null;
 }
 
-/** Up to 50 distinct ids from an admin bulk form. */
+/** Distinct ids. More than 50 is refused whole, so a confirm count cannot hide a partial write. */
 export function bulkIds(raw) {
   const arr = Array.isArray(raw) ? raw : [];
   const seen = new Set();
-  const out = [];
-  for (let i = 0; i < arr.length && out.length < 50; i++) {
+  const ids = [];
+  for (let i = 0; i < arr.length; i++) {
     const id = String(arr[i] || '').trim();
     if (!id || seen.has(id)) continue;
     seen.add(id);
-    out.push(id);
+    ids.push(id);
   }
-  return out;
+  if (ids.length > 50) return { ids: [], error: 'too_many' };
+  return { ids, error: '' };
 }
 
 /** Grant the same number of days to each account. Accounts that cannot be granted are skipped. */
 export function grantDaysMany(state, { accountIds, days, now }) {
-  const ids = bulkIds(accountIds);
+  const picked = bulkIds(accountIds);
+  if (picked.error) return { state, result: { error: picked.error, count: 0, grants: [] } };
+  const ids = picked.ids;
   const n = days > 0 ? Math.floor(days) : 0;
   if (!n || !ids.length) return { state, result: { error: 'bad_args', count: 0, grants: [] } };
   let cur = state;
@@ -2532,7 +2535,9 @@ export function grantDaysMany(state, { accountIds, days, now }) {
 }
 
 export function revokePromos(state, promoIds) {
-  const ids = new Set(bulkIds(promoIds));
+  const picked = bulkIds(promoIds);
+  if (picked.error) return { state, result: { error: picked.error, count: 0 } };
+  const ids = new Set(picked.ids);
   let count = 0;
   const promos = (state.promos || []).map((p) => {
     if (!p || !ids.has(p.id) || p.revoked) return p;
@@ -2674,7 +2679,7 @@ function adminFeedText(row) {
 }
 
 /** Account an audit row is about: stored accountId, else an account id at the start of the detail. */
-function auditAccount(state, row) {
+export function auditAccount(state, row) {
   if (row && row.accountId) return String(row.accountId);
   const action = String((row && row.action) || '');
   if (LOGIN_FEED[action]) return '';

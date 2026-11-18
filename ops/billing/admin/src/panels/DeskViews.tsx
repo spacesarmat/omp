@@ -143,6 +143,10 @@ export function UsersDesk({
             label: 'Выдать дни',
             run: (list) => {
               const n = list.length;
+              if (n > 50) {
+                toast('За раз не больше 50');
+                return;
+              }
               void askConfirm({ title: 'Выдать дни', body: 'Выдать +' + days + ' дн. ' + n + ' людям?', yes: 'Выдать' }).then((ok) => {
                 if (!ok) return;
                 void run('/admin/grant-bulk', { accountIds: list.map((r) => r.id), days, confirm: 'yes' });
@@ -153,6 +157,10 @@ export function UsersDesk({
             label: 'Написать',
             run: (list) => {
               const body = text.trim();
+              if (list.length > 50) {
+                toast('За раз не больше 50');
+                return;
+              }
               const withTg = list.filter((r) => r.telegramId).length;
               if (!body) {
                 toast('Сначала введите текст сообщения');

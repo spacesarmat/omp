@@ -2560,14 +2560,38 @@ export function createApp(file, fetchImpl, opts) {
           if (body.accountId) redirectTo = '/admin/?id=' + encodeURIComponent(body.accountId);
         }
         if (path === '/admin/grant-bulk') {
+          const picked = bulkIds(body.accountIds);
           if (!confirmed(body)) flashError = 'Нужно подтверждение';
+          else if (picked.error) flashError = 'За раз не больше 50';
           else {
             const result = await store.update((state) =>
               grantDaysMany(state, { accountIds: body.accountIds, days: Number(body.days) || 0, now: Date.now() }),
             );
-            if (result.error || !result.count) flashError = 'Не удалось выдать дни';
-            else flashText = 'Выдано дней: ' + result.count;
-            await audit(file, 'grant_bulk', String(result.count || 0), admin);
+            if (result.error === 'too_many') flashError = 'За раз не больше 50';
+            else if (result.error || !result.count) flashError = 'Не удалось выдать дни';
+            else {
+              flashText = 'Выдано дней: ' + result.count;
+              const fresh = await store.read();
+              const grants = result.grants || [];
+              for (let i = 0; i < grants.length; i++) {
+                const granted = grants[i];
+                const acc = fresh.accounts.find((a) => a.id === granted.accountId);
+                if (!acc || !acc.telegramId) continue;
+                try {
+                  const rec = copyRecipient(fresh, acc.id, Date.now());
+                  const note = grantUserMessage(fresh.settings.publicOrigin || '', granted, rec.lang);
+                  await sendCopied(store, fresh.settings.botToken, acc.telegramId, note.text, net, {
+                    parseMode: note.parseMode,
+                    inline: note.inline,
+                    keyboard: note.keyboard,
+                    copy: note.copy ? { ...note.copy, state: rec.state, lang: rec.lang } : undefined,
+                  });
+                } catch (e) {
+                  /* days are granted; the notice is best effort */
+                }
+              }
+            }
+            await audit(file, 'grant_bulk', String((result && result.count) || 0), admin);
           }
         }
         if (path === '/admin/message') {
@@ -2594,41 +2618,48 @@ export function createApp(file, fetchImpl, opts) {
         }
         if (path === '/admin/message-bulk') {
           const text = String(body.text || '').trim();
-          const ids = bulkIds(body.accountIds);
+          const picked = bulkIds(body.accountIds);
           if (!confirmed(body)) flashError = 'Нужно подтверждение';
-          else if (!text || !ids.length) flashError = 'Нет текста или никого не выбрано';
+          else if (picked.error) flashError = 'За раз не больше 50';
+          else if (!text || !picked.ids.length) flashError = 'Нет текста или никого не выбрано';
           else {
             const state = await store.read();
-            const sentTo = [];
+            let sentCount = 0;
             let skipped = 0;
-            for (let i = 0; i < ids.length; i++) {
-              const acc = state.accounts.find((a) => a.id === ids[i]);
+            for (let i = 0; i < picked.ids.length; i++) {
+              const acc = state.accounts.find((a) => a.id === picked.ids[i]);
               if (!acc || !acc.telegramId) {
                 skipped++;
                 continue;
               }
-              const sent = await telegramSend(state.settings.botToken, acc.telegramId, text, net);
-              if (sent.ok) sentTo.push(acc.telegramId);
-              else skipped++;
-            }
-            if (sentTo.length) {
-              await store.update((cur) => {
-                let next = cur;
-                for (let i = 0; i < sentTo.length; i++) {
-                  const wrote = appendSupportMessage(next, {
-                    telegramId: sentTo[i],
+              let ok = false;
+              try {
+                const sent = await telegramSend(state.settings.botToken, acc.telegramId, text, net);
+                ok = !!(sent && sent.ok);
+              } catch (e) {
+                ok = false;
+              }
+              if (!ok) {
+                skipped++;
+                continue;
+              }
+              try {
+                await store.update((cur) =>
+                  appendSupportMessage(cur, {
+                    telegramId: acc.telegramId,
                     text,
                     direction: 'out',
                     now: Date.now(),
                     via: 'panel',
-                  });
-                  next = wrote.state || next;
-                }
-                return { state: next };
-              });
+                  }),
+                );
+                sentCount++;
+              } catch (e) {
+                skipped++;
+              }
             }
-            flashText = 'Отправлено: ' + sentTo.length + ', пропущено: ' + skipped;
-            await audit(file, 'message_bulk', String(sentTo.length), admin);
+            flashText = 'Отправлено: ' + sentCount + ', пропущено: ' + skipped;
+            await audit(file, 'message_bulk', String(sentCount), admin);
           }
         }
         if (path === '/admin/promo') {
@@ -2674,11 +2705,14 @@ export function createApp(file, fetchImpl, opts) {
           redirectTo = '/admin/?tab=promos';
         }
         if (path === '/admin/promo-revoke-bulk') {
+          const picked = bulkIds(body.promoIds);
           if (!confirmed(body)) flashError = 'Нужно подтверждение';
+          else if (picked.error) flashError = 'За раз не больше 50';
           else {
             const result = await store.update((state) => revokePromos(state, body.promoIds));
-            flashText = 'Отозвано промокодов: ' + (result.count || 0);
-            await audit(file, 'promo_revoke_bulk', String(result.count || 0), admin);
+            if (result.error === 'too_many') flashError = 'За раз не больше 50';
+            else flashText = 'Отозвано промокодов: ' + (result.count || 0);
+            await audit(file, 'promo_revoke_bulk', String((result && result.count) || 0), admin);
           }
           redirectTo = '/admin/?tab=promos';
         }

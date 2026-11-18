@@ -370,13 +370,19 @@ describe('user timeline and bulk actions', () => {
   it('puts payments, donations, referrals and audit on one tape, newest first', () => {
     const start = seeded();
     start.state.donations = [{ id: 'd1', accountId: start.account.id, status: 'paid', amountRub: 100, paidAt: NOW + 5000, method: 'yoomoney' }];
+    start.state.payments = [{ id: 'pay1', at: NOW + 4000, amount: '200', label: 'new:' + start.account.id, error: 'unaccepted', pending: true }];
+    start.state.referralJournal = [{ friendId: 'friend', referrerId: start.account.id, status: 'waiting', days: 0, reason: 'bind' }];
     start.state.referralBinds = [{ friendId: 'friend', referrerId: start.account.id, boundAt: NOW + 1000 }];
-    const withAudit = logAudit(start.state, { action: 'grant', detail: 'плюс 7', now: NOW + 9000, accountId: start.account.id, actor: { kind: 'admin', label: 'andy' } });
-    const user = userPayload(withAudit, start.account.id, {}) as { timeline: { at: number; kind: string; title: string }[] };
+    const withAudit = logAudit(start.state, { action: 'message', detail: start.account.id, now: NOW + 8000 });
+    const withGrant = logAudit(withAudit, { action: 'grant', detail: 'плюс 7', now: NOW + 9000, accountId: start.account.id, actor: { kind: 'admin', label: 'andy' } });
+    const user = userPayload(withGrant, start.account.id, {}) as { timeline: { at: number; kind: string; title: string }[] };
     expect(user.timeline[0]).toMatchObject({ kind: 'audit', title: 'Выдача дней · плюс 7' });
-    expect(user.timeline.map((row) => row.kind)).toEqual(expect.arrayContaining(['subscription', 'donation', 'referral', 'audit']));
+    expect(user.timeline.map((row) => row.kind)).toEqual(expect.arrayContaining(['subscription', 'donation', 'referral', 'audit', 'payment']));
+    expect(user.timeline.filter((row) => row.kind === 'referral')).toHaveLength(1);
+    expect(user.timeline.find((row) => row.kind === 'referral')?.at).toBe(NOW + 1000);
     expect(user.timeline.find((row) => row.kind === 'donation')?.title).toContain('100 ₽');
-    expect(user.timeline.find((row) => row.kind === 'referral')?.title).toContain('пригласил');
+    expect(user.timeline.find((row) => row.kind === 'payment')?.title).toContain('ждёт');
+    expect(user.timeline.some((row) => row.title.indexOf('Сообщение') === 0)).toBe(true);
     const other = userPayload(withAudit, 'missing', {});
     expect(other).toBeNull();
   });
@@ -388,6 +394,10 @@ describe('user timeline and bulk actions', () => {
     expect(granted.result.count).toBe(2);
     const skipped = grantDaysMany(second.state, { accountIds: ['nope'], days: 7, now: NOW });
     expect(skipped.result.count).toBe(0);
+    const many = Array.from({ length: 51 }, (_, i) => 'id-' + i);
+    const refused = grantDaysMany(second.state, { accountIds: many, days: 7, now: NOW });
+    expect(refused.result.error).toBe('too_many');
+    expect(refused.state).toBe(second.state);
     const made = createPromos(start.state, { count: 2, days: 3, maxUses: 1, now: NOW });
     const ids = made.result.promos.map((p: { id: string }) => p.id);
     const revoked = revokePromos(made.state, [ids[0]]);

@@ -7,6 +7,7 @@ import {
   bonusRows,
   creditOf,
   dailySeries,
+  auditAccount,
   limitBreakdown,
   limitOverrideOf,
   deviceLimitNow,
@@ -25,6 +26,7 @@ const DAY = 24 * 60 * 60 * 1000;
 
 const AUDIT_RU = {
   grant: 'Выдача дней',
+  issue: 'Выдача кода',
   message: 'Сообщение',
   unbind: 'Сброс устройства',
   device_revoke: 'Отзыв устройства',
@@ -39,6 +41,12 @@ const AUDIT_RU = {
 };
 
 const DONATE_RU = { paid: 'оплачен', pending: 'ждёт', refunded: 'возврат' };
+const PAY_RU = { unaccepted: 'ждёт подтверждения', rejected: 'отклонён', amount: 'неверная сумма', refunded: 'возврат' };
+
+function payTitle(p) {
+  const status = p.pending ? 'ждёт' : p.error ? PAY_RU[p.error] || 'ошибка' : '';
+  return 'Оплата ' + (p.amount || '-') + (status ? ' · ' + status : '') + (p.label ? ' · ' + p.label : '');
+}
 const REFERRAL_RU = { granted: 'начислено', waiting: 'ждёт', cancelled: 'отменено', rejected: 'отклонено' };
 
 function pushEvent(events, at, kind, title) {
@@ -62,7 +70,7 @@ function accountTimeline(state, card) {
   const payments = card.payments || [];
   for (let i = 0; i < payments.length; i++) {
     const p = payments[i];
-    pushEvent(events, p.at, 'payment', 'Оплата ' + (p.amount || '-') + (p.label ? ' · ' + p.label : ''));
+    pushEvent(events, p.at, 'payment', payTitle(p));
   }
   const promos = card.promos || [];
   for (let i = 0; i < promos.length; i++) {
@@ -84,8 +92,14 @@ function accountTimeline(state, card) {
     const role = row.referrerId === id ? 'пригласил' : 'друг';
     const status = REFERRAL_RU[row.status] || row.status || '';
     const days = Number(row.days) || 0;
-    pushEvent(events, row.grantedAt || row.at || row.paidAt, 'referral', 'Реферал · ' + role + ' · ' + status + (days ? ' · ' + days + ' дн.' : ''));
-    seenReferral.add(String(row.friendId || '') + ':' + String(row.referrerId || ''));
+    let at = Number(row.grantedAt) || Number(row.at) || Number(row.paidAt) || 0;
+    if (!at) {
+      const bind = (state.referralBinds || []).find((b) => b && b.friendId === row.friendId && b.referrerId === row.referrerId);
+      at = bind ? Number(bind.boundAt) || 0 : 0;
+    }
+    const before = events.length;
+    pushEvent(events, at, 'referral', 'Реферал · ' + role + ' · ' + status + (days ? ' · ' + days + ' дн.' : ''));
+    if (events.length > before) seenReferral.add(String(row.friendId || '') + ':' + String(row.referrerId || ''));
   }
   const binds = state.referralBinds || [];
   for (let i = 0; i < binds.length; i++) {
@@ -99,7 +113,7 @@ function accountTimeline(state, card) {
   const audit = state.audit || [];
   for (let i = 0; i < audit.length; i++) {
     const row = audit[i];
-    if (!row || row.accountId !== id) continue;
+    if (!row || auditAccount(state, row) !== id) continue;
     const name = AUDIT_RU[row.action] || row.action || 'запись';
     const detail = String(row.detail || '');
     const extra = detail && detail !== id ? ' · ' + detail : '';

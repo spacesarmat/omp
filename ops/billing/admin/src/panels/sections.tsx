@@ -164,6 +164,10 @@ export function PromoCard({ run, promos }: { run: Run; promos: NonNullable<HomeD
               variant="secondary"
               onClick={() => {
                 const n = chosen.length;
+                if (n > 50) {
+                  toast('За раз не больше 50');
+                  return;
+                }
                 void askConfirm({ title: 'Отозвать промокоды', body: 'Отозвать ' + n + ' промокодов?', yes: 'Отозвать' }).then((ok) => {
                   if (!ok) return;
                   void run('/admin/promo-revoke-bulk', { promoIds: chosen.map((p) => p.id), confirm: 'yes' }).then(() => setPicked({}));
