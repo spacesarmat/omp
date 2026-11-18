@@ -1,7 +1,7 @@
-import { describe, it, expect, beforeAll, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from 'vitest';
 import { render, h } from 'preact';
 import { act } from 'preact/test-utils';
-import { init } from '@noriginmedia/norigin-spatial-navigation';
+import { init, setFocus, getCurrentFocusKey } from '@noriginmedia/norigin-spatial-navigation';
 import { LibraryScreen } from '../../src/screens/Library';
 import { SettingsScreen } from '../../src/screens/Settings';
 import { ToastHost } from '../../src/ui/toast';
@@ -80,7 +80,22 @@ describe('Developer Mode expiry banner', () => {
     });
     expect(calls[0]).toEqual({ uri: 'luna://com.webos.applicationManager/launch', params: { id: 'com.palmdts.devmode' } });
     expect(host.querySelector('[data-fk="lib-devmode-extend"]')).toBeNull();
-    expect(document.body.textContent).toContain('Режим продлён');
+    expect(document.body.textContent).toContain('нажмите в нём Extend');
+  });
+  it('rechecks the expiry while the catalog stays open', async () => {
+    vi.useFakeTimers();
+    try {
+      const start = Date.now();
+      localStorage.setItem('omp.devmode.extendAt', JSON.stringify(start));
+      const host = mountLib();
+      await act(async () => { vi.advanceTimersByTime(50); });
+      expect(host.querySelector('[data-fk="lib-devmode-extend"]')).toBeNull();
+      vi.setSystemTime(start + LEAD + 1000);
+      await act(async () => { vi.advanceTimersByTime(10000); });
+      expect(host.querySelector('[data-fk="lib-devmode-extend"]')).toBeTruthy();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 
@@ -104,5 +119,23 @@ describe('Settings Developer Mode button', () => {
     document.body.appendChild(host);
     act(() => render(h(SettingsScreen, {}), host));
     expect(host.querySelector('[data-fk="set-devmode-extend"]')).toBeNull();
+  });
+  it('D-pad reaches the new button from the update row', async () => {
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    act(() => render(h(SettingsScreen, {}), host));
+    const arrow = (keyCode: number, key: string) => act(async () => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { keyCode, key, bubbles: true } as KeyboardEventInit));
+      await new Promise((r) => setTimeout(r, 20));
+    });
+    await act(async () => { await new Promise((r) => setTimeout(r, 20)); });
+    act(() => setFocus('set-update'));
+    await act(async () => { await new Promise((r) => setTimeout(r, 20)); });
+    await arrow(40, 'ArrowDown');
+    expect(getCurrentFocusKey()).toBe('set-devmode-extend');
+    await arrow(39, 'ArrowRight');
+    expect(getCurrentFocusKey()).toBe('set-onboarding');
+    await arrow(37, 'ArrowLeft');
+    expect(getCurrentFocusKey()).toBe('set-devmode-extend');
   });
 });

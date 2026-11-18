@@ -78,7 +78,11 @@ export function LibraryScreen() {
     // the count on the «Новое» tab (the tab itself asks the phone when it is open)
     if (phoneLink.peek() && libraryTab.peek() !== 'news') phoneFeed().catch(() => undefined);
     // picks up torrents added from a phone via the TorrServer web UI
-    const timer = setInterval(() => load(() => dead), 10000);
+    const timer = setInterval(() => {
+      load(() => dead);
+      // the TV may sleep across the expiry mark: recheck while the catalog stays open
+      setDevmodeDue(platformKind() === 'webos' && devmodeExpiring(Date.now()));
+    }, 10000);
     return () => {
       dead = true;
       clearInterval(timer);
@@ -247,7 +251,7 @@ export function LibraryScreen() {
             label={t('tvSettings.devmodeExtend')}
             onPress={() => {
               extendDevMode(Date.now()).then(
-                () => { setDevmodeDue(false); toast(t('tvSettings.devmodeExtended')); },
+                () => { setDevmodeDue(false); toast(t('tvSettings.devmodeOpened')); },
                 () => toast(t('tvSettings.devmodeOpenFailed'), 'error'),
               );
             }}

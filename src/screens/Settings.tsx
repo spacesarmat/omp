@@ -249,7 +249,7 @@ export function SettingsScreen() {
     ['set-live-seeds'],
     ['set-update-check'],
     ['set-update'].concat(platformKind() === 'androidtv' ? [] : ['set-addHbRepo']).concat(['set-faq', 'set-advanced']),
-    ['set-onboarding'],
+    platformKind() === 'androidtv' ? ['set-onboarding'] : ['set-devmode-extend', 'set-onboarding'],
   ];
   if (isBetaBuild()) tail.push(['set-test-mode'], ['set-test-size']);
   const nav = (key: string) => rowArrow(tail, key);
@@ -352,7 +352,7 @@ export function SettingsScreen() {
             onArrow={nav('set-devmode-extend')}
             onPress={() => {
               extendDevMode(Date.now()).then(
-                () => toast(t('tvSettings.devmodeExtended')),
+                () => toast(t('tvSettings.devmodeOpened')),
                 () => toast(t('tvSettings.devmodeOpenFailed'), 'error'),
               );
             }}

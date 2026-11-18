@@ -2327,7 +2327,7 @@ export const en: EnDict<typeof ru> = {
     update: 'Update',
     addHbRepo: 'Add the OMP repository to Homebrew Channel',
     devmodeExtend: 'Extend mode',
-    devmodeExtended: 'Mode extended - the 1000-hour countdown restarted',
+    devmodeOpened: 'Developer Mode is open - press Extend there to renew the mode',
     devmodeOpenFailed: 'Could not open Developer Mode on the TV',
     resetApp: 'Reset the app settings',
     resetAppAsk: 'Reset the app settings?',

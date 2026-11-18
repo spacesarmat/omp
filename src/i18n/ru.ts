@@ -2373,7 +2373,7 @@ export const ru = {
     update: 'Обновление',
     addHbRepo: 'Добавить репозиторий OMP в Homebrew Channel',
     devmodeExtend: 'Продлить режим',
-    devmodeExtended: 'Режим продлён - отсчёт 1000 часов пошёл заново',
+    devmodeOpened: 'Developer Mode открыт - нажмите в нём Extend, чтобы продлить режим',
     devmodeOpenFailed: 'Не удалось открыть Developer Mode на телевизоре',
     resetApp: 'Сбросить настройки приложения',
     resetAppAsk: 'Сбросить настройки приложения?',

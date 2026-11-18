@@ -6,7 +6,7 @@ The English translation covers the latest versions only; the full history (in Ru
 
 ## Unreleased
 
-- [lg] "Extend mode" button in the TV settings and a catalog banner 3 days before the 1000-hour Developer Mode ends: they open Developer Mode and restart the countdown so OMP stays on the TV
+- [lg] "Extend mode" button in the TV settings and a catalog banner 3 days before the 1000-hour Developer Mode ends: they open Developer Mode, where Extend completes the renewal; the banner rechecks the deadline while the catalog is open so OMP stays on the TV
 - [tech] TV boot regression test: the phone launch must open the player even on the old WebView (SVG without dataset) and when the design runtime fails. The test reproduces the beta.11 incident and fails on pre-#431 code
 
 ## 0.30.1-beta.12
