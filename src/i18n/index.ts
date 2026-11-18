@@ -4,6 +4,14 @@ import { en } from './en';
 import { uk } from './uk';
 import { be } from './be';
 import { kk } from './kk';
+import { ky } from './ky';
+import { uz } from './uz';
+import { tg } from './tg';
+import { tk } from './tk';
+import { hy } from './hy';
+import { az } from './az';
+import { ka } from './ka';
+import { ro } from './ro';
 import type { StringKeys, PluralKeys } from './types';
 
 export type { Plural, EnPlural, EnDict, StringKeys, PluralKeys } from './types';
@@ -24,7 +32,7 @@ export type Params = { [k: string]: string | number };
 export const lang = signal<Lang>('ru');
 
 /** Translated packs plug in here as they land; a missing pack or key falls back to Russian. */
-export const DICTS: Partial<Record<Lang, unknown>> = { ru, en, uk, be, kk };
+export const DICTS: Partial<Record<Lang, unknown>> = { ru, en, uk, be, kk, ky, uz, tg, tk, hy, az, ka, ro };
 
 /** Prefix match so regional variants (uk-UA, kk-KZ, en-US, ...) map to the base code. Unsupported stays ''. */
 export function normalizeLang(code: string): Lang | '' {

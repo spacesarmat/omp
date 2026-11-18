@@ -1,5 +1,7 @@
 /** The kk dictionary (DeepL draft, reviewed). Mirrors ru.ts; plurals one/other. */
-export const kk = {
+import type { EnDict } from './types';
+import type { ru } from './ru';
+export const kk: EnDict<typeof ru> = {
   filters: {
     noCam: "экрандарсыз",
     seeds: "жақтары ≥ {n}",
@@ -2964,4 +2966,4 @@ export const kk = {
     friendsText: "OMP – фильмдер мен телехикаялар үшін ойыншы",
     seasonOut: "{n} маусымы {date} шығады",
   },
-} as typeof import('./ru').ru;
+};
