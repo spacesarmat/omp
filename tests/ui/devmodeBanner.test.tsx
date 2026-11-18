@@ -91,7 +91,12 @@ describe('Developer Mode expiry banner', () => {
       await act(async () => { vi.advanceTimersByTime(50); });
       expect(host.querySelector('[data-fk="lib-devmode-extend"]')).toBeNull();
       vi.setSystemTime(start + LEAD + 1000);
-      await act(async () => { vi.advanceTimersByTime(10000); });
+      // advance past the 10s recheck: the interval sets the flag, but Preact defers the render to an rAF
+      // frame that lands after exactly 10000ms, so give it room to fire too
+      await act(async () => {
+        vi.advanceTimersByTime(10100);
+        for (let i = 0; i < 8; i++) await Promise.resolve();
+      });
       expect(host.querySelector('[data-fk="lib-devmode-extend"]')).toBeTruthy();
     } finally {
       vi.useRealTimers();

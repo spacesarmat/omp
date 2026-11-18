@@ -7,6 +7,7 @@ The English translation covers the latest versions only; the full history (in Ru
 ## Unreleased
 
 - [tech] LG Content Store build: the __STORE_BUILD__ flag (npm run build:store / package:store) disables public search and discovery - a player for the user's own TorrServer (catalog, M3U/HLS, playback) remains; regular builds are unchanged
+- [tech] The developer mode expiry banner test is no longer flaky: after fake timers it deterministically waits for Preact's deferred rAF render, which had failed the full release test run
 
 ## 0.30.1-beta.13
 
