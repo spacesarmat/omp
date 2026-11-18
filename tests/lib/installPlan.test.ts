@@ -16,6 +16,7 @@ import {
   FAQ_XIAOMI,
   FAQ_SBER,
   FAQ_YANDEX,
+  FAQ_ATV_ADB,
   SBER_APPS_URL,
   atvBrand,
   type LgFacts,
@@ -276,13 +277,18 @@ describe('installPlan - Android TV', () => {
     const p = installPlan(atv({ ompVersion: '0.12.0', latest: '0.13.1' }));
     expect(p.kind).toBe('atv-installed');
     expect(p.needsUpdate).toBe(true);
-    expect(ids(p)).toEqual(['install', 'update-on-tv']);
+    expect(ids(p)).toEqual(['install', 'update-on-tv', 'faq']);
     expect(p.actions[0]).toEqual({ id: 'install', label: 'Обновить с телефона', primary: true });
+    expect(p.actions[2]).toEqual({ id: 'faq', label: 'Как установить через компьютер', faq: FAQ_ATV_ADB });
     expect(p.install).toEqual({ method: 'atv-adb', ip: '192.168.1.9', wireless: null });
     expect(p.subtitle).toBe('Google TV · OMP 0.12.0');
+    // the adb setup is shown before the attempt: OMP may have been installed by USB
+    expect(p.steps.map((s) => s.id)).toEqual(['omp', 'devopts', 'debug']);
+    expect(states(p)).toEqual(['done', 'current', 'todo']);
     const fresh = installPlan(atv({ ompVersion: '0.13.1', latest: '0.13.1' }));
     expect(fresh.actions).toEqual([]);
     expect(fresh.install).toBeUndefined();
+    expect(fresh.steps.map((s) => s.id)).toEqual(['omp']);
   });
 
   it('Yandex with OMP outdated: only the TV update, no adb update from the phone', () => {
@@ -291,6 +297,17 @@ describe('installPlan - Android TV', () => {
     expect(p.needsUpdate).toBe(true);
     expect(p.actions).toEqual([{ id: 'update-on-tv', label: 'Обновить на ТВ', primary: true }]);
     expect(p.install).toBeUndefined();
+    expect(p.steps.map((s) => s.id)).toEqual(['omp']);
+  });
+
+  it('Sber with OMP outdated: the adb setup, the SberStudio note and the Sber FAQ', () => {
+    const p = installPlan(atv({ brand: 'sber', model: undefined, cast: undefined, ompVersion: '0.12.0', latest: '0.13.1' }));
+    expect(p.kind).toBe('atv-installed');
+    expect(ids(p)).toEqual(['install', 'update-on-tv', 'faq']);
+    expect(p.actions[2]).toEqual({ id: 'faq', label: 'Сбер: все способы установки', faq: FAQ_SBER });
+    expect(p.notes.join(' ')).toContain('SberStudio');
+    expect(p.steps.map((s) => s.id)).toEqual(['omp', 'devopts', 'debug']);
+    expect(p.install).toEqual({ method: 'atv-adb', ip: '192.168.1.9', wireless: null });
   });
 
   it('no OMP and nothing known: network debugging, with the Android 11+ hint and the arm64 note', () => {

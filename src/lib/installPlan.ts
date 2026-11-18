@@ -564,22 +564,44 @@ function atvPlan(f: AtvFacts): InstallPlan {
     const old = needsUpdate(installed, f.latest);
     // Yandex (YaOS) has no network adb (see sideloadPlan): OMP may be there by USB, so only the TV update is offered
     const adbUpdate = f.brand !== 'yandex';
+    const xiaomi = f.brand === 'xiaomi';
+    const sber = f.brand === 'sber';
+    const wireless = typeof f.sdkInt === 'number' ? f.sdkInt >= WIRELESS_DEBUG_SDK : null;
+    // the phone update goes over adb: OMP may have been installed by USB, so show the debugging setup first
+    const setup =
+      old && adbUpdate
+        ? [
+            { id: 'devopts', title: t('install.plan.devOptsTitle'), text: xiaomi ? t('install.plan.xiaomiDevOpts') : t('install.plan.devOptsText'), done: false },
+            {
+              id: 'debug',
+              title: t('install.plan.debugTitle'),
+              text: wireless === true ? t('install.plan.debugWireless') : wireless === false ? t('install.plan.debugPlain') : t('install.plan.debugUnknown'),
+              done: false,
+            },
+          ]
+        : [];
+    const faq = sber
+      ? { id: 'faq' as const, label: t('install.plan.sberFaq'), faq: FAQ_SBER }
+      : xiaomi
+        ? { id: 'faq' as const, label: t('install.plan.xiaomiFaq'), faq: FAQ_XIAOMI }
+        : { id: 'faq' as const, label: t('install.plan.adbFaq'), faq: FAQ_ATV_ADB };
     return {
       kind: 'atv-installed',
       title: f.name,
       subtitle: join([model, android, 'OMP ' + installed]),
-      steps: [{ id: 'omp', title: t('install.plan.ompInstalled'), text: versionText(installed, f.latest), state: 'done' }],
+      steps: withProgress([{ id: 'omp', title: t('install.plan.ompInstalled'), text: versionText(installed, f.latest), done: true }, ...setup]),
       actions: old
         ? [
             ...(adbUpdate ? [{ id: 'install' as const, label: t('install.plan.updateFromPhone'), primary: true }] : []),
             { id: 'update-on-tv', label: t('install.plan.updateOnTv'), primary: !adbUpdate },
+            ...(adbUpdate ? [faq] : []),
           ]
         : [],
-      notes: f.abi && !isArm64(f.abi) ? [abiNote(f.abi)] : [],
+      notes: (old && adbUpdate && sber ? [t('install.plan.sberAdbNote')] : []).concat(f.abi && !isArm64(f.abi) ? [abiNote(f.abi)] : []),
       installed,
       latest: f.latest,
       needsUpdate: old,
-      install: old && adbUpdate ? { method: 'atv-adb', ip: f.ip, wireless: typeof f.sdkInt === 'number' ? f.sdkInt >= WIRELESS_DEBUG_SDK : null } : undefined,
+      install: old && adbUpdate ? { method: 'atv-adb', ip: f.ip, wireless } : undefined,
     };
   }
 

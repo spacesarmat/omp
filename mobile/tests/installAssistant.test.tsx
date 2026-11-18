@@ -779,6 +779,8 @@ describe('Install assistant - install from the phone', () => {
     const el = mount(<InstallAssistant ip="192.168.1.20" kind="atv" />);
     await flush();
     expect(el.textContent).toContain('Версия 0.12.1 - есть 0.13.1');
+    expect(el.textContent).toContain('Режим разработчика');
+    expect(el.textContent).toContain('Отладка по сети');
     click(button(el, 'Обновить с телефона'));
     expect(inst.reqs).toEqual([{ method: 'atv-adb', ip: '192.168.1.20' }]);
     expect(el.textContent).toContain('Обновляю OMP');
