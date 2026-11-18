@@ -650,14 +650,8 @@ const OMP_APP_ID = 'com.spacesarmat.torrplayer';
 
 /** Whether the TV's app list still contains OMP; null when the TV did not answer the list. */
 async function lgHasOmp(): Promise<boolean | null> {
-  try {
-    const r = await request('ssap://com.webos.applicationManager/listApps');
-    const apps = Array.isArray(r?.apps) ? r.apps : null;
-    if (!apps) return null;
-    return apps.some((a: any) => a && a.id === OMP_APP_ID);
-  } catch (e) {
-    return null;
-  }
+  const ids = await lgAppIds();
+  return ids ? ids.indexOf(OMP_APP_ID) >= 0 : null;
 }
 
 /** Id of the app in the TV foreground; null when unknown or the TV does not answer. */

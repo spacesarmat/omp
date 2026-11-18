@@ -457,16 +457,21 @@ describe('tvClient commands', () => {
     await expect(p).rejects.toThrow('Не удалось запустить OMP на телевизоре');
   });
 
-  it('a launch refusal without an app list answer stays a generic launch failure', async () => {
+  it('a silent app list times out soft: generic failure, session stays connected', async () => {
     await connected(fake);
+    vi.useFakeTimers();
     const p = launchOnTv({ torrent: 'h' });
-    await flush();
+    await vi.advanceTimersByTimeAsync(0);
     const req = fake.sent[fake.sent.length - 1];
     fake.emit({ type: 'error', id: req.id, error: 'Permission denied' });
-    await flush();
+    await vi.advanceTimersByTimeAsync(0);
     const list = fake.sent[fake.sent.length - 1];
-    fake.emit({ type: 'error', id: list.id, error: 'timeout' });
-    await expect(p).rejects.toThrow('Не удалось запустить OMP на телевизоре');
+    expect(list.uri).toBe('ssap://com.webos.applicationManager/listApps');
+    const assertion = expect(p).rejects.toThrow('Не удалось запустить OMP на телевизоре');
+    await vi.advanceTimersByTimeAsync(8001);
+    await assertion;
+    expect(tvState.value).toBe('connected');
+    vi.useRealTimers();
   });
 
   it('connects to the active TV before launching', async () => {
