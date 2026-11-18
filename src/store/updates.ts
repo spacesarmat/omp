@@ -6,6 +6,7 @@ import { compareVersions } from '../lib/version';
 import { UpdateInfo, sanitizeUpdateInfo, updateFeedUrl } from '../lib/updateInfo';
 import { platformKind } from '../platform/env';
 import { APP_VERSION } from '../version';
+import { STORE_BUILD } from '../storeMode';
 
 const KEY = 'tsp.update';
 /** The least time between automatic checks when OMP comes back to the screen; a launch always checks. */
@@ -90,6 +91,8 @@ export function updateCheckDue(opts: { manual?: boolean; now?: number; minInterv
 }
 
 export function checkForUpdate(opts: { manual: boolean; now?: number; current?: string; url?: string; minIntervalMs?: number }): Promise<CheckResult> {
+  // the store app is updated through the LG Content Store; the sideload feed points at the dev-mode package, so no update path here
+  if (STORE_BUILD) return Promise.resolve<CheckResult>('latest');
   const now = opts.now === undefined ? Date.now() : opts.now;
   const current = opts.current === undefined ? APP_VERSION : opts.current;
   const gap = opts.minIntervalMs === undefined ? CHECK_INTERVAL_MS : opts.minIntervalMs;
@@ -140,6 +143,7 @@ function checkFeed(opts: { manual: boolean; url?: string }, now: number, current
  * once per CHECK_INTERVAL_MS (Android keeps the app in memory, so a «launch» is often a return). Returns the cleanup.
  */
 export function installUpdateChecks(run: (minIntervalMs: number) => void, delayMs = 3000): () => void {
+  if (STORE_BUILD) return () => {};
   const timer = setTimeout(() => run(0), delayMs);
   const onShow = () => {
     if (!document.hidden) run(CHECK_INTERVAL_MS);

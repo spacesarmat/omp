@@ -31,6 +31,7 @@ import { cleanFileName, comingEpisodes, seasonEpisodes, showOf, type ShowInfo } 
 import { baseName, naturalCompare, parseEpisode, playableFiles, stripExt, type TorrentFile } from '../lib/episodes';
 import { externalNoteText } from '../lib/externalNote';
 import { libraryTitle } from '../lib/libraryView';
+import { STORE_BUILD } from '../storeMode';
 import { buildTorrentQueue } from '../player/queue';
 import { currentRoute, goBack, navigate, type Route } from '../ui/nav';
 import { FocusGroup, Focusable, Button, ProgressBar } from '../ui/components';
@@ -661,9 +662,11 @@ function Body({ group, asked }: { group: SeriesGroup; asked?: number }) {
       {isMissing && card && (
         <div class="series-missing">
           <div class="muted">{runLast > season ? t('series.notInMediaRange') : t('series.notInMedia')}</div>
-          <FocusGroup focusKey="SERIES-MISSING" className="row">
-            <Button focusKey="series-find" label={t('titleCard.findTorrents')} onPress={findMissing} />
-          </FocusGroup>
+          {!STORE_BUILD && (
+            <FocusGroup focusKey="SERIES-MISSING" className="row">
+              <Button focusKey="series-find" label={t('titleCard.findTorrents')} onPress={findMissing} />
+            </FocusGroup>
+          )}
         </div>
       )}
       {better && (

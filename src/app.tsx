@@ -31,6 +31,7 @@ import { OnboardingScreen } from './ui/OnboardingScreen';
 import { armOnboardingBoot, onboardingVisible, resumeOnboarding } from './onboarding/gate';
 import { getChangelog } from './lib/changelogData';
 import { APP_VERSION } from './version';
+import { STORE_BUILD } from './storeMode';
 import { checkForUpdate, installUpdateChecks, updatePrompt } from './store/updates';
 import { checkComponentUpdates, componentPrompt, installComponentChecks } from './store/componentUpdates';
 import { readTvAbi, readTvPlayerVersion, readTvTorr } from './player/componentProbe';
@@ -64,6 +65,11 @@ function LazySources() {
 }
 
 function renderRoute(r: Route) {
+  // store build: public search / discovery routes fall back to the catalog of the user's own TorrServer; the update
+  // screen leads to the sideload package, and the store app is updated through the LG Content Store instead
+  if (STORE_BUILD && (r.name === 'add' || r.name === 'title' || r.name === 'person' || r.name === 'sources' || r.name === 'tsSources' || r.name === 'update')) {
+    return <LibraryScreen />;
+  }
   switch (r.name) {
     case 'connect':
       return <ConnectScreen />;
