@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Alerts, Brand, FlashBox, LoadingScreen, Toast, toast } from '@/components/chrome';
 import { post, api, type PostResult } from '@/lib/api';
@@ -22,7 +21,10 @@ import { WatchPanel } from '@/panels/WatchPanel';
 import { AuditPanel, FailsPanel, FinancePanel, HomeFeed, IssueCard, PromoCard, SecurityCard, ServicesCard, SettingsCard, SubsPanel } from '@/panels/sections';
 import { DeskHome, DevicesDesk, FunnelDesk, RevenueDesk, RollbackCard, SourcesDesk, UsersDesk, NucDesk } from '@/panels/DeskViews';
 import { BroadcastDesk, CrashesDesk, LoginsDesk, VersionsDesk } from '@/panels/OpsExtra';
-import { NAV, Palette } from '@/components/palette';
+import { Palette } from '@/components/palette';
+import { NAV } from '@/lib/nav';
+import { tabFromSearch, urlForTab } from '@/lib/tabUrl';
+import { ConfirmHost, askConfirm } from '@/components/confirm';
 import { useDesk } from '@/lib/desk';
 import { LiveBar, useLive } from '@/lib/live';
 import type { HomeData, UserData } from '@/lib/types';
@@ -59,11 +61,11 @@ export function App() {
   const [data, setData] = useState<HomeData | null>(null);
   const [user, setUser] = useState<UserData | null>(null);
   const params = useMemo(() => new URLSearchParams(location.search), []);
-  const [tab, setTab] = useState(() => params.get('tab') || 'home');
+  const [tab, setTab] = useState(() => tabFromSearch(location.search));
   const [filter, setFilter] = useState('all');
-  const [q, setQ] = useState('');
   const [navOpen, setNavOpen] = useState(false);
   const [palette, setPalette] = useState(false);
+  const [paletteQ, setPaletteQ] = useState('');
   const supportTg = params.get('tg') || '';
   const live = useLive();
   const desk = useDesk(auth === true && !user, live.paused);
@@ -100,6 +102,19 @@ export function App() {
   useEffect(() => {
     void reload();
   }, []);
+
+  useEffect(() => {
+    const onPop = () => setTab(tabFromSearch(location.search));
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, []);
+
+  function goTab(id: string) {
+    setTab(id);
+    const next = urlForTab(id, location.search);
+    const here = urlForTab(tabFromSearch(location.search), location.search);
+    if (next !== here) history.pushState({ tab: id }, '', next);
+  }
 
   useEffect(() => {
     const onLive = () => void reload();
@@ -165,6 +180,7 @@ export function App() {
           </Button>
         </div>
         <UserCard user={user} run={run} />
+        <ConfirmHost />
         <Toast />
       </>
     );
@@ -176,7 +192,15 @@ export function App() {
 
   return (
     <main className="min-h-screen lg:flex">
-      <aside className={(navOpen ? 'block' : 'hidden') + ' w-full border-b border-border bg-card lg:block lg:w-56 lg:shrink-0 lg:border-b-0 lg:border-r'}>
+      {navOpen ? (
+        <button type="button" className="fixed inset-0 z-30 bg-black/60 lg:hidden" aria-label="Закрыть меню" onClick={() => setNavOpen(false)} />
+      ) : null}
+      <aside
+        className={
+          (navOpen ? 'fixed inset-y-0 left-0 z-40 block w-72 overflow-auto' : 'hidden') +
+          ' border-b border-border bg-card lg:static lg:block lg:w-56 lg:shrink-0 lg:overflow-visible lg:border-b-0 lg:border-r'
+        }
+      >
         <div className="px-3 py-3">
           <Brand />
         </div>
@@ -190,7 +214,7 @@ export function App() {
                   type="button"
                   className={'block w-full rounded-md px-2 py-1.5 text-left text-sm ' + (tab === id ? 'bg-primary text-primary-foreground' : 'text-foreground hover:bg-secondary')}
                   onClick={() => {
-                    setTab(id);
+                    goTab(id);
                     setNavOpen(false);
                   }}
                 >
@@ -208,7 +232,13 @@ export function App() {
           <Button variant="secondary" className="lg:hidden" onClick={() => setNavOpen((v) => !v)}>
             Меню
           </Button>
-          <Button variant="secondary" onClick={() => setPalette(true)}>
+          <Button
+            variant="secondary"
+            onClick={() => {
+              setPaletteQ('');
+              setPalette(true);
+            }}
+          >
             Поиск
           </Button>
           <span className="text-xs text-muted-foreground">Ctrl+K</span>
@@ -221,9 +251,9 @@ export function App() {
           </Button>
         </div>
       </header>
-      <Palette open={palette} onOpen={setPalette} go={setTab} />
+      <Palette open={palette} onOpen={setPalette} go={goTab} initialQuery={paletteQ} />
       <FlashBox flash={d.flash} />
-      <Tabs value={tab} onValueChange={setTab}>
+      <Tabs value={tab} onValueChange={goTab}>
         <TabsList className="hidden">
           <TabsTrigger value="home">
             Главная
@@ -297,34 +327,39 @@ export function App() {
               </Card>
             ))}
           </div>
-          <Card>
-            <CardHeader>
-              <CardTitle>Найти</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <form
-                className="flex flex-col gap-2 sm:flex-row"
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  void run('/admin/find', { q });
-                }}
-              >
-                <Input placeholder="Telegram / почта / код / идентификатор" value={q} onChange={(e) => setQ(e.target.value)} />
-                <Button type="submit">Найти</Button>
-              </form>
-            </CardContent>
-          </Card>
           <AlertsPanel alerts={d.alerts} />
           <Card>
             <CardHeader>
               <CardTitle>Быстрое промо</CardTitle>
             </CardHeader>
             <CardContent className="flex flex-wrap gap-2">
-              <Button onClick={() => void run('/admin/promo', { days: 1, maxUses: 1 })}>1 день × 1</Button>
-              <Button variant="secondary" onClick={() => void run('/admin/promo', { days: 7, maxUses: 10 })}>
+              <Button
+                onClick={() =>
+                  void askConfirm({ title: 'Промокод', body: 'Создать промокод на 1 день с 1 активацией?', yes: 'Создать' }).then((ok) => {
+                    if (ok) void run('/admin/promo', { days: 1, maxUses: 1 });
+                  })
+                }
+              >
+                1 день × 1
+              </Button>
+              <Button
+                variant="secondary"
+                onClick={() =>
+                  void askConfirm({ title: 'Промокод', body: 'Создать промокод на 7 дней с 10 активациями?', yes: 'Создать' }).then((ok) => {
+                    if (ok) void run('/admin/promo', { days: 7, maxUses: 10 });
+                  })
+                }
+              >
                 7 дней × 10
               </Button>
-              <Button variant="secondary" onClick={() => void run('/admin/promo', { days: 30, maxUses: 1 })}>
+              <Button
+                variant="secondary"
+                onClick={() =>
+                  void askConfirm({ title: 'Промокод', body: 'Создать промокод на 30 дней с 1 активацией?', yes: 'Создать' }).then((ok) => {
+                    if (ok) void run('/admin/promo', { days: 30, maxUses: 1 });
+                  })
+                }
+              >
                 30 дней × 1
               </Button>
             </CardContent>
@@ -417,6 +452,7 @@ export function App() {
           <VersionsDesk data={deskData} />
         </TabsContent>
       </Tabs>
+      <ConfirmHost />
       <Toast />
       </div>
     </main>

@@ -6,6 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { CopyBtn, FlashBox, SubStatus, toast } from '@/components/chrome';
 import { api, type PostResult } from '@/lib/api';
+import { askConfirm } from '@/components/confirm';
 import { Stamp } from '@/components/stamp';
 import { payMethodLabel, personLabel, problemKind } from '@/lib/text';
 import type { UserData } from '@/lib/types';
@@ -89,8 +90,9 @@ export function UserCard({
               <Button
                 variant="secondary"
                 onClick={() => {
-                  if (!window.confirm('Начислить зачёт ' + creditRub + ' ₽?')) return;
-                  void run('/admin/api/credit', { accountId: user.account.id, rub: creditRub, confirm: 'yes' });
+                  void askConfirm({ title: 'Зачёт', body: 'Начислить зачёт ' + creditRub + ' ₽?', yes: 'Начислить' }).then((ok) => {
+                    if (ok) void run('/admin/api/credit', { accountId: user.account.id, rub: creditRub, confirm: 'yes' });
+                  });
                 }}
               >
                 Зачёт
@@ -170,9 +172,11 @@ export function UserCard({
             </select>
             <Button
               onClick={() => {
-                if (!window.confirm('Выдать +' + grantDays + ' дн.?')) return;
-                sessionStorage.setItem(DAY_KEY, grantDays);
-                void run('/admin/grant', { accountId: user.account.id, days: grantDays });
+                void askConfirm({ title: 'Выдать дни', body: 'Выдать +' + grantDays + ' дн.?', yes: 'Выдать' }).then((ok) => {
+                  if (!ok) return;
+                  sessionStorage.setItem(DAY_KEY, grantDays);
+                  void run('/admin/grant', { accountId: user.account.id, days: grantDays });
+                });
               }}
             >
               Выдать

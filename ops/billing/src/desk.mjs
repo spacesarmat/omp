@@ -416,6 +416,40 @@ export function searchDesk(state, devices, q) {
       out.push({ kind: 'release', id: String(r.infohash || i), title: title || String(r.infohash || ''), href: '/admin/?tab=rank' });
     }
   }
+  const donations = state.donations || [];
+  for (let i = donations.length - 1; i >= 0 && out.length < 20; i--) {
+    const d = donations[i];
+    if (!d) continue;
+    const hay = [d.id, d.comment, d.displayName, d.telegramId, d.amountRub, d.operationId, d.accountId].join(' ').toLowerCase();
+    if (hay.indexOf(query) < 0) continue;
+    out.push({
+      kind: 'donation',
+      id: String(d.id || i),
+      title: (d.amountRub || 0) + ' ₽' + (d.displayName ? ' · ' + d.displayName : '') + (d.comment ? ' · ' + d.comment : ''),
+      href: '/admin/?tab=donations',
+    });
+  }
+  const promos = state.promos || [];
+  for (let i = 0; i < promos.length && out.length < 20; i++) {
+    const p = promos[i];
+    if (!p) continue;
+    const hay = [p.id, p.code].join(' ').toLowerCase();
+    if (hay.indexOf(query) < 0) continue;
+    out.push({ kind: 'promo', id: String(p.id || p.code || i), title: String(p.code || p.id || ''), href: '/admin/?tab=promos' });
+  }
+  const referrals = state.referralJournal || [];
+  for (let i = referrals.length - 1; i >= 0 && out.length < 20; i--) {
+    const r = referrals[i];
+    if (!r) continue;
+    const hay = [r.id, r.friendId, r.referrerId, r.status, r.variant].join(' ').toLowerCase();
+    if (hay.indexOf(query) < 0) continue;
+    out.push({
+      kind: 'referral',
+      id: String(r.id || i),
+      title: String(r.variant || 'реферал') + (r.status ? ' · ' + r.status : ''),
+      href: '/admin/?tab=referral',
+    });
+  }
   return out;
 }
 

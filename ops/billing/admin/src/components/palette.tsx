@@ -1,39 +1,23 @@
 import { Command } from 'cmdk';
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api';
-
-const PAGES: { id: string; label: string }[] = [
-  ['home', 'Обзор'],
-  ['users', 'Пользователи'],
-  ['subs', 'Подписки и оплаты'],
-  ['devices', 'Устройства'],
-  ['sources', 'Источники поиска'],
-  ['rank', 'Подбор раздач'],
-  ['cache', 'Кэш'],
-  ['funnel', 'Воронка'],
-  ['revenue', 'Выручка'],
-  ['nuc', 'NUC'],
-  ['support', 'Поддержка'],
-  ['promos', 'Промо'],
-  ['fails', 'Отказы'],
-  ['audit', 'Журнал'],
-  ['ads', 'Реклама'],
-  ['referral', 'Рефералы'],
-  ['services', 'Сервисы'],
-  ['dht', 'DHT'],
-  ['monitor', 'Мониторинг'],
-  ['changes', 'Изменения'],
-  ['settings', 'Настройки'],
-  ['security', 'Доступ'],
-  ['crashes', 'Сбои'],
-  ['broadcast', 'Рассылка'],
-  ['versions', 'Версии'],
-].map(([id, label]) => ({ id, label }));
+import { ADMIN_PAGES } from '@/lib/nav';
+import { searchKindLabel } from '@/lib/text';
 
 type Hit = { kind: string; id: string; title: string; href: string };
 
-export function Palette({ open, onOpen, go }: { open: boolean; onOpen: (v: boolean) => void; go: (tab: string) => void }) {
-  const [q, setQ] = useState('');
+export function Palette({
+  open,
+  onOpen,
+  go,
+  initialQuery,
+}: {
+  open: boolean;
+  onOpen: (v: boolean) => void;
+  go: (tab: string) => void;
+  initialQuery?: string;
+}) {
+  const [q, setQ] = useState(initialQuery || '');
   const [hits, setHits] = useState<Hit[]>([]);
 
   useEffect(() => {
@@ -46,6 +30,10 @@ export function Palette({ open, onOpen, go }: { open: boolean; onOpen: (v: boole
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [open, onOpen]);
+
+  useEffect(() => {
+    if (open) setQ(initialQuery || '');
+  }, [open, initialQuery]);
 
   useEffect(() => {
     if (!open || q.trim().length < 2) {
@@ -69,11 +57,11 @@ export function Palette({ open, onOpen, go }: { open: boolean; onOpen: (v: boole
     <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/60 px-4 pt-[12vh]" onClick={() => onOpen(false)}>
       <div className="w-full max-w-xl rounded-lg border border-border bg-card shadow-xl" onClick={(e) => e.stopPropagation()}>
         <Command label="Поиск" shouldFilter={false}>
-          <Command.Input value={q} onValueChange={setQ} placeholder="Аккаунт, устройство, платёж, раздача" autoFocus />
+          <Command.Input value={q} onValueChange={setQ} placeholder="Аккаунт, устройство, платёж, донат, промо, реферал" autoFocus />
           <Command.List className="max-h-80 overflow-auto p-2">
             <Command.Empty className="px-2 py-3 text-sm text-muted-foreground">Ничего не найдено</Command.Empty>
             <Command.Group heading="Экраны">
-              {PAGES.filter((p) => !q.trim() || p.label.toLowerCase().indexOf(q.trim().toLowerCase()) >= 0).map((p) => (
+              {ADMIN_PAGES.filter((p) => !q.trim() || p.label.toLowerCase().indexOf(q.trim().toLowerCase()) >= 0).map((p) => (
                 <Command.Item
                   key={p.id}
                   value={p.label}
@@ -101,7 +89,7 @@ export function Palette({ open, onOpen, go }: { open: boolean; onOpen: (v: boole
                       onOpen(false);
                     }}
                   >
-                    <span className="mr-2 text-xs uppercase text-muted-foreground">{h.kind}</span>
+                    <span className="mr-2 text-xs text-muted-foreground">{searchKindLabel(h.kind)}</span>
                     {h.title}
                   </Command.Item>
                 ))}
@@ -114,10 +102,4 @@ export function Palette({ open, onOpen, go }: { open: boolean; onOpen: (v: boole
   );
 }
 
-export const NAV = [
-  { title: 'Обзор', items: [['home', 'Обзор'], ['users', 'Пользователи'], ['subs', 'Подписки и оплаты'], ['devices', 'Устройства']] },
-  { title: 'Сеть', items: [['sources', 'Источники'], ['rank', 'Подбор'], ['cache', 'Кэш'], ['nuc', 'NUC']] },
-  { title: 'Деньги', items: [['funnel', 'Воронка'], ['revenue', 'Выручка'], ['finance', 'Финансы'], ['donations', 'Донаты'], ['promos', 'Промо'], ['referral', 'Рефералы']] },
-  { title: 'Работа', items: [['support', 'Поддержка'], ['replies', 'Ответы бота'], ['fails', 'Отказы'], ['ads', 'Реклама'], ['services', 'Сервисы'], ['dht', 'DHT'], ['monitor', 'Мониторинг'], ['changes', 'Изменения']] },
-  { title: 'Система', items: [['settings', 'Настройки'], ['audit', 'Журнал'], ['security', 'Доступ'], ['crashes', 'Сбои'], ['broadcast', 'Рассылка'], ['versions', 'Версии']] },
-];
+export { NAV } from '@/lib/nav';

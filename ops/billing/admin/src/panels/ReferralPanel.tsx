@@ -4,7 +4,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { post, type PostResult } from '@/lib/api';
+import { askConfirm } from '@/components/confirm';
 import { nextTierFriends } from '@/lib/nextTierFriends';
+import { referralStatus } from '@/lib/text';
 
 type Tier = { friends: number; days: number; percent: number };
 
@@ -196,12 +198,25 @@ export function ReferralPanel({
         {rows.length === 0 ? <p className="text-sm">Начислений нет</p> : rows.map((row) => (
           <div key={row.id} className="flex flex-wrap items-center gap-2 text-sm">
             <span>
-              {row.friendId || row.id} · {variantLabel(row.variant)} · {row.status} · {row.days} дн.
+              {row.friendId || row.id} · {variantLabel(row.variant)} · {referralStatus(row.status)} · {row.days} дн.
               {row.credit ? ' · ' + row.credit + ' ₽' : ''}
               {row.shortfall ? ' · ' + row.shortfall : ''}
             </span>
             {row.status !== 'cancelled' ? (
-              <Button type="button" variant="secondary" disabled={busy} onClick={() => void save({}, row.id)}>
+              <Button
+                type="button"
+                variant="secondary"
+                disabled={busy}
+                onClick={() =>
+                  void askConfirm({
+                    title: 'Отменить начисление',
+                    body: 'Дни и баланс этого начисления вернутся.',
+                    yes: 'Отменить начисление',
+                  }).then((ok) => {
+                    if (ok) void save({}, row.id);
+                  })
+                }
+              >
                 Отменить
               </Button>
             ) : null}

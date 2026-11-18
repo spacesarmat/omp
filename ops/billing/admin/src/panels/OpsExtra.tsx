@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { api, post } from '@/lib/api';
+import { askConfirm } from '@/components/confirm';
 import { useLive } from '@/lib/live';
 import { toast } from '@/components/chrome';
 import { LogDialog } from '@/components/logDialog';
@@ -47,7 +48,14 @@ export function CrashesDesk({ csrf }: { csrf: string }) {
   }
   return (
     <div className="space-y-2">
-      {groups.length === 0 ? <p className="text-sm text-muted-foreground">Сбоев нет</p> : null}
+      {groups.length === 0 ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Сбои</CardTitle>
+          </CardHeader>
+          <CardContent className="text-sm text-muted-foreground">Сбоев нет. Сюда попадают падения приложений, когда телефон их присылает.</CardContent>
+        </Card>
+      ) : null}
       {groups.map((g) => (
         <Card key={g.id}>
           <CardContent className="space-y-2 pt-4">
@@ -80,8 +88,10 @@ export function CrashesDesk({ csrf }: { csrf: string }) {
                     key={status}
                     variant="secondary"
                     onClick={() => {
-                      if (!window.confirm('Поставить статус ' + status + '?')) return;
-                      void post('/admin/api/crashes/status', csrf, { id: g.id, status, confirm: 'yes' }).then(() => qc.invalidateQueries({ queryKey: ['crashes'] }));
+                      const label = status === 'progress' ? 'В работе' : status === 'fixed' ? 'Исправлен' : 'Игнор';
+                      void askConfirm({ title: 'Статус сбоя', body: 'Поставить статус «' + label + '»?', yes: 'Поставить' }).then((ok) => {
+                        if (ok) void post('/admin/api/crashes/status', csrf, { id: g.id, status, confirm: 'yes' }).then(() => qc.invalidateQueries({ queryKey: ['crashes'] }));
+                      });
                     }}
                   >
                     {status === 'progress' ? 'В работе' : status === 'fixed' ? 'Исправлен' : 'Игнор'}
@@ -164,10 +174,16 @@ export function BroadcastDesk({ csrf }: { csrf: string }) {
             disabled={!preview}
             onClick={() => {
               if (!preview) return;
-              if (!window.confirm('Отправить ' + preview.count + ' сообщений? Это нельзя отменить.')) return;
+              void askConfirm({
+                title: 'Рассылка',
+                body: 'Отправить ' + preview.count + ' сообщений? Это нельзя отменить.',
+                yes: 'Отправить',
+              }).then((ok) => {
+                if (!ok || !preview) return;
               void post('/admin/api/broadcast/send', csrf, { id: preview.id, confirm: 'yes' }).then((r) => {
                 toast(r.ok ? 'Отправлено' : 'Не отправлено');
                 setPreview(null);
+              });
               });
             }}
           >
