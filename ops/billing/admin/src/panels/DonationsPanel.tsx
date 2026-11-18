@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { api, type PostResult } from '@/lib/api';
+import { askConfirm } from '@/components/confirm';
 import { donateSaveFailed, formFromDonateSettings, keepOrRefreshForm, stillDirtyAfterSave, takeFilterRows, type DonateForm } from '@/lib/donateForm';
 import { when } from '@/lib/text';
 import type { DonateRateRow, DonateRates } from '@/lib/types';
@@ -312,13 +313,61 @@ export function DonationsPanel({
                     <td className="py-1 pr-2">{row.held && row.status === 'pending' ? 'ждёт в ЮMoney' : STATUS[row.status] || row.status}</td>
                     <td className="py-1 space-x-2 whitespace-nowrap">
                       {row.held && row.status === 'pending' ? (
-                        <button type="button" className="text-primary" onClick={() => { if (window.confirm('Подтвердить удержанный донат? Подписка не продлится.')) void run('/admin/donate/confirm', { id: row.id, confirm: 'yes' }).then(() => reload()); }}>Подтвердить</button>
+                        <button
+                          type="button"
+                          className="text-primary"
+                          onClick={() =>
+                            void askConfirm({ title: 'Подтвердить донат', body: 'Подписка не продлится.', yes: 'Подтвердить' }).then((ok) => {
+                              if (ok) void run('/admin/donate/confirm', { id: row.id, confirm: 'yes' }).then(() => reload());
+                            })
+                          }
+                        >
+                          Подтвердить
+                        </button>
                       ) : null}
                       {row.status === 'paid' ? (
-                        <button type="button" className="text-primary" onClick={() => { if (window.confirm('Отметить возврат? Деньги этой кнопкой не уходят.')) void run('/admin/donate/refund', { id: row.id, confirm: 'yes' }).then(() => reload()); }}>Возврат</button>
+                        <button
+                          type="button"
+                          className="text-primary"
+                          onClick={() =>
+                            void askConfirm({ title: 'Возврат доната', body: 'Деньги этой кнопкой не уходят. Строка будет отмечена как возврат.', yes: 'Отметить возврат' }).then((ok) => {
+                              if (ok) void run('/admin/donate/refund', { id: row.id, confirm: 'yes' }).then(() => reload());
+                            })
+                          }
+                        >
+                          Возврат
+                        </button>
                       ) : null}
-                      <button type="button" className="text-primary" onClick={() => void run('/admin/donate/hide', { id: row.id, field: 'comment' }).then(() => reload())}>{row.commentHidden ? 'Вернуть комментарий' : 'Скрыть комментарий'}</button>
-                      <button type="button" className="text-primary" onClick={() => void run('/admin/donate/hide', { id: row.id, field: 'name' }).then(() => reload())}>{row.nameHidden ? 'Вернуть имя' : 'Скрыть имя'}</button>
+                      <button
+                        type="button"
+                        className="text-primary"
+                        onClick={() =>
+                          void askConfirm({
+                            title: row.commentHidden ? 'Вернуть комментарий' : 'Скрыть комментарий',
+                            body: row.commentHidden ? 'Комментарий снова будет виден в списке.' : 'Комментарий скроется в списке донатов.',
+                            yes: row.commentHidden ? 'Вернуть' : 'Скрыть',
+                          }).then((ok) => {
+                            if (ok) void run('/admin/donate/hide', { id: row.id, field: 'comment' }).then(() => reload());
+                          })
+                        }
+                      >
+                        {row.commentHidden ? 'Вернуть комментарий' : 'Скрыть комментарий'}
+                      </button>
+                      <button
+                        type="button"
+                        className="text-primary"
+                        onClick={() =>
+                          void askConfirm({
+                            title: row.nameHidden ? 'Вернуть имя' : 'Скрыть имя',
+                            body: row.nameHidden ? 'Имя снова будет видно в списке.' : 'Имя скроется в списке донатов.',
+                            yes: row.nameHidden ? 'Вернуть' : 'Скрыть',
+                          }).then((ok) => {
+                            if (ok) void run('/admin/donate/hide', { id: row.id, field: 'name' }).then(() => reload());
+                          })
+                        }
+                      >
+                        {row.nameHidden ? 'Вернуть имя' : 'Скрыть имя'}
+                      </button>
                     </td>
                   </tr>
                 ))}

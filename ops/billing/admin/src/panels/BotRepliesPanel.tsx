@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { api } from '@/lib/api';
+import { askConfirm } from '@/components/confirm';
 
 type Variable = { key: string; label: string; sample: string; sampleEn?: string; samples?: Record<string, string> };
 type Template = {
@@ -357,6 +358,12 @@ export function BotRepliesPanel({ csrf }: { csrf: string }) {
 
   async function reset() {
     if (!open || loading) return;
+    const ok = await askConfirm({
+      title: 'Текст по умолчанию',
+      body: 'Сохранённый текст этого ответа будет забыт. Бот снова возьмёт текст из кода.',
+      yes: 'Вернуть',
+    });
+    if (!ok) return;
     const target = { id: open.id, state, lang };
     setBusy(true);
     try {

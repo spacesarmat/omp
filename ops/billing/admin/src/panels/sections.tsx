@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { CopyBtn, DayChart, Devices, Pager, Skeleton, SubStatus, toast } from '@/components/chrome';
 import { api, post, type PostResult } from '@/lib/api';
+import { askConfirm } from '@/components/confirm';
 import { Stamp } from '@/components/stamp';
 import { botPollStatusText, type BotPollView } from '@/lib/botPoll';
 import { actorLine, auditAction, AUDIT_FILTERS, bytesText, downloadCsv, FAIL_FILTERS, failReason, payMethodLabel, problemKind, serviceError, when } from '@/lib/text';
@@ -59,7 +60,8 @@ export function IssueCard({ run }: { run: Run }) {
             variant="secondary"
             onClick={() => {
               const n = Number(count) || 1;
-              if (!window.confirm('Создать ' + n + ' новых кодов на ' + days + ' дн.?')) return;
+              void askConfirm({ title: 'Пакет кодов', body: 'Создать ' + n + ' новых кодов на ' + days + ' дн.?', yes: 'Создать' }).then((ok) => {
+                if (!ok) return;
               void run('/admin/issue-bulk', { count: n, days }).then((res) => {
                 const codes = res?.extra?.codes || [];
                 if (!codes.length) return;
@@ -68,6 +70,7 @@ export function IssueCard({ run }: { run: Run }) {
                   [['код', 'аккаунт', 'до']].concat(codes.map((c) => [c.code, c.accountId || '', c.paidUntil ? new Date(c.paidUntil).toISOString().slice(0, 10) : ''])),
                 );
                 toast('CSV со кодами скачан');
+              });
               });
             }}
           >
@@ -199,8 +202,9 @@ export function PromoCard({ run, promos }: { run: Run; promos: NonNullable<HomeD
                         size="sm"
                         variant="secondary"
                         onClick={() => {
-                          if (!window.confirm('Отозвать промокод ' + p.code + '?')) return;
-                          void run('/admin/promo-revoke', { promoId: p.id });
+                          void askConfirm({ title: 'Отозвать промокод', body: 'Отозвать промокод ' + p.code + '?', yes: 'Отозвать' }).then((ok) => {
+                            if (ok) void run('/admin/promo-revoke', { promoId: p.id });
+                          });
                         }}
                       >
                         Отозвать
@@ -267,7 +271,12 @@ export function SubsPanel({
             disabled={expiring.length === 0}
             onClick={() => {
               if (!expiring.length) return;
-              if (!window.confirm('Отправить напоминание ' + expiring.length + ' пользователям в Telegram?')) return;
+              void askConfirm({
+                title: 'Напоминание',
+                body: 'Отправить напоминание ' + expiring.length + ' пользователям в Telegram?',
+                yes: 'Отправить',
+              }).then((ok) => {
+                if (!ok) return;
               void (async () => {
                 let ok = 0;
                 for (let i = 0; i < expiring.length; i++) {
@@ -281,6 +290,7 @@ export function SubsPanel({
                 }
                 toast('Отправлено: ' + ok + ' из ' + expiring.length);
               })();
+              });
             }}
           >
             Напомнить истекающим ({expiring.length})

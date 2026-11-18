@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Skeleton, toast } from '@/components/chrome';
 import { api, post } from '@/lib/api';
+import { askConfirm } from '@/components/confirm';
 import {
   AD_PLATFORM_LABEL,
   AD_SECTION_LABEL,
@@ -274,8 +275,13 @@ export function AdsPanel({ csrf }: { csrf: string }) {
                   variant="destructive"
                   disabled={busy}
                   onClick={() => {
-                    if (!confirm('Удалить баннер «' + b.title + '»? Статистика по нему останется.')) return;
-                    void send('/admin/ads/banner-remove', { id: b.id, confirm: 'yes' }).then(() => load());
+                    void askConfirm({
+                      title: 'Удалить баннер',
+                      body: 'Удалить баннер «' + b.title + '»? Статистика по нему останется.',
+                      yes: 'Удалить',
+                    }).then((ok) => {
+                      if (ok) void send('/admin/ads/banner-remove', { id: b.id, confirm: 'yes' }).then(() => load());
+                    });
                   }}
                 >
                   Удалить

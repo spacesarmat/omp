@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Textarea } from '@/components/ui/textarea';
 import { Skeleton } from '@/components/chrome';
 import { api, post } from '@/lib/api';
+import { askConfirm } from '@/components/confirm';
 import { nextSupportSelection } from '@/lib/subs';
 import { Stamp } from '@/components/stamp';
 import { personLabel } from '@/lib/text';
@@ -111,7 +112,8 @@ export function SupportPanel({
 
   async function closeDialog() {
     if (!selected || busy) return;
-    if (!window.confirm('Завершить диалог? Пользователь получит уведомление в боте.')) return;
+    const ok = await askConfirm({ title: 'Завершить диалог', body: 'Пользователь получит уведомление в боте.', yes: 'Завершить' });
+    if (!ok) return;
     setBusy(true);
     setErr('');
     const res = await post('/admin/support-close', csrf, { telegramId: selected });

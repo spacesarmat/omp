@@ -88,6 +88,35 @@ const AUDIT_ACTION: Record<string, string> = {
   ads_banner_add: 'новый баннер',
   ads_banner_save: 'изменение баннера',
   ads_banner_remove: 'удаление баннера',
+  donate_settings: 'настройки доната',
+  donate_confirm: 'подтверждение доната',
+  donate_refund: 'возврат доната',
+  donate_hide: 'скрытие в донате',
+  referral_cancel: 'отмена реферала',
+  stars_refund: 'возврат звёзд',
+  credit: 'зачёт',
+  settings_rollback: 'откат настроек',
+  watch_rank_mod: 'подбор',
+  watch_rank_flag: 'флаг подбора',
+  broadcast: 'рассылка',
+  tg_unlink: 'отвязка Telegram',
+};
+
+const REFERRAL_STATUS: Record<string, string> = {
+  granted: 'начислено',
+  waiting: 'ждёт',
+  cancelled: 'отменено',
+  rejected: 'отклонено',
+};
+
+const SEARCH_KIND: Record<string, string> = {
+  account: 'аккаунт',
+  device: 'устройство',
+  order: 'платёж',
+  release: 'раздача',
+  donation: 'донат',
+  promo: 'промо',
+  referral: 'реферал',
 };
 
 const PROBLEM_KIND: Record<string, string> = {
@@ -126,6 +155,14 @@ export function failReason(reason: string) {
 
 export function auditAction(action: string) {
   return AUDIT_ACTION[action] || action;
+}
+
+export function referralStatus(status: string) {
+  return REFERRAL_STATUS[status] || status;
+}
+
+export function searchKindLabel(kind: string) {
+  return SEARCH_KIND[kind] || kind;
 }
 
 export function problemKind(kind: string) {

@@ -1,6 +1,7 @@
 /** Admin desk: dashboard numbers, search, sources, roles, alerts, presence. Pure helpers. */
 import { createHash } from 'node:crypto';
 import { SEEN_EVERY_MS } from './deviceAdmin.mjs';
+import { codeHash } from './crypto.mjs';
 import { creditOf, logAudit, mainSubscription } from './logic.mjs';
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -366,21 +367,60 @@ export function setWatchFlag(state, { infohash, flag, on }) {
 }
 
 export function searchDesk(state, devices, q) {
-  const query = String(q || '').trim().toLowerCase();
+  const raw = String(q || '').trim();
+  const query = raw.toLowerCase();
+  const nick = query.replace(/^@+/, '');
   if (query.length < 2) return [];
   const out = [];
+  const seen = new Set();
+  const push = (hit) => {
+    const key = hit.kind + ':' + hit.id;
+    if (seen.has(key) || out.length >= 20) return;
+    seen.add(key);
+    out.push(hit);
+  };
+  const byId = new Map();
   const accounts = state.accounts || [];
-  for (let i = 0; i < accounts.length && out.length < 20; i++) {
+  for (let i = 0; i < accounts.length; i++) if (accounts[i] && accounts[i].id) byId.set(accounts[i].id, accounts[i]);
+  const person = (id) => {
+    const key = String(id || '');
+    const account = byId.get(key);
+    if (!account) return key ? key.slice(0, 8) : '';
+    const name = account.telegramUsername ? '@' + String(account.telegramUsername).replace(/^@/, '') : account.telegramName || account.telegramId || '';
+    return name || key.slice(0, 8);
+  };
+  for (let i = 0; i < accounts.length; i++) {
     const a = accounts[i];
+    if (!a) continue;
     const hay = [a.id, a.email, a.telegramId, a.telegramUsername, a.telegramName].join(' ').toLowerCase();
-    if (hay.indexOf(query) >= 0) {
-      out.push({
-        kind: 'account',
-        id: a.id,
-        title: a.telegramUsername || a.telegramName || a.email || a.id,
-        href: '/admin/?id=' + encodeURIComponent(a.id),
-      });
-    }
+    if (hay.indexOf(query) < 0 && !(nick && nick !== query && hay.indexOf(nick) >= 0)) continue;
+    push({
+      kind: 'account',
+      id: a.id,
+      title: a.telegramUsername || a.telegramName || a.email || a.id,
+      href: '/admin/?id=' + encodeURIComponent(a.id),
+    });
+  }
+  const codeHit = (row) => {
+    if (!row) return;
+    const sub = (state.subscriptions || []).find((s) => s && s.id === row.subscriptionId);
+    const accountId = sub && sub.accountId ? sub.accountId : '';
+    push({
+      kind: 'account',
+      id: accountId || row.id,
+      title: person(accountId) + ' · код',
+      href: accountId ? '/admin/?id=' + encodeURIComponent(accountId) : '/admin/?tab=subs',
+    });
+  };
+  const hash = codeHash(raw);
+  const codes = state.codes || [];
+  if (hash) codeHit(codes.find((c) => c && c.hash === hash));
+  for (let i = 0; i < codes.length; i++) {
+    const row = codes[i];
+    if (!row || !row.plain) continue;
+    const plain = String(row.plain).toLowerCase();
+    if (plain.indexOf(query) < 0 && !(nick && plain.indexOf(nick) >= 0)) continue;
+    codeHit(row);
   }
   const list = devices || [];
   for (let i = 0; i < list.length && out.length < 20; i++) {
@@ -415,6 +455,42 @@ export function searchDesk(state, devices, q) {
     if (title.toLowerCase().indexOf(query) >= 0 || String(r.infohash || '').indexOf(query) >= 0) {
       out.push({ kind: 'release', id: String(r.infohash || i), title: title || String(r.infohash || ''), href: '/admin/?tab=rank' });
     }
+  }
+  const donations = state.donations || [];
+  for (let i = donations.length - 1; i >= 0 && out.length < 20; i--) {
+    const d = donations[i];
+    if (!d || d.status === 'draft' || d.status === 'cancelled') continue;
+    const hay = [d.id, d.comment, d.displayName, d.telegramId, d.amountRub, d.operationId, d.accountId].join(' ').toLowerCase();
+    if (hay.indexOf(query) < 0) continue;
+    out.push({
+      kind: 'donation',
+      id: String(d.id || i),
+      title: (d.amountRub || 0) + ' ₽' + (d.displayName ? ' · ' + d.displayName : '') + (d.comment ? ' · ' + d.comment : ''),
+      href: '/admin/?tab=donations',
+    });
+  }
+  const promos = state.promos || [];
+  for (let i = 0; i < promos.length && out.length < 20; i++) {
+    const p = promos[i];
+    if (!p) continue;
+    const hay = [p.id, p.code].join(' ').toLowerCase();
+    if (hay.indexOf(query) < 0) continue;
+    out.push({ kind: 'promo', id: String(p.id || p.code || i), title: String(p.code || p.id || ''), href: '/admin/?tab=promos' });
+  }
+  const referrals = state.referralJournal || [];
+  for (let i = referrals.length - 1; i >= 0 && out.length < 20; i--) {
+    const r = referrals[i];
+    if (!r) continue;
+    const friend = person(r.friendId);
+    const referrer = person(r.referrerId);
+    const hay = [r.id, r.friendId, r.referrerId, r.status, r.variant, friend, referrer].join(' ').toLowerCase();
+    if (hay.indexOf(query) < 0 && !(nick && hay.indexOf(nick) >= 0)) continue;
+    out.push({
+      kind: 'referral',
+      id: String(r.id || i),
+      title: friend + (referrer ? ' · от ' + referrer : '') + (r.variant ? ' · ' + r.variant : ''),
+      href: '/admin/?tab=referral',
+    });
   }
   return out;
 }

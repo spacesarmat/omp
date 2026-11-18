@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { DataTable } from '@/components/data-table';
 import { post } from '@/lib/api';
+import { askConfirm } from '@/components/confirm';
 import type { DeskData, DeskDevice, DeskUser } from '@/lib/desk';
 import { Stamp } from '@/components/stamp';
 import { toast } from '@/components/chrome';
@@ -192,8 +193,14 @@ export function SourcesDesk({ data, csrf }: { data?: DeskData; csrf: string }) {
                   variant="secondary"
                   onClick={() => {
                     const next = s.enabled === false;
-                    if (!next && !window.confirm('Выключить ' + s.name + '?')) return;
-                    void post('/admin/api/sources/toggle', csrf, { source: s.name, enabled: next, confirm: next ? '' : 'yes' }).then(() => toast(next ? 'Включено' : 'Выключено'));
+                    const send = () => post('/admin/api/sources/toggle', csrf, { source: s.name, enabled: next, confirm: next ? '' : 'yes' }).then(() => toast(next ? 'Включено' : 'Выключено'));
+                    if (next) {
+                      void send();
+                      return;
+                    }
+                    void askConfirm({ title: 'Выключить источник', body: 'Выключить ' + s.name + '?', yes: 'Выключить' }).then((ok) => {
+                      if (ok) void send();
+                    });
                   }}
                 >
                   {s.enabled === false ? 'Включить' : 'Выключить'}
@@ -246,8 +253,14 @@ export function RankDesk({ data, csrf }: { data?: DeskData; csrf: string }) {
               <Button
                 variant="secondary"
                 onClick={() => {
-                  if (!window.confirm('Запретить раздачу?')) return;
-                  void post('/admin/api/rank/pin', csrf, { infohash: row.original.infohash, flag: 'ban', on: !row.original.banned, confirm: 'yes' });
+                  const on = !row.original.banned;
+                  void askConfirm({
+                    title: on ? 'Запретить раздачу' : 'Снять запрет',
+                    body: on ? 'Раздача пропадёт из подбора.' : 'Раздача снова сможет попасть в подбор.',
+                    yes: on ? 'Запретить' : 'Снять',
+                  }).then((ok) => {
+                    if (ok) void post('/admin/api/rank/pin', csrf, { infohash: row.original.infohash, flag: 'ban', on, confirm: 'yes' });
+                  });
                 }}
               >
                 {row.original.banned ? 'Снять запрет' : 'Запретить'}
@@ -433,7 +446,11 @@ export function NucDesk({ csrf }: { csrf: string }) {
               CPU {box.host.cpus} · RAM {Math.round(box.host.mem / 1024 / 1024 / 1024)} ГБ
             </p>
           ) : (
-            <p className="text-muted-foreground">{box?.error || 'Сводка хоста недоступна'}</p>
+            <p className="text-muted-foreground">
+              {box?.error && box.error.indexOf('BILLING_DOCKER') < 0
+                ? box.error
+                : 'Контейнеры с этой машины не видны. Лог и перезапуск появятся, когда биллинг запущен на сервере и видит Docker.'}
+            </p>
           )}
         </CardContent>
       </Card>
@@ -454,8 +471,9 @@ export function NucDesk({ csrf }: { csrf: string }) {
                 <Button
                   variant="secondary"
                   onClick={() => {
-                    if (!window.confirm('Перезапустить ' + c.name + '?')) return;
-                    void post('/admin/api/nuc/restart', csrf, { name: c.name, confirm: 'yes' }).then((r) => toast(r.ok ? 'Перезапущен' : 'Не вышло'));
+                    void askConfirm({ title: 'Перезапуск', body: 'Перезапустить ' + c.name + '?', yes: 'Перезапустить' }).then((ok) => {
+                      if (ok) void post('/admin/api/nuc/restart', csrf, { name: c.name, confirm: 'yes' }).then((r) => toast(r.ok ? 'Перезапущен' : 'Не вышло'));
+                    });
                   }}
                 >
                   Перезапуск
@@ -507,8 +525,9 @@ export function RollbackCard({ rows, csrf }: { rows: { id: string; at: number }[
           <Button
             variant="secondary"
             onClick={() => {
-              if (!window.confirm('Откатить настройки к этому снимку? Секреты не меняются.')) return;
-              void post('/admin/api/rollback', csrf, { id: r.id, confirm: 'yes' }).then((res) => toast(res.ok ? 'Откат выполнен' : 'Не вышло'));
+              void askConfirm({ title: 'Откат настроек', body: 'Вернуть настройки к этому снимку? Секреты не меняются.', yes: 'Откатить' }).then((ok) => {
+                if (ok) void post('/admin/api/rollback', csrf, { id: r.id, confirm: 'yes' }).then((res) => toast(res.ok ? 'Откат выполнен' : 'Не вышло'));
+              });
             }}
           >
             Откатить
