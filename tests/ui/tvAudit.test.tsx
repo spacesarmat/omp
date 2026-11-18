@@ -37,7 +37,7 @@ describe('settings D-pad rows', () => {
     ['set-live-seeds'],
     ['set-update-check'],
     ['set-update', 'set-addHbRepo', 'set-faq', 'set-advanced'],
-    ['set-onboarding'],
+    ['set-devmode-extend', 'set-onboarding'],
   ];
 
   it('moves to the neighbour in the same column, both ways', () => {
@@ -48,6 +48,7 @@ describe('settings D-pad rows', () => {
     expect(nextRowKey(rows, 'set-advanced', 'left')).toBe('set-faq');
     expect(nextRowKey(rows, 'set-pair', 'down')).toBe('set-sources');
     expect(nextRowKey(rows, 'set-subBackground', 'right')).toBeNull();
+    expect(nextRowKey(rows, 'set-devmode-extend', 'right')).toBe('set-onboarding');
     expect(nextRowKey(rows, 'set-onboarding', 'down')).toBeUndefined();
     expect(nextRowKey(rows, 'set-subBackground', 'up')).toBeUndefined();
   });

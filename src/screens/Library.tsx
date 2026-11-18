@@ -28,6 +28,8 @@ import { DiscoverGrid } from './library/DiscoverGrid';
 import { NewsTv, newsSeg } from './library/NewsTv';
 import { phoneLink } from '../phone/phoneStore';
 import { phoneFeed } from '../phone/monitor';
+import { platformKind } from '../platform/env';
+import { devmodeExpiring, extendDevMode } from '../platform/devmode';
 import { displayTitle } from '../lib/torrentName';
 import type { SeriesGroup } from '../lib/seriesGroups';
 
@@ -42,6 +44,7 @@ export function LibraryScreen() {
   const setSearchOpen = (o: boolean) => { librarySearchOpen.value = o; };
   const [error, setError] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(torrents.value.length > 0);
+  const [devmodeDue, setDevmodeDue] = useState(() => platformKind() === 'webos' && devmodeExpiring(Date.now()));
   // card under focus: a torrent, or a history entry when fileIndex is set
   // (a ref: focus moves must not re-render the whole catalog)
   const selRef = useRef<{ hash: string; fileIndex?: number; group?: SeriesGroup } | null>(null);
@@ -75,7 +78,11 @@ export function LibraryScreen() {
     // the count on the «Новое» tab (the tab itself asks the phone when it is open)
     if (phoneLink.peek() && libraryTab.peek() !== 'news') phoneFeed().catch(() => undefined);
     // picks up torrents added from a phone via the TorrServer web UI
-    const timer = setInterval(() => load(() => dead), 10000);
+    const timer = setInterval(() => {
+      load(() => dead);
+      // the TV may sleep across the expiry mark: recheck while the catalog stays open
+      setDevmodeDue(platformKind() === 'webos' && devmodeExpiring(Date.now()));
+    }, 10000);
     return () => {
       dead = true;
       clearInterval(timer);
@@ -234,6 +241,22 @@ export function LibraryScreen() {
         <FocusGroup focusKey="LIB-BANNER" className="banner-error banner-row">
           <span class="banner-text">{cachedBanner(torrentsAt.value)}</span>
           <Button focusKey="lib-banner-retry" label={t('common.retry')} onPress={() => load()} onFocused={() => setSel(null)} />
+        </FocusGroup>
+      )}
+      {devmodeDue && (
+        <FocusGroup focusKey="LIB-DEVMODE" className="banner-error banner-row">
+          <span class="banner-text">{t('tv.devmodeBanner')}</span>
+          <Button
+            focusKey="lib-devmode-extend"
+            label={t('tvSettings.devmodeExtend')}
+            onPress={() => {
+              extendDevMode(Date.now()).then(
+                () => { setDevmodeDue(false); toast(t('tvSettings.devmodeOpened')); },
+                () => toast(t('tvSettings.devmodeOpenFailed'), 'error'),
+              );
+            }}
+            onFocused={() => setSel(null)}
+          />
         </FocusGroup>
       )}
       {!loaded && !isDiscover && <Spinner text={t('catalog.loading')} />}

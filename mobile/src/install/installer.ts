@@ -279,9 +279,8 @@ export function hbcErrorText(code: string): string {
 // ---- Developer Mode reminder ----
 
 const HOUR = 3600 * 1000;
-/** Developer Mode lasts 1000 hours; the reminder comes 3 days before the end. */
-export const DEVMODE_HOURS = 1000;
-export const REMINDER_BEFORE_HOURS = 72;
+export { DEVMODE_HOURS, REMINDER_BEFORE_HOURS } from '../../../src/lib/installPlan';
+import { DEVMODE_HOURS, REMINDER_BEFORE_HOURS } from '../../../src/lib/installPlan';
 
 export function reminderAt(installedAt: number): number {
   return installedAt + (DEVMODE_HOURS - REMINDER_BEFORE_HOURS) * HOUR;

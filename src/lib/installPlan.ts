@@ -7,6 +7,10 @@ export const LG_OMP_APP_ID = 'com.spacesarmat.torrplayer';
 export const LG_HBC_APP_ID = 'org.webosbrew.hbchannel';
 export const LG_DEVMODE_APP_ID = 'com.palmdts.devmode';
 
+/** Developer Mode lasts 1000 hours; the reminder comes 3 days before the end. */
+export const DEVMODE_HOURS = 1000;
+export const REMINDER_BEFORE_HOURS = 72;
+
 /** Developer Mode ports on an LG TV: SSH (open while Dev Mode Status is on) and Key Server. */
 export const LG_SSH_PORT = 9922;
 export const LG_KEY_SERVER_PORT = 9991;
