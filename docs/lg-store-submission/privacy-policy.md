@@ -1,6 +1,6 @@
-# OMP - Privacy Policy (draft for LG Content Store)
+# OMP - Privacy Policy
 
-Черновик. Перед подачей: вычитать Andy, при необходимости юрист; разместить по постоянному URL (кандидат - omp-player.online) и указать этот URL в Seller Lounge. Описывает фактическое поведение store-сборки. Если решим убрать названия медиа из диагностики или отключить её в store-сборке - упростить разделы 1-2 отдельным фиксом кода.
+Публичная страница: https://omp-player.online/privacy (русский) и https://omp-player.online/privacy/en (English). Текст ниже совпадает со страницей. Дата публикации: 18 ноября 2026. Перед подачей в Seller Lounge Andy вычитывает текст; в листинг вписать https://omp-player.online/privacy. Страница отвечает только после деплоя site/ и обоих Caddyfile. Описывает фактическое поведение store-сборки. Если решим убрать названия медиа из диагностики или отключить её в store-сборке - упростить разделы 1-2 отдельным фиксом кода.
 
 ## English
 
@@ -28,8 +28,15 @@ We do not collect your name, email, precise location or contacts, and we do not 
 ### 6. Children
 The app is a general-purpose media player and is not directed at children. It does not knowingly collect personal information from children.
 
-### 7. Changes and contact
-We may update this policy; the current version is always available at the URL listed in the store listing. Contact: [указать контакт поддержки - email/сайт].
+### 7. Changes
+Published on 18 November 2026. We may update this policy. The current version is this page: https://omp-player.online/privacy/en. The Russian version is https://omp-player.online/privacy.
+
+### 8. Support
+Support email: ompplayerandroid@gmail.com.
+Questions about this policy or the app: the Telegram group https://t.me/ompgplayerroup.
+News: the Telegram channel https://t.me/ompplyaer.
+Subscription and payment: @OMPBILLINGBOT at https://t.me/OMPBILLINGBOT.
+Bugs: https://github.com/spacesarmat/omp/issues.
 
 ## Русский
 
@@ -57,5 +64,12 @@ OMP («приложение») - медиаплеер, который воспр
 ### 6. Дети
 Приложение - медиаплеер общего назначения, не ориентировано на детей и сознательно не собирает их персональные данные.
 
-### 7. Изменения и контакт
-Политика может обновляться; актуальная версия доступна по URL из листинга магазина. Контакт: [указать контакт поддержки].
+### 7. Изменения
+Опубликовано: 18 ноября 2026. Политика может обновляться. Актуальная версия - эта страница: https://omp-player.online/privacy. English version: https://omp-player.online/privacy/en.
+
+### 8. Поддержка
+Почта поддержки: ompplayerandroid@gmail.com.
+Вопросы о приложении и об этой политике: группа в Telegram https://t.me/ompgplayerroup.
+Новости: канал в Telegram https://t.me/ompplyaer.
+Подписка и оплата: @OMPBILLINGBOT, https://t.me/OMPBILLINGBOT.
+Ошибки в приложении: https://github.com/spacesarmat/omp/issues.

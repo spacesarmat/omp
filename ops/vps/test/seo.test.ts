@@ -152,10 +152,17 @@ describe('landing SEO', () => {
     const sitemap = new DOMParser().parseFromString(readFileSync(`${SITE}/sitemap.xml`, 'utf8'), 'application/xml');
     expect(sitemap.querySelector('parsererror')).toBeNull();
     const locs = [...sitemap.getElementsByTagName('loc')].map((n) => n.textContent);
-    expect(locs).toEqual(PAGES.map((p) => p.url));
+    expect(locs).toEqual([
+      ...PAGES.map((p) => p.url),
+      `${ORIGIN}/privacy`,
+      `${ORIGIN}/privacy/en`,
+    ]);
+    const homeAlts = [`ru ${ORIGIN}/`, `en ${ORIGIN}/en/`, `x-default ${ORIGIN}/`];
+    const privacyAlts = [`ru ${ORIGIN}/privacy`, `en ${ORIGIN}/privacy/en`, `x-default ${ORIGIN}/privacy`];
     for (const url of sitemap.getElementsByTagName('url')) {
+      const loc = url.getElementsByTagName('loc')[0]?.textContent ?? '';
       const alts = [...url.getElementsByTagName('xhtml:link')].map((l) => `${l.getAttribute('hreflang')} ${l.getAttribute('href')}`);
-      expect(alts).toEqual([`ru ${ORIGIN}/`, `en ${ORIGIN}/en/`, `x-default ${ORIGIN}/`]);
+      expect(alts).toEqual(loc.includes('/privacy') ? privacyAlts : homeAlts);
     }
   });
 });

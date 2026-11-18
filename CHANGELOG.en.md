@@ -15,6 +15,7 @@ The English translation covers the latest versions only; the full history (in Ru
 - [lg] "Extend mode" button in the TV settings and a catalog banner 3 days before the 1000-hour Developer Mode ends: they open Developer Mode, where Extend completes the renewal; the banner rechecks the deadline while the catalog is open so OMP stays on the TV
 - [phone] "Update OMP on the TV": when the TV runs an older version, the install assistant offers "Update from the phone" - the same installer (LG - Developer Mode passphrase, Android TV - adb); "Update on the TV" stays next to it. Updating does not reset the developer mode reminder
 - [tech] TV boot regression test: the phone launch must open the player even on the old WebView (SVG without dataset) and when the design runtime fails. The test reproduces the beta.11 incident and fails on pre-#431 code
+- [tech] omp-player.online: a permanent privacy policy at /privacy (Russian) and /privacy/en (English), linked from the footer. Contact: ompplayerandroid@gmail.com and the Telegram links already in the footer. Deploy of site/ and both Caddyfiles is separate and needs approval
 
 ## 0.30.1-beta.12
 
