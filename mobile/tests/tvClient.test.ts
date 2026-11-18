@@ -431,6 +431,44 @@ describe('tvClient commands', () => {
     await expect(p).rejects.toThrow('На телевизоре нет OMP');
   });
 
+  it('a purged dev app (other error text) is reported as missing OMP via the app list', async () => {
+    await connected(fake);
+    const p = launchOnTv({ torrent: 'h' });
+    await flush();
+    const req = fake.sent[fake.sent.length - 1];
+    fake.emit({ type: 'error', id: req.id, error: 'Application is not installed' });
+    await flush();
+    const list = fake.sent[fake.sent.length - 1];
+    expect(list.uri).toBe('ssap://com.webos.applicationManager/listApps');
+    fake.emit({ type: 'response', id: list.id, payload: { returnValue: true, apps: [{ id: 'netflix' }] } });
+    await expect(p).rejects.toThrow('На телевизоре нет OMP');
+  });
+
+  it('a launch refusal with OMP still installed stays a generic launch failure', async () => {
+    await connected(fake);
+    const p = launchOnTv({ torrent: 'h' });
+    await flush();
+    const req = fake.sent[fake.sent.length - 1];
+    fake.emit({ type: 'error', id: req.id, error: 'Permission denied' });
+    await flush();
+    const list = fake.sent[fake.sent.length - 1];
+    expect(list.uri).toBe('ssap://com.webos.applicationManager/listApps');
+    fake.emit({ type: 'response', id: list.id, payload: { returnValue: true, apps: [{ id: 'com.spacesarmat.torrplayer' }] } });
+    await expect(p).rejects.toThrow('Не удалось запустить OMP на телевизоре');
+  });
+
+  it('a launch refusal without an app list answer stays a generic launch failure', async () => {
+    await connected(fake);
+    const p = launchOnTv({ torrent: 'h' });
+    await flush();
+    const req = fake.sent[fake.sent.length - 1];
+    fake.emit({ type: 'error', id: req.id, error: 'Permission denied' });
+    await flush();
+    const list = fake.sent[fake.sent.length - 1];
+    fake.emit({ type: 'error', id: list.id, error: 'timeout' });
+    await expect(p).rejects.toThrow('Не удалось запустить OMP на телевизоре');
+  });
+
   it('connects to the active TV before launching', async () => {
     saveTv({ ...TV, clientKey: 'K' });
     autoReply(fake);
