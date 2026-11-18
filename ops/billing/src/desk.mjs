@@ -379,14 +379,16 @@ export function searchDesk(state, devices, q) {
     seen.add(key);
     out.push(hit);
   };
+  const byId = new Map();
+  const accounts = state.accounts || [];
+  for (let i = 0; i < accounts.length; i++) if (accounts[i] && accounts[i].id) byId.set(accounts[i].id, accounts[i]);
   const person = (id) => {
     const key = String(id || '');
-    const account = (state.accounts || []).find((a) => a && a.id === key);
+    const account = byId.get(key);
     if (!account) return key ? key.slice(0, 8) : '';
     const name = account.telegramUsername ? '@' + String(account.telegramUsername).replace(/^@/, '') : account.telegramName || account.telegramId || '';
     return name || key.slice(0, 8);
   };
-  const accounts = state.accounts || [];
   for (let i = 0; i < accounts.length; i++) {
     const a = accounts[i];
     if (!a) continue;
@@ -416,7 +418,8 @@ export function searchDesk(state, devices, q) {
   for (let i = 0; i < codes.length; i++) {
     const row = codes[i];
     if (!row || !row.plain) continue;
-    if (String(row.plain).toLowerCase().indexOf(query) < 0 && String(row.plain).toLowerCase().indexOf(nick) < 0) continue;
+    const plain = String(row.plain).toLowerCase();
+    if (plain.indexOf(query) < 0 && !(nick && plain.indexOf(nick) >= 0)) continue;
     codeHit(row);
   }
   const list = devices || [];

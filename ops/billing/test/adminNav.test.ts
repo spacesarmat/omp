@@ -93,6 +93,8 @@ describe('searchDesk', () => {
     };
     expect(searchDesk(found, [], '@mira')[0]).toMatchObject({ kind: 'account', id: 'acc1', href: '/admin/?id=acc1' });
     expect(searchDesk(found, [], 'ABCD-2345')[0]).toMatchObject({ kind: 'account', id: 'acc1' });
+    found.codes[0].plain = 'ABCD-2345';
+    expect(searchDesk(found, [], '@@')).toEqual([]);
   });
 
   it('names the friend and the referrer on a referral hit', () => {
