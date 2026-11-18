@@ -16,6 +16,7 @@ import {
   parseCoinGeckoRub,
   parseCryptoPayRates,
   rateAdminView,
+  priceRateDiff,
   rateAuditText,
   ratePinError,
 } from '../src/rates.mjs';
@@ -416,6 +417,11 @@ describe('donate rate admin', () => {
     expect(paymentPricing({ rates: next }, NOW + 3 * 60 * 60 * 1000).cryptoRateUsdt).toBe(90);
     expect(rateAuditText(prev, next)).toContain('интервал 12 -> 15');
     expect(rateAuditText(prev, next)).toContain('закреп usdt нет -> 80');
+    const diff = priceRateDiff({ priceRub: 100, extraDeviceRub: 50, rates: prev }, { priceRub: 120, extraDeviceRub: 50, rates: next });
+    expect(diff).toContainEqual({ field: 'Подписка, ₽', was: '100', now: '120', source: 'настройки' });
+    expect(diff).toContainEqual({ field: 'Интервал, мин', was: '12', now: '15', source: 'настройки' });
+    expect(diff.find((line) => line.field === 'Курс usdt')).toMatchObject({ was: 'нет', now: '80', source: 'закрепление: выходные' });
+    expect(priceRateDiff({ rates: next }, { rates: next })).toEqual([]);
     const cleared = applyRateSettings(next, { pinUsdt: '0' }, NOW);
     expect(cleared.pins.usdt).toBeUndefined();
     expect(rateAuditText(next, next)).toBe('');

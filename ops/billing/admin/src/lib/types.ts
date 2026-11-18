@@ -309,4 +309,5 @@ export type UserData = {
   pending?: PendingPayment[];
   payments?: PaymentRow[];
   watch?: { name: string; at: number; version?: string; platform?: string }[];
+  timeline?: { at: number; kind: string; title: string }[];
 };

@@ -7,6 +7,7 @@ import {
   bonusRows,
   creditOf,
   dailySeries,
+  auditAccount,
   limitBreakdown,
   limitOverrideOf,
   deviceLimitNow,
@@ -22,6 +23,105 @@ import { paymentFee, watchFor } from './desk.mjs';
 import { backupAlert } from './pgBackup.mjs';
 
 const DAY = 24 * 60 * 60 * 1000;
+
+const AUDIT_RU = {
+  grant: 'Выдача дней',
+  issue: 'Выдача кода',
+  message: 'Сообщение',
+  unbind: 'Сброс устройства',
+  device_revoke: 'Отзыв устройства',
+  limit_set: 'Лимит устройств',
+  days_subtract: 'Убавление дней',
+  credit: 'Зачёт',
+  payment_confirm: 'Подтверждение платежа',
+  payment_reject: 'Отклонение платежа',
+  bonus_grant: 'Бонусные устройства',
+  bonus_remove: 'Снятие бонуса',
+  promo_create: 'Промокод',
+};
+
+const DONATE_RU = { paid: 'оплачен', pending: 'ждёт', refunded: 'возврат' };
+const PAY_RU = { unaccepted: 'ждёт подтверждения', rejected: 'отклонён', amount: 'неверная сумма', refunded: 'возврат' };
+
+function payTitle(p) {
+  const status = p.pending ? 'ждёт' : p.error ? PAY_RU[p.error] || 'ошибка' : '';
+  return 'Оплата ' + (p.amount || '-') + (status ? ' · ' + status : '') + (p.label ? ' · ' + p.label : '');
+}
+const REFERRAL_RU = { granted: 'начислено', waiting: 'ждёт', cancelled: 'отменено', rejected: 'отклонено' };
+
+function pushEvent(events, at, kind, title) {
+  const when = Number(at) || 0;
+  if (!(when > 0) || !title) return;
+  events.push({ at: when, kind, title: String(title).slice(0, 180) });
+}
+
+/** One tape for this person: subscription, devices, payments, donations, referrals, audit. */
+function accountTimeline(state, card) {
+  const id = card.account.id;
+  const events = [];
+  const sub = mainSubscription(state, id);
+  if (sub) pushEvent(events, sub.createdAt, 'subscription', 'Подписка открыта');
+  const codes = card.codes || [];
+  for (let i = 0; i < codes.length; i++) {
+    const code = codes[i];
+    if (!code.deviceId) continue;
+    pushEvent(events, code.boundAt || code.createdAt, 'device', 'Устройство привязано · ' + String(code.deviceId).slice(0, 8));
+  }
+  const payments = card.payments || [];
+  for (let i = 0; i < payments.length; i++) {
+    const p = payments[i];
+    pushEvent(events, p.at, 'payment', payTitle(p));
+  }
+  const promos = card.promos || [];
+  for (let i = 0; i < promos.length; i++) {
+    const p = promos[i];
+    pushEvent(events, p.at, 'promo', 'Промо ' + (p.code || '') + ' · ' + (p.days || 0) + ' дн.');
+  }
+  const donations = state.donations || [];
+  for (let i = 0; i < donations.length; i++) {
+    const d = donations[i];
+    if (!d || d.accountId !== id || d.status === 'draft' || d.status === 'cancelled') continue;
+    const status = d.held ? 'удержан' : DONATE_RU[d.status] || d.status || '';
+    pushEvent(events, d.paidAt || d.createdAt, 'donation', 'Донат ' + (Number(d.amountRub) || 0) + ' ₽ · ' + status);
+  }
+  const seenReferral = new Set();
+  const journal = state.referralJournal || [];
+  for (let i = 0; i < journal.length; i++) {
+    const row = journal[i];
+    if (!row || (row.friendId !== id && row.referrerId !== id)) continue;
+    const role = row.referrerId === id ? 'пригласил' : 'друг';
+    const status = REFERRAL_RU[row.status] || row.status || '';
+    const days = Number(row.days) || 0;
+    let at = Number(row.grantedAt) || Number(row.at) || Number(row.paidAt) || 0;
+    if (!at) {
+      const bind = (state.referralBinds || []).find((b) => b && b.friendId === row.friendId && b.referrerId === row.referrerId);
+      at = bind ? Number(bind.boundAt) || 0 : 0;
+    }
+    const before = events.length;
+    pushEvent(events, at, 'referral', 'Реферал · ' + role + ' · ' + status + (days ? ' · ' + days + ' дн.' : ''));
+    if (events.length > before) seenReferral.add(String(row.friendId || '') + ':' + String(row.referrerId || ''));
+  }
+  const binds = state.referralBinds || [];
+  for (let i = 0; i < binds.length; i++) {
+    const row = binds[i];
+    if (!row || (row.friendId !== id && row.referrerId !== id)) continue;
+    const key = String(row.friendId || '') + ':' + String(row.referrerId || '');
+    if (seenReferral.has(key)) continue;
+    const role = row.referrerId === id ? 'пригласил' : 'друг';
+    pushEvent(events, row.boundAt, 'referral', 'Реферал · ' + role + ' · ждёт');
+  }
+  const audit = state.audit || [];
+  for (let i = 0; i < audit.length; i++) {
+    const row = audit[i];
+    if (!row || auditAccount(state, row) !== id) continue;
+    const name = AUDIT_RU[row.action] || row.action || 'запись';
+    const detail = String(row.detail || '');
+    const extra = detail && detail !== id ? ' · ' + detail : '';
+    pushEvent(events, row.at, 'audit', name + extra);
+  }
+  events.sort((a, b) => b.at - a.at);
+  return events.slice(0, 80);
+}
 
 function day(ms) {
   if (!ms) return '-';
@@ -307,6 +407,7 @@ export function userPayload(state, accountId, opts) {
       };
     }),
     watch: watchFor(state, card.account.id),
+    timeline: accountTimeline(state, card),
     promos: (card.promos || []).map((p) => ({
       code: p.code,
       days: p.days,

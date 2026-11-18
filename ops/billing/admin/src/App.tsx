@@ -396,7 +396,7 @@ export function App() {
         </TabsContent>
 
         <TabsContent value="users">
-          <UsersDesk users={deskData?.users || []} go={(id) => (location.href = '/admin/?id=' + encodeURIComponent(id))} />
+          <UsersDesk users={deskData?.users || []} go={(id) => (location.href = '/admin/?id=' + encodeURIComponent(id))} run={run} />
         </TabsContent>
         <TabsContent value="devices">
           <DevicesDesk rows={deskData?.devices || []} />

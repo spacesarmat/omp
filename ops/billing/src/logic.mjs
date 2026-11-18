@@ -1038,11 +1038,29 @@ function actorFromAuditDetail(row) {
 }
 
 /** Append an admin panel action. `actor` is { kind, id, label } when the caller knows who. */
-export function logAudit(state, { action, detail, now, actor, accountId, id }) {
+function auditDiff(raw) {
+  if (!Array.isArray(raw)) return [];
+  const out = [];
+  for (let i = 0; i < raw.length && out.length < 20; i++) {
+    const line = raw[i];
+    if (!line || typeof line !== 'object') continue;
+    out.push({
+      field: String(line.field || '').slice(0, 80),
+      was: String(line.was == null ? '' : line.was).slice(0, 80),
+      now: String(line.now == null ? '' : line.now).slice(0, 80),
+      source: String(line.source || '').slice(0, 80),
+    });
+  }
+  return out;
+}
+
+export function logAudit(state, { action, detail, now, actor, accountId, id, diff }) {
   const row = { id: id || randomId(), at: now || Date.now(), action: String(action || ''), detail: String(detail || '') };
   const who = normalizeActor(actor);
   if (who) row.actor = who;
   if (accountId) row.accountId = String(accountId);
+  const lines = auditDiff(diff);
+  if (lines.length) row.diff = lines;
   const audit = (state.audit || []).concat([row]).slice(-AUDIT_CAP);
   return { ...state, audit };
 }
@@ -2068,6 +2086,12 @@ export function pagePayments(state, { q, from, to, offset, limit }) {
   return { total: rows.length, payments: rows.slice(start, start + size) };
 }
 
+function rateAuditRow(row) {
+  if (row && Array.isArray(row.diff) && row.diff.length) return true;
+  const text = String((row && row.detail) || '');
+  return text.indexOf('->') >= 0;
+}
+
 export function pageAudit(state, { q, action, offset, limit }) {
   const query = String(q || '').trim().toLowerCase();
   const act = String(action || '').trim();
@@ -2075,10 +2099,13 @@ export function pageAudit(state, { q, action, offset, limit }) {
     .slice()
     .reverse()
     .filter((row) => {
-      if (act && row.action !== act) return false;
+      if (act === 'rate') {
+        if (!rateAuditRow(row)) return false;
+      } else if (act && row.action !== act) return false;
       if (!query) return true;
       const who = row.actor ? String(row.actor.kind || '') + ' ' + String(row.actor.label || '') + ' ' + String(row.actor.id || '') : '';
-      return (String(row.action || '') + ' ' + String(row.detail || '') + ' ' + who).toLowerCase().indexOf(query) >= 0;
+      const diffText = Array.isArray(row.diff) ? row.diff.map((line) => [line.field, line.was, line.now, line.source].join(' ')).join(' ') : '';
+      return (String(row.action || '') + ' ' + String(row.detail || '') + ' ' + who + ' ' + diffText).toLowerCase().indexOf(query) >= 0;
     });
   const start = Math.max(0, Math.floor(Number(offset) || 0));
   const size = Math.min(100, Math.max(1, Math.floor(Number(limit) || 30)));
@@ -2474,6 +2501,52 @@ export function revealableCode(state, accountId) {
   return row ? { code: row.plain, codeId: row.id } : null;
 }
 
+/** Distinct ids. More than 50 is refused whole, so a confirm count cannot hide a partial write. */
+export function bulkIds(raw) {
+  const arr = Array.isArray(raw) ? raw : [];
+  const seen = new Set();
+  const ids = [];
+  for (let i = 0; i < arr.length; i++) {
+    const id = String(arr[i] || '').trim();
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    ids.push(id);
+  }
+  if (ids.length > 50) return { ids: [], error: 'too_many' };
+  return { ids, error: '' };
+}
+
+/** Grant the same number of days to each account. Accounts that cannot be granted are skipped. */
+export function grantDaysMany(state, { accountIds, days, now }) {
+  const picked = bulkIds(accountIds);
+  if (picked.error) return { state, result: { error: picked.error, count: 0, grants: [] } };
+  const ids = picked.ids;
+  const n = days > 0 ? Math.floor(days) : 0;
+  if (!n || !ids.length) return { state, result: { error: 'bad_args', count: 0, grants: [] } };
+  let cur = state;
+  const grants = [];
+  for (let i = 0; i < ids.length; i++) {
+    const out = grantDays(cur, { accountId: ids[i], days: n, now });
+    if (!out.result || out.result.error) continue;
+    cur = out.state;
+    grants.push(out.result);
+  }
+  return { state: cur, result: { count: grants.length, grants } };
+}
+
+export function revokePromos(state, promoIds) {
+  const picked = bulkIds(promoIds);
+  if (picked.error) return { state, result: { error: picked.error, count: 0 } };
+  const ids = new Set(picked.ids);
+  let count = 0;
+  const promos = (state.promos || []).map((p) => {
+    if (!p || !ids.has(p.id) || p.revoked) return p;
+    count++;
+    return { ...p, revoked: true };
+  });
+  return { state: { ...state, promos }, result: { count } };
+}
+
 export function grantDays(state, { telegramId, accountId, days, now }) {
   const n = days > 0 ? Math.floor(days) : 0;
   if (!n) return { state, result: { error: 'bad_args' } };
@@ -2606,7 +2679,7 @@ function adminFeedText(row) {
 }
 
 /** Account an audit row is about: stored accountId, else an account id at the start of the detail. */
-function auditAccount(state, row) {
+export function auditAccount(state, row) {
   if (row && row.accountId) return String(row.accountId);
   const action = String((row && row.action) || '');
   if (LOGIN_FEED[action]) return '';
