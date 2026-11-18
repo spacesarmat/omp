@@ -811,6 +811,14 @@ ALTER TABLE bot_copy_versions DROP CONSTRAINT IF EXISTS bot_copy_versions_lang_c
 ALTER TABLE bot_copy_versions ADD CONSTRAINT bot_copy_versions_lang_check CHECK (lang IN ('', 'ru', 'en', 'uk', 'be', 'kk', 'ky', 'uz', 'tg', 'tk', 'hy', 'az', 'ka', 'ro'));
 `,
   },
+  {
+    version: '018_refresh_grace_used',
+    sql: `
+-- Marks a rotated refresh token whose single lost-response grace retry was already spent, so a
+-- replay cannot take the retry branch again even when rotation and retry share a millisecond.
+ALTER TABLE refresh_tokens ADD COLUMN IF NOT EXISTS grace_used integer NOT NULL DEFAULT 0;
+`,
+  },
 ];
 
 /** Apply pending migrations. Safe to run from several processes: they wait on the lock. */

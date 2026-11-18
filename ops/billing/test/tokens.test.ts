@@ -514,6 +514,29 @@ describe('refresh rotation', () => {
     expect(ok.pair).toBeTruthy();
   });
 
+  it('a replay in the same millisecond as the rotation cannot spend the grace retry twice', async () => {
+    const file = await testStore();
+    const s = base(Date.now());
+    await writeState(file, s.state);
+    const db = file.registry;
+    const secret = await db.tokenSecret({});
+    const row = await db.activeRowForCode(s.codeId);
+    const now = Date.now();
+    const issued = (await db.issuePair(secret, row, now)).pair.refreshToken;
+    // Rotation and the lost-response retry share the same timestamp.
+    await db.refreshPair(secret, { refreshToken: issued, deviceId: DEV_A, now });
+    const retry = await db.refreshPair(secret, { refreshToken: issued, deviceId: DEV_A, now });
+    expect(retry.retry).toBe(true);
+    const live = retry.pair.refreshToken;
+    // Same-millisecond replay: the spent retry is tracked explicitly, so this is a clone, not a retry.
+    const again = await db.refreshPair(secret, { refreshToken: issued, deviceId: DEV_A, now });
+    expect(again.clone).toBe(true);
+    expect(again.retry).toBeUndefined();
+    const ok = await db.refreshPair(secret, { refreshToken: live, deviceId: DEV_A, now });
+    expect(ok.error).toBeUndefined();
+    expect(ok.pair).toBeTruthy();
+  });
+
   it('refuses unknown, other-device and expired refresh tokens, and rate-limits per IP', async () => {
     const t = await setup({ env: { BILLING_TOKEN_IP_MAX: '5' } });
     const pair = await pairFor(t, DEV_B);
