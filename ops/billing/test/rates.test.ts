@@ -404,3 +404,38 @@ describe('donate rate admin', () => {
     expect(kept.maxAgeMin).toBe(360);
   });
 });
+
+describe('rate admin view subscription preview', () => {
+  it('derives subscription and extra device prices from the ruble base, manual tariffs as fallback', () => {
+    const rates = mergeRateBook({ starUsd: 0.013 }, {
+      usdt: { rub: 100, source: 'cryptopay' },
+      usd: { rub: 100, source: 'cbr' },
+    }, NOW);
+    const settings = { priceRub: 150, extraDeviceRub: 50, starsPrice: 999, starsExtra: 99, cryptoUsdt: 9, rates };
+    const view = rateAdminView(settings, NOW);
+    expect(view.sub.stars).toBe(116);
+    expect(view.sub.starsExtra).toBe(39);
+    expect(view.sub.usdt).toBe('1.50');
+    const stale = rateAdminView(settings, NOW + 25 * 60 * 60 * 1000);
+    expect(stale.sub.stars).toBe(999);
+    expect(stale.sub.starsExtra).toBe(99);
+    expect(stale.sub.usdt).toBe('9.00');
+  });
+  it('stale auto rate with a manual crypto rate previews the invoice amount', () => {
+    const rates = mergeRateBook({ starUsd: 0.013 }, {
+      usdt: { rub: 100, source: 'cryptopay' },
+      usd: { rub: 100, source: 'cbr' },
+    }, NOW);
+    const settings = { priceRub: 150, cryptoUsdt: 0, cryptoRateUsdt: 50, rates };
+    const stale = rateAdminView(settings, NOW + 25 * 60 * 60 * 1000);
+    expect(stale.sub.usdt).toBe('3.00');
+  });
+  it('star preview applies the invoice cap instead of falling back to the manual tariff', () => {
+    const rates = mergeRateBook({ starUsd: 0.013, auto: { star: false } }, {
+      usd: { rub: 100, source: 'cbr' },
+    }, NOW);
+    const settings = { priceRub: 150, starsPrice: 999, donate: { rubPerStar: 0.0001 }, rates };
+    const view = rateAdminView(settings, NOW);
+    expect(view.sub.stars).toBe(0);
+  });
+});

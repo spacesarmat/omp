@@ -26,6 +26,7 @@
  * Markup percent lowers the ruble rate so the donor sends (1 + p/100) more of the asset.
  */
 import { cryptoPayCredentials } from './cryptoPay.mjs';
+import { cryptoDue, starList } from './payMethods.mjs';
 
 export const STAR_USD_DEFAULT = 0.013;
 export const COINGECKO_URL = 'https://api.coingecko.com/api/v3/simple/price?ids=tether,the-open-network,bitcoin&vs_currencies=rub';
@@ -264,12 +265,23 @@ export function rateAdminView(settings, now) {
       last,
     };
   };
+  const priceRub = positive(s.priceRub);
+  const extraRub = positive(s.extraDeviceRub);
   return {
     refreshMin: book.refreshMin,
     maxAgeMin: book.maxAgeMin,
     markupPercent: book.markupPercent,
     starUsd: book.starUsd,
     rows: { star: row('star'), usdt: row('usdt'), ton: row('ton'), btc: row('btc') },
+    // The invoice computation itself (starList/cryptoDue): ruble base, manual fallback,
+    // star cap and asset rounding included, so the admin sees what a customer pays.
+    sub: {
+      stars: starList(s, 'sub', 0, priceRub, at),
+      starsExtra: starList(s, 'dev', 0, extraRub, at),
+      usdt: cryptoDue(s, 'USDT', 'sub', 0, priceRub, null, at),
+      ton: cryptoDue(s, 'TON', 'sub', 0, priceRub, null, at),
+      btc: cryptoDue(s, 'BTC', 'sub', 0, priceRub, null, at),
+    },
   };
 }
 

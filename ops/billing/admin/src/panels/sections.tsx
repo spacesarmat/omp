@@ -12,7 +12,7 @@ import { Stamp } from '@/components/stamp';
 import { botPollStatusText, type BotPollView } from '@/lib/botPoll';
 import { actorLine, auditAction, AUDIT_FILTERS, bytesText, downloadCsv, FAIL_FILTERS, failReason, payMethodLabel, problemKind, serviceError, when } from '@/lib/text';
 import { matchesSubscriptionFilter, reminderTargets } from '@/lib/subs';
-import type { BackupStatus, HomeData, MethodSplit, PaymentRow, ProblemRow, SecretView, SubRow } from '@/lib/types';
+import type { BackupStatus, DonateRates, HomeData, MethodSplit, PaymentRow, ProblemRow, SecretView, SubRow } from '@/lib/types';
 
 export { HomeFeed } from '@/panels/EventFeed';
 
@@ -618,7 +618,7 @@ const SETTING_GROUPS: { title: string; fields: [string, string][] }[] = [
     ],
   },
   {
-    title: 'Цены',
+    title: 'Цены и курсы (база - рубли)',
     fields: [
       ['priceRub', 'Цена, ₽'],
       ['periodDays', 'Период, дней'],
@@ -686,12 +686,14 @@ export function SettingsCard({
   storage,
   backup,
   secrets,
+  rates,
 }: {
   run: Run;
   settings: Record<string, string | number | boolean>;
   storage?: HomeData['storage'];
   backup?: HomeData['backup'];
   secrets?: SecretView[];
+  rates?: DonateRates;
 }) {
   const [form, setForm] = useState<Record<string, string>>({});
   const [notify, setNotify] = useState(true);
@@ -755,6 +757,16 @@ export function SettingsCard({
           <CardHeader>
             <CardTitle>{group.title}</CardTitle>
             {group.title === 'Платежи' ? <CardDescription>Кошелёк показывается частично. Чтобы сменить, введите новый номер целиком.</CardDescription> : null}
+            {group.title === 'Цены и курсы (база - рубли)' ? (
+              <CardDescription>
+                Рублёвая база для всех способов оплаты. Звёзды и крипта при включённом автокурсе считаются от неё (общий автокурс - вкладка «Донаты»).
+                {rates?.sub
+                  ? ' Сейчас: подписка ' + rates.sub.stars + '★ / ' + rates.sub.usdt + ' USDT / ' + rates.sub.ton + ' TON / ' + rates.sub.btc + ' BTC; доп. устройство ' + rates.sub.starsExtra + '★.'
+                  : ''}
+              </CardDescription>
+            ) : null}
+            {group.title === 'Звёзды' ? <CardDescription>Ручной тариф - запасной: применяется, когда автокурс звёзд выключен или устарел.</CardDescription> : null}
+            {group.title === 'Крипта' ? <CardDescription>Ручные цены и курсы - запасные: при свежем автокурсе суммы считаются от рублёвой базы.</CardDescription> : null}
             {group.title === 'Бэкапы Postgres' ? <BackupLine backup={backup} /> : null}
             {group.title === 'DHT' ? (
               <CardDescription>

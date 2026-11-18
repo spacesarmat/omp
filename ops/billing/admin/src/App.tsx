@@ -381,7 +381,7 @@ export function App() {
           <ChangelogPanel />
         </TabsContent>
         <TabsContent value="settings">
-          <SettingsCard run={run} settings={d.settings || {}} storage={d.storage} backup={d.backup} secrets={d.secrets} />
+          <SettingsCard run={run} settings={d.settings || {}} storage={d.storage} backup={d.backup} secrets={d.secrets} rates={d.settings?.rates} />
         </TabsContent>
         <TabsContent value="ads">{tab === 'ads' ? <AdsPanel csrf={d.csrf || ''} /> : null}</TabsContent>
         <TabsContent value="donations">
