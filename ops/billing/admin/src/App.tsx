@@ -23,7 +23,8 @@ import { DeskHome, DevicesDesk, FunnelDesk, RevenueDesk, RollbackCard, SourcesDe
 import { BroadcastDesk, CrashesDesk, LoginsDesk, VersionsDesk } from '@/panels/OpsExtra';
 import { Palette } from '@/components/palette';
 import { NAV } from '@/lib/nav';
-import { tabFromSearch, urlForTab } from '@/lib/tabUrl';
+import { useNavigate, useRouterState } from '@tanstack/react-router';
+import { tabFromPath, tabFromSearch, urlForTab } from '@/lib/tabUrl';
 import { ConfirmHost, askConfirm } from '@/components/confirm';
 import { useDesk } from '@/lib/desk';
 import { LiveBar, useLive } from '@/lib/live';
@@ -61,7 +62,14 @@ export function App() {
   const [data, setData] = useState<HomeData | null>(null);
   const [user, setUser] = useState<UserData | null>(null);
   const params = useMemo(() => new URLSearchParams(location.search), []);
-  const [tab, setTab] = useState(() => tabFromSearch(location.search));
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const searchStr = useRouterState({ select: (s) => s.location.searchStr });
+  const navigate = useNavigate();
+  const [tab, setTab] = useState(() => {
+    const legacy = tabFromSearch(window.location.search);
+    if (new URLSearchParams(window.location.search).get('tab')) return legacy;
+    return tabFromPath(window.location.pathname);
+  });
   const [filter, setFilter] = useState('all');
   const [navOpen, setNavOpen] = useState(false);
   const [palette, setPalette] = useState(false);
@@ -104,16 +112,16 @@ export function App() {
   }, []);
 
   useEffect(() => {
-    const onPop = () => setTab(tabFromSearch(location.search));
-    window.addEventListener('popstate', onPop);
-    return () => window.removeEventListener('popstate', onPop);
-  }, []);
+    if (new URLSearchParams(searchStr).get('tab')) {
+      void navigate({ href: urlForTab(tabFromSearch(searchStr), searchStr), replace: true });
+      return;
+    }
+    setTab(tabFromPath(pathname));
+  }, [pathname, searchStr, navigate]);
 
   function goTab(id: string) {
     setTab(id);
-    const next = urlForTab(id, location.search);
-    const here = urlForTab(tabFromSearch(location.search), location.search);
-    if (next !== here) history.pushState({ tab: id }, '', next);
+    void navigate({ href: urlForTab(id, window.location.search) });
   }
 
   useEffect(() => {

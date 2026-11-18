@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { codeHash } from '../src/crypto.mjs';
 import { searchDesk } from '../src/desk.mjs';
-import { ADMIN_PAGES } from '../admin/src/lib/nav.ts';
-import { tabFromSearch, urlForTab } from '../admin/src/lib/tabUrl.ts';
+import { ADMIN_SECTIONS } from '../src/adminSections.mjs';
+import { ADMIN_PAGES, TAB_IDS } from '../admin/src/lib/nav.ts';
+import { tabFromPath, tabFromSearch, urlForTab } from '../admin/src/lib/tabUrl.ts';
 import { auditAction, referralStatus, searchKindLabel } from '../admin/src/lib/text.ts';
 
 describe('admin section url', () => {
@@ -11,10 +12,13 @@ describe('admin section url', () => {
     expect(tabFromSearch('?tab=replies&id=1')).toBe('replies');
     expect(tabFromSearch('?tab=nope')).toBe('home');
     expect(tabFromSearch('')).toBe('home');
+    expect(tabFromPath('/admin/finance')).toBe('finance');
+    expect(tabFromPath('/admin/')).toBe('home');
+    expect(tabFromPath('/finance')).toBe('finance');
   });
 
-  it('writes the tab and keeps the other query', () => {
-    expect(urlForTab('finance', '?tg=9')).toBe('/admin/?tg=9&tab=finance');
+  it('writes the section path and keeps the other query', () => {
+    expect(urlForTab('finance', '?tg=9')).toBe('/admin/finance?tg=9');
     expect(urlForTab('home', '?tab=finance&tg=9')).toBe('/admin/?tg=9');
   });
 });
@@ -26,6 +30,7 @@ describe('admin palette pages', () => {
     expect(ids).toContain('donations');
     expect(ids).toContain('replies');
     expect(new Set(ids).size).toBe(ids.length);
+    expect(TAB_IDS).toEqual(ADMIN_SECTIONS);
   });
 });
 
