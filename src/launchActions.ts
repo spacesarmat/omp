@@ -12,10 +12,18 @@ import { magnetName } from './lib/categoryGuess';
 import { updateSettings } from './store/settings';
 import { t } from './i18n';
 import { pauseOnboarding, resumeOnboarding } from './onboarding/gate';
+import { log } from './lib/log';
 
 /** Applies webOS launch params: {server}, {magnet}, {torrent[, file, t]}, {play, title}, {lang}, {phone}. */
 export function runLaunchParams(raw: unknown): void {
   const plan = parseLaunchParams(raw);
+  // Diagnostic: what the TV actually received from the phone launch (key presence only, no secrets).
+  log(
+    'info',
+    'app',
+    'launch: raw=' + (raw == null ? 'null' : typeof raw) +
+      (plan ? ` server=${plan.server ? 1 : 0} action=${plan.action ? plan.action.kind : '-'} open=${plan.open || '-'} invalid=${plan.invalid ? 1 : 0}` : ' plan=null'),
+  );
   if (!plan) return;
   // the phone sets the TV's language first, so whatever follows is shown in it
   if (plan.lang) updateSettings({ language: plan.lang });
