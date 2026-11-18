@@ -4,6 +4,10 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## Unreleased
+
+- [tech] TV boot regression test: the phone launch must open the player even on the old WebView (SVG without dataset) and when the design runtime fails. The test reproduces the beta.11 incident and fails on pre-#431 code
+
 ## 0.30.1-beta.12
 
 - [lg] "Watch on TV" from the phone works again on old webOS (WebView 53): the design runtime DOM walk threw on SVG icons without dataset and aborted app start before launch params applied, so the TV opened the catalog instead of the player. Launch params now apply before the design runtime, and a design runtime failure no longer aborts start

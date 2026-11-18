@@ -2,6 +2,10 @@
 
 <!-- Markers [phone] [tv] [lg] [atv] [tech]: see docs/changelog-markers.md. [tech] bullets are technical or admin-only and never reach users. -->
 
+## Не выпущено
+
+- [tech] Регрессионный тест старта ТВ: телефонный launch обязан открывать плеер даже на старом WebView (SVG без dataset) и при сбое design-runtime. Тест воспроизводит инцидент beta.11 и падает на коде до фикса #431
+
 ## 0.30.1-beta.12
 
 - [lg] «Смотреть на ТВ» с телефона снова работает на старых webOS (WebView 53): обход DOM в design-runtime падал на SVG-иконках без dataset и обрывал старт приложения до применения параметров запуска - ТВ открывал каталог вместо плеера. Теперь параметры применяются до design-runtime, а его сбой не роняет старт
