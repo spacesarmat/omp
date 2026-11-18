@@ -6,6 +6,7 @@ The English translation covers the latest versions only; the full history (in Ru
 
 ## Unreleased
 
+- [tech] Billing: sending codes over SMTP no longer allows an unencrypted fallback - ports other than 465 require STARTTLS (requireTLS), 465 uses implicit TLS. Prevents downgrade and sending the password/code in plaintext
 - [tech] Billing: replaying an already-rotated refresh token inside the 60 s lost-response window no longer revokes the device's live token - the grace retry is allowed once, further replays are treated as a suspected clone. Hardens against hijack and DoS with a stolen old token
 - [tech] Store channels: winget, Scoop, a Homebrew cask, Flatpak and Snap manifests, IzzyOnDroid metadata, and CI on a stable release. A step with a missing secret skips with a notice. First store submissions are not sent
 - [tech] LG store build: the ipk appinfo sets requiredACG to network.query (the TV address, used to find the user's TorrServer). Homebrew Channel, Developer Mode and the settingsservice device-name call are left out of the store bundle. ipk icons are opaque on #181B22. Diagnostics, crash reports and ranking stats stay off in the store build until diagnostics are turned on in Settings. The settings hint says logs may still contain media titles. The site privacy policy and docs/lg-store-submission say the same. Drafts: Self Checklist and UX Scenario. A real TV smoke test is still required
