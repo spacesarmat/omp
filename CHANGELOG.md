@@ -2,7 +2,7 @@
 
 <!-- Markers [phone] [tv] [lg] [atv] [tech]: see docs/changelog-markers.md. [tech] bullets are technical or admin-only and never reach users. -->
 
-## Не выпущено
+## 0.30.1-beta.12
 
 - [lg] «Смотреть на ТВ» с телефона снова работает на старых webOS (WebView 53): обход DOM в design-runtime падал на SVG-иконках без dataset и обрывал старт приложения до применения параметров запуска - ТВ открывал каталог вместо плеера. Теперь параметры применяются до design-runtime, а его сбой не роняет старт
 - [tech] ТВ: старый WebView больше не пишет в журнал ошибку reader.closed на каждый периодический запрос (Chrome 53 отклоняет closed при releaseLock); обход layout пропускает элементы без dataset, path-индексы считаются по всем детям, id узлов совпадают с современными браузерами
