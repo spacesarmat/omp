@@ -6,6 +6,7 @@ The English translation covers the latest versions only; the full history (in Ru
 
 ## Unreleased
 
+- [tech] The GitHub Actions check, every 15 minutes, probes billing.omp-player.online (the root and /health) and omp-player.online. HTTP 5xx, including 530, and timeouts count as down; the billing root answers 404, which means the process is up. Three tries, 20s apart. Telegram only when a check goes down or recovers. State is stored in a GitHub issue labeled outage (the Actions cache was evicted, so dedupe did not hold). If the issue list cannot be read after 3 tries, Telegram is still sent and no new issue is opened
 - [tech] LG Content Store build: the __STORE_BUILD__ flag (npm run build:store / package:store) disables public search and discovery - a player for the user's own TorrServer (catalog, M3U/HLS, playback) remains; regular builds are unchanged
 - [tech] The developer mode expiry banner test is no longer flaky: after fake timers it deterministically waits for Preact's deferred rAF render, which had failed the full release test run
 
