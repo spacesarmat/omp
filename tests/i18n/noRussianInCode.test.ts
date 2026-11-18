@@ -10,6 +10,8 @@ const PENDING: string[] = [
 /** Not copy: tracker parsers and patterns (reason each). */
 const ALLOWLIST: { [file: string]: string } = {
   'src/i18n/ru.ts': 'the Russian dictionary',
+  'src/i18n/uk.ts': 'the Ukrainian dictionary',
+  'src/i18n/be.ts': 'the Belarusian dictionary',
   'src/i18n/languageNames.ts': 'language names in their own language',
   'src/faq/faq.ru.ts': 'Russian FAQ texts',
   'src/testmode/registry.ts': 'stable TV screen-code catalog (Russian and English names, source of docs/screen-codes.md)',

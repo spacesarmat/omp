@@ -2,6 +2,7 @@ import { signal } from '@preact/signals';
 import { ru } from './ru';
 import { en } from './en';
 import { uk } from './uk';
+import { be } from './be';
 import type { StringKeys, PluralKeys } from './types';
 
 export type { Plural, EnPlural, EnDict, StringKeys, PluralKeys } from './types';
@@ -22,7 +23,7 @@ export type Params = { [k: string]: string | number };
 export const lang = signal<Lang>('ru');
 
 /** Translated packs plug in here as they land; a missing pack or key falls back to Russian. */
-export const DICTS: Partial<Record<Lang, unknown>> = { ru, en, uk };
+export const DICTS: Partial<Record<Lang, unknown>> = { ru, en, uk, be };
 
 /** Prefix match so regional variants (uk-UA, kk-KZ, en-US, ...) map to the base code. Unsupported stays ''. */
 export function normalizeLang(code: string): Lang | '' {
