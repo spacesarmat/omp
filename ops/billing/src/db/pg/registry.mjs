@@ -234,17 +234,21 @@ export async function refreshPair(pool, secret, { refreshToken, deviceId, now })
     if (t.revoked || row.status !== 'active') return { error: 'revoked' };
     if (t.rotated_at) {
       const next = t.replaced_by ? await one(q, 'SELECT * FROM refresh_tokens WHERE hash = $1', [t.replaced_by]) : null;
-      const lost = now - t.rotated_at <= ROTATE_GRACE_MS && next && !next.rotated_at && !next.revoked;
+      // Grace covers ONE lost response. The spent retry is tracked explicitly (grace_used), not by
+      // timestamps: rotation and retry can share a millisecond, so a second replay of the old token
+      // must fall to the clone path instead of revoking the live token again.
+      const lost = now - t.rotated_at <= ROTATE_GRACE_MS && next && !next.rotated_at && !next.revoked && !t.grace_used;
       if (!lost) {
         const cloneLog = !row.clone_at || now - row.clone_at >= CLONE_LOG_EVERY_MS || now < row.clone_at;
         await q.query('UPDATE devices SET clone_at = $1, clone_count = clone_count + 1 WHERE id = $2', [now, row.id]);
         const out = await issuePair(q, secret, row, now);
-        await q.query('UPDATE refresh_tokens SET replaced_by = $1 WHERE hash = $2', [out.hash, t.hash]);
+        // Close grace here too: a clone-issued replacement must not be revokable by a later old-token replay.
+        await q.query('UPDATE refresh_tokens SET replaced_by = $1, grace_used = 1 WHERE hash = $2', [out.hash, t.hash]);
         return { row, pair: out.pair, clone: true, cloneLog };
       }
       await q.query('UPDATE refresh_tokens SET revoked = 1 WHERE hash = $1', [next.hash]);
       const out = await issuePair(q, secret, row, now);
-      await q.query('UPDATE refresh_tokens SET replaced_by = $1 WHERE hash = $2', [out.hash, t.hash]);
+      await q.query('UPDATE refresh_tokens SET replaced_by = $1, grace_used = 1 WHERE hash = $2', [out.hash, t.hash]);
       return { row, pair: out.pair, retry: true };
     }
     if (t.expires_at <= now) return { error: 'refresh_expired' };
