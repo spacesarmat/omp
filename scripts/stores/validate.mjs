@@ -1,18 +1,27 @@
-// Check committed store files against the v0.30.0 fixture and the fastlane tree.
+// Check committed store files against the fixture for the winget version on disk.
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import { renderRelease } from './lib.mjs';
+import { matchingFixtures, renderRelease } from './lib.mjs';
 
 const root = process.cwd();
 const read = (path) => readFileSync(join(root, path), 'utf8').replace(/\r\n/g, '\n');
 
-const release = JSON.parse(read('tests/fixtures/stores/v0.30.0.json'));
-const files = renderRelease({
-  release,
-  changelog: read('CHANGELOG.md'),
-  changelogEn: read('CHANGELOG.en.md'),
-});
+const wingetRoot = 'packaging/winget/manifests/s/Spacesarmat/OMP';
+const versions = readdirSync(join(root, wingetRoot)).filter((name) => statSync(join(root, wingetRoot, name)).isDirectory());
+const fixtures = readdirSync(join(root, 'tests/fixtures/stores'))
+  .filter((name) => name.endsWith('.json'))
+  .map((name) => JSON.parse(read(`tests/fixtures/stores/${name}`)));
+const matches = versions.length === 1 ? matchingFixtures(fixtures, versions[0]) : [];
+const files = matches.length === 1
+  ? renderRelease({
+    release: matches[0],
+    changelog: read('CHANGELOG.md'),
+    changelogEn: read('CHANGELOG.en.md'),
+  })
+  : {};
 const bad = [];
+if (versions.length !== 1) bad.push(`expected one winget version, found ${versions.join(', ') || 'none'}`);
+if (matches.length !== 1) bad.push(`expected one fixture for ${versions[0] || 'the winget version'}, found ${matches.length}`);
 for (const [path, body] of Object.entries(files)) {
   let onDisk = '';
   try {

@@ -333,9 +333,10 @@ description: |
 grade: stable
 confinement: strict
 license: GPL-3.0
-architectures:
-  - build-on: amd64
-    build-for: amd64
+platforms:
+  amd64:
+    build-on: [amd64]
+    build-for: [amd64]
 apps:
   omp:
     command: usr/bin/omp-desktop
@@ -364,6 +365,35 @@ parts:
       craftctl default
       cp -a usr "$CRAFT_PART_INSTALL/"
 `;
+}
+
+/** Stable fixtures whose version equals the winget directory being checked. */
+export function matchingFixtures(releases, version) {
+  return (releases || []).filter((release) => {
+    const parsed = parseReleaseTag(release.tag || release.tagName || '');
+    return parsed.stable && parsed.version === version;
+  });
+}
+
+/** The five desktop assets the store renderer reads, in a stable order. */
+export function releaseFixture(release, version) {
+  const names = [
+    `OMP-${version}-setup.exe`,
+    `OMP-${version}-macos-arm64.dmg`,
+    `OMP-${version}-macos-x64.dmg`,
+    `OMP-${version}-linux-x64.deb`,
+    `OMP-${version}-linux-x64.AppImage`,
+  ];
+  const by = new Map((release.assets || []).map((asset) => [asset.name, asset]));
+  return {
+    tag: release.tag || release.tagName,
+    prerelease: false,
+    publishedAt: release.publishedAt,
+    assets: names.filter((name) => by.has(name)).map((name) => {
+      const asset = by.get(name);
+      return { name: asset.name, digest: asset.digest, size: asset.size };
+    }),
+  };
 }
 
 export function planRelease(release, extras = {}) {

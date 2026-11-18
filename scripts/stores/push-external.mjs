@@ -59,7 +59,16 @@ try {
   run('git', ['clone', '--depth', '1', `https://github.com/${repo}.git`, dir], { env, stdio: 'inherit' });
   const branch = `stores/${parsed.tag}`;
   const base = process.env.CHANNEL_BASE || 'main';
-  run('git', ['checkout', '-B', branch], { cwd: dir, stdio: 'inherit' });
+  let hasBranch = false;
+  try {
+    run('git', ['fetch', 'origin', branch], { cwd: dir, env });
+    run('git', ['rev-parse', '--verify', `origin/${branch}`], { cwd: dir });
+    hasBranch = true;
+  } catch {
+    hasBranch = false;
+  }
+  if (hasBranch) run('git', ['checkout', '-B', branch, `origin/${branch}`], { cwd: dir, stdio: 'inherit' });
+  else run('git', ['checkout', '-B', branch], { cwd: dir, stdio: 'inherit' });
   for (const [src, dest] of copies) {
     const body = plan.files[src] || readFileSync(src, 'utf8');
     if (!body) throw new Error(`renderer has no ${src}`);
@@ -69,16 +78,16 @@ try {
   }
   run('git', ['add', '-A'], { cwd: dir });
   const dirty = run('git', ['status', '--porcelain'], { cwd: dir }).trim();
-  if (!dirty) {
-    console.log(`::notice::${repo} already has ${parsed.tag}.`);
-    process.exit(0);
+  if (!dirty) console.log(`::notice::${repo} already has ${parsed.tag}.`);
+  else {
+    run('git', [
+      '-c', 'user.name=github-actions[bot]',
+      '-c', 'user.email=41898282+github-actions[bot]@users.noreply.github.com',
+      'commit', '-m', `Update OMP ${parsed.tag}`,
+    ], { cwd: dir, env, stdio: 'inherit' });
+    run('git', ['push', 'origin', `HEAD:${branch}`], { cwd: dir, env, stdio: 'inherit' });
   }
-  run('git', [
-    '-c', 'user.name=github-actions[bot]',
-    '-c', 'user.email=41898282+github-actions[bot]@users.noreply.github.com',
-    'commit', '-m', `Update OMP ${parsed.tag}`,
-  ], { cwd: dir, env, stdio: 'inherit' });
-  run('git', ['push', 'origin', `HEAD:${branch}`], { cwd: dir, env, stdio: 'inherit' });
+  if (!dirty && !hasBranch) return;
   const body = join(dir, 'pr.md');
   writeFileSync(body, `Update OMP ${parsed.tag} from the GitHub release assets.\n`);
   let existing = '';

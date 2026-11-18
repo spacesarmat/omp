@@ -1,13 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 // @ts-ignore plain .mjs script
 import {
   androidVersionCode,
   channelSkip,
   fastlaneChangelog,
+  matchingFixtures,
   parseReleaseTag,
   planRelease,
+  releaseFixture,
   renderRelease,
   userBullets,
 } from '../../scripts/stores/lib.mjs';
@@ -80,7 +82,10 @@ describe('planRelease', () => {
     expect(plan.files['packaging/homebrew/Casks/omp.rb']).toContain('706c7966376f27117e07a34589403292258ec5e9f734755dee805bbcb82ffde0');
     expect(plan.files['packaging/homebrew/Casks/omp.rb']).toContain('b3a93a261f55c38c056d2d43e7d68366d569920a42e178976961df8c3f15e5c4');
     expect(plan.files['packaging/flatpak/com.spacesarmat.omp.desktop.yml']).toContain('567e10c5c64191b492848cf5b1e2ba3f6ea3a359562dd5801050c5fa06165778');
-    expect(plan.files['packaging/snap/snapcraft.yaml']).toContain("version: '0.30.0'");
+    const snap = plan.files['packaging/snap/snapcraft.yaml'];
+    expect(snap).toContain("version: '0.30.0'");
+    expect(snap).toContain('platforms:\n  amd64:');
+    expect(snap).not.toContain('architectures:');
     const winget = plan.files['packaging/winget/manifests/s/Spacesarmat/OMP/0.30.0/Spacesarmat.OMP.installer.yaml'];
     expect(winget).toContain('PackageIdentifier: Spacesarmat.OMP');
     expect(winget).toContain('InstallerType: nullsoft');
@@ -123,11 +128,53 @@ describe('renderRelease', () => {
   });
 });
 
+describe('matchingFixtures', () => {
+  it('keeps only the stable fixture for the winget version on disk', () => {
+    const next = { ...v030, tag: 'v0.31.0', publishedAt: '2026-12-01T00:00:00Z' };
+    expect(matchingFixtures([v030, next], '0.30.0')).toEqual([v030]);
+    expect(matchingFixtures([{ ...v030, tag: 'v0.30.1-beta.1' }], '0.30.1')).toEqual([]);
+  });
+
+  it('round-trips the checked-in v0.30.0 fixture', () => {
+    expect(releaseFixture(v030, '0.30.0')).toEqual(v030);
+  });
+});
+
+describe('store update scripts', () => {
+  const update = readFileSync('scripts/stores/update.mjs', 'utf8');
+  const external = readFileSync('scripts/stores/push-external.mjs', 'utf8');
+
+  it('opens the PR even when a retry has nothing new to commit', () => {
+    const dirtyAt = update.indexOf('if (!dirty)');
+    const prAt = update.indexOf("['pr', 'create'");
+    expect(dirtyAt).toBeGreaterThan(0);
+    expect(prAt).toBeGreaterThan(dirtyAt);
+    expect(update.slice(dirtyAt, prAt)).not.toContain('process.exit');
+    expect(update).toContain('tests/fixtures/stores');
+  });
+
+  it('continues an existing external branch instead of recreating it', () => {
+    expect(external).toContain("['fetch', 'origin', branch]");
+    expect(external).toContain('origin/${branch}');
+    const dirtyAt = external.indexOf('if (!dirty)');
+    const prAt = external.indexOf("['pr', 'create'");
+    expect(prAt).toBeGreaterThan(dirtyAt);
+    expect(external.slice(dirtyAt, prAt)).not.toContain('process.exit');
+  });
+});
+
 describe('committed store files', () => {
-  it('match the renderer for v0.30.0 and contain no dash punctuation other than hyphen', () => {
+  it('match the fixture for the winget version on disk', () => {
     const changelog = readFileSync('CHANGELOG.md', 'utf8');
     const changelogEn = readFileSync('CHANGELOG.en.md', 'utf8');
-    const files = renderRelease({ release: v030, changelog, changelogEn });
+    const versions = readdirSync('packaging/winget/manifests/s/Spacesarmat/OMP');
+    expect(versions).toEqual(['0.30.0']);
+    const fixtures = readdirSync('tests/fixtures/stores')
+      .filter((name: string) => name.endsWith('.json'))
+      .map((name: string) => JSON.parse(readFileSync(`tests/fixtures/stores/${name}`, 'utf8')));
+    const matches = matchingFixtures(fixtures, versions[0]);
+    expect(matches).toHaveLength(1);
+    const files = renderRelease({ release: matches[0], changelog, changelogEn });
     const bad: string[] = [];
     for (const [path, body] of Object.entries(files) as [string, string][]) {
       const onDisk = readFileSync(path, 'utf8').replace(/\r\n/g, '\n');

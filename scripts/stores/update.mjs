@@ -3,7 +3,7 @@ import { appendFileSync, existsSync, mkdirSync, readdirSync, rmSync, writeFileSy
 import { execFileSync } from 'node:child_process';
 import { dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { planRelease, parseReleaseTag } from './lib.mjs';
+import { planRelease, parseReleaseTag, releaseFixture } from './lib.mjs';
 
 function out(key, value) {
   const file = process.env.GITHUB_OUTPUT;
@@ -67,6 +67,9 @@ for (const [path, body] of Object.entries(plan.files)) {
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, body);
 }
+const fixturePath = `tests/fixtures/stores/${parsed.tag}.json`;
+mkdirSync(dirname(fixturePath), { recursive: true });
+writeFileSync(fixturePath, `${JSON.stringify(releaseFixture(release, plan.version), null, 2)}\n`);
 const wingetRoot = 'packaging/winget/manifests/s/Spacesarmat/OMP';
 if (existsSync(wingetRoot)) {
   for (const name of readdirSync(wingetRoot)) {
@@ -74,41 +77,40 @@ if (existsSync(wingetRoot)) {
   }
 }
 
-run('git', ['add', '-A', '--', 'packaging', 'bucket', 'fastlane/metadata/android/en-US/changelogs', 'fastlane/metadata/android/ru-RU/changelogs']);
+run('git', ['add', '-A', '--', 'packaging', 'bucket', 'tests/fixtures/stores', 'fastlane/metadata/android/en-US/changelogs', 'fastlane/metadata/android/ru-RU/changelogs']);
 const dirty = run('git', ['status', '--porcelain']).trim();
 if (!dirty) {
   console.log(`::notice::Store manifests for ${parsed.tag} are already current.`);
-  out('desktop', 'true');
-  process.exit(0);
+} else {
+  run('git', [
+    '-c', 'user.name=github-actions[bot]',
+    '-c', 'user.email=41898282+github-actions[bot]@users.noreply.github.com',
+    'commit', '-m', `Update store manifests for ${parsed.tag}`,
+  ], { stdio: 'inherit' });
+  run('git', ['push', 'origin', `HEAD:${branch}`], { stdio: 'inherit' });
 }
-
-run('git', [
-  '-c', 'user.name=github-actions[bot]',
-  '-c', 'user.email=41898282+github-actions[bot]@users.noreply.github.com',
-  'commit', '-m', `Update store manifests for ${parsed.tag}`,
-], { stdio: 'inherit' });
-run('git', ['push', 'origin', `HEAD:${branch}`], { stdio: 'inherit' });
-
-const bodyPath = join(tmpdir(), `stores-${parsed.tag}.md`);
-writeFileSync(bodyPath, [
-  '## Манифесты магазинов',
-  '',
-  `Стабильный релиз \`${parsed.tag}\`.`,
-  '',
-  '- winget, Scoop, Homebrew, Flatpak и Snap переписаны из ассетов релиза',
-  '- fastlane changelog для IzzyOnDroid',
-  '',
-  'Внешние репозитории этот PR не пушит. Winget и Snap запускаются соседними job, если секреты заданы.',
-  '',
-].join('\n'));
-let existing = '';
-try {
-  existing = run('gh', ['pr', 'view', branch, '--json', 'url', '--jq', '.url']).trim();
-} catch {
-  existing = '';
-}
-if (existing) console.log(existing);
-else {
-  run('gh', ['pr', 'create', '--base', 'main', '--head', branch, '--title', `chore(stores): манифесты ${parsed.tag}`, '--body-file', bodyPath], { stdio: 'inherit' });
+if (dirty || hasBranch) {
+  const bodyPath = join(tmpdir(), `stores-${parsed.tag}.md`);
+  writeFileSync(bodyPath, [
+    '## Манифесты магазинов',
+    '',
+    `Стабильный релиз \`${parsed.tag}\`.`,
+    '',
+    '- winget, Scoop, Homebrew, Flatpak и Snap переписаны из ассетов релиза',
+    '- fastlane changelog для IzzyOnDroid',
+    '',
+    'Внешние репозитории этот PR не пушит. Winget и Snap запускаются соседними job, если секреты заданы.',
+    '',
+  ].join('\n'));
+  let existing = '';
+  try {
+    existing = run('gh', ['pr', 'view', branch, '--json', 'url', '--jq', '.url']).trim();
+  } catch {
+    existing = '';
+  }
+  if (existing) console.log(existing);
+  else {
+    run('gh', ['pr', 'create', '--base', 'main', '--head', branch, '--title', `chore(stores): манифесты ${parsed.tag}`, '--body-file', bodyPath], { stdio: 'inherit' });
+  }
 }
 out('desktop', 'true');
