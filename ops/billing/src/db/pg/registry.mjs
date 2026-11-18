@@ -242,7 +242,8 @@ export async function refreshPair(pool, secret, { refreshToken, deviceId, now })
         const cloneLog = !row.clone_at || now - row.clone_at >= CLONE_LOG_EVERY_MS || now < row.clone_at;
         await q.query('UPDATE devices SET clone_at = $1, clone_count = clone_count + 1 WHERE id = $2', [now, row.id]);
         const out = await issuePair(q, secret, row, now);
-        await q.query('UPDATE refresh_tokens SET replaced_by = $1 WHERE hash = $2', [out.hash, t.hash]);
+        // Close grace here too: a clone-issued replacement must not be revokable by a later old-token replay.
+        await q.query('UPDATE refresh_tokens SET replaced_by = $1, grace_used = 1 WHERE hash = $2', [out.hash, t.hash]);
         return { row, pair: out.pair, clone: true, cloneLog };
       }
       await q.query('UPDATE refresh_tokens SET revoked = 1 WHERE hash = $1', [next.hash]);
