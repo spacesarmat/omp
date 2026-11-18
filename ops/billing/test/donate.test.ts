@@ -20,6 +20,7 @@ import {
 import { ensureTelegramAccount, settleReferrals, subscriptionView } from '../src/logic.mjs';
 import { emptyState } from '../src/state.mjs';
 import { grossUp } from '../src/yoomoney.mjs';
+import { mergeRateBook } from '../src/rates.mjs';
 
 const NOW = Date.UTC(2026, 10, 12, 9, 0, 0);
 
@@ -27,8 +28,12 @@ function on() {
   const opened = ensureTelegramAccount(emptyState(), '42', NOW);
   const state = opened.state;
   state.settings.yoomoneyWallet = '410011111111111';
-  state.settings.cryptoRateUsdt = 100;
-  state.settings.rates = { auto: { usdt: false, ton: false, btc: false, star: false } };
+  state.settings.rates = mergeRateBook({ starUsd: 0.02 }, {
+    usdt: { rub: 100, source: 'cryptopay' },
+    usd: { rub: 100, source: 'cbr' },
+    ton: { rub: 200, source: 'coingecko' },
+    btc: { rub: 8_000_000, source: 'coingecko' },
+  }, NOW);
   state.settings.donate = {
     enabled: true,
     amounts: '100,300,500,1000',

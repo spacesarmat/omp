@@ -4,6 +4,7 @@ import { activate, createSubscription, ensureTelegramAccount, issueCliAdminLogin
 import { createApp, handleCallback } from '../src/server.mjs';
 import { emptyState } from '../src/state.mjs';
 import { grossUp, notificationSign } from '../src/yoomoney.mjs';
+import { mergeRateBook } from '../src/rates.mjs';
 import { readState, testStore, writeState, type Store } from './pg';
 
 const SECRET = 'test-notify-secret';
@@ -359,8 +360,12 @@ describe('donate crypto pay mode', () => {
     Object.assign(state.settings, {
       cryptoPayToken: LIVE,
       cryptoPayTestnetToken: TESTNET,
-      cryptoRateUsdt: 100,
-      rates: { auto: { usdt: false, ton: false, btc: false, star: false } },
+      rates: mergeRateBook({}, {
+        usdt: { rub: 100, source: 'cryptopay' },
+        usd: { rub: 100, source: 'cbr' },
+        ton: { rub: 200, source: 'coingecko' },
+        btc: { rub: 8_000_000, source: 'coingecko' },
+      }, Date.now()),
       ...patch,
     });
     // boot() stamps the row at 09:00 UTC. A draft older than two hours is a stale button, so a later run never creates an invoice.

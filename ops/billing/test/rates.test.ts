@@ -16,6 +16,7 @@ import {
   parseCoinGeckoRub,
   parseCryptoPayRates,
   rateAdminView,
+  rateAuditText,
 } from '../src/rates.mjs';
 
 const NOW = Date.UTC(2026, 10, 12, 12, 0, 0);
@@ -116,9 +117,9 @@ describe('donate rate cache', () => {
       donate: { rubPerStar: 2 },
       rates: { ...rates, auto: { usdt: false, ton: false, btc: false, star: false } },
     }, NOW);
-    expect(manual.cryptoRateUsdt).toBe(50);
-    expect(manual.rubPerStar).toBe(2);
-    expect(starsForRub(100, manual.rubPerStar)).toBe(50);
+    expect(manual.cryptoRateUsdt).toBeCloseTo(100, 5);
+    expect(manual.rubPerStar).toBeCloseTo(1.3 / 1.1, 5);
+    expect(starsForRub(100, manual.rubPerStar)).toBe(85);
   });
 });
 
@@ -245,7 +246,7 @@ describe('donate rate timing', () => {
     const empty = { settings: { rates: { auto: { usdt: true, ton: true, btc: true, star: true } } }, donations: row };
     expect(donateRateWait('dn:n:row1:0', empty, NOW)).toBe('block');
     const manual = { settings: { rates: { auto: { usdt: false, ton: false, btc: false, star: false } } }, donations: row };
-    expect(donateRateWait('dn:n:row1:0', manual, NOW)).toBe('skip');
+    expect(donateRateWait('dn:n:row1:0', manual, NOW)).toBe('block');
   });
 
   it('answers a stale name or method button without calling the rate hosts', () => {
@@ -403,6 +404,21 @@ describe('donate rate admin', () => {
     expect(kept.markupPercent).toBe(10);
     expect(kept.maxAgeMin).toBe(360);
   });
+
+  it('pins a rate until it expires and writes the before and after numbers', () => {
+    const prev = mergeRateBook({}, { usdt: { rub: 90, source: 'cryptopay' }, usd: { rub: 90, source: 'cbr' } }, NOW);
+    const next = applyRateSettings(prev, { pinUsdt: '80', pinHours: '2', pinReason: 'выходные', refreshMin: '15' }, NOW);
+    expect(next.refreshMin).toBe(15);
+    expect(next.pins.usdt.rub).toBe(80);
+    expect(next.pins.usdt.until).toBe(NOW + 2 * 60 * 60 * 1000);
+    expect(paymentPricing({ rates: next }, NOW).cryptoRateUsdt).toBe(80);
+    expect(paymentPricing({ rates: next }, NOW + 3 * 60 * 60 * 1000).cryptoRateUsdt).toBe(90);
+    expect(rateAuditText(prev, next)).toContain('интервал 12 -> 15');
+    expect(rateAuditText(prev, next)).toContain('закреп usdt нет -> 80');
+    const cleared = applyRateSettings(next, { pinUsdt: '0' }, NOW);
+    expect(cleared.pins.usdt).toBeUndefined();
+    expect(rateAuditText(next, next)).toBe('');
+  });
 });
 
 describe('rate admin view subscription preview', () => {
@@ -417,9 +433,9 @@ describe('rate admin view subscription preview', () => {
     expect(view.sub.starsExtra).toBe(39);
     expect(view.sub.usdt).toBe('1.50');
     const stale = rateAdminView(settings, NOW + 25 * 60 * 60 * 1000);
-    expect(stale.sub.stars).toBe(999);
-    expect(stale.sub.starsExtra).toBe(99);
-    expect(stale.sub.usdt).toBe('9.00');
+    expect(stale.sub.stars).toBe(0);
+    expect(stale.sub.starsExtra).toBe(0);
+    expect(stale.sub.usdt).toBe('');
   });
   it('stale auto rate with a manual crypto rate previews the invoice amount', () => {
     const rates = mergeRateBook({ starUsd: 0.013 }, {
@@ -428,7 +444,7 @@ describe('rate admin view subscription preview', () => {
     }, NOW);
     const settings = { priceRub: 150, cryptoUsdt: 0, cryptoRateUsdt: 50, rates };
     const stale = rateAdminView(settings, NOW + 25 * 60 * 60 * 1000);
-    expect(stale.sub.usdt).toBe('3.00');
+    expect(stale.sub.usdt).toBe('');
   });
   it('star preview applies the invoice cap instead of falling back to the manual tariff', () => {
     const rates = mergeRateBook({ starUsd: 0.013, auto: { star: false } }, {
@@ -436,6 +452,6 @@ describe('rate admin view subscription preview', () => {
     }, NOW);
     const settings = { priceRub: 150, starsPrice: 999, donate: { rubPerStar: 0.0001 }, rates };
     const view = rateAdminView(settings, NOW);
-    expect(view.sub.stars).toBe(0);
+    expect(view.sub.stars).toBe(116);
   });
 });

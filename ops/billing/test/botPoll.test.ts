@@ -15,6 +15,7 @@ import {
 } from '../src/botPoll.mjs';
 import { createApp, pollBot } from '../src/server.mjs';
 import { issueCliAdminLogin, quotePurchase } from '../src/logic.mjs';
+import { mergeRateBook } from '../src/rates.mjs';
 import { emptyState } from '../src/state.mjs';
 import { readState, updateState, writeState, testStore } from './pg';
 
@@ -421,7 +422,12 @@ describe('pollBot: a rejected Stars charge is refunded', () => {
           priceRub: 200,
           periodDays: 30,
           starsEnabled: true,
-          starsPrice: 100,
+          rates: mergeRateBook({ starUsd: 0.02 }, {
+            usd: { rub: 100, source: 'cbr' },
+            usdt: { rub: 100, source: 'cryptopay' },
+            ton: { rub: 200, source: 'coingecko' },
+            btc: { rub: 8_000_000, source: 'coingecko' },
+          }, NOW),
           referral: { enabled: true, friendDiscount: true, friendDiscountPercent: 10, delayDays: 0 },
         },
         accounts: [
