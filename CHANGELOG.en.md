@@ -4,7 +4,7 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
-## Unreleased
+## 0.30.1-beta.12
 
 - [lg] "Watch on TV" from the phone works again on old webOS (WebView 53): the design runtime DOM walk threw on SVG icons without dataset and aborted app start before launch params applied, so the TV opened the catalog instead of the player. Launch params now apply before the design runtime, and a design runtime failure no longer aborts start
 - [tech] TV: the old WebView no longer logs a reader.closed error on every periodic request (Chrome 53 rejects closed on releaseLock); the layout walk skips elements without dataset while path indices still count every child, so node ids match modern browsers
