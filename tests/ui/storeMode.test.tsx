@@ -118,6 +118,7 @@ describe('store build: public search and discovery are off', () => {
     await flush();
     expect(host.querySelector('[data-fk="adv-diagnostics"]')).toBeTruthy();
     expect(host.textContent).toContain('Выключено, пока вы сами не включите');
+    expect(host.textContent).toContain('названия медиа');
     expect(host.textContent).not.toContain('Можно выключить');
   });
 

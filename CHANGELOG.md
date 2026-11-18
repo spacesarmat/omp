@@ -4,7 +4,7 @@
 
 ## Не выпущено
 
-- [tech] Store-сборка LG: в appinfo ipk поле requiredACG со значением network.query (адрес ТВ для поиска своего TorrServer). Вызовы Homebrew Channel, Developer Mode и имени устройства из settingsservice в store-бандл не попадают. Иконки ipk непрозрачные, фон #181B22. Диагностика, отчёты о сбоях и статистика ранжирования в store выключены, пока диагностику не включат в настройках. Политика на сайте и в docs/lg-store-submission говорит то же. Черновики Self Checklist и UX Scenario. Проверка на настоящем ТВ ещё нужна
+- [tech] Store-сборка LG: в appinfo ipk поле requiredACG со значением network.query (адрес ТВ для поиска своего TorrServer). Вызовы Homebrew Channel, Developer Mode и имени устройства из settingsservice в store-бандл не попадают. Иконки ipk непрозрачные, фон #181B22. Диагностика, отчёты о сбоях и статистика ранжирования в store выключены, пока диагностику не включат в настройках. Подсказка в настройках говорит, что в журнале могут остаться названия медиа. Политика на сайте и в docs/lg-store-submission говорит то же. Черновики Self Checklist и UX Scenario. Проверка на настоящем ТВ ещё нужна
 - [tech] Store-сборка для LG Content Store: флаг __STORE_BUILD__ (npm run build:store / package:store) отключает публичный поиск и discovery - остаётся плеер своего TorrServer (каталог, M3U/HLS, плеер); обычные сборки не меняются
 - [tech] Тест баннера срока режима разработчика больше не флаки: после fake-timers он детерминированно дожидается отложенного rAF-рендера Preact, из-за чего падал полный прогон тестов релиза
 
