@@ -15,7 +15,7 @@ vi.mock('../../src/storeMode', () => ({
 
 import { tvLibraryTabs } from '../../src/lib/libraryView';
 import { TopBar } from '../../src/ui/TopBar';
-import { SettingsScreen } from '../../src/screens/Settings';
+import { AdvancedSettingsScreen, SettingsScreen } from '../../src/screens/Settings';
 import { canUpgrade } from '../../src/ui/BetterDialog';
 import { checkForUpdate } from '../../src/store/updates';
 import { servers, activeServerId, addServer, setActiveServer } from '../../src/store/servers';
@@ -81,7 +81,10 @@ describe('store build: public search and discovery are off', () => {
     const host = mount(topBar());
     await flush();
     expect(host.querySelector('[data-fk="lib-btn-add"]')).toBeNull();
-    expect(host.querySelector('[data-fk="lib-btn-search"]')).toBeTruthy();
+    const search = host.querySelector('[data-fk="lib-btn-search"]');
+    expect(search).toBeTruthy();
+    expect(search!.getAttribute('aria-label')).toBe('Поиск');
+    expect(host.textContent).not.toContain('Найти раздачу');
     expect(host.querySelector('[data-fk="lib-btn-playlist"]')).toBeTruthy();
   });
 
@@ -103,9 +106,20 @@ describe('store build: public search and discovery are off', () => {
     expect(host.querySelector('[data-fk="set-update-check"]')).toBeNull();
     expect(host.querySelector('[data-fk="set-update"]')).toBeNull();
     expect(host.querySelector('[data-fk="set-addHbRepo"]')).toBeNull();
+    expect(host.querySelector('[data-fk="set-devmode-extend"]')).toBeNull();
     // help and advanced stay
     expect(host.querySelector('[data-fk="set-faq"]')).toBeTruthy();
     expect(host.querySelector('[data-fk="set-advanced"]')).toBeTruthy();
+  });
+
+  it('advanced settings keep diagnostics opt-in and say it starts off', async () => {
+    flag.store = true;
+    const host = mount(h(AdvancedSettingsScreen, {}));
+    await flush();
+    expect(host.querySelector('[data-fk="adv-diagnostics"]')).toBeTruthy();
+    expect(host.textContent).toContain('Выключено, пока вы сами не включите');
+    expect(host.textContent).toContain('названия медиа');
+    expect(host.textContent).not.toContain('Можно выключить');
   });
 
   it('no better-quality upgrade search', () => {
@@ -144,6 +158,13 @@ describe('regular build: unchanged', () => {
     await flush();
     expect(host.querySelector('[data-fk="set-update-check"]')).toBeTruthy();
     expect(host.querySelector('[data-fk="set-update"]')).toBeTruthy();
+    expect(host.querySelector('[data-fk="set-devmode-extend"]')).toBeTruthy();
+  });
+
+  it('advanced settings keep the sideload diagnostics hint', async () => {
+    const host = mount(h(AdvancedSettingsScreen, {}));
+    await flush();
+    expect(host.textContent).toContain('Можно выключить');
   });
 
   it('better-quality upgrade search is offered for a film', () => {

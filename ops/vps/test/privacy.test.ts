@@ -58,7 +58,7 @@ describe('privacy policy pages', () => {
   it('states the seven policy topics and a support block that reuses footer contacts', () => {
     expect([...ru.querySelectorAll('h2')].map((h) => h.textContent)).toEqual([
       '1. Ваши медиа и история остаются в вашей сети',
-      '2. Отключаемая диагностика',
+      '2. Диагностика выключена, пока её не включат',
       '3. Метаданные (TMDB)',
       '4. Аккаунт не требуется',
       '5. Что мы не собираем',
@@ -68,7 +68,7 @@ describe('privacy policy pages', () => {
     ]);
     expect([...en.querySelectorAll('h2')].map((h) => h.textContent)).toEqual([
       '1. Your media and history stay on your network',
-      '2. Optional diagnostics (can be turned off)',
+      '2. Optional diagnostics (off until you turn it on)',
       '3. Metadata (TMDB)',
       '4. No account required',
       '5. Data we do not collect',

@@ -30,6 +30,7 @@ import { phoneLink } from '../phone/phoneStore';
 import { phoneFeed } from '../phone/monitor';
 import { platformKind } from '../platform/env';
 import { devmodeExpiring, extendDevMode } from '../platform/devmode';
+import { STORE_BUILD } from '../storeMode';
 import { displayTitle } from '../lib/torrentName';
 import type { SeriesGroup } from '../lib/seriesGroups';
 
@@ -44,7 +45,8 @@ export function LibraryScreen() {
   const setSearchOpen = (o: boolean) => { librarySearchOpen.value = o; };
   const [error, setError] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(torrents.value.length > 0);
-  const [devmodeDue, setDevmodeDue] = useState(() => platformKind() === 'webos' && devmodeExpiring(Date.now()));
+  const watchDevmode = !STORE_BUILD && platformKind() === 'webos';
+  const [devmodeDue, setDevmodeDue] = useState(() => watchDevmode && devmodeExpiring(Date.now()));
   // card under focus: a torrent, or a history entry when fileIndex is set
   // (a ref: focus moves must not re-render the whole catalog)
   const selRef = useRef<{ hash: string; fileIndex?: number; group?: SeriesGroup } | null>(null);
@@ -81,7 +83,7 @@ export function LibraryScreen() {
     const timer = setInterval(() => {
       load(() => dead);
       // the TV may sleep across the expiry mark: recheck while the catalog stays open
-      setDevmodeDue(platformKind() === 'webos' && devmodeExpiring(Date.now()));
+      if (watchDevmode) setDevmodeDue(devmodeExpiring(Date.now()));
     }, 10000);
     return () => {
       dead = true;
@@ -243,7 +245,7 @@ export function LibraryScreen() {
           <Button focusKey="lib-banner-retry" label={t('common.retry')} onPress={() => load()} onFocused={() => setSel(null)} />
         </FocusGroup>
       )}
-      {devmodeDue && (
+      {watchDevmode && devmodeDue && (
         <FocusGroup focusKey="LIB-DEVMODE" className="banner-error banner-row">
           <span class="banner-text">{t('tv.devmodeBanner')}</span>
           <Button

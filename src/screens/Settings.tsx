@@ -251,7 +251,7 @@ export function SettingsScreen() {
     STORE_BUILD
       ? ['set-faq', 'set-advanced']
       : ['set-update'].concat(platformKind() === 'androidtv' ? [] : ['set-addHbRepo']).concat(['set-faq', 'set-advanced']),
-    platformKind() === 'androidtv' ? ['set-onboarding'] : ['set-devmode-extend', 'set-onboarding'],
+    platformKind() === 'androidtv' || STORE_BUILD ? ['set-onboarding'] : ['set-devmode-extend', 'set-onboarding'],
   ];
   if (isBetaBuild()) tail.push(['set-test-mode'], ['set-test-size']);
   const nav = (key: string) => rowArrow(tail, key);
@@ -353,7 +353,7 @@ export function SettingsScreen() {
         <Button focusKey="set-advanced" label={t('settings.advanced')} onPress={() => navigate({ name: 'advanced' })} onArrow={nav('set-advanced')} />
       </div>
       <div class="row">
-        {platformKind() !== 'androidtv' && (
+        {!STORE_BUILD && platformKind() !== 'androidtv' && (
           <Button
             focusKey="set-devmode-extend"
             label={t('tvSettings.devmodeExtend')}
@@ -506,8 +506,8 @@ export function AdvancedSettingsScreen() {
           <div class="muted">{t('settings.betaHint')}</div>
         </>
       )}
-      <ChoiceRow focusKey="adv-diagnostics" label={t('settings.diagnosticsTitle')} value={s.diagnostics} options={onOff()} onChange={(v) => updateSettings({ diagnostics: v })} />
-      <div class="muted">{t('settings.diagnosticsHint')}</div>
+      <ChoiceRow focusKey="adv-diagnostics" label={t('settings.diagnosticsTitle')} value={s.diagnostics} options={onOff()} onChange={(v) => updateSettings(STORE_BUILD ? { diagnostics: v, diagnosticsTouched: true } : { diagnostics: v })} />
+      <div class="muted">{STORE_BUILD ? t('settings.diagnosticsHintStore') : t('settings.diagnosticsHint')}</div>
 
       <h2>{t('tvSettings.log')}</h2>
       <LogBrief />

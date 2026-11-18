@@ -24,6 +24,8 @@ OMP не содержит каталога контента и не ищет р�
 
 Приложение не требует аккаунта для воспроизведения ваших медиа.
 
+Поддержка: ompplayerandroid@gmail.com. Политика конфиденциальности: https://omp-player.online/privacy.
+
 ## English
 
 ### Title
@@ -44,3 +46,5 @@ OMP plays the media library of your own TorrServer on your LG TV.
 OMP does not contain a content catalog and does not search for releases on the internet. It connects to a TorrServer that you run yourself on your home network and plays what you have added to it. The phone, the TV and the server must be on the same network.
 
 No account is required to play your own media.
+
+Support: ompplayerandroid@gmail.com. Privacy policy: https://omp-player.online/privacy.
