@@ -72,6 +72,7 @@ describe('planRelease', () => {
     expect(plan.files['packaging/homebrew/Casks/omp.rb']).toContain('706c7966376f27117e07a34589403292258ec5e9f734755dee805bbcb82ffde0');
     expect(plan.files['packaging/homebrew/Casks/omp.rb']).toContain('b3a93a261f55c38c056d2d43e7d68366d569920a42e178976961df8c3f15e5c4');
     expect(plan.files['packaging/flatpak/com.spacesarmat.omp.desktop.yml']).toContain('567e10c5c64191b492848cf5b1e2ba3f6ea3a359562dd5801050c5fa06165778');
+    expect(plan.files['packaging/flatpak/com.spacesarmat.omp.desktop.yml']).toContain('--talk-name=org.kde.StatusNotifierWatcher');
     const snap = plan.files['packaging/snap/snapcraft.yaml'];
     expect(snap).toContain("version: '0.30.0'");
     expect(snap).toContain('platforms:\n  amd64:');
@@ -206,6 +207,7 @@ describe('store workflows', () => {
     expect(storesYml).toContain('::notice::');
     expect(storesYml).toContain('vedantmgoyal9/winget-releaser@b7370d4d152efdce803a26cc6ca9eee58cb2ad54');
     expect(storesYml).toContain("-setup\\.exe$");
+    expect(storesYml).toContain('lxd init --minimal');
     const snap = storesYml.slice(storesYml.indexOf('\n  snap:'));
     expect(snap).toContain("steps.gate.outputs.skip != 'true'");
     expect(snap.indexOf('snapcraft')).toBeGreaterThan(snap.indexOf('SNAPCRAFT_STORE_CREDENTIALS'));

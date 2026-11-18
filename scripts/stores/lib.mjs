@@ -264,6 +264,7 @@ finish-args:
   - --socket=pulseaudio
   - --device=dri
   - --filesystem=home
+  - --talk-name=org.kde.StatusNotifierWatcher
 modules:
   - name: omp
     buildsystem: simple

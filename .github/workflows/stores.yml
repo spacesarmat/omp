@@ -133,9 +133,11 @@ jobs:
           SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
         run: |
           sudo snap install snapcraft --classic
-          cd packaging/snap
-          snapcraft
-          snapcraft upload --release=stable ./*.snap
+          sudo snap install lxd
+          sudo lxd init --minimal
+          sudo usermod -aG lxd "$USER"
+          sg lxd -c "cd packaging/snap && snapcraft"
+          sg lxd -c "cd packaging/snap && snapcraft upload --release=stable ./*.snap"
 
   homebrew-tap:
     needs: update
