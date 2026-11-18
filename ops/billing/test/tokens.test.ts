@@ -490,6 +490,30 @@ describe('refresh rotation', () => {
     expect((await db.activeRowForCode(s.codeId))).toMatchObject({ status: 'active', clone_count: 3 });
   });
 
+  it('a second replay of a rotated token inside the grace window is a clone, not another lost-response retry', async () => {
+    const file = await testStore();
+    const s = base(Date.now());
+    await writeState(file, s.state);
+    const db = file.registry;
+    const secret = await db.tokenSecret({});
+    const row = await db.activeRowForCode(s.codeId);
+    const now = Date.now();
+    const issued = (await db.issuePair(secret, row, now)).pair.refreshToken;
+    await db.refreshPair(secret, { refreshToken: issued, deviceId: DEV_A, now: now + 1000 });
+    // First replay inside grace: the single intended lost-response recovery.
+    const retry = await db.refreshPair(secret, { refreshToken: issued, deviceId: DEV_A, now: now + 2000 });
+    expect(retry.retry).toBe(true);
+    const live = retry.pair.refreshToken;
+    // A second replay inside grace must not revoke the live token again: it is a suspected clone.
+    const again = await db.refreshPair(secret, { refreshToken: issued, deviceId: DEV_A, now: now + 3000 });
+    expect(again.clone).toBe(true);
+    expect(again.retry).toBeUndefined();
+    // The legitimate holder's token still works.
+    const ok = await db.refreshPair(secret, { refreshToken: live, deviceId: DEV_A, now: now + 4000 });
+    expect(ok.error).toBeUndefined();
+    expect(ok.pair).toBeTruthy();
+  });
+
   it('refuses unknown, other-device and expired refresh tokens, and rate-limits per IP', async () => {
     const t = await setup({ env: { BILLING_TOKEN_IP_MAX: '5' } });
     const pair = await pairFor(t, DEV_B);

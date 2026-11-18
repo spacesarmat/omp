@@ -234,7 +234,11 @@ export async function refreshPair(pool, secret, { refreshToken, deviceId, now })
     if (t.revoked || row.status !== 'active') return { error: 'revoked' };
     if (t.rotated_at) {
       const next = t.replaced_by ? await one(q, 'SELECT * FROM refresh_tokens WHERE hash = $1', [t.replaced_by]) : null;
-      const lost = now - t.rotated_at <= ROTATE_GRACE_MS && next && !next.rotated_at && !next.revoked;
+      // Grace covers ONE lost response: the successor must be the direct product of this rotation
+      // (created_at == rotated_at). A retry replaces it with a newer token, so a second replay of the
+      // old token no longer qualifies and falls to the clone path instead of revoking the live token.
+      const lost =
+        now - t.rotated_at <= ROTATE_GRACE_MS && next && !next.rotated_at && !next.revoked && Number(next.created_at) === Number(t.rotated_at);
       if (!lost) {
         const cloneLog = !row.clone_at || now - row.clone_at >= CLONE_LOG_EVERY_MS || now < row.clone_at;
         await q.query('UPDATE devices SET clone_at = $1, clone_count = clone_count + 1 WHERE id = $2', [now, row.id]);
