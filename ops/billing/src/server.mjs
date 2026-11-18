@@ -22,6 +22,9 @@ import {
   grantDays,
   issueActivation,
   issueMany,
+  grantDaysMany,
+  revokePromos,
+  bulkIds,
   pageAudit,
   pageFails,
   pagePayments,
@@ -104,7 +107,7 @@ import { createChangelogSource } from './changelog.mjs';
 import { ALLOWED_UPDATES, channelFromEnv, pinNotice, pinNoticeFailedLine } from './channelPins.mjs';
 import { codeHash, normalizeCode, randomId, sha256 } from './crypto.mjs';
 import { createCryptoInvoice, cryptoPayCredentials, cryptoPaySignatureMode, paidInvoice } from './cryptoPay.mjs';
-import { applyRateSettings, donateRateWait, ensureRates, normalizeRateSettings, rateAuditText, ratePinError } from './rates.mjs';
+import { applyRateSettings, donateRateWait, ensureRates, normalizeRateSettings, priceRateDiff, rateAuditText, ratePinError } from './rates.mjs';
 import { countryCode, cryptoOffered, starCheckoutDecision } from './payMethods.mjs';
 import { quotePurchase } from './logic.mjs';
 import { goPage } from './go.mjs';
@@ -407,6 +410,7 @@ function audit(file, action, detail, admin, extra) {
         now: Date.now(),
         actor: adminActor(admin),
         accountId: extra && extra.accountId,
+        diff: extra && extra.diff,
       });
       if (extra && extra.before) next = pushRollback(next, { id, at: Date.now(), before: extra.before });
       return { state: next, result: { id } };
@@ -2402,15 +2406,23 @@ export function createApp(file, fetchImpl, opts) {
             : null;
         const lowerBlocked = !!(baseImpact && baseImpact.lowering && !confirmed(body));
         if ((path === '/admin/settings' || path === '/admin/services') && !lowerBlocked) {
-          const beforeSnap = snapshotSettings((await store.read()).settings);
-          const baseBefore = baseDevices((await store.read()).settings);
-          const beforeRates = (await store.read()).settings.rates;
+          const beforeSettings = (await store.read()).settings;
+          const beforeSnap = snapshotSettings(beforeSettings);
+          const baseBefore = baseDevices(beforeSettings);
+          const beforeRates = beforeSettings.rates;
+          const beforePrice = JSON.parse(JSON.stringify({ priceRub: beforeSettings.priceRub, extraDeviceRub: beforeSettings.extraDeviceRub, rates: beforeRates || {} }));
           await store.update((state) => {
             const merged = mergeSettings(state.settings, body);
             return { state: { ...state, settings: { ...merged, rates: applyRateSettings(merged.rates, body, Date.now()) } } };
           });
-          const baseAfter = baseDevices((await store.read()).settings);
-          const rateNote = rateAuditText(beforeRates, (await store.read()).settings.rates);
+          const afterSettings = (await store.read()).settings;
+          const baseAfter = baseDevices(afterSettings);
+          const rateNote = rateAuditText(beforeRates, afterSettings.rates);
+          const diff = priceRateDiff(beforePrice, {
+            priceRub: afterSettings.priceRub,
+            extraDeviceRub: afterSettings.extraDeviceRub,
+            rates: afterSettings.rates,
+          });
           await audit(
             file,
             path === '/admin/services' ? 'services_save' : 'settings_save',
@@ -2419,7 +2431,7 @@ export function createApp(file, fetchImpl, opts) {
                   (baseImpact && baseImpact.lowering ? ' (подписок затронуто: ' + baseImpact.subscriptions + ', устройств отключено: ' + baseImpact.devices + ')' : '')
               : 'ok') + (rateNote ? '; ' + rateNote : ''),
             admin,
-            { before: beforeSnap },
+            { before: beforeSnap, diff },
           );
           if (wantsJson(req) && path === '/admin/services') {
             const services = await probeAllServices((await store.read()).settings, net);
@@ -2547,6 +2559,17 @@ export function createApp(file, fetchImpl, opts) {
           }
           if (body.accountId) redirectTo = '/admin/?id=' + encodeURIComponent(body.accountId);
         }
+        if (path === '/admin/grant-bulk') {
+          if (!confirmed(body)) flashError = 'Нужно подтверждение';
+          else {
+            const result = await store.update((state) =>
+              grantDaysMany(state, { accountIds: body.accountIds, days: Number(body.days) || 0, now: Date.now() }),
+            );
+            if (result.error || !result.count) flashError = 'Не удалось выдать дни';
+            else flashText = 'Выдано дней: ' + result.count;
+            await audit(file, 'grant_bulk', String(result.count || 0), admin);
+          }
+        }
         if (path === '/admin/message') {
           const state = (await store.read());
           const acc = state.accounts.find((a) => a.id === body.accountId);
@@ -2568,6 +2591,45 @@ export function createApp(file, fetchImpl, opts) {
             } else flashError = 'Telegram не принял сообщение';
           }
           if (!isQuiet(body) && body.accountId) redirectTo = '/admin/?id=' + encodeURIComponent(body.accountId);
+        }
+        if (path === '/admin/message-bulk') {
+          const text = String(body.text || '').trim();
+          const ids = bulkIds(body.accountIds);
+          if (!confirmed(body)) flashError = 'Нужно подтверждение';
+          else if (!text || !ids.length) flashError = 'Нет текста или никого не выбрано';
+          else {
+            const state = await store.read();
+            const sentTo = [];
+            let skipped = 0;
+            for (let i = 0; i < ids.length; i++) {
+              const acc = state.accounts.find((a) => a.id === ids[i]);
+              if (!acc || !acc.telegramId) {
+                skipped++;
+                continue;
+              }
+              const sent = await telegramSend(state.settings.botToken, acc.telegramId, text, net);
+              if (sent.ok) sentTo.push(acc.telegramId);
+              else skipped++;
+            }
+            if (sentTo.length) {
+              await store.update((cur) => {
+                let next = cur;
+                for (let i = 0; i < sentTo.length; i++) {
+                  const wrote = appendSupportMessage(next, {
+                    telegramId: sentTo[i],
+                    text,
+                    direction: 'out',
+                    now: Date.now(),
+                    via: 'panel',
+                  });
+                  next = wrote.state || next;
+                }
+                return { state: next };
+              });
+            }
+            flashText = 'Отправлено: ' + sentTo.length + ', пропущено: ' + skipped;
+            await audit(file, 'message_bulk', String(sentTo.length), admin);
+          }
         }
         if (path === '/admin/promo') {
           const count = Number(body.count) || 1;
@@ -2609,6 +2671,15 @@ export function createApp(file, fetchImpl, opts) {
         if (path === '/admin/promo-revoke') {
           await store.update((state) => ({ state: revokePromo(state, body.promoId || '') }));
           flashText = 'Промокод отозван';
+          redirectTo = '/admin/?tab=promos';
+        }
+        if (path === '/admin/promo-revoke-bulk') {
+          if (!confirmed(body)) flashError = 'Нужно подтверждение';
+          else {
+            const result = await store.update((state) => revokePromos(state, body.promoIds));
+            flashText = 'Отозвано промокодов: ' + (result.count || 0);
+            await audit(file, 'promo_revoke_bulk', String(result.count || 0), admin);
+          }
           redirectTo = '/admin/?tab=promos';
         }
         if (path === '/admin/unbind') {
@@ -2814,7 +2885,9 @@ export function createApp(file, fetchImpl, opts) {
           redirectTo = '/admin/?tab=ads';
         }
         if (path === '/admin/donate') {
-          const beforeRates = (await store.read()).settings.rates;
+          const beforeSettings = (await store.read()).settings;
+          const beforeRates = beforeSettings.rates;
+          const beforePrice = JSON.parse(JSON.stringify({ priceRub: beforeSettings.priceRub, extraDeviceRub: beforeSettings.extraDeviceRub, rates: beforeRates || {} }));
           await store.update((state) => ({
             state: {
               ...state,
@@ -2834,8 +2907,14 @@ export function createApp(file, fetchImpl, opts) {
           } catch (e) {
             /* a rate host can fail; the saved pin and the last good rate stay */
           }
-          const rateNote = rateAuditText(beforeRates, (await store.read()).settings.rates);
-          await audit(file, 'donate_settings', rateNote || 'Донат', admin);
+          const afterSettings = (await store.read()).settings;
+          const rateNote = rateAuditText(beforeRates, afterSettings.rates);
+          const diff = priceRateDiff(beforePrice, {
+            priceRub: afterSettings.priceRub,
+            extraDeviceRub: afterSettings.extraDeviceRub,
+            rates: afterSettings.rates,
+          });
+          await audit(file, 'donate_settings', rateNote || 'Донат', admin, { diff });
           flashText = 'Настройки доната сохранены';
           redirectTo = '/admin/?tab=donations';
         }

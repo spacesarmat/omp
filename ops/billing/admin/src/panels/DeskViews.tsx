@@ -7,7 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { DataTable } from '@/components/data-table';
-import { post } from '@/lib/api';
+import { post, type PostResult } from '@/lib/api';
 import { askConfirm } from '@/components/confirm';
 import type { DeskData, DeskDevice, DeskUser } from '@/lib/desk';
 import { Stamp } from '@/components/stamp';
@@ -104,16 +104,71 @@ export function DeskHome({ data, csrf }: { data?: DeskData; csrf: string }) {
   );
 }
 
-export function UsersDesk({ users, go }: { users: DeskUser[]; go: (id: string) => void }) {
+export function UsersDesk({
+  users,
+  go,
+  run,
+}: {
+  users: DeskUser[];
+  go: (id: string) => void;
+  run: (path: string, fields?: Record<string, unknown>) => Promise<PostResult | undefined>;
+}) {
   const [row, setRow] = useState<DeskUser | null>(null);
+  const [days, setDays] = useState('30');
+  const [text, setText] = useState('');
   return (
     <>
+      <div className="mb-2 flex flex-wrap items-end gap-2">
+        <label className="space-y-1 text-sm">
+          <span className="text-muted-foreground">Дней выбранным</span>
+          <select className="block h-10 rounded-md border border-input bg-secondary px-3 text-sm" value={days} aria-label="Дней выбранным" onChange={(e) => setDays(e.target.value)}>
+            <option value="1">1</option>
+            <option value="7">7</option>
+            <option value="30">30</option>
+            <option value="90">90</option>
+          </select>
+        </label>
+        <label className="min-w-64 flex-1 space-y-1 text-sm">
+          <span className="text-muted-foreground">Текст сообщения</span>
+          <input className="block h-10 w-full rounded-md border border-input bg-secondary px-3 text-sm" value={text} aria-label="Текст сообщения" onChange={(e) => setText(e.target.value)} />
+        </label>
+      </div>
       <DataTable
         name="omp-users-view"
         rows={users}
         search={(r, q) => (r.who + ' ' + r.telegramId + ' ' + r.email + ' ' + r.id).toLowerCase().indexOf(q) >= 0}
         onRow={setRow}
-        bulk={[{ label: 'Открыть первого', run: (list) => list[0] && go(list[0].id) }]}
+        bulk={[
+          {
+            label: 'Выдать дни',
+            run: (list) => {
+              const n = list.length;
+              void askConfirm({ title: 'Выдать дни', body: 'Выдать +' + days + ' дн. ' + n + ' людям?', yes: 'Выдать' }).then((ok) => {
+                if (!ok) return;
+                void run('/admin/grant-bulk', { accountIds: list.map((r) => r.id), days, confirm: 'yes' });
+              });
+            },
+          },
+          {
+            label: 'Написать',
+            run: (list) => {
+              const body = text.trim();
+              const withTg = list.filter((r) => r.telegramId).length;
+              if (!body) {
+                toast('Сначала введите текст сообщения');
+                return;
+              }
+              void askConfirm({
+                title: 'Написать',
+                body: 'Отправить сообщение ' + list.length + ' людям? С Telegram: ' + withTg + '.',
+                yes: 'Отправить',
+              }).then((ok) => {
+                if (!ok) return;
+                void run('/admin/message-bulk', { accountIds: list.map((r) => r.id), text: body, confirm: 'yes' });
+              });
+            },
+          },
+        ]}
         columns={[
           { accessorKey: 'who', header: 'Кто' },
           { accessorKey: 'telegramId', header: 'Telegram', cell: ({ getValue }) => <span className="font-mono text-xs">{String(getValue() || '-')}</span> },

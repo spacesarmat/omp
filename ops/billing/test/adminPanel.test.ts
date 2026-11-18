@@ -12,6 +12,10 @@ import {
   issueActivation,
   issueCliAdminLogin,
   issueMany,
+  grantDaysMany,
+  logAudit,
+  pageAudit,
+  revokePromos,
   openAccount,
   pagePayments,
 } from '../src/logic.mjs';
@@ -359,5 +363,51 @@ describe('admin http', () => {
     const ok = await call(app, 'POST', '/v1/yoomoney', { form: fields });
     expect(ok.status).toBe(200);
     expect(calls.some((url) => url.indexOf('sendMessage') >= 0)).toBe(true);
+  });
+});
+
+describe('user timeline and bulk actions', () => {
+  it('puts payments, donations, referrals and audit on one tape, newest first', () => {
+    const start = seeded();
+    start.state.donations = [{ id: 'd1', accountId: start.account.id, status: 'paid', amountRub: 100, paidAt: NOW + 5000, method: 'yoomoney' }];
+    start.state.referralBinds = [{ friendId: 'friend', referrerId: start.account.id, boundAt: NOW + 1000 }];
+    const withAudit = logAudit(start.state, { action: 'grant', detail: 'плюс 7', now: NOW + 9000, accountId: start.account.id, actor: { kind: 'admin', label: 'andy' } });
+    const user = userPayload(withAudit, start.account.id, {}) as { timeline: { at: number; kind: string; title: string }[] };
+    expect(user.timeline[0]).toMatchObject({ kind: 'audit', title: 'Выдача дней · плюс 7' });
+    expect(user.timeline.map((row) => row.kind)).toEqual(expect.arrayContaining(['subscription', 'donation', 'referral', 'audit']));
+    expect(user.timeline.find((row) => row.kind === 'donation')?.title).toContain('100 ₽');
+    expect(user.timeline.find((row) => row.kind === 'referral')?.title).toContain('пригласил');
+    const other = userPayload(withAudit, 'missing', {});
+    expect(other).toBeNull();
+  });
+
+  it('grants days and revokes promos only for the chosen ids', () => {
+    const start = seeded();
+    const second = openAccount(start.state, { telegramId: '77', now: NOW });
+    const granted = grantDaysMany(second.state, { accountIds: [start.account.id, second.account.id, start.account.id], days: 7, now: NOW });
+    expect(granted.result.count).toBe(2);
+    const skipped = grantDaysMany(second.state, { accountIds: ['nope'], days: 7, now: NOW });
+    expect(skipped.result.count).toBe(0);
+    const made = createPromos(start.state, { count: 2, days: 3, maxUses: 1, now: NOW });
+    const ids = made.result.promos.map((p: { id: string }) => p.id);
+    const revoked = revokePromos(made.state, [ids[0]]);
+    expect(revoked.result.count).toBe(1);
+    expect(revoked.state.promos.filter((p: { revoked?: boolean }) => p.revoked)).toHaveLength(1);
+    const again = revokePromos(revoked.state, [ids[0]]);
+    expect(again.result.count).toBe(0);
+  });
+
+  it('keeps a price diff on the audit row and the rate filter finds it', () => {
+    const start = seeded();
+    const noted = logAudit(start.state, {
+      action: 'settings_save',
+      detail: 'ok',
+      now: NOW,
+      diff: [{ field: 'Подписка, ₽', was: '100', now: '120', source: 'настройки' }],
+    });
+    const noise = logAudit(noted, { action: 'login', detail: 'ok', now: NOW + 1 });
+    const page = pageAudit(noise, { action: 'rate', limit: 10 });
+    expect(page.total).toBe(1);
+    expect(page.audit[0].diff[0]).toMatchObject({ was: '100', now: '120', source: 'настройки' });
   });
 });

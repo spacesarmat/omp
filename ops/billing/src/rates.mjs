@@ -417,6 +417,57 @@ export function rateAuditText(prev, next) {
   return bits.join('; ');
 }
 
+const PRICE_FIELDS = [
+  ['priceRub', 'Подписка, ₽'],
+  ['extraDeviceRub', 'Доп. устройство, ₽'],
+];
+
+function pinSource(pin) {
+  if (!pin) return 'снято';
+  const reason = String(pin.reason || '').trim();
+  return reason ? 'закрепление: ' + reason : 'закрепление';
+}
+
+/** Lines for the audit journal: what changed, the old number, the new number, and where it came from. */
+export function priceRateDiff(prevSettings, nextSettings) {
+  const prev = prevSettings || {};
+  const next = nextSettings || {};
+  const lines = [];
+  for (let i = 0; i < PRICE_FIELDS.length; i++) {
+    const key = PRICE_FIELDS[i][0];
+    const was = Number(prev[key]) || 0;
+    const now = Number(next[key]) || 0;
+    if (was === now) continue;
+    lines.push({ field: PRICE_FIELDS[i][1], was: String(was), now: String(now), source: 'настройки' });
+  }
+  const a = normalizeRateSettings(prev.rates);
+  const b = normalizeRateSettings(next.rates);
+  const knobs = [
+    ['refreshMin', 'Интервал, мин'],
+    ['markupPercent', 'Наценка, %'],
+    ['starUsd', 'USD за звезду'],
+    ['maxAgeMin', 'Срок курса, мин'],
+  ];
+  for (let i = 0; i < knobs.length; i++) {
+    if (a[knobs[i][0]] === b[knobs[i][0]]) continue;
+    lines.push({ field: knobs[i][1], was: String(a[knobs[i][0]]), now: String(b[knobs[i][0]]), source: 'настройки' });
+  }
+  for (let i = 0; i < PIN_KEYS.length; i++) {
+    const key = PIN_KEYS[i];
+    const left = a.pins[key];
+    const right = b.pins[key];
+    const same = !!left === !!right && (!left || (left.rub === right.rub && left.until === right.until));
+    if (same) continue;
+    lines.push({
+      field: 'Курс ' + key,
+      was: left ? String(left.rub) : 'нет',
+      now: right ? String(right.rub) : 'нет',
+      source: right ? pinSource(right) : 'снято',
+    });
+  }
+  return lines;
+}
+
 /** Why a pin was not saved. Empty when the form is not creating a pin, or the pin is valid. */
 export function ratePinError(body) {
   const b = body || {};

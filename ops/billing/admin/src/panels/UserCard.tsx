@@ -109,6 +109,24 @@ export function UserCard({
         </CardContent>
       </Card>
 
+      <Card>
+        <CardHeader>
+          <CardTitle>Лента</CardTitle>
+          <CardDescription>Подписка, устройства, оплаты, донаты, рефералы и журнал этого человека.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {(user.timeline || []).length === 0 ? <p className="text-sm text-muted-foreground">Пока пусто</p> : null}
+          <ul className="space-y-1 text-sm">
+            {(user.timeline || []).map((event, i) => (
+              <li key={event.kind + '-' + event.at + '-' + i} className="flex flex-wrap items-baseline gap-x-2">
+                <Stamp ms={event.at} />
+                <span>{event.title}</span>
+              </li>
+            ))}
+          </ul>
+        </CardContent>
+      </Card>
+
       <OverLimitAlert user={user} />
       <PendingPayments rows={user.pending || []} run={run} accountId={user.account.id} />
       {user.subscription ? <DevicesCard user={user} run={run} /> : null}

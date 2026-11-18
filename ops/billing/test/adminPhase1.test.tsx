@@ -5,7 +5,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { createElement, type ReactNode } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ConfirmHost, askConfirm } from '../admin/src/components/confirm.tsx';
-import { NucDesk } from '../admin/src/panels/DeskViews.tsx';
+import { NucDesk, UsersDesk } from '../admin/src/panels/DeskViews.tsx';
 import { CrashesDesk } from '../admin/src/panels/OpsExtra.tsx';
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -88,5 +88,35 @@ describe('empty operational screens', () => {
     await settle();
     expect(document.body.textContent).toContain('Сбои');
     expect(document.body.textContent).toContain('Сбоев нет');
+  });
+});
+
+describe('bulk days', () => {
+  it('states how many people are affected and does not send until the yes button', async () => {
+    const run = vi.fn(async () => ({ ok: true }));
+    const users = [
+      { id: 'a', who: 'Аня', telegramId: '1', email: '', paidUntil: 0, active: true },
+      { id: 'b', who: 'Боря', telegramId: '', email: '', paidUntil: 0, active: false },
+    ];
+    render(
+      createElement(
+        'div',
+        null,
+        createElement(ConfirmHost),
+        createElement(UsersDesk, { users, go: () => undefined, run }),
+      ),
+    );
+    await settle();
+    const all = document.querySelector('input[aria-label="Выбрать все"]') as HTMLInputElement;
+    act(() => all.click());
+    const grant = Array.from(document.querySelectorAll('button')).find((b) => b.textContent === 'Выдать дни');
+    act(() => grant!.click());
+    await settle();
+    expect(document.body.textContent).toContain('2 людям');
+    expect(run).not.toHaveBeenCalled();
+    const yes = Array.from(document.querySelectorAll('button')).find((b) => b.textContent === 'Выдать');
+    act(() => yes!.click());
+    await settle();
+    expect(run).toHaveBeenCalledWith('/admin/grant-bulk', { accountIds: ['a', 'b'], days: '30', confirm: 'yes' });
   });
 });

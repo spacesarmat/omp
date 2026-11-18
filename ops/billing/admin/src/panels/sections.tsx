@@ -91,6 +91,8 @@ export function PromoCard({ run, promos }: { run: Run; promos: NonNullable<HomeD
   const [bonusDays, setBonusDays] = useState('');
   const [expiresDays, setExpiresDays] = useState('');
   const [discountPercent, setDiscountPercent] = useState('0');
+  const [picked, setPicked] = useState<Record<string, boolean>>({});
+  const chosen = promos.filter((p) => picked[p.id] && !p.revoked);
   return (
     <Card>
       <CardHeader>
@@ -157,8 +159,23 @@ export function PromoCard({ run, promos }: { run: Run; promos: NonNullable<HomeD
           </a>
         </div>
         <Table className="min-w-[36rem]">
+          {chosen.length ? (
+            <Button
+              variant="secondary"
+              onClick={() => {
+                const n = chosen.length;
+                void askConfirm({ title: 'Отозвать промокоды', body: 'Отозвать ' + n + ' промокодов?', yes: 'Отозвать' }).then((ok) => {
+                  if (!ok) return;
+                  void run('/admin/promo-revoke-bulk', { promoIds: chosen.map((p) => p.id), confirm: 'yes' }).then(() => setPicked({}));
+                });
+              }}
+            >
+              Отозвать выбранные: {chosen.length}
+            </Button>
+          ) : null}
           <TableHeader>
             <TableRow>
+              <TableHead />
               <TableHead>Код</TableHead>
               <TableHead>Дни</TableHead>
               <TableHead>Бонус</TableHead>
@@ -170,7 +187,7 @@ export function PromoCard({ run, promos }: { run: Run; promos: NonNullable<HomeD
           <TableBody>
             {promos.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="text-muted-foreground">
+                <TableCell colSpan={7} className="text-muted-foreground">
                   Нет промокодов
                 </TableCell>
               </TableRow>
@@ -179,6 +196,16 @@ export function PromoCard({ run, promos }: { run: Run; promos: NonNullable<HomeD
               const exhausted = p.uses >= p.maxUses;
               return (
                 <TableRow key={p.id}>
+                  <TableCell>
+                    {p.revoked ? null : (
+                      <input
+                        type="checkbox"
+                        checked={!!picked[p.id]}
+                        aria-label={'Выбрать ' + p.code}
+                        onChange={(e) => setPicked((prev) => ({ ...prev, [p.id]: e.target.checked }))}
+                      />
+                    )}
+                  </TableCell>
                   <TableCell>
                     <span className={p.revoked ? 'text-muted-foreground' : 'font-mono'}>{p.code}</span> <CopyBtn value={p.code} />
                   </TableCell>
@@ -1194,13 +1221,13 @@ export function AuditPanel() {
   const [q, setQ] = useState('');
   const [action, setAction] = useState('');
   const [page, setPage] = useState(1);
-  const [rows, setRows] = useState<{ at?: number; action: string; detail: string; actor?: { kind?: string; label?: string } }[] | null>(null);
+  const [rows, setRows] = useState<{ at?: number; action: string; detail: string; actor?: { kind?: string; label?: string }; diff?: { field: string; was: string; now: string; source: string }[] }[] | null>(null);
   const [total, setTotal] = useState(0);
   const limit = 30;
   useEffect(() => {
     let stop = false;
     const params = new URLSearchParams({ q, action, offset: String((page - 1) * limit), limit: String(limit) });
-    void api<{ audit?: { at?: number; action: string; detail: string; actor?: { kind?: string; label?: string } }[]; total?: number; auth?: boolean }>('/admin/api/audit?' + params).then((r) => {
+    void api<{ audit?: { at?: number; action: string; detail: string; actor?: { kind?: string; label?: string }; diff?: { field: string; was: string; now: string; source: string }[] }[]; total?: number; auth?: boolean }>('/admin/api/audit?' + params).then((r) => {
       if (stop || r.auth === false) return;
       setRows(r.audit || []);
       setTotal(r.total || 0);
@@ -1254,6 +1281,11 @@ export function AuditPanel() {
                 <span>{actorLine(a.actor, { fallback: 'админ' })}</span>
                 <span>{auditAction(a.action)}</span>
                 <span className="text-muted-foreground">{a.detail}</span>
+                {a.diff && a.diff.length ? (
+                  <span className="basis-full text-muted-foreground">
+                    {a.diff.map((line) => line.field + ': было ' + line.was + ', стало ' + line.now + ', источник ' + line.source).join('; ')}
+                  </span>
+                ) : null}
               </li>
             ))}
           </ul>
