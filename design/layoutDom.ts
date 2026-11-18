@@ -178,7 +178,12 @@ function resolveNodes(root: HTMLElement): ResolvedNode[] {
     if (remembered) usedIds.add(remembered.nodeId);
     const stamped = element.dataset.layoutNode;
     if (stamped && SCHEMA_ID.test(stamped)) usedIds.add(stamped);
-    for (const child of element.children) reserve(child as HTMLElement);
+    for (const child of element.children) {
+      // SVG children have no dataset on the oldest supported WebView (Chrome < 55);
+      // skip them, path indices below still count every child.
+      const el = child as HTMLElement;
+      if (el.dataset) reserve(el);
+    }
   };
   reserve(root);
   const visit = (element: HTMLElement, parentId: string | null, indices: number[]): void => {
@@ -190,7 +195,8 @@ function resolveNodes(root: HTMLElement): ResolvedNode[] {
     nodes.push({ element, nodeId: candidate.nodeId, elementId, parentId, kind: candidate.kind });
     let childIndex = 0;
     for (const child of element.children) {
-      visit(child as HTMLElement, candidate.nodeId, [...indices, childIndex]);
+      const el = child as HTMLElement;
+      if (el.dataset) visit(el, candidate.nodeId, [...indices, childIndex]);
       childIndex += 1;
     }
   };

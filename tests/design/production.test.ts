@@ -11,7 +11,7 @@ const generated = vi.hoisted(() => ({
 vi.mock('../../design/generated/layout.ts', () => ({ PRODUCTION_LAYOUT: generated.layout }));
 
 import { createDefaultTheme } from '../../design/defaults';
-import { observeLayout } from '../../design/layoutDom';
+import { collectLayoutNodes, observeLayout } from '../../design/layoutDom';
 import { desktopTargetForPlatform, installProductionDesign, resolveProductionFormat } from '../../design/production';
 import type { LayoutContainer, LayoutDocument, LayoutPlacement } from '../../design/layout';
 
@@ -345,5 +345,35 @@ describe('installProductionDesign', () => {
     second();
     expect(root.getAttribute('data-design-target')).toBe('android-phone');
     first();
+  });
+});
+
+describe('old webOS WebView (Chrome 53: SVG elements without dataset)', () => {
+  const stripDataset = (root: HTMLElement): void => {
+    for (const el of root.querySelectorAll('svg, path')) {
+      Object.defineProperty(el, 'dataset', { value: undefined, configurable: true });
+    }
+  };
+
+  it('install and the layout walk skip SVG without dataset instead of throwing', () => {
+    const root = document.createElement('div');
+    root.innerHTML = '<div class="m-screen"><svg class="logo" viewBox="0 0 24 24"><path d="M0 0h24v24H0z"/></svg><div class="m-card">A</div></div>';
+    document.body.appendChild(root);
+    stripDataset(root);
+
+    cleanup = installProductionDesign(root, { target: 'lg-webos', screenOf: () => 'library' });
+
+    expect(root.querySelector<HTMLElement>('.m-card')!.dataset.designComponent).toBe('card');
+    expect(collectLayoutNodes(root).some((node) => node.elementId === 'card')).toBe(true);
+  });
+
+  it('path indices still count skipped SVG children, so ids match modern browsers', () => {
+    const root = document.createElement('div');
+    root.innerHTML = '<div>tail<svg viewBox="0 0 24 24"><path d="M0 0"/></svg><div class="m-card">A</div></div>';
+    document.body.appendChild(root);
+    stripDataset(root);
+
+    const card = collectLayoutNodes(root).find((node) => node.label === 'A')!;
+    expect(card.nodeId).toBe('path-0-1');
   });
 });
