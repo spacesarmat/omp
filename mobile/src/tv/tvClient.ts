@@ -638,11 +638,21 @@ export async function launchOnTv(params: object): Promise<void> {
     if (tv) markPhoneSent(tv, phone);
   } catch (e) {
     if (!(e instanceof TvAnswerError)) throw e;
-    throw new Error(/no such app|not found|not exist|404|-101/i.test(e.raw) ? tvNoOmp() : tvLaunchFailed());
+    if (/no such app|not found|not exist|404|-101/i.test(e.raw)) throw new Error(tvNoOmp());
+    // webOS purges dev apps when the developer mode expires and may answer with another text:
+    // a missing app in the TV's own list means "no OMP", not a generic launch failure.
+    if ((await lgHasOmp()) === false) throw new Error(tvNoOmp());
+    throw new Error(tvLaunchFailed());
   }
 }
 
 const OMP_APP_ID = 'com.spacesarmat.torrplayer';
+
+/** Whether the TV's app list still contains OMP; null when the TV did not answer the list. */
+async function lgHasOmp(): Promise<boolean | null> {
+  const ids = await lgAppIds();
+  return ids ? ids.indexOf(OMP_APP_ID) >= 0 : null;
+}
 
 /** Id of the app in the TV foreground; null when unknown or the TV does not answer. */
 export async function foregroundAppId(): Promise<string | null> {

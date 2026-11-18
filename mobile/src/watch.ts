@@ -382,6 +382,12 @@ export function openInstallGuide(): void {
   window.open(OMP_INSTALL_URL, '_system');
 }
 
+/** Opens the in-app install assistant for the active TV: reinstall is the fix for a purged dev app. */
+export function openInstallAssistant(): void {
+  const tv = activeTv.value;
+  navigate({ name: 'install', ip: tv ? tv.ip : undefined, kind: tv && tv.kind === 'atv' ? 'atv' : 'lg' });
+}
+
 export type TvLaunchStep = { kind: 'resume'; at: number; duration?: number } | { kind: 'oldTv'; version: string };
 
 type Answer = 'go' | 'resume' | 'restart' | null;
