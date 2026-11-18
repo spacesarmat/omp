@@ -29,6 +29,9 @@ afterEach(() => {
   if (svgDataset) Object.defineProperty(window.SVGElement.prototype, 'dataset', svgDataset);
   else delete (window.SVGElement.prototype as { dataset?: unknown }).dataset;
   delete (window as unknown as { PalmSystem?: unknown }).PalmSystem;
+  // main.tsx registers the design runtime cleanup on pagehide: stop the observers
+  // before the next test boots, so the cases do not share a live runtime.
+  window.dispatchEvent(new Event('pagehide'));
   document.body.innerHTML = '';
   vi.doUnmock('../../design/production.ts');
   vi.unstubAllGlobals();
