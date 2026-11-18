@@ -1,16 +1,12 @@
 {
-  "version": "0.30.1-beta.13",
-  "ipkUrl": "https://github.com/spacesarmat/omp/releases/download/v0.30.1-beta.13/OMP-0.30.1-beta.13-webOS.ipk",
-  "ipkHash": "825dc0e2d9b3de572f916817605e9a7d19853bf241cabd00071221676053fadb",
-  "ipkSize": 624368,
+  "version": "0.30.1-beta.14",
+  "ipkUrl": "https://github.com/spacesarmat/omp/releases/download/v0.30.1-beta.14/OMP-0.30.1-beta.14-webOS.ipk",
+  "ipkHash": "996d8329eed7f6835467aaffbbd755fcd1f3fbaf67e4af10586f985ac6b59fec",
+  "ipkSize": 1186178,
   "notes": [
-    "Кнопка «Продлить режим» в настройках ТВ и баннер в каталоге за 3 дня до конца 1000-часового режима разработчика: открывают Developer Mode, где продление - кнопка Extend; баннер перечитывает срок, пока каталог открыт, чтобы OMP не пропал с телевизора"
+    "Исправления и улучшения"
   ],
-  "releaseUrl": "https://github.com/spacesarmat/omp/releases/tag/v0.30.1-beta.13",
-  "notesTv": [
-    "Кнопка «Продлить режим» в настройках ТВ и баннер в каталоге за 3 дня до конца 1000-часового режима разработчика: открывают Developer Mode, где продление - кнопка Extend; баннер перечитывает срок, пока каталог открыт, чтобы OMP не пропал с телевизора"
-  ],
-  "notesPhone": [
-    "«Обновить OMP на ТВ»: если на телевизоре стоит старая версия, ассистент установки предлагает «Обновить с телефона» - тот же установщик (LG - код Developer Mode, Android TV - adb); «Обновить на ТВ» остаётся рядом. Обновление не сбрасывает напоминание о продлении режима"
-  ]
+  "releaseUrl": "https://github.com/spacesarmat/omp/releases/tag/v0.30.1-beta.14",
+  "notesTv": [],
+  "notesPhone": []
 }

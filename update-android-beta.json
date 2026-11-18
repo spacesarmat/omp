@@ -1,26 +1,24 @@
 {
-  "version": "0.30.1-beta.13",
-  "ipkUrl": "https://github.com/spacesarmat/omp/releases/download/v0.30.1-beta.13/OMP-0.30.1-beta.13.apk",
-  "ipkHash": "241050ce69792715bb84133c0b8e6f56c4a86eefb1c96f4f630d3d8560ad893d",
-  "ipkSize": 93577837,
+  "version": "0.30.1-beta.14",
+  "ipkUrl": "https://github.com/spacesarmat/omp/releases/download/v0.30.1-beta.14/OMP-0.30.1-beta.14.apk",
+  "ipkHash": "b48bbd575ec4c9dfb7aa316988cf93034c8259095d983c5dded83ccf2baa070d",
+  "ipkSize": 94711993,
   "apks": {
     "arm64": {
-      "url": "https://github.com/spacesarmat/omp/releases/download/v0.30.1-beta.13/OMP-0.30.1-beta.13-arm64.apk",
-      "sha256": "cef702da3f51b3a9d6843a03687eb316c2324755c6599b66631254124af36aa8",
-      "size": 59029571
+      "url": "https://github.com/spacesarmat/omp/releases/download/v0.30.1-beta.14/OMP-0.30.1-beta.14-arm64.apk",
+      "sha256": "d219a1a97a86096c0bf455d0ab60839da687eb2230c66ef97d1f718e014a8a5f",
+      "size": 60163727
     },
     "armv7": {
-      "url": "https://github.com/spacesarmat/omp/releases/download/v0.30.1-beta.13/OMP-0.30.1-beta.13-armv7.apk",
-      "sha256": "9ee8bbafd00d79a020e8eba5dc870b77e9575df427b3b6241556c2728e907790",
-      "size": 54848599
+      "url": "https://github.com/spacesarmat/omp/releases/download/v0.30.1-beta.14/OMP-0.30.1-beta.14-armv7.apk",
+      "sha256": "e004af835f87d655fe93ddee95c62d0f6854917d4f0be689292d56c539dd8ee8",
+      "size": 55982755
     }
   },
   "notes": [
     "Исправления и улучшения"
   ],
   "notesTv": [],
-  "notesPhone": [
-    "«Обновить OMP на ТВ»: если на телевизоре стоит старая версия, ассистент установки предлагает «Обновить с телефона» - тот же установщик (LG - код Developer Mode, Android TV - adb); «Обновить на ТВ» остаётся рядом. Обновление не сбрасывает напоминание о продлении режима"
-  ],
-  "releaseUrl": "https://github.com/spacesarmat/omp/releases/tag/v0.30.1-beta.13"
+  "notesPhone": [],
+  "releaseUrl": "https://github.com/spacesarmat/omp/releases/tag/v0.30.1-beta.14"
 }
