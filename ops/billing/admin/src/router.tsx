@@ -1,4 +1,5 @@
-import { createRootRoute, createRoute, createRouter, RouterProvider } from '@tanstack/react-router';
+import { createMemoryHistory, createRootRoute, createRoute, createRouter, RouterProvider } from '@tanstack/react-router';
+import type { RouterHistory } from '@tanstack/history';
 import { App } from '@/App';
 
 const rootRoute = createRootRoute();
@@ -17,10 +18,15 @@ const sectionRoute = createRoute({
 
 const routeTree = rootRoute.addChildren([homeRoute, sectionRoute]);
 
-export const router = createRouter({
-  routeTree,
-  basepath: '/admin',
-});
+export function createAdminRouter(history?: RouterHistory) {
+  return createRouter({
+    routeTree,
+    basepath: '/admin',
+    history,
+  });
+}
+
+export const router = createAdminRouter();
 
 declare module '@tanstack/react-router' {
   interface Register {
@@ -30,4 +36,11 @@ declare module '@tanstack/react-router' {
 
 export function AdminRouter() {
   return <RouterProvider router={router} />;
+}
+
+/** In-memory router for tests. The address is the real browser path, including /admin. */
+export function createMemoryAdmin(entry: string) {
+  const history = createMemoryHistory({ initialEntries: [entry] });
+  const memoryRouter = createAdminRouter(history);
+  return { history, router: memoryRouter, element: <RouterProvider router={memoryRouter} /> };
 }

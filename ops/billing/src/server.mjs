@@ -7,6 +7,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { extname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ADMIN_SECTIONS } from './adminSections.mjs';
+import { readCappedBody } from './httpBody.mjs';
 import { applyReferralPost, claimReferralNotices, publicReferral, referralCodeFor, restoreReferralNotices } from './referralAdmin.mjs';
 import { homePayload, userPayload } from './adminApi.mjs';
 import {
@@ -254,13 +255,16 @@ function serveSpa(res) {
   return true;
 }
 
+function adminSectionPage(path) {
+  const section = path.match(/^\/admin\/([a-z0-9-]+)$/);
+  return !!(section && ADMIN_SECTIONS.indexOf(section[1]) >= 0 && section[1] !== 'home');
+}
+
 function servePublic(path, res) {
   const staticFile = path.indexOf('/admin/assets/') === 0 || path === '/admin/logo.svg' || path === '/admin/tunnel.svg';
-  const section = path.match(/^\/admin\/([a-z0-9-]+)$/);
-  const sectionPage = !!(section && ADMIN_SECTIONS.indexOf(section[1]) >= 0 && section[1] !== 'home');
-  if (!staticFile && path !== '/admin/' && path !== '/admin' && !sectionPage) return false;
+  if (!staticFile && path !== '/admin/' && path !== '/admin') return false;
   if (!existsSync(PUBLIC_DIR)) return false;
-  if (path === '/admin' || path === '/admin/' || sectionPage) return serveSpa(res);
+  if (path === '/admin' || path === '/admin/') return serveSpa(res);
   const rel = path.replace(/^\/admin\//, '');
   if (rel.indexOf('..') >= 0) return false;
   const file = join(PUBLIC_DIR, rel);
@@ -2122,7 +2126,7 @@ export function createApp(file, fetchImpl, opts) {
         if (!payload) return json(res, 404, { error: 'not_found' });
         return json(res, 200, payload);
       }
-      if (req.method === 'GET' && (path === '/admin' || path === '/admin/')) {
+      if (req.method === 'GET' && (path === '/admin' || path === '/admin/' || adminSectionPage(path))) {
         if (existsSync(SPA_INDEX)) return serveSpa(res);
         return send(res, 200, loginPage(adminOf(req) ? '' : ''), { 'content-type': 'text/html; charset=utf-8' });
       }

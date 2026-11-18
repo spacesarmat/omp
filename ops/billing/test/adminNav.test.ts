@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { codeHash } from '../src/crypto.mjs';
 import { searchDesk } from '../src/desk.mjs';
+import { createApp } from '../src/server.mjs';
 import { ADMIN_SECTIONS } from '../src/adminSections.mjs';
 import { ADMIN_PAGES, TAB_IDS } from '../admin/src/lib/nav.ts';
 import { tabFromPath, tabFromSearch, urlForTab } from '../admin/src/lib/tabUrl.ts';
@@ -21,7 +22,41 @@ describe('admin section url', () => {
     expect(urlForTab('finance', '?tg=9')).toBe('/admin/finance?tg=9');
     expect(urlForTab('home', '?tab=finance&tg=9')).toBe('/admin/?tg=9');
   });
+
+  it('serves the admin page for a section path and 404s an unknown one', async () => {
+    const store = { read: async () => ({}), update: async (fn: (s: object) => unknown) => fn({}), registry: {} };
+    const app = createApp(store, async () => ({ ok: true, status: 200, text: async () => '', json: async () => ({}) }));
+    const finance = await call(app, 'GET', '/admin/finance');
+    expect(finance.status).toBe(200);
+    expect(finance.body).toContain('id="root"');
+    const missing = await call(app, 'GET', '/admin/not-a-section');
+    expect(missing.status).toBe(404);
+    const asset = await call(app, 'GET', '/admin/logo.svg');
+    expect(asset.status).toBe(200);
+  });
 });
+
+function call(app: (req: unknown, res: unknown) => Promise<void>, method: string, path: string) {
+  const req = {
+    method,
+    url: path,
+    headers: { accept: 'text/html' },
+    socket: { remoteAddress: '127.0.0.1' },
+    async *[Symbol.asyncIterator]() {},
+  };
+  const res = {
+    status: 0,
+    body: '',
+    writeHead(status: number) {
+      this.status = status;
+    },
+    setHeader() {},
+    end(buf?: Buffer | string) {
+      this.body = Buffer.isBuffer(buf) ? buf.toString('utf8') : String(buf || '');
+    },
+  };
+  return app(req, res).then(() => res);
+}
 
 describe('admin palette pages', () => {
   it('lists every menu section, including finance, donations and bot replies', () => {

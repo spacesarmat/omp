@@ -24,7 +24,7 @@ import { BroadcastDesk, CrashesDesk, LoginsDesk, VersionsDesk } from '@/panels/O
 import { Palette } from '@/components/palette';
 import { NAV } from '@/lib/nav';
 import { useNavigate, useRouterState } from '@tanstack/react-router';
-import { tabFromPath, tabFromSearch, urlForTab } from '@/lib/tabUrl';
+import { tabFromPath, tabFromSearch } from '@/lib/tabUrl';
 import { ConfirmHost, askConfirm } from '@/components/confirm';
 import { useDesk } from '@/lib/desk';
 import { LiveBar, useLive } from '@/lib/live';
@@ -112,8 +112,19 @@ export function App() {
   }, []);
 
   useEffect(() => {
-    if (new URLSearchParams(searchStr).get('tab')) {
-      void navigate({ href: urlForTab(tabFromSearch(searchStr), searchStr), replace: true });
+    const raw = searchStr.startsWith('?') ? searchStr.slice(1) : searchStr;
+    if (new URLSearchParams(raw).has('tab')) {
+      const next = tabFromSearch(searchStr);
+      void navigate({
+        to: next === 'home' ? '/' : '/$section',
+        params: next === 'home' ? {} : { section: next },
+        search: (prev) => {
+          const copy = { ...prev } as Record<string, unknown>;
+          delete copy.tab;
+          return copy;
+        },
+        replace: true,
+      });
       return;
     }
     setTab(tabFromPath(pathname));
@@ -121,7 +132,15 @@ export function App() {
 
   function goTab(id: string) {
     setTab(id);
-    void navigate({ href: urlForTab(id, window.location.search) });
+    void navigate({
+      to: !id || id === 'home' ? '/' : '/$section',
+      params: !id || id === 'home' ? {} : { section: id },
+      search: (prev) => {
+        const copy = { ...prev } as Record<string, unknown>;
+        delete copy.tab;
+        return copy;
+      },
+    });
   }
 
   useEffect(() => {
