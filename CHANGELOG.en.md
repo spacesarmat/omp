@@ -4,7 +4,7 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
-## Unreleased
+## 0.30.1-beta.13
 
 - [lg] "Extend mode" button in the TV settings and a catalog banner 3 days before the 1000-hour Developer Mode ends: they open Developer Mode, where Extend completes the renewal; the banner rechecks the deadline while the catalog is open so OMP stays on the TV
 - [phone] "Update OMP on the TV": when the TV runs an older version, the install assistant offers "Update from the phone" - the same installer (LG - Developer Mode passphrase, Android TV - adb); "Update on the TV" stays next to it. Updating does not reset the developer mode reminder
