@@ -14,4 +14,18 @@
     <xhtml:link rel="alternate" hreflang="en" href="https://omp-player.online/en/" />
     <xhtml:link rel="alternate" hreflang="x-default" href="https://omp-player.online/" />
   </url>
+  <url>
+    <loc>https://omp-player.online/privacy</loc>
+    <lastmod>2026-11-18</lastmod>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://omp-player.online/privacy" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://omp-player.online/privacy/en" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://omp-player.online/privacy" />
+  </url>
+  <url>
+    <loc>https://omp-player.online/privacy/en</loc>
+    <lastmod>2026-11-18</lastmod>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://omp-player.online/privacy" />
+    <xhtml:link rel="alternate" hreflang="en" href="https://omp-player.online/privacy/en" />
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://omp-player.online/privacy" />
+  </url>
 </urlset>
