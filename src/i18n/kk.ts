@@ -1,4 +1,3 @@
-/** The kk dictionary (DeepL draft, reviewed). Mirrors ru.ts; plurals one/other. */
 import type { EnDict } from './types';
 import type { ru } from './ru';
 export const kk: EnDict<typeof ru> = {
@@ -27,11 +26,17 @@ export const kk: EnDict<typeof ru> = {
     originalChip: "Түпнұсқа",
     rusSubsChip: "Орысша субтитрлер",
     fullSeasonOnly: "Тек толық маусым",
-    show: { one: "Қолды көрсетіңіз {n}", other: "{n}-тің қолын көрсетіңіз" },
+    show: {
+      one: "Қолды көрсетіңіз {n}",
+      other: "{n}-тің қолын көрсетіңіз",
+    },
   },
   common: {
     signInTo: "{site} сайтына кіріңіз",
-    torrents: { one: "{n} таратылымы", other: "{n}-тің айналымдары" },
+    torrents: {
+      one: "{n} таратылымы",
+      other: "{n}-тің айналымдары",
+    },
     gb: "Ұлыбритания",
     mb: "MB",
     mbps: "МБ/с",
@@ -219,6 +224,7 @@ export const kk: EnDict<typeof ru> = {
     advanced: "Жетілдірілген",
     expert: "Тәжірибелі пайдаланушыларға",
     phoneServer: "Сіздің ұялы телефоныңыздағы сервер",
+    diagnosticsHintStore: "Өзіңіз қоспайынша өшірілген. Баптау, кіру, төлем және ақау туралы есептер. Мекенжайлар мен токендер жоқ. Мәдіа атаулары журналда қалуы мүмкін.",
   },
   errors: {
     onlyAndroid: "Тек Android қосымшасында ғана қолжетімді",
@@ -447,9 +453,18 @@ export const kk: EnDict<typeof ru> = {
     watchedDone: "Көрді",
     addedMany: "Торренттер қосылды: {n}",
     added: "Қосылды: {titles}",
-    episodes: { one: "{n} сериясы", other: "{n} эпизодтары" },
-    extDubs: { one: "+{n} дауыстық түсініктеме", other: "+ {n} дауыстық жазбалар" },
-    extDubsSubs: { one: "+ {n} дауыстық түсініктеме, субтитрлар", other: "+ {n} дауыстық түсіндірулер, субтитрлар" },
+    episodes: {
+      one: "{n} сериясы",
+      other: "{n} эпизодтары",
+    },
+    extDubs: {
+      one: "+{n} дауыстық түсініктеме",
+      other: "+ {n} дауыстық жазбалар",
+    },
+    extDubsSubs: {
+      one: "+ {n} дауыстық түсініктеме, субтитрлар",
+      other: "+ {n} дауыстық түсіндірулер, субтитрлар",
+    },
     extSubs: "+тітіркемелер",
     select: "Таңдау",
     selectCancel: "Таңдауды алып тастау",
@@ -457,7 +472,10 @@ export const kk: EnDict<typeof ru> = {
     selectAll: "Барлығын таңдау",
     selectNone: "Таңдауды алып тастау",
     deleteN: "Өшіру ({n})",
-    deleteAsk: { one: "Серверден таратылымды ({n}) жоюым керек пе?", other: "Серверден тарату файлдарын ({n}) өшіруім керек пе?" },
+    deleteAsk: {
+      one: "Серверден таратылымды ({n}) жоюым керек пе?",
+      other: "Серверден тарату файлдарын ({n}) өшіруім керек пе?",
+    },
     deletedN: "Өшірілді: {n}",
     deleteFailed: "Өшіру мүмкін емес: {n}",
     actions: "Іс-әрекеттер",
@@ -477,8 +495,14 @@ export const kk: EnDict<typeof ru> = {
     metaEpisodesOf: "{from}–{to} {total}-тен",
   },
   series: {
-    seasons: { one: "{n}-маусым", other: "{n} маусымдары" },
-    seasonsOf: { one: "Серияның {n} және <img id=\"1\"/> эпизодтарынан {have} эпизоды", other: "{have} сериясында, {n} маусымдар бойы" },
+    seasons: {
+      one: "{n}-маусым",
+      other: "{n} маусымдары",
+    },
+    seasonsOf: {
+      one: "Серияның {n} және <img id=\"1\"/> эпизодтарынан {have} эпизоды",
+      other: "{have} сериясында, {n} маусымдар бойы",
+    },
     rowEnded: "аяқталды",
     toEpisodes: "серияға",
     watchedOf: "{have} қаралған {n}-тен",
@@ -489,8 +513,14 @@ export const kk: EnDict<typeof ru> = {
     notInRelease: "Қолда емес",
     dubPriority: "Басымдық: {list}",
     findSeason: "Маусымды тауып, {n}",
-    releases: { one: "{n} таратылымы", other: "{n}-тің айналымдары" },
-    deleteSeries: { one: "Серияны ({n} эпизодын) жою", other: "Серияны жою ({n} эпизодтары)" },
+    releases: {
+      one: "{n} таратылымы",
+      other: "{n}-тің айналымдары",
+    },
+    deleteSeries: {
+      one: "Серияны ({n} эпизодын) жою",
+      other: "Серияны жою ({n} эпизодтары)",
+    },
     noSeason: "Маусымаралық кезең",
     gone: "Бұл серия енді «Менің» тізімінде жоқ.",
     goneTv: "Сериал медиа кітапханада енді қолжетімді емес",
@@ -513,12 +543,24 @@ export const kk: EnDict<typeof ru> = {
     badgeNext: "Жаңа серия {date}",
     badgeEpisode: "жаңа серия",
     badgeSeason: "жаңа маусым",
-    seasonReleases: { one: "{n} – осы маусымның жеребесі", other: "{n} осы маусымда сәйкес келеді" },
-    files: { one: "{n} файлы", other: "{n} файлдары" },
+    seasonReleases: {
+      one: "{n} – осы маусымның жеребесі",
+      other: "{n} осы маусымда сәйкес келеді",
+    },
+    files: {
+      one: "{n} файлы",
+      other: "{n} файлдары",
+    },
     alreadyHave: "Осындай қол бұрыннан бар: {info}",
     keepOnly: "Тек осыны ғана қалдыр",
-    keepOnlyAsk: { one: "{season} маусымынан {n} эпизодын тағы бір жою ма?", other: "{season} маусымынан тағы бір {n} эпизодын жою ма?" },
-    keepOnlyAskNoSeason: { one: "Тағы бір {n} маусымаралық таралымды жою ма?", other: "Тағы бір {n} маусымаралық тартылыс жойылды ма?" },
+    keepOnlyAsk: {
+      one: "{season} маусымынан {n} эпизодын тағы бір жою ма?",
+      other: "{season} маусымынан тағы бір {n} эпизодын жою ма?",
+    },
+    keepOnlyAskNoSeason: {
+      one: "Тағы бір {n} маусымаралық таралымды жою ма?",
+      other: "Тағы бір {n} маусымаралық тартылыс жойылды ма?",
+    },
     releaseDelete: "Таратылымды жою",
     releaseDeleteAsk: "«{name}» трансляциясын жою ма? Көру саны «{keeper}»-ке көшіріледі.",
     releaseDeleteCurrentAsk: "Сіз қазір осы қолды қарап отырсыз: «{name}». Оны жойғыңыз келе ме? Ойын «{keeper}»-та жалғасады, ал маркерлер сол жерге ауысады.",
@@ -526,7 +568,10 @@ export const kk: EnDict<typeof ru> = {
     releaseDeletePack: "Бұл пакетте басқа маусымдар да бар. Сіз оны тек «Менің пакетімнен» басқа маусымдармен бірге ғана жоя аласыз.",
     releaseCarryFailed: "Көру белгілерін тасымалдау мүмкін болмады; таратылым жойылған жоқ",
     releaseDeleted: "Таратылым жойылды",
-    releaseDeleteLossAsk: { one: "{keeper} {n} сериясындағы көрілім санын қамтымайды; оның көрілім саны жоғалады. Сіз оны әлі де жойғыңыз келе ме?", other: "«{keeper}»-та көру саны көрсетілген {n} эпизодтары жоқ; олардың көру саны жоғалады. Сіз оларды әлі де жойғыңыз келе ме?" },
+    releaseDeleteLossAsk: {
+      one: "{keeper} {n} сериясындағы көрілім санын қамтымайды; оның көрілім саны жоғалады. Сіз оны әлі де жойғыңыз келе ме?",
+      other: "«{keeper}»-та көру саны көрсетілген {n} эпизодтары жоқ; олардың көру саны жоғалады. Сіз оларды әлі де жойғыңыз келе ме?",
+    },
     releaseDeleteBusy: "Тұр, алдыңғы қол әлі де тазаланып жатыр.",
     releasesHintDelete: "Таратылымды жою",
     releasesHintOk: "Жарайды – қолыңды аш",
@@ -546,7 +591,10 @@ export const kk: EnDict<typeof ru> = {
     dubReset: "Әдепкі бойынша (қайта жүктеу)",
     dubChange: "Өзгерту",
     dubNote: "Осы маусымға осыны ескеріңіз. Егер ол бос болса, келесі маусымда дәл сол студия теледидар мен телефон хабарламалары үшін де пайдаланылады.",
-    episodesOf: { one: "{have}, {n} сериясынан", other: "{have} эпизодтың ішіндегі {n}" },
+    episodesOf: {
+      one: "{have}, {n} сериясынан",
+      other: "{have} эпизодтың ішіндегі {n}",
+    },
     watchedSome: "{n}-ты көрді",
     watchedEvery: "қарады",
     left: "{n} минут қалды",
@@ -725,6 +773,12 @@ export const kk: EnDict<typeof ru> = {
       lgNoConnect: "LG: Текшеуге байланыс жоқ",
       lgProbeFailed: "LG: Дамытушы режимін тексеру сәтсіз аяқталды",
       takeover: "«{target}»-ке қосыласыз ба? «{other}»-пен ағымдағы қосылым жабылады.",
+      updateTitle: "OMP-ны жаңарту",
+      updateTitleVersion: "OMP-ны жаңарту {version}",
+      logStartUpdate: "Менің ұялы телефонымнан жарияланды: {what}",
+      logDoneUpdate: "OMP ұялы телефон арқылы жаңартылды",
+      doneUpdate: "OMP жаңартылды",
+      doneUpdateVersion: "OMP {version}-ке жаңартылды.",
     },
     plan: {
       byModelYear: "{label} (модель жылы бойынша)",
@@ -812,6 +866,7 @@ export const kk: EnDict<typeof ru> = {
       yandexSubscriptionNote: "Егер TV Station жазылым арқылы сатып алынса, APK-файлдарды орнату мүмкін емес және құрылғы толық төленгенге дейін «Файл менеджері» қолжетімсіз болады.",
       yandexNoAdbNote: "YaOS-та әдетте «Әзірлеушілерге арналған» мәзірі мен желіні ақаулықтарды түзету құралы болмайды, сондықтан телефон OMP-ті өзі орната алмайды.",
       yandexFaq: "Яндекс: барлық орнату әдістері",
+      updateFromPhone: "Мобильді телефоныңыздан жаңарту",
     },
     assistant: {
       title: "Теледидарыңызға OMP орнатыңыз",
@@ -914,10 +969,22 @@ export const kk: EnDict<typeof ru> = {
     defaultPhone: "Телефон",
     today: "бүгін",
     yesterday: "кеше",
-    seeds: { one: "{n} sid", other: "{n}, sidov" },
-    leechers: { one: "{n} профилі", other: "{n}-тің личтері" },
-    downloaded: { one: "{n} рет жүктелді", other: "{n} рет жүктелді" },
-    dhtPeers: { one: "{n} Feast Online", other: "{n} онлайн ойындары" },
+    seeds: {
+      one: "{n} sid",
+      other: "{n}, sidov",
+    },
+    leechers: {
+      one: "{n} профилі",
+      other: "{n}-тің личтері",
+    },
+    downloaded: {
+      one: "{n} рет жүктелді",
+      other: "{n} рет жүктелді",
+    },
+    dhtPeers: {
+      one: "{n} Feast Online",
+      other: "{n} онлайн ойындары",
+    },
     jackettHint: "Сайт Cloudflare арқылы бұғатталған ба? Оған браузер арқылы кіріңіз (сайттың «Search Sources» бөліміндегі «Log in» батырмасы) немесе Jackett, Prowlarr немесе FlareSolverr арқылы қосылыңыз – нұсқаулықтар үшін «Сұрақтар мен жауаптар» бөлімін қараңыз.",
     cloudflareTvOne: "{name} Cloudflare арқылы бұғатталған – оны ұялы құрылғыңызда «Search Sources» арқылы ашыңыз.",
     cloudflareTvMany: "{names} Cloudflare арқылы бұғатталған – оларға ұялы құрылғыңызда «Search Sources» арқылы кіріңіз.",
@@ -926,8 +993,14 @@ export const kk: EnDict<typeof ru> = {
       date: "Күні бойынша",
     },
     progress: {
-      line: { one: "{found} · {n} {sources} жауап бергені анықталды", other: "{found} табылды · {n} жауап {sources}берді" },
-      sources: { one: "{n}-тің дереккөзі", other: "{n}-тің дереккөздері" },
+      line: {
+        one: "{found} · {n} {sources} жауап бергені анықталды",
+        other: "{found} табылды · {n} жауап {sources}берді",
+      },
+      sources: {
+        one: "{n}-тің дереккөзі",
+        other: "{n}-тің дереккөздері",
+      },
       searchingIn: "Мен әлі де {names}-ті қарап жүрмін…",
       failed: "Жауап бермеді: {names}",
     },
@@ -1055,7 +1128,10 @@ export const kk: EnDict<typeof ru> = {
       thanksTitle: "Алғыс сөздер",
       thanksEmpty: "Қазіргі уақытта ол бос. Аты адам оны өзі ашқан жағдайда ғана көрінеді.",
       thanksDown: "Алғыс білдіру тізімі қазір жүктелмеген.",
-      daysLeft: { one: "{n} күн қалды", other: "{n} күн қалды" },
+      daysLeft: {
+        one: "{n} күн қалды",
+        other: "{n} күн қалды",
+      },
       about: "Толығырақ оқу",
       tgMenu: "Меню",
       renew: "Жаңарту",
@@ -1129,8 +1205,14 @@ export const kk: EnDict<typeof ru> = {
       whereManual: "Қолмен қосылды",
       hiddenStates: "Jackett парольмен қорғалған – трекерлердің күйі көрінбейді",
       noTrackers: "трекерлер жоқ",
-      trackers: { one: "{n} трекері", other: "{n} трекерлері" },
-      working: { one: "{n} жұмыс істейді", other: "{n} жұмыс істеп тұр" },
+      trackers: {
+        one: "{n} трекері",
+        other: "{n} трекерлері",
+      },
+      working: {
+        one: "{n} жұмыс істейді",
+        other: "{n} жұмыс істеп тұр",
+      },
       disabledAfterErrors: "Қателерден кейін өшірілді",
       direct: "тікелей · {rest}",
       directChecking: "тікелей · Мен тексеріп жатырмын…",
@@ -1138,9 +1220,18 @@ export const kk: EnDict<typeof ru> = {
       noKeyLine: "Маған API кілті керек",
       badKeyLine: "Дұрыс емес API кілті",
       justChecked: "Тек қана тексердім",
-      checkedMin: { one: "{n}-ті бір минут бұрын тексерді", other: "{n} минут бұрын тексерілді" },
-      checkedHour: { one: "{n}-ті бір сағат бұрын тексердім", other: "{n} сағат бұрын тексерілді" },
-      checkedDay: { one: "{n} күн бұрын тексерілді", other: "Соңғы рет тексерілді {n} күн бұрын" },
+      checkedMin: {
+        one: "{n}-ті бір минут бұрын тексерді",
+        other: "{n} минут бұрын тексерілді",
+      },
+      checkedHour: {
+        one: "{n}-ті бір сағат бұрын тексердім",
+        other: "{n} сағат бұрын тексерілді",
+      },
+      checkedDay: {
+        one: "{n} күн бұрын тексерілді",
+        other: "Соңғы рет тексерілді {n} күн бұрын",
+      },
     },
     screen: {
       builtin: "Құрылғыға кіріктірілген · телефонда",
@@ -1231,16 +1322,25 @@ export const kk: EnDict<typeof ru> = {
     nextAt: "Келесі тексеруді {time} жанында тексеріңіз",
     nextDayAt: "Келесі тексеруді {day} {time} жанында тексеріңіз.",
     everyHour: "сағат сайын бір рет",
-    everyHours: { one: "{n} әр сағат сайын", other: "{n} сағат" },
+    everyHours: {
+      one: "{n} әр сағат сайын",
+      other: "{n} сағат",
+    },
     anyQuality: "Кез келген",
     anyQualityRule: "кез келген сапа",
     fromQuality: "{q}-тен p",
     allSources: "Барлық дереккөздер",
     noSources: "Дереккөздер жоқ",
-    minSeeds: { one: "{n}-тен Sida", other: "{n}-тен Sidov" },
+    minSeeds: {
+      one: "{n}-тен Sida",
+      other: "{n}-тен Sidov",
+    },
     maxSize: "{size} ГБ-ға дейін",
     noNotify: "ескертусіз",
-    fresh: { one: "{n} жаңа", other: "{n} жаңа" },
+    fresh: {
+      one: "{n} жаңа",
+      other: "{n} жаңа",
+    },
     episodeOut: "Сериал{to}-де жарияланды.",
     episodesOut: "{from}–{to} эпизодтары жарияланды",
     youHave: "{news} · сізде {range} бар",
@@ -1254,7 +1354,10 @@ export const kk: EnDict<typeof ru> = {
     foundNew: "Жаңа табылғандар: {n}",
     noNew: "Жаңа дистрибуциялар жоқ",
     sourcesAnswered: "Дереккөздер: {answered}, {asked}-тен, жауап берді",
-    skipped: { one: "Біз әлі тексеріп көрмедік: {n} жазылымы", other: "Біз әлі тексеруге уақыт таба алмадық: {n} жазылымдары" },
+    skipped: {
+      one: "Біз әлі тексеріп көрмедік: {n} жазылымы",
+      other: "Біз әлі тексеруге уақыт таба алмадық: {n} жазылымдары",
+    },
     notifyBlocked: "Хабарламалар көрсетілмейді: олар OMP үшін өшірілген.",
     notifyOff: "OMP хабарламалары өшірілген – жаңа таралымдар туралы хабарлама алу үшін Android баптауларыңызда оларды қосыңыз",
     replace: {
@@ -1290,7 +1393,10 @@ export const kk: EnDict<typeof ru> = {
       allEnabled: "бәрін қамтитын",
       allEnabledOption: "Барлығын қамтитын",
       noneChosen: "таңдалмаған",
-      sourcesN: { one: "{n}-тің дереккөзі", other: "{n}-тің дереккөздері" },
+      sourcesN: {
+        one: "{n}-тің дереккөзі",
+        other: "{n}-тің дереккөздері",
+      },
       notify: "Хабарлау",
       notifyHint: "әрбір жаңа қолға",
       telegram: "Телеграм",
@@ -1338,7 +1444,10 @@ export const kk: EnDict<typeof ru> = {
       keepsSkip: "«Pass» баптамалары мен санаты көшіріледі",
       removesOld: "Ескі таралым серверден жойылды.",
       searching: "Мен іздеп жүрмін…",
-      moreN: { one: "тағы бір нұсқа: {n}", other: "{n} қосымша опциялар" },
+      moreN: {
+        one: "тағы бір нұсқа: {n}",
+        other: "{n} қосымша опциялар",
+      },
       noOthers: "Басқалары жоқ",
       busy: "Алмастыру… Бұл бір минутқа дейін созылуы мүмкін.",
       replace: "Алмастыру",
@@ -1365,7 +1474,10 @@ export const kk: EnDict<typeof ru> = {
     },
   },
   notify: {
-    newTorrents: { one: "{n} жаңа қол", other: "{n}-тің жаңа таралымдары" },
+    newTorrents: {
+      one: "{n} жаңа қол",
+      other: "{n}-тің жаңа таралымдары",
+    },
     episodeTitle: "{name}: {to} эпизоды жарияланды",
     episodesTitle: "{name}: {from}–{to} эпизодтары жарыққа шықты",
     rangeOfTotal: "{range}-тен {total}",
@@ -1575,7 +1687,10 @@ export const kk: EnDict<typeof ru> = {
       empty: "Әзірге жазылымдар жоқ – оларды телефоныңызға қосыңыз немесе картадағы «Көргім келеді» батырмасын басу арқылы жазылыңыз.",
       noMatch: "{q}-пен жазылымдар жоқ",
       anyQuality: "кез келген сапа",
-      fresh: { one: "{n} жаңа", other: "{n} жаңа" },
+      fresh: {
+        one: "{n} жаңа",
+        other: "{n} жаңа",
+      },
       notify: "Есеп",
       better: "Ең жақсы сапада",
       check: "Қазір тексеріңіз",
@@ -1623,6 +1738,7 @@ export const kk: EnDict<typeof ru> = {
       hintOk: "Жарайды – бір қолды таңдаңыз",
       hintBack: "Кері – Жабу",
     },
+    devmodeBanner: "Дамытушы режимі жақында аяқталуға жақын – оны ұзартыңыз, сонда OMP теледидарыңыздан жоғалып кетпейді.",
   },
   tls: {
     untrustedTitle: "{host} сертификатына сене аламыз ба?",
@@ -1940,7 +2056,10 @@ export const kk: EnDict<typeof ru> = {
     trackerMark: "(трекер)",
     seedsUnknown: "-",
     deadRelease: "Тарату сервері жауап бермейді – басқа серверді қолданып көріңіз",
-    deadSeeds: { one: "Сервер жауап бермейді: {n} sid", other: "Таратылым мынаны қолдайды: {n} sidov" },
+    deadSeeds: {
+      one: "Сервер жауап бермейді: {n} sid",
+      other: "Таратылым мынаны қолдайды: {n} sidov",
+    },
     extDubsWebos: "Теледидар осы шығарылымға кіретін кейбір аудио форматтарды (DTS, FLAC және ұқсас) ойната алмайды. Оның орнына видеоның аудиожолы ойнайды.",
     extDubsBuiltin: "2160 Player жеке аудио тректерді іске қосуға мүмкіндік береді: «Параметрлер» → «Бейне ойнатқыш»",
     deleteAsk: "Серверден торрентті жою ма?",
@@ -2022,7 +2141,10 @@ export const kk: EnDict<typeof ru> = {
       saveFailed: "Сақтау мүмкін емес",
     },
     screen: {
-      peerCount: { one: "{n} – той", other: "{n} pirov" },
+      peerCount: {
+        one: "{n} – той",
+        other: "{n} pirov",
+      },
       loading: "Жүктеліп жатыр…",
       notFound: "Таратылым табылған жоқ",
       continueOnTv: "Теледидарда жалғастыру · {ep}мен {time}",
@@ -2305,6 +2427,9 @@ export const kk: EnDict<typeof ru> = {
     openOnStartupAllow: "Терезелердің үстіне көрсетуді қосу",
     openOnStartupOverlayAsk: "Жүйе бағдарламаның іске қосылуын блоктайды. Басқа терезелердің үстінде көрінуіне рұқсат етіңіз, сонда OMP автоматты түрде ашылады.",
     openOnStartupNoScreen: "Жүйе параметрлерін ашу мүмкін емес.",
+    devmodeExtend: "Режимді ұзарту",
+    devmodeOpened: "Әзірлеуші режимі ашық – режимін ұзарту үшін ішіндегі «Ұзарту» түймесін басыңыз",
+    devmodeOpenFailed: "Мен теледидарда әзірлеуші режимін қоса алмадым.",
   },
   tvSources: {
     tsRutor: "рутор (TorrServer іздеу)",
@@ -2605,11 +2730,20 @@ export const kk: EnDict<typeof ru> = {
     errEmpty: "Көшірмеде қалпына келтіруге болатын ешқандай дерек жоқ",
     sumServers: "TorrServer серверлері: {list}",
     sumTvs: "Теледидарлар: {list}",
-    sumSubs: { one: "{n}-ті бақылау жазылымы", other: "{n} мониторинг жазылымдары" },
-    sumSources: { one: "Дереккөздерді іздеу: {n}-ауыстырып қосқыш", other: "Дереккөздерді іздеу: {n} ауыстырып қосқыштары" },
+    sumSubs: {
+      one: "{n}-ті бақылау жазылымы",
+      other: "{n} мониторинг жазылымдары",
+    },
+    sumSources: {
+      one: "Дереккөздерді іздеу: {n}-ауыстырып қосқыш",
+      other: "Дереккөздерді іздеу: {n} ауыстырып қосқыштары",
+    },
     sumIndexers: "Индексаторлар (Jackett, Prowlarr): {n} – API кілттері жоқ; кілттерді қайта енгізу қажет",
     sumPlaylists: "Сүйікті плейлисттер: {n}",
-    sumTracks: { one: "Тректерді таңдау: {n} deal", other: "Тректерді таңдау: {n}-раундтар" },
+    sumTracks: {
+      one: "Тректерді таңдау: {n} deal",
+      other: "Тректерді таңдау: {n}-раундтар",
+    },
     sumSettings: "Қосымша, бақылау және сенсорлық тақта параметрлері; каталог көрінісі",
     warnNoSecrets: "Көшірмеде сервер мекенжайлары бар – файлды қауіпсіз жерде сақтаңыз.",
     warnSecrets: "Көшірмеде сервер мекенжайлары, TorrServer-ге кіру паролі (егер ол орнатылған болса) және теледидарларыңызға арналған жұптастыру кодтары бар – бұл файлды пароль секілді қауіпсіз сақтаңыз.",
@@ -2803,7 +2937,10 @@ export const kk: EnDict<typeof ru> = {
     noSubsMatch: "Осы атпен жазылымдар жоқ",
     foundReleases: "Қол тарихтары табылды",
     noFindingsMatch: "Табылған қолдар арасында сәйкес келетіндер жоқ",
-    moreFindings: { one: "және тағы бір тарату {n} – сұрағыңызды нақтылаңыз", other: "және тағы бір {n} таратылымы – сұрағыңызды нақтылаңыз" },
+    moreFindings: {
+      one: "және тағы бір тарату {n} – сұрағыңызды нақтылаңыз",
+      other: "және тағы бір {n} таратылымы – сұрағыңызды нақтылаңыз",
+    },
     sortAdded: "қосылған күні бойынша",
     sortFresh: "жаңа ашылулар",
     sortName: "аты бойынша",
@@ -2837,7 +2974,10 @@ export const kk: EnDict<typeof ru> = {
     calNextMonth: "Келесі ай",
     calDayEmpty: "Бұл күні ешқандай сериялар жоқ",
     calEarlier: "Бұрын ({n})",
-    calReleases: { one: "{n}-тің шығарылуы", other: "{n} шығарылымдары" },
+    calReleases: {
+      one: "{n}-тің шығарылуы",
+      other: "{n} шығарылымдары",
+    },
     calEmptySubs: "Қазіргі уақытта ағынмен көрсетуге сериалдар жоқ",
     calDayAria: "{date}, эпизодтар: {n}",
     calSheet: "Серия",

@@ -1,4 +1,3 @@
-/** The ka dictionary (DeepL draft, reviewed). Mirrors ru.ts; plurals one/other. */
 import type { EnDict } from './types';
 import type { ru } from './ru';
 export const ka: EnDict<typeof ru> = {
@@ -27,11 +26,17 @@ export const ka: EnDict<typeof ru> = {
     originalChip: "ორიგინალი",
     rusSubsChip: "რუსული სუბტიტრები",
     fullSeasonOnly: "მხოლოდ სრული სეზონი",
-    show: { one: "აჩვენეთ ხელი {n}", other: "{n}-ის ხელები" },
+    show: {
+      one: "აჩვენეთ ხელი {n}",
+      other: "{n}-ის ხელები",
+    },
   },
   common: {
     signInTo: "შედით {site}-ზე",
-    torrents: { one: "{n}-ის განაწილება", other: "{n}-ის რაუნდები" },
+    torrents: {
+      one: "{n}-ის განაწილება",
+      other: "{n}-ის რაუნდები",
+    },
     gb: "დიდი ბრიტანეთი",
     mb: "მმ",
     mbps: "მბ/წმ",
@@ -219,6 +224,7 @@ export const ka: EnDict<typeof ru> = {
     advanced: "გარდამავალი",
     expert: "გამოცდილი მომხმარებლებისთვის",
     phoneServer: "სერვერი თქვენს მობილურ ტელეფონზე",
+    diagnosticsHintStore: "გამორთულია, სანამ თავად არ ჩართავთ. პარამეტრების დაყენება, ავტორიზაცია, გადახდა და ხარვეზების ანგარიშები. არც მისამართები და არც ტოკენები. მედიის სახელები შეიძლება დარჩეს ჟურნალში.",
   },
   errors: {
     onlyAndroid: "ხელმისაწვდომია მხოლოდ Android აპლიკაციაში",
@@ -447,9 +453,18 @@ export const ka: EnDict<typeof ru> = {
     watchedDone: "ნანახი",
     addedMany: "დამატებულია ტორენტები: {n}",
     added: "დამატებულია: {titles}",
-    episodes: { one: "{n}-ის სერია", other: "{n}-ის ეპიზოდები" },
-    extDubs: { one: "+{n}-ის ხმა", other: "+ {n}-ის ხმოვანი ჩანაწერები" },
-    extDubsSubs: { one: "+{n}-ის ხმა, სუბტიტრები", other: "+{n}-ის ხმოვანი ჩანაწერები, სუბტიტრები" },
+    episodes: {
+      one: "{n}-ის სერია",
+      other: "{n}-ის ეპიზოდები",
+    },
+    extDubs: {
+      one: "+{n}-ის ხმა",
+      other: "+ {n}-ის ხმოვანი ჩანაწერები",
+    },
+    extDubsSubs: {
+      one: "+{n}-ის ხმა, სუბტიტრები",
+      other: "+{n}-ის ხმოვანი ჩანაწერები, სუბტიტრები",
+    },
     extSubs: "+სათაურები",
     select: "არჩევა",
     selectCancel: "არჩევის გაუქმება",
@@ -457,7 +472,10 @@ export const ka: EnDict<typeof ru> = {
     selectAll: "ყველას მონიშვნა",
     selectNone: "არჩევის გაუქმება",
     deleteN: "წაშლა ({n})",
-    deleteAsk: { one: "უნდა წავშალო დისტრიბუცია სერვერიდან ({n})?", other: "უნდა წავშალო თუ არა სერვერიდან დისტრიბუციის ფაილები ({n})?" },
+    deleteAsk: {
+      one: "უნდა წავშალო დისტრიბუცია სერვერიდან ({n})?",
+      other: "უნდა წავშალო თუ არა სერვერიდან დისტრიბუციის ფაილები ({n})?",
+    },
     deletedN: "ამოღებულია: {n}",
     deleteFailed: "შეუძლებელია წაშლა: {n}",
     actions: "მოქმედებები",
@@ -477,8 +495,14 @@ export const ka: EnDict<typeof ru> = {
     metaEpisodesOf: "სერია {from}–{to} {total}-დან",
   },
   series: {
-    seasons: { one: "{n}-ის სეზონი", other: "{n}-ის სეზონები" },
-    seasonsOf: { one: "ეპიზოდი {have} სერიიდან {n}", other: "სერიალში {have}, რომელიც {n} სეზონს მოიცავს" },
+    seasons: {
+      one: "{n}-ის სეზონი",
+      other: "{n}-ის სეზონები",
+    },
+    seasonsOf: {
+      one: "ეპიზოდი {have} სერიიდან {n}",
+      other: "სერიალში {have}, რომელიც {n} სეზონს მოიცავს",
+    },
     rowEnded: "დასრულებულია",
     toEpisodes: "სერიისკენ",
     watchedOf: "{have}-დან ნანახი {n}",
@@ -489,8 +513,14 @@ export const ka: EnDict<typeof ru> = {
     notInRelease: "არა ხელში",
     dubPriority: "პრიორიტეტი: {list}",
     findSeason: "იპოვე სეზონი {n}",
-    releases: { one: "{n}-ის განაწილება", other: "{n}-ის რაუნდები" },
-    deleteSeries: { one: "წაშალეთ სერია (ეპიზოდი {n})", other: "სერიის წაშლა ({n}-ის ეპიზოდები)" },
+    releases: {
+      one: "{n}-ის განაწილება",
+      other: "{n}-ის რაუნდები",
+    },
+    deleteSeries: {
+      one: "წაშალეთ სერია (ეპიზოდი {n})",
+      other: "სერიის წაშლა ({n}-ის ეპიზოდები)",
+    },
     noSeason: "სეზანსგარეშე",
     gone: "ეს სერია აღარ არის \"ჩემს\" სიაში.",
     goneTv: "სერიალი მედიათეკაში აღარ არის ხელმისაწვდომი",
@@ -513,12 +543,24 @@ export const ka: EnDict<typeof ru> = {
     badgeNext: "ახალი სერია {date}",
     badgeEpisode: "ახალი სერია",
     badgeSeason: "ახალი სეზონი",
-    seasonReleases: { one: "{n} ამ სეზონის გათამაშება", other: "{n}-ის შესატყვისი ამ სეზონში" },
-    files: { one: "{n}-ის ფაილი", other: "{n}-ის ფაილები" },
+    seasonReleases: {
+      one: "{n} ამ სეზონის გათამაშება",
+      other: "{n}-ის შესატყვისი ამ სეზონში",
+    },
+    files: {
+      one: "{n}-ის ფაილი",
+      other: "{n}-ის ფაილები",
+    },
     alreadyHave: "უკვე არსებობს ასეთი ხელი: {info}",
     keepOnly: "დაიტოვე მხოლოდ ეს",
-    keepOnlyAsk: { one: "შალო, {season}-ის მე-{n}-ი ეპიზოდი?", other: "{n}-ის კიდევ ერთი ეპიზოდი წავშალოთ {season}-ის სეზონიდან?" },
-    keepOnlyAskNoSeason: { one: "კიდევ ერთი {n}-ის არასეზონური დისტრიბუციის წაშლა?", other: "კიდევ ერთი {n}-ის არასეზონი იწყება?" },
+    keepOnlyAsk: {
+      one: "შალო, {season}-ის მე-{n}-ი ეპიზოდი?",
+      other: "{n}-ის კიდევ ერთი ეპიზოდი წავშალოთ {season}-ის სეზონიდან?",
+    },
+    keepOnlyAskNoSeason: {
+      one: "კიდევ ერთი {n}-ის არასეზონური დისტრიბუციის წაშლა?",
+      other: "კიდევ ერთი {n}-ის არასეზონი იწყება?",
+    },
     releaseDelete: "განაწილების წაშლა",
     releaseDeleteAsk: "შეიწყალეთ ტრანსლაცია \"{name}\"? ნახვების რაოდენობა გადავა \"{keeper}\"-ზე.",
     releaseDeleteCurrentAsk: "თქვენ ამჟამად ათამაშებთ ამ ხელს: '{name}'. გსურთ მისი წაშლა? თამაში გაგრძელდება '{keeper}'-ზე და მარკერები იქ გადაინაცვლებს.",
@@ -526,7 +568,10 @@ export const ka: EnDict<typeof ru> = {
     releaseDeletePack: "ეს პაკეტი სხვა სეზონებსაც შეიცავს. მისი წაშლა \"ჩემიდან\" მხოლოდ მათთან ერთად შეგიძლიათ.",
     releaseCarryFailed: "ნახვის ნიშნების გადატანა შეუძლებელია; განაწილება წაშლილი არ არის.",
     releaseDeleted: "განაწილება წაშლილია",
-    releaseDeleteLossAsk: { one: "{keeper} არ შეიცავს {n}-ის სერიებს ნახვების რაოდენობებით; მათი ნახვების რაოდენობა დაიკარგება. მაინც გსურთ მისი წაშლა?", other: "\"{keeper}\"-ში არ არის {n}-ის ეპიზოდები ნახვების რაოდენობით; მათი ნახვების რაოდენობა დაიკარგება. მაინც გსურთ მათი წაშლა?" },
+    releaseDeleteLossAsk: {
+      one: "{keeper} არ შეიცავს {n}-ის სერიებს ნახვების რაოდენობებით; მათი ნახვების რაოდენობა დაიკარგება. მაინც გსურთ მისი წაშლა?",
+      other: "\"{keeper}\"-ში არ არის {n}-ის ეპიზოდები ნახვების რაოდენობით; მათი ნახვების რაოდენობა დაიკარგება. მაინც გსურთ მათი წაშლა?",
+    },
     releaseDeleteBusy: "მოიცა, წინა ხელი ჯერ კიდევ იწმინდება",
     releasesHintDelete: "განაწილების წაშლა",
     releasesHintOk: "კარგი – გაშალე ხელი",
@@ -546,7 +591,10 @@ export const ka: EnDict<typeof ru> = {
     dubReset: "ნაგულისხმევი (გადატვირთვა)",
     dubChange: "ცვლილება",
     dubNote: "გაითვალისწინეთ ეს ამ სეზონისთვის. მომავალ სეზონშიც იმავე სტუდიას გამოვიყენებთ, თუ ის ხელმისაწვდომი იქნება, როგორც სატელევიზიო, ისე სატელეფონო გადაცემებისთვის.",
-    episodesOf: { one: "{have} სერიიდან {n}", other: "{have}-დან {n} ეპიზოდი" },
+    episodesOf: {
+      one: "{have} სერიიდან {n}",
+      other: "{have}-დან {n} ეპიზოდი",
+    },
     watchedSome: "{n}-ის ყურება",
     watchedEvery: "ნანახი",
     left: "{n} წუთი რჩება",
@@ -725,6 +773,12 @@ export const ka: EnDict<typeof ru> = {
       lgNoConnect: "LG: შესამოწმებელი კავშირი არ არის",
       lgProbeFailed: "LG: დეველოპერის რეჟიმის შემოწმება წარუმატებელი იყო",
       takeover: "\"{target}\"-თან დაკავშირება? \"{other}\"-თან მიმდინარე კავშირი დაიხურება.",
+      updateTitle: "OMP-ის განახლება",
+      updateTitleVersion: "OMP-ის განახლება {version}",
+      logStartUpdate: "გამოქვეყნდა ჩემი მობილურიდან: {what}",
+      logDoneUpdate: "OMP განახლდა მობილური ტელეფონის საშუალებით",
+      doneUpdate: "OMP განახლდა",
+      doneUpdateVersion: "OMP განახლდა {version}-მდე",
     },
     plan: {
       byModelYear: "{label} (მოდელის წლის მიხედვით)",
@@ -812,6 +866,7 @@ export const ka: EnDict<typeof ru> = {
       yandexSubscriptionNote: "თუ სატელევიზიო არხი გამოიწერეთ, APK ფაილების დაყენება შეუძლებელია, ხოლო \"ფაილების მენეჯერი\" ხელმისაწვდომი არ იქნება მოწყობილობის სრულად გადახდამდე.",
       yandexNoAdbNote: "YaOS-ს, როგორც წესი, არ აქვს \"დეველოპერებისთვის\" მენიუ ან ქსელის გამართვა, ამიტომ ტელეფონი თავად ვერ დააინსტალირებს OMP-ს.",
       yandexFaq: "იანდექსი: ინსტალაციის ყველა მეთოდი",
+      updateFromPhone: "განახლება თქვენი მობილური ტელეფონიდან",
     },
     assistant: {
       title: "დააინსტალირეთ OMP თქვენს ტელევიზორზე",
@@ -914,10 +969,22 @@ export const ka: EnDict<typeof ru> = {
     defaultPhone: "ტელეფონი",
     today: "დღეს",
     yesterday: "გუშინ",
-    seeds: { one: "{n}-ის სიდ", other: "{n}-ის გვერდი" },
-    leechers: { one: "{n}-ის პროფილი", other: "{n}-ის ლიჩები" },
-    downloaded: { one: "{n}-ჯერ გადმოწერილი", other: "{n}-ჯერ გადმოწერილი" },
-    dhtPeers: { one: "{n}-ის ონლაინ ნადიმობა", other: "{n}-ის ონლაინ თამაშები" },
+    seeds: {
+      one: "{n}-ის სიდ",
+      other: "{n}-ის გვერდი",
+    },
+    leechers: {
+      one: "{n}-ის პროფილი",
+      other: "{n}-ის ლიჩები",
+    },
+    downloaded: {
+      one: "{n}-ჯერ გადმოწერილი",
+      other: "{n}-ჯერ გადმოწერილი",
+    },
+    dhtPeers: {
+      one: "{n}-ის ონლაინ ნადიმობა",
+      other: "{n}-ის ონლაინ თამაშები",
+    },
     jackettHint: "დაბლოკილია საიტი Cloudflare-ის მიერ? მიუწვდით მას ბრაუზერის საშუალებით (საიტზე \"Search Sources\"-ში არსებული \"Log in\" ღილაკით) ან დაუკავშირდით Jackett-ის, Prowlarr-ის ან FlareSolverr-ის მეშვეობით – ინსტრუქციებისთვის იხილეთ \"კითხვები და პასუხები\" სექცია.",
     cloudflareTvOne: "{name} დაბლოკილია Cloudflare-ის მიერ – მასზე წვდომა მიიღეთ თქვენს მობილურზე \"წყაროების ძიების\" მეშვეობით.",
     cloudflareTvMany: "{names} დაბლოკილია Cloudflare-ის მიერ – მათზე წვდომა მიიღეთ თქვენს მობილურში \"წყაროების ძიების\" მეშვეობით.",
@@ -926,8 +993,14 @@ export const ka: EnDict<typeof ru> = {
       date: "თარიღის მიხედვით",
     },
     progress: {
-      line: { one: "{found} · {n}-მა აღმოაჩინა {sources}-დან, რომელმაც უპასუხა", other: "{found}-მა იპოვა · {n}-მა უპასუხა {sources}-დან" },
-      sources: { one: "{n}-ის წყარო", other: "{n}-ის წყაროები" },
+      line: {
+        one: "{found} · {n}-მა აღმოაჩინა {sources}-დან, რომელმაც უპასუხა",
+        other: "{found}-მა იპოვა · {n}-მა უპასუხა {sources}-დან",
+      },
+      sources: {
+        one: "{n}-ის წყარო",
+        other: "{n}-ის წყაროები",
+      },
       searchingIn: "მე ჯერ კიდევ ვუყურებ {names}-ში…",
       failed: "არ უპასუხა: {names}",
     },
@@ -1055,7 +1128,10 @@ export const ka: EnDict<typeof ru> = {
       thanksTitle: "მადლიერება",
       thanksEmpty: "ამჟამად ის ცარიელია. სახელი ჩნდება, თუ ადამიანმა ის თავად გახსნა.",
       thanksDown: "მადლიერების სიის ჩატვირთვა ამჟამად ვერ მოხერხდა.",
-      daysLeft: { one: "{n} დღე დარჩა", other: "{n} დღე დარჩა" },
+      daysLeft: {
+        one: "{n} დღე დარჩა",
+        other: "{n} დღე დარჩა",
+      },
       about: "გაიგეთ მეტი",
       tgMenu: "მენიუ",
       renew: "განახლება",
@@ -1129,8 +1205,14 @@ export const ka: EnDict<typeof ru> = {
       whereManual: "ხელით დამატებული",
       hiddenStates: "Jackett დაცულია პაროლით – თრექერების სტატუსი არ ჩანს",
       noTrackers: "არანაირი თრექერი",
-      trackers: { one: "{n}-ის თრექერი", other: "{n}-ის თრექერები" },
-      working: { one: "{n} მუშაობს", other: "{n} მუშაობს" },
+      trackers: {
+        one: "{n}-ის თრექერი",
+        other: "{n}-ის თრექერები",
+      },
+      working: {
+        one: "{n} მუშაობს",
+        other: "{n} მუშაობს",
+      },
       disabledAfterErrors: "შეცდომების გამო გათიშული",
       direct: "პირდაპირ · {rest}",
       directChecking: "პირდაპირ · ვამოწმებ…",
@@ -1138,9 +1220,18 @@ export const ka: EnDict<typeof ru> = {
       noKeyLine: "API გასაღები მჭირდება",
       badKeyLine: "არასწორი API გასაღები",
       justChecked: "ახლახან შევამოწმე",
-      checkedMin: { one: "{n}-ი შემოწმდა ერთი წუთის წინ", other: "შემოწმებულია {n} წუთის წინ" },
-      checkedHour: { one: "{n}-ი ერთი საათის წინ შემოწმდა", other: "შემოწმდა {n} საათის წინ" },
-      checkedDay: { one: "შემოწმებულია {n} დღის წინ", other: "ბოლოს შემოწმდა {n} დღის წინ" },
+      checkedMin: {
+        one: "{n}-ი შემოწმდა ერთი წუთის წინ",
+        other: "შემოწმებულია {n} წუთის წინ",
+      },
+      checkedHour: {
+        one: "{n}-ი ერთი საათის წინ შემოწმდა",
+        other: "შემოწმდა {n} საათის წინ",
+      },
+      checkedDay: {
+        one: "შემოწმებულია {n} დღის წინ",
+        other: "ბოლოს შემოწმდა {n} დღის წინ",
+      },
     },
     screen: {
       builtin: "ჩაშენებული · ტელეფონში",
@@ -1231,16 +1322,25 @@ export const ka: EnDict<typeof ru> = {
     nextAt: "შემდეგი შემოწმება ახლოს {time}",
     nextDayAt: "შემდეგ შეამოწმეთ {day}{time}-ის მახლობლად",
     everyHour: "საათში ერთხელ",
-    everyHours: { one: "{n} ყოველ საათში", other: "{n}ი საათი" },
+    everyHours: {
+      one: "{n} ყოველ საათში",
+      other: "{n}ი საათი",
+    },
     anyQuality: "ნებისმიერი",
     anyQualityRule: "ნებისმიერი ხარისხი",
     fromQuality: "{q}-ისგან",
     allSources: "ყველა წყარო",
     noSources: "წყაროების გარეშე",
-    minSeeds: { one: "{n}-ისგან სიდის", other: "{n}-ის გვერდიდან" },
+    minSeeds: {
+      one: "{n}-ისგან სიდის",
+      other: "{n}-ის გვერდიდან",
+    },
     maxSize: "{size}-მდე",
     noNotify: "წინასწარი შეტყობინების გარეშე",
-    fresh: { one: "{n} ახალი", other: "{n} ახალი" },
+    fresh: {
+      one: "{n} ახალი",
+      other: "{n} ახალი",
+    },
     episodeOut: "სერია გამოვიდა {to}",
     episodesOut: "გამოვიდა ეპიზოდები {from}–{to}",
     youHave: "{news} · თქვენ გაქვთ {range}",
@@ -1254,7 +1354,10 @@ export const ka: EnDict<typeof ru> = {
     foundNew: "ახლები იპოვეს: {n}",
     noNew: "ახალი დისტრიბუტივები არ არის",
     sourcesAnswered: "წყაროები: {answered}, {asked}-დან, უპასუხა",
-    skipped: { one: "ჯერ არ გვქონია შესაძლებლობა შემოწმების: {n}-ის გამოწერა", other: "ჯერ ვერ მოვასწარით შემოწმება: {n}-ის გამოწერები" },
+    skipped: {
+      one: "ჯერ არ გვქონია შესაძლებლობა შემოწმების: {n}-ის გამოწერა",
+      other: "ჯერ ვერ მოვასწარით შემოწმება: {n}-ის გამოწერები",
+    },
     notifyBlocked: "შეტყობინებები არ ჩანს: ისინი გამორთულია OMP-ისთვის",
     notifyOff: "OMP შეტყობინებები გამორთულია – გთხოვთ, ჩართოთ ისინი თქვენი Android-ის პარამეტრებში, რათა მიიღოთ შეტყობინებები ახალი დისტრიბუტივების შესახებ.",
     replace: {
@@ -1290,7 +1393,10 @@ export const ka: EnDict<typeof ru> = {
       allEnabled: "ყველაფერი შედის",
       allEnabledOption: "ყველაფერი შედის",
       noneChosen: "არ არის შერჩეული",
-      sourcesN: { one: "{n}-ის წყარო", other: "{n}-ის წყაროები" },
+      sourcesN: {
+        one: "{n}-ის წყარო",
+        other: "{n}-ის წყაროები",
+      },
       notify: "შეტყობინება",
       notifyHint: "თითოეული ახალი ხელისთვის",
       telegram: "ტელეგრამი",
@@ -1338,7 +1444,10 @@ export const ka: EnDict<typeof ru> = {
       keepsSkip: "\"Pass\"-ის პარამეტრები და კატეგორია გადადის",
       removesOld: "ძველი განაწილება წაიშალა სერვერიდან",
       searching: "ვეძებ...",
-      moreN: { one: "კიდევ ერთი ვარიანტი: {n}", other: "{n} მეტი პარამეტრი" },
+      moreN: {
+        one: "კიდევ ერთი ვარიანტი: {n}",
+        other: "{n} მეტი პარამეტრი",
+      },
       noOthers: "სხვები არ არიან",
       busy: "ცვლა... ამას შეიძლება დაჭირდეს ერთ წუთამდე.",
       replace: "ჩანაცვლება",
@@ -1365,7 +1474,10 @@ export const ka: EnDict<typeof ru> = {
     },
   },
   notify: {
-    newTorrents: { one: "{n}ახალი ხელი", other: "{n}-ის ახალი დისტრიბუტივები" },
+    newTorrents: {
+      one: "{n}ახალი ხელი",
+      other: "{n}-ის ახალი დისტრიბუტივები",
+    },
     episodeTitle: "{name}: გამოვიდა ეპიზოდი {to}",
     episodesTitle: "{name}: გამოვიდა ეპიზოდები {from}–{to}",
     rangeOfTotal: "{range}-დან {total}",
@@ -1575,7 +1687,10 @@ export const ka: EnDict<typeof ru> = {
       empty: "გამოწერები ჯერ არ არის – დაამატეთ ისინი თქვენს ტელეფონში ან დააჭირეთ ბარათზე ღილაკს \"მინდა ყურება\".",
       noMatch: "\"{q}\"-ს არ აქვს გამოწერები",
       anyQuality: "ნებისმიერი ხარისხი",
-      fresh: { one: "{n} ახალი", other: "{n} ახალი" },
+      fresh: {
+        one: "{n} ახალი",
+        other: "{n} ახალი",
+      },
       notify: "ანგარიში",
       better: "საუკეთესო ხარისხში",
       check: "შეამოწმეთ ახლავე",
@@ -1623,6 +1738,7 @@ export const ka: EnDict<typeof ru> = {
       hintOk: "კარგი – აირჩიეთ ხელი",
       hintBack: "უკან – დახურვა",
     },
+    devmodeBanner: "დეველოპერის რეჟიმი მალე იწურება – გაახანგრძლივეთ, რომ OMP თქვენი ტელევიზორიდან არ გაქრეს.",
   },
   tls: {
     untrustedTitle: "უნდა ვენდოთ თუ არა სერტიფიკატს {host}?",
@@ -1940,7 +2056,10 @@ export const ka: EnDict<typeof ru> = {
     trackerMark: "(მომყოლი)",
     seedsUnknown: "-",
     deadRelease: "განაწილების სერვერი არ პასუხობს – გთხოვთ, სცადოთ სხვა",
-    deadSeeds: { one: "სერვერი არ პასუხობს: {n} sid", other: "განაწილება არ უჭერს მხარს: {n} sidov" },
+    deadSeeds: {
+      one: "სერვერი არ პასუხობს: {n} sid",
+      other: "განაწილება არ უჭერს მხარს: {n} sidov",
+    },
     extDubsWebos: "ტელევიზორი არ უკრავს ამ გამოცემაში შემავალ გარკვეულ აუდიო ფორმატებს (DTS, FLAC და მსგავსი). ამის ნაცვლად, ის უკრავს ვიდეოს აუდიო ტრეკს.",
     extDubsBuiltin: "2160 Player-ი უზრუნველყოფს ცალკეული აუდიო ტრეკების მოსმენას: \"პარამეტრები\" → \"ვიდეო დამკვრელი\"",
     deleteAsk: "მომხმარებლის მიერ დამატებული ტორენტი სერვერიდან წაიშალოს?",
@@ -2022,7 +2141,10 @@ export const ka: EnDict<typeof ru> = {
       saveFailed: "შენახვა შეუძლებელია",
     },
     screen: {
-      peerCount: { one: "{n}-ის ნადიმი", other: "{n}-ის ნაწილი" },
+      peerCount: {
+        one: "{n}-ის ნადიმი",
+        other: "{n}-ის ნაწილი",
+      },
       loading: "იტვირთება…",
       notFound: "არ მოიძებნა არანაირი განაწილება",
       continueOnTv: "გაგრძელება ტელევიზიით · {ep}{time}-თან ერთად",
@@ -2305,6 +2427,9 @@ export const ka: EnDict<typeof ru> = {
     openOnStartupAllow: "ფანჯრების ზემოთ ჩვენების ჩართვა",
     openOnStartupOverlayAsk: "სისტემა ხელს უშლის პროგრამას გაშვებას მის წამოწყებისას. დაუშვით, რომ ის სხვა ფანჯრების ზემოდან გამოჩნდეს, რათა OMP ავტომატურად გაიხსნას.",
     openOnStartupNoScreen: "სისტემის პარამეტრების გახსნა შეუძლებელია.",
+    devmodeExtend: "რეჟიმის გახანგრძლივება",
+    devmodeOpened: "დეველოპერის რეჟიმი ღიაა – რეჟიმის გასახანგრძლივებლად დააჭირეთ \"გახანგრძლივებას\".",
+    devmodeOpenFailed: "ვერ შევძელი ტელევიზორზე დეველოპერის რეჟიმის ჩართვა.",
   },
   tvSources: {
     tsRutor: "რუტორ (TorrServer-ის ძიება)",
@@ -2605,11 +2730,20 @@ export const ka: EnDict<typeof ru> = {
     errEmpty: "კოპირებულ მასალაში აღდგენადი მონაცემები არ არის.",
     sumServers: "TorrServer სერვერები: {list}",
     sumTvs: "ტელევიზორები: {list}",
-    sumSubs: { one: "{n}-ის მონიტორინგის გამოწერა", other: "{n}-ის მონიტორინგის გამოწერები" },
-    sumSources: { one: "წყაროების ძიება: {n}-ის გადამრთველი", other: "წყაროების ძიება: {n}-ის გადამრთველები" },
+    sumSubs: {
+      one: "{n}-ის მონიტორინგის გამოწერა",
+      other: "{n}-ის მონიტორინგის გამოწერები",
+    },
+    sumSources: {
+      one: "წყაროების ძიება: {n}-ის გადამრთველი",
+      other: "წყაროების ძიება: {n}-ის გადამრთველები",
+    },
     sumIndexers: "ინდექსატორები (Jackett, Prowlarr): {n} – არ არის API გასაღებები; მოგიწევთ გასაღებების ხელახლა შეყვანა",
     sumPlaylists: "საყვარელი პლეისლისტები: {n}",
-    sumTracks: { one: "ტრეკების შერჩევა: {n} deal", other: "ტრეკების შერჩევა: {n}-ის რაუნდები" },
+    sumTracks: {
+      one: "ტრეკების შერჩევა: {n} deal",
+      other: "ტრეკების შერჩევა: {n}-ის რაუნდები",
+    },
     sumSettings: "აპლიკაციის, მონიტორინგისა და სენსორული პანელის პარამეტრები; კატალოგის ხედი",
     warnNoSecrets: "ფაილში სერვერის მისამართებია – გთხოვთ, შეინახეთ ის უსაფრთხო ადგილას.",
     warnSecrets: "ფაილში მოცემულია სერვერის მისამართები, თქვენი TorrServer-ის წვდომის პაროლი (თუ დაყენებულია) და თქვენი ტელევიზორების წყვილების კოდები – მოეპყარით ამ ფაილს ისე, როგორც პაროლს.",
@@ -2803,7 +2937,10 @@ export const ka: EnDict<typeof ru> = {
     noSubsMatch: "ამ სახელით გამოწერები არ არის",
     foundReleases: "ხელის ისტორიები ნაპოვნია",
     noFindingsMatch: "პოვნილ ხელებს შორის შესატყვისობები არ მოიძებნა",
-    moreFindings: { one: "და კიდევ ერთი დისტრიბუტივი {n} – გთხოვთ, დააზუსტოთ თქვენი მოთხოვნა", other: "და კიდევ ერთი {n}-ის განაწილება – გთხოვთ, დააზუსტოთ თქვენი მოთხოვნა" },
+    moreFindings: {
+      one: "და კიდევ ერთი დისტრიბუტივი {n} – გთხოვთ, დააზუსტოთ თქვენი მოთხოვნა",
+      other: "და კიდევ ერთი {n}-ის განაწილება – გთხოვთ, დააზუსტოთ თქვენი მოთხოვნა",
+    },
     sortAdded: "დამატების თარიღის მიხედვით",
     sortFresh: "ახალი აღმოჩენები",
     sortName: "სახელით",
@@ -2837,7 +2974,10 @@ export const ka: EnDict<typeof ru> = {
     calNextMonth: "მომავალ თვეს",
     calDayEmpty: "ამ დღეს სერიები არ არის",
     calEarlier: "წინა ({n})",
-    calReleases: { one: "{n}-ის გამოშვება", other: "{n}-ის რელიზები" },
+    calReleases: {
+      one: "{n}-ის გამოშვება",
+      other: "{n}-ის რელიზები",
+    },
     calEmptySubs: "ამჟამად სטריმინგისთვის სერიები არ არის ხელმისაწვდომი",
     calDayAria: "{date}, სერია: {n}",
     calSheet: "სერიალი",

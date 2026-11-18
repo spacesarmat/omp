@@ -1,4 +1,3 @@
-/** The uz dictionary (DeepL draft, reviewed). Mirrors ru.ts; plurals one/other. */
 import type { EnDict } from './types';
 import type { ru } from './ru';
 export const uz: EnDict<typeof ru> = {
@@ -27,11 +26,17 @@ export const uz: EnDict<typeof ru> = {
     originalChip: "Asl nusxa",
     rusSubsChip: "Ruscha subtitrlar",
     fullSeasonOnly: "Faqat to'liq mavsum",
-    show: { one: "Qo'lni ko'rsating {n}", other: "{n} qo'llarini ko'rsating" },
+    show: {
+      one: "Qo'lni ko'rsating {n}",
+      other: "{n} qo'llarini ko'rsating",
+    },
   },
   common: {
     signInTo: "{site} saytiga kiring",
-    torrents: { one: "{n} taqsimoti", other: "{n}-dan aylanalar" },
+    torrents: {
+      one: "{n} taqsimoti",
+      other: "{n}-dan aylanalar",
+    },
     gb: "Buyuk Britaniya",
     mb: "MB",
     mbps: "MB/s",
@@ -219,6 +224,7 @@ export const uz: EnDict<typeof ru> = {
     advanced: "Rivojlangan",
     expert: "Tajriba orttirgan foydalanuvchilar uchun",
     phoneServer: "Mobil telefoningizdagi server",
+    diagnosticsHintStore: "Siz uni o'zingiz yoqmaguningizcha o'chirilgan.  Sozlash, tizimga kirish, to'lov va nosozlik hisobotlari.  Hech qanday manzillar yoki tokenlar yo'q.  Media nomlari logda qolishi mumkin.",
   },
   errors: {
     onlyAndroid: "Faqat Android ilovasida mavjud",
@@ -447,9 +453,18 @@ export const uz: EnDict<typeof ru> = {
     watchedDone: "Ko'rildi",
     addedMany: "Qo'shilgan torrentlar: {n}",
     added: "Qo'shildi: {titles}",
-    episodes: { one: "{n} seriyasi", other: "{n} epizodlari" },
-    extDubs: { one: "+{n} ovozli izoh", other: "{n} ovozli izohlar" },
-    extDubsSubs: { one: "+{n} ovozi, subtitrlar", other: "+{n} ovozli izohlar, subtitrlar" },
+    episodes: {
+      one: "{n} seriyasi",
+      other: "{n} epizodlari",
+    },
+    extDubs: {
+      one: "+{n} ovozli izoh",
+      other: "{n} ovozli izohlar",
+    },
+    extDubsSubs: {
+      one: "+{n} ovozi, subtitrlar",
+      other: "+{n} ovozli izohlar, subtitrlar",
+    },
     extSubs: "+subtitellar",
     select: "Tanlang",
     selectCancel: "Tanlovni bekor qiling",
@@ -457,7 +472,10 @@ export const uz: EnDict<typeof ru> = {
     selectAll: "Barchasini tanlang",
     selectNone: "Tanlovni bekor qiling",
     deleteN: "O'chirish ({n})",
-    deleteAsk: { one: "Tarqatishni serverdan ({n}) o'chirib tashlaymi?", other: "Tarqatish fayllarini ({n}) serverdan o'chirib tashlaymi?" },
+    deleteAsk: {
+      one: "Tarqatishni serverdan ({n}) o'chirib tashlaymi?",
+      other: "Tarqatish fayllarini ({n}) serverdan o'chirib tashlaymi?",
+    },
     deletedN: "Olib tashlandi: {n}",
     deleteFailed: "O'chira olmadi: {n}",
     actions: "Harakatlar",
@@ -477,8 +495,14 @@ export const uz: EnDict<typeof ru> = {
     metaEpisodesOf: "{from}–{to} seriyasi {total} dan",
   },
   series: {
-    seasons: { one: "{n} mavsumi", other: "{n} mavsumlari" },
-    seasonsOf: { one: "Seriyaning <img id=\"1\"/> va {n} epizodlaridagi {have}", other: "{have} seriyasida, {n} mavsumlarini qamrab olgan" },
+    seasons: {
+      one: "{n} mavsumi",
+      other: "{n} mavsumlari",
+    },
+    seasonsOf: {
+      one: "Seriyaning <img id=\"1\"/> va {n} epizodlaridagi {have}",
+      other: "{have} seriyasida, {n} mavsumlarini qamrab olgan",
+    },
     rowEnded: "Tugallangan",
     toEpisodes: "seriyaga",
     watchedOf: "{have} tomosha qilingan {n} ichidan",
@@ -489,8 +513,14 @@ export const uz: EnDict<typeof ru> = {
     notInRelease: "qo'lda emas",
     dubPriority: "Ustuvorlik: {list}",
     findSeason: "{n} mavsumini toping",
-    releases: { one: "{n} taqsimoti", other: "{n}-dan aylanalar" },
-    deleteSeries: { one: "Seriyani o'chirish ({n}-epizod)", other: "Seriyani o'chirish ({n} epizodlari)" },
+    releases: {
+      one: "{n} taqsimoti",
+      other: "{n}-dan aylanalar",
+    },
+    deleteSeries: {
+      one: "Seriyani o'chirish ({n}-epizod)",
+      other: "Seriyani o'chirish ({n} epizodlari)",
+    },
     noSeason: "Mavsumdan tashqari",
     gone: "Ushbu seriya endi 'My'da yo'q.",
     goneTv: "Ushbu serial media kutubxonasida endi mavjud emas.",
@@ -513,12 +543,24 @@ export const uz: EnDict<typeof ru> = {
     badgeNext: "yangi seriya {date}",
     badgeEpisode: "yangi seriya",
     badgeSeason: "yangi mavsum",
-    seasonReleases: { one: "{n} bu mavsumning tortishuvi", other: "{n} bu mavsum mos keladi" },
-    files: { one: "{n} fayli", other: "{n} fayllari" },
+    seasonReleases: {
+      one: "{n} bu mavsumning tortishuvi",
+      other: "{n} bu mavsum mos keladi",
+    },
+    files: {
+      one: "{n} fayli",
+      other: "{n} fayllari",
+    },
     alreadyHave: "Allaqachon bunday qo'l mavjud: {info}",
     keepOnly: "Faqat shuni saqlang",
-    keepOnlyAsk: { one: "{season}-mavsumning yana bir {n}epizodini o'chirib tashlaymizmi?", other: "{season} mavsumidan yana bir {n} epizodini o'chirib tashlaymizmi?" },
-    keepOnlyAskNoSeason: { one: "{n}ning yana bir mavsumdan tashqari tarqatishini o'chirib tashlaymizmi?", other: "{n}ning yana bir mavsumdan tashqari jalb etish marosimini o'chirib tashlaymizmi?" },
+    keepOnlyAsk: {
+      one: "{season}-mavsumning yana bir {n}epizodini o'chirib tashlaymizmi?",
+      other: "{season} mavsumidan yana bir {n} epizodini o'chirib tashlaymizmi?",
+    },
+    keepOnlyAskNoSeason: {
+      one: "{n}ning yana bir mavsumdan tashqari tarqatishini o'chirib tashlaymizmi?",
+      other: "{n}ning yana bir mavsumdan tashqari jalb etish marosimini o'chirib tashlaymizmi?",
+    },
     releaseDelete: "Tarqatishni o'chirish",
     releaseDeleteAsk: "'{name}' efirini o'chirib tashlashingiz mumkinmi? Ko'rish sonlari '{keeper}' ga o'tkaziladi.",
     releaseDeleteCurrentAsk: "Hozirda siz ushbu qo'lni ko'ryapsiz: '{name}'. Uni olib tashlamoqchimisiz? O'yin '{keeper}'da davom etadi va markerlar o'sha yerga ko'chadi.",
@@ -526,7 +568,10 @@ export const uz: EnDict<typeof ru> = {
     releaseDeletePack: "Ushbu paketda boshqa mavsumlar ham mavjud. Siz uni faqat 'My' bo'limidan ular bilan birga o'chirishingiz mumkin.",
     releaseCarryFailed: "Ko'rish belgilarini ko'chirib bo'lmaydi; tarqatma o'chirilmagan.",
     releaseDeleted: "Tarqatish olib tashlandi",
-    releaseDeleteLossAsk: { one: "{keeper} {n} seriyasidagi ko'rish sonlarini o'z ichiga olmaydi; ular yo'qoladi. Baribir uni o'chirmoqchimisiz?", other: "{keeper}'da ko'rish soniga ega {n} epizodlari yo'q; ularning ko'rish sonlari yo'qoladi. Ularni o'chirib tashlamoqchimisiz?" },
+    releaseDeleteLossAsk: {
+      one: "{keeper} {n} seriyasidagi ko'rish sonlarini o'z ichiga olmaydi; ular yo'qoladi. Baribir uni o'chirmoqchimisiz?",
+      other: "{keeper}'da ko'rish soniga ega {n} epizodlari yo'q; ularning ko'rish sonlari yo'qoladi. Ularni o'chirib tashlamoqchimisiz?",
+    },
     releaseDeleteBusy: "Bir oz sabr qiling, oldingi qo'l hali tozalanmoqda.",
     releasesHintDelete: "Tarqatishni o'chirish",
     releasesHintOk: "OK – qo'lni oching",
@@ -546,7 +591,10 @@ export const uz: EnDict<typeof ru> = {
     dubReset: "Standart bo'yicha (qayta tiklash)",
     dubChange: "O'zgartirish",
     dubNote: "Bu mavsum uchun buni yodda tuting. Agar u mavjud bo'lsa, keyingi mavsumda ham shu studiya televideniye va telefon efirlari uchun ishlatiladi.",
-    episodesOf: { one: "{have}, {n} seriyasidan", other: "{have} {n} seriyasidan" },
+    episodesOf: {
+      one: "{have}, {n} seriyasidan",
+      other: "{have} {n} seriyasidan",
+    },
     watchedSome: "{n}ni tomosha qildi",
     watchedEvery: "ko'rildi",
     left: "{n} daqiqa qoldi",
@@ -725,6 +773,12 @@ export const uz: EnDict<typeof ru> = {
       lgNoConnect: "LG: Tekshirish uchun ulanish yo'q",
       lgProbeFailed: "LG: Rivojlantiruvchi rejim tekshiruvi muvaffaqiyatsiz bo'ldi",
       takeover: "'{target}'ga ulanishmi? Joriy '{other}'ga ulanish yopiladi.",
+      updateTitle: "OMPni yangilash",
+      updateTitleVersion: "OMPni yangilash {version}",
+      logStartUpdate: "Mobilimdan joylandi: {what}",
+      logDoneUpdate: "OMP mobil telefon orqali yangilandi",
+      doneUpdate: "OMP yangilandi",
+      doneUpdateVersion: "OMP {version} ga yangilandi.",
     },
     plan: {
       byModelYear: "{label} (model yili bo'yicha)",
@@ -812,6 +866,7 @@ export const uz: EnDict<typeof ru> = {
       yandexSubscriptionNote: "Agar TV Station obuna orqali sotib olingan bo'lsa, APK-larni o'rnatib bo'lmaydi va 'File Manager' qurilma to'liq to'langanigacha mavjud bo'lmaydi.",
       yandexNoAdbNote: "YaOS odatda 'Dasturchilar uchun' menyusi yoki tarmoqni xatoliklarni tuzatish imkoniyatiga ega emas, shuning uchun telefon OMPni o'zi o'rnatolmaydi.",
       yandexFaq: "Yandex: barcha o'rnatish usullari",
+      updateFromPhone: "Mobil telefoningizdan yangilanish",
     },
     assistant: {
       title: "TVingizga OMPni o'rnating",
@@ -914,10 +969,22 @@ export const uz: EnDict<typeof ru> = {
     defaultPhone: "Telefon",
     today: "bugun",
     yesterday: "kecha",
-    seeds: { one: "{n}-ning sidi", other: "{n}ning yon tomoni" },
-    leechers: { one: "{n} profili", other: "{n}liklari" },
-    downloaded: { one: "{n} marta yuklab olindi", other: "{n} marta yuklab olindi" },
-    dhtPeers: { one: "{n} ziyofati onlayn", other: "{n} onlayn o'yinlari" },
+    seeds: {
+      one: "{n}-ning sidi",
+      other: "{n}ning yon tomoni",
+    },
+    leechers: {
+      one: "{n} profili",
+      other: "{n}liklari",
+    },
+    downloaded: {
+      one: "{n} marta yuklab olindi",
+      other: "{n} marta yuklab olindi",
+    },
+    dhtPeers: {
+      one: "{n} ziyofati onlayn",
+      other: "{n} onlayn o'yinlari",
+    },
     jackettHint: "Sayt Cloudflare tomonidan bloklanganmi? Uni brauzer orqali (saytdagi 'Log in' tugmasi orqali 'Search Sources' bo'limida) oching yoki Jackett, Prowlarr yoki FlareSolverr orqali ulaning – ko'rsatmalar uchun 'Savol va javoblar' bo'limiga qarang.",
     cloudflareTvOne: "{name} Cloudflare tomonidan bloklangan – uni mobil qurilmangizda 'Search Sources' orqali oching",
     cloudflareTvMany: "{names} Cloudflare tomonidan bloklangan – ularga mobil qurilmangizda 'Search Sources' orqali kirishingiz mumkin.",
@@ -926,8 +993,14 @@ export const uz: EnDict<typeof ru> = {
       date: "Sanaga ko'ra",
     },
     progress: {
-      line: { one: "{found} va {n} {sources} javob berdi", other: "{found} topildi · {n} {sources} dan javob berdi" },
-      sources: { one: "{n} manbai", other: "{n} manbalari" },
+      line: {
+        one: "{found} va {n} {sources} javob berdi",
+        other: "{found} topildi · {n} {sources} dan javob berdi",
+      },
+      sources: {
+        one: "{n} manbai",
+        other: "{n} manbalari",
+      },
       searchingIn: "Men hanuzgacha {names}da qidiryapman…",
       failed: "Javob bermadi: {names}",
     },
@@ -1055,7 +1128,10 @@ export const uz: EnDict<typeof ru> = {
       thanksTitle: "Tashakkurlar",
       thanksEmpty: "Hozircha bo'sh. Nom shaxs uni o'zi ochgan taqdirda paydo bo'ladi.",
       thanksDown: "Tashakkurlar ro'yxati hozircha yuklanmadi.",
-      daysLeft: { one: "{n} kun qoldi", other: "{n} kun qoldi" },
+      daysLeft: {
+        one: "{n} kun qoldi",
+        other: "{n} kun qoldi",
+      },
       about: "Batafsil o'qish",
       tgMenu: "Menyu",
       renew: "Yangilash",
@@ -1129,8 +1205,14 @@ export const uz: EnDict<typeof ru> = {
       whereManual: "qo'lda qo'shildi",
       hiddenStates: "Jackett parol bilan himoyalangan – trekerlarning holati ko'rinmaydi.",
       noTrackers: "hech qanday kuzatuvchi yo'q",
-      trackers: { one: "{n} kuzatuvchisi", other: "{n} kuzatuvchilari" },
-      working: { one: "{n} ishlaydi", other: "{n} ishlayapti" },
+      trackers: {
+        one: "{n} kuzatuvchisi",
+        other: "{n} kuzatuvchilari",
+      },
+      working: {
+        one: "{n} ishlaydi",
+        other: "{n} ishlayapti",
+      },
       disabledAfterErrors: "Xatoliklar tufayli o'chirilgan",
       direct: "to'g'ridan-to'g'ri · {rest}",
       directChecking: "to'g'ridan-to'g'ri · Men tekshiryapman…",
@@ -1138,9 +1220,18 @@ export const uz: EnDict<typeof ru> = {
       noKeyLine: "Menga API kaliti kerak",
       badKeyLine: "Noto'g'ri API kaliti",
       justChecked: "Faqatgina tekshirdim",
-      checkedMin: { one: "{n}ni bir daqiqa oldin tekshirildi", other: "{n} daqiqa oldin tekshirildi" },
-      checkedHour: { one: "{n}ni bir soat oldin tekshirdim", other: "{n} soat oldin tekshirildi" },
-      checkedDay: { one: "{n} kun oldin tekshirildi", other: "Oxirgi marta {n} kun oldin tekshirilgan" },
+      checkedMin: {
+        one: "{n}ni bir daqiqa oldin tekshirildi",
+        other: "{n} daqiqa oldin tekshirildi",
+      },
+      checkedHour: {
+        one: "{n}ni bir soat oldin tekshirdim",
+        other: "{n} soat oldin tekshirildi",
+      },
+      checkedDay: {
+        one: "{n} kun oldin tekshirildi",
+        other: "Oxirgi marta {n} kun oldin tekshirilgan",
+      },
     },
     screen: {
       builtin: "Ichiga o'rnatilgan · telefonda",
@@ -1231,16 +1322,25 @@ export const uz: EnDict<typeof ru> = {
     nextAt: "Keyingi tekshiruvni {time} yaqinida bajaring",
     nextDayAt: "Keyingi tekshiruvni {day}{time} yaqinida tekshiring.",
     everyHour: "soatiga bir marta",
-    everyHours: { one: "{n} har soatda", other: "{n} soat" },
+    everyHours: {
+      one: "{n} har soatda",
+      other: "{n} soat",
+    },
     anyQuality: "Har qanday",
     anyQualityRule: "har qanday sifat",
     fromQuality: "{q}dan p",
     allSources: "Barcha manbalar",
     noSources: "Manbalar yo'q",
-    minSeeds: { one: "{n}dan Sida", other: "{n}ning sahifasidan" },
+    minSeeds: {
+      one: "{n}dan Sida",
+      other: "{n}ning sahifasidan",
+    },
     maxSize: "{size} GB gacha",
     noNotify: "oldindan ogohlantirmasdan",
-    fresh: { one: "{n} yangi", other: "{n} yangi" },
+    fresh: {
+      one: "{n} yangi",
+      other: "{n} yangi",
+    },
     episodeOut: "Seriya e{to} qilingan.",
     episodesOut: "{from}–{to} epizodlari chiqarildi",
     youHave: "{news} · sizda {range} bor",
@@ -1254,7 +1354,10 @@ export const uz: EnDict<typeof ru> = {
     foundNew: "Yangi topilganlar: {n}",
     noNew: "Yangi tarqatmalar yo'q",
     sourcesAnswered: "Manbalar: {answered}, {asked}'dan, javob berdi",
-    skipped: { one: "Biz hali tekshirib ko'rishga ulgurmadik: {n} obunasi", other: "Biz hali tekshirishga ulgurmadik: {n} obunalar" },
+    skipped: {
+      one: "Biz hali tekshirib ko'rishga ulgurmadik: {n} obunasi",
+      other: "Biz hali tekshirishga ulgurmadik: {n} obunalar",
+    },
     notifyBlocked: "Bildirishnomalar ko'rsatilmaydi: ular OMP uchun o'chirilgan.",
     notifyOff: "OMP bildirishnomalari o'chirilgan – yangi tarqatmalar haqida xabardor bo'lish uchun iltimos, ularni Android sozlamalaringizda yoqing",
     replace: {
@@ -1290,7 +1393,10 @@ export const uz: EnDict<typeof ru> = {
       allEnabled: "hammasi kiritilgan",
       allEnabledOption: "Hammasi kiritilgan",
       noneChosen: "tanlanmagan",
-      sourcesN: { one: "{n} manbai", other: "{n} manbalari" },
+      sourcesN: {
+        one: "{n} manbai",
+        other: "{n} manbalari",
+      },
       notify: "Xabar berish",
       notifyHint: "har bir yangi qo'l uchun",
       telegram: "Telegram",
@@ -1338,7 +1444,10 @@ export const uz: EnDict<typeof ru> = {
       keepsSkip: "'Pass' sozlamalari va kategoriyasi o'tkaziladi.",
       removesOld: "Eski tarqatma serverdan o'chiriladi.",
       searching: "Men izlayapman…",
-      moreN: { one: "Yana bir variant: {n}", other: "{n} ko'proq imkoniyatlar" },
+      moreN: {
+        one: "Yana bir variant: {n}",
+        other: "{n} ko'proq imkoniyatlar",
+      },
       noOthers: "Boshqalari yo'q",
       busy: "Almashish… Bu bir daqiqagacha davom etishi mumkin.",
       replace: "O'rnini bosish",
@@ -1365,7 +1474,10 @@ export const uz: EnDict<typeof ru> = {
     },
   },
   notify: {
-    newTorrents: { one: "{n} yangi qo'l", other: "{n} yangi tarqatmalar" },
+    newTorrents: {
+      one: "{n} yangi qo'l",
+      other: "{n} yangi tarqatmalar",
+    },
     episodeTitle: "{name}: {to} epizodi chiqarildi",
     episodesTitle: "{name}: {from}–{to} epizodlari chiqarildi",
     rangeOfTotal: "{range}dan {total}",
@@ -1575,7 +1687,10 @@ export const uz: EnDict<typeof ru> = {
       empty: "Hali obunalar yo'q – ularni telefoningizga qo'shing yoki kartochkadagi 'Men tomosha qilishni xohlayman' tugmasini bosib obuna bo'ling.",
       noMatch: "'{q}' bilan obunalar yo'q.",
       anyQuality: "har qanday sifat",
-      fresh: { one: "{n} yangi", other: "{n} yangi" },
+      fresh: {
+        one: "{n} yangi",
+        other: "{n} yangi",
+      },
       notify: "Hisobot",
       better: "Eng yaxshi sifatda",
       check: "Hozir tekshiring",
@@ -1623,6 +1738,7 @@ export const uz: EnDict<typeof ru> = {
       hintOk: "OK – qo'lni tanlang",
       hintBack: "Orqaga – Yopish",
     },
+    devmodeBanner: "Rivojlantiruvchi rejim tez orada tugaydi – uni uzaytiring, shunda OMP televizoringizdan yo'qolmaydi",
   },
   tls: {
     untrustedTitle: "{host} sertifikatiga ishonishimiz kerakmi?",
@@ -1940,7 +2056,10 @@ export const uz: EnDict<typeof ru> = {
     trackerMark: "(izlovchi)",
     seedsUnknown: "-",
     deadRelease: "Tarqatish serveri javob bermayapti – iltimos, boshqasini sinab ko'ring",
-    deadSeeds: { one: "Tarqatish javob bermayapti: {n} sid", other: "Tarqatish javob bermayapti: {n} sidov" },
+    deadSeeds: {
+      one: "Tarqatish javob bermayapti: {n} sid",
+      other: "Tarqatish javob bermayapti: {n} sidov",
+    },
     extDubsWebos: "TV ushbu nashrga kiritilgan ba'zi audio formatlarni (DTS, FLAC va shunga o'xshash) ijro eta olmaydi. Buning o'rniga videodan olingan audio yo'lak ijro etiladi.",
     extDubsBuiltin: "2160 Player individual audio treklarni yoqish imkonini beradi: 'Sozlamalar' → 'Video pleer'",
     deleteAsk: "Torrenti serverdan o'chirib tashlaymizmi?",
@@ -2022,7 +2141,10 @@ export const uz: EnDict<typeof ru> = {
       saveFailed: "Saqlash mumkin emas",
     },
     screen: {
-      peerCount: { one: "{n} ziyofati", other: "{n}ning pirovlari" },
+      peerCount: {
+        one: "{n} ziyofati",
+        other: "{n}ning pirovlari",
+      },
       loading: "Yuklanmoqda…",
       notFound: "Tarqatish topilmadi",
       continueOnTv: "TVda davom eting · {ep}{time}bilan",
@@ -2305,6 +2427,9 @@ export const uz: EnDict<typeof ru> = {
     openOnStartupAllow: "Derazalar ustida ko'rsatishni yoqish",
     openOnStartupOverlayAsk: "Tizim dasturni ishga tushirilganda bloklaydi. Uni boshqa oynalarning ustida ko'rinishiga ruxsat bering, shunda OMP avtomatik ravishda ochiladi.",
     openOnStartupNoScreen: "Tizim sozlamalarini ochib bo'lmadi.",
+    devmodeExtend: "Tartibni uzaytirish",
+    devmodeOpened: "Rivojlantiruvchi rejim ochiq – rejimni kengaytirish uchun ichidagi 'Kengaytirish' tugmasini bosing",
+    devmodeOpenFailed: "Men televizorda ishlab chiquvchi rejimini yoqolmadim.",
   },
   tvSources: {
     tsRutor: "rutor (TorrServer qidiruvi)",
@@ -2605,11 +2730,20 @@ export const uz: EnDict<typeof ru> = {
     errEmpty: "Ko'chirmada tiklab bo'ladigan ma'lumot yo'q.",
     sumServers: "TorrServer serverlari: {list}",
     sumTvs: "Televizorlar: {list}",
-    sumSubs: { one: "{n} monitoring obunasini", other: "{n} monitoring obunalari" },
-    sumSources: { one: "Qidiruv manbalari: {n}-kalit", other: "Qidiruv manbalari: {n} almashtiruvchilari" },
+    sumSubs: {
+      one: "{n} monitoring obunasini",
+      other: "{n} monitoring obunalari",
+    },
+    sumSources: {
+      one: "Qidiruv manbalari: {n}-kalit",
+      other: "Qidiruv manbalari: {n} almashtiruvchilari",
+    },
     sumIndexers: "Indekslovchilar (Jackett, Prowlarr): {n} – API kalitlari yo'q; kalitlarni qayta kiritishingiz kerak bo'ladi",
     sumPlaylists: "Sevimli pleyslistlar: {n}",
-    sumTracks: { one: "Treklardan tanlash: {n} deal", other: "Treklardan tanlash: {n}-aylana" },
+    sumTracks: {
+      one: "Treklardan tanlash: {n} deal",
+      other: "Treklardan tanlash: {n}-aylana",
+    },
     sumSettings: "Ilova, monitoring va touchpad sozlamalari; katalog ko'rinishi",
     warnNoSecrets: "Nusxada server manzillari mavjud – iltimos, faylni xavfsiz joyda saqlang.",
     warnSecrets: "Nusxada server manzillari, TorrServeringizga kirish paroli (agar belgilangan bo'lsa) va televizorlaringiz uchun juftlashtirish kodlari mavjud – bu faylni parol kabi muomala qiling.",
@@ -2803,7 +2937,10 @@ export const uz: EnDict<typeof ru> = {
     noSubsMatch: "Ushbu nom bilan obunalar yo'q.",
     foundReleases: "Topilgan qo'l tarixlari",
     noFindingsMatch: "Topilgan qo'llar orasida mos keladiganlari yo'q.",
-    moreFindings: { one: "va yana bir taqsimot {n} – iltimos, so'rovingizni aniqlashtiring", other: "va yana bir {n} taqsimoti – iltimos, so'rovingizni aniqlashtiring" },
+    moreFindings: {
+      one: "va yana bir taqsimot {n} – iltimos, so'rovingizni aniqlashtiring",
+      other: "va yana bir {n} taqsimoti – iltimos, so'rovingizni aniqlashtiring",
+    },
     sortAdded: "qo'shilgan sanaga ko'ra",
     sortFresh: "yangi kashfiyotlar",
     sortName: "nom bilan",
@@ -2837,7 +2974,10 @@ export const uz: EnDict<typeof ru> = {
     calNextMonth: "Keyingi oy",
     calDayEmpty: "Bu kunda hech qanday serial yo'q.",
     calEarlier: "Oldin ({n})",
-    calReleases: { one: "{n}-ning chiqarilishi", other: "{n} chiqarilishlari" },
+    calReleases: {
+      one: "{n}-ning chiqarilishi",
+      other: "{n} chiqarilishlari",
+    },
     calEmptySubs: "Hozirda tomosha qilish uchun hech qanday serial mavjud emas.",
     calDayAria: "{date}, epizodlar: {n}",
     calSheet: "Seri",

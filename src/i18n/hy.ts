@@ -1,4 +1,3 @@
-/** The hy dictionary (DeepL draft, reviewed). Mirrors ru.ts; plurals one/other. */
 import type { EnDict } from './types';
 import type { ru } from './ru';
 export const hy: EnDict<typeof ru> = {
@@ -27,11 +26,17 @@ export const hy: EnDict<typeof ru> = {
     originalChip: "Առաջնօրինակ",
     rusSubsChip: "ռուսերեն ենթագրեր",
     fullSeasonOnly: "Միայն ամբողջ մրցաշրջան",
-    show: { one: "Ցուցադրել ձեռքը {n}", other: "Ցույց տալ {n}-ի ձեռքերը" },
+    show: {
+      one: "Ցուցադրել ձեռքը {n}",
+      other: "Ցույց տալ {n}-ի ձեռքերը",
+    },
   },
   common: {
     signInTo: "Մուտք գործեք {site} հասցեով",
-    torrents: { one: "{n}-ի բաշխում", other: "{n}-ի շրջափուլեր" },
+    torrents: {
+      one: "{n}-ի բաշխում",
+      other: "{n}-ի շրջափուլեր",
+    },
     gb: "Մեծ Բրիտանիա",
     mb: "ՄԲ",
     mbps: "ՄԲ/վր",
@@ -219,6 +224,7 @@ export const hy: EnDict<typeof ru> = {
     advanced: "Ընդլայնված",
     expert: "Փորձառու օգտվողների համար",
     phoneServer: "Ձեր բջջային հեռախոսում սերվեր",
+    diagnosticsHintStore: "Անջատված է մինչև ինքներդ այն ակտիվացնեք։   Կարգավորում, մուտք, վճարում և սխալների հաշվետվություններ։   Չկան հասցեներ կամ տոկեններ։   Մեդիայի անունները կարող են մնալ լոգում։",
   },
   errors: {
     onlyAndroid: "Մատչելի է միայն Android հավելվածում։",
@@ -447,9 +453,18 @@ export const hy: EnDict<typeof ru> = {
     watchedDone: "Դիտվել է",
     addedMany: "Տորենթներ ավելացվել են՝ {n}",
     added: "Ավելացվել է՝ {titles}",
-    episodes: { one: "{n} շարք", other: "{n}-ի էպիզոդներ" },
-    extDubs: { one: "+{n} ձայնային մեկնաբանություն", other: "+ {n} ձայնային մեկնաբանություններ" },
-    extDubsSubs: { one: "+{n} ձայնային մեկնաբանություն, ենթագրեր", other: "+{n}-ի ձայնային մեկնաբանություններ, ենթագրեր" },
+    episodes: {
+      one: "{n} շարք",
+      other: "{n}-ի էպիզոդներ",
+    },
+    extDubs: {
+      one: "+{n} ձայնային մեկնաբանություն",
+      other: "+ {n} ձայնային մեկնաբանություններ",
+    },
+    extDubsSubs: {
+      one: "+{n} ձայնային մեկնաբանություն, ենթագրեր",
+      other: "+{n}-ի ձայնային մեկնաբանություններ, ենթագրեր",
+    },
     extSubs: "+թերագրություններ",
     select: "Ընտրել",
     selectCancel: "Հեռացնել ընտրությունը",
@@ -457,7 +472,10 @@ export const hy: EnDict<typeof ru> = {
     selectAll: "Բոլորը ընտրել",
     selectNone: "Հեռացնել ընտրությունը",
     deleteN: "Սրբել ({n})",
-    deleteAsk: { one: "Պետք է՞ հեռացնեմ բաշխումը սերվերից ({n})?", other: "Պետք է՞ սերվերից ջնջեմ բաշխման ֆայլերը ({n})։" },
+    deleteAsk: {
+      one: "Պետք է՞ հեռացնեմ բաշխումը սերվերից ({n})?",
+      other: "Պետք է՞ սերվերից ջնջեմ բաշխման ֆայլերը ({n})։",
+    },
     deletedN: "Հեռացվել է: {n}",
     deleteFailed: "Չհաջողվեց ջնջել՝ {n}",
     actions: "Գործողություններ",
@@ -477,8 +495,14 @@ export const hy: EnDict<typeof ru> = {
     metaEpisodesOf: "Սերիա {from}–{to} {total}–ից",
   },
   series: {
-    seasons: { one: "{n}-ի սեզոն", other: "{n}-ի սեզոններ" },
-    seasonsOf: { one: "Սերիալի {n}-ի {have}-րդ էպիզոդում", other: "{have} շարքում, որը ընդգրկում է {n} սեզոններ" },
+    seasons: {
+      one: "{n}-ի սեզոն",
+      other: "{n}-ի սեզոններ",
+    },
+    seasonsOf: {
+      one: "Սերիալի {n}-ի {have}-րդ էպիզոդում",
+      other: "{have} շարքում, որը ընդգրկում է {n} սեզոններ",
+    },
     rowEnded: "ավարտված",
     toEpisodes: "սերիային",
     watchedOf: "{have}-ից դիտվել է {n}",
@@ -489,8 +513,14 @@ export const hy: EnDict<typeof ru> = {
     notInRelease: "ոչ ձեռքում",
     dubPriority: "Առաջնահերթություն: {list}",
     findSeason: "Գտեք սեզոն {n}",
-    releases: { one: "{n}-ի բաշխում", other: "{n}-ի շրջափուլեր" },
-    deleteSeries: { one: "Հեռացնել շարքը ({n}-րդ էպիզոդը)", other: "Հեռացնել շարքը ({n}-ի էպիզոդներ)" },
+    releases: {
+      one: "{n}-ի բաշխում",
+      other: "{n}-ի շրջափուլեր",
+    },
+    deleteSeries: {
+      one: "Հեռացնել շարքը ({n}-րդ էպիզոդը)",
+      other: "Հեռացնել շարքը ({n}-ի էպիզոդներ)",
+    },
     noSeason: "Մրցաշրջանից դուրս",
     gone: "Այս շարքը այլևս «Իմ շարքերում» չէ։",
     goneTv: "Սերիան այլևս հասանելի չէ մեդիա գրադարանում։",
@@ -513,12 +543,24 @@ export const hy: EnDict<typeof ru> = {
     badgeNext: "Նոր շարք {date}",
     badgeEpisode: "Նոր շարք",
     badgeSeason: "Նոր սեզոնը",
-    seasonReleases: { one: "{n} այս մրցաշրջանի վիճակահանությունը", other: "{n}-ը համապատասխանում է այս սեզոնին" },
-    files: { one: "{n} ֆայլ", other: "{n} ֆայլեր" },
+    seasonReleases: {
+      one: "{n} այս մրցաշրջանի վիճակահանությունը",
+      other: "{n}-ը համապատասխանում է այս սեզոնին",
+    },
+    files: {
+      one: "{n} ֆայլ",
+      other: "{n} ֆայլեր",
+    },
     alreadyHave: "Արդեն կա այսպիսի ձեռք՝ {info}",
     keepOnly: "Պահիր միայն սա։",
-    keepOnlyAsk: { one: "Սրբել՞ «{season}th season {n}»-ի մեկ այլ էպիզոդ։", other: "Հեռացնել՞ {season} սեզոնից ևս մեկ {n} էպիզոդ" },
-    keepOnlyAskNoSeason: { one: "Հեռացնել՞ մեկ այլ {n}-ի արտամրցաշրջանային բաշխում", other: "Հեռացնե՞լ մեկ այլ {n}-ի ոչ մրցաշրջանային գրավչություն։" },
+    keepOnlyAsk: {
+      one: "Սրբել՞ «{season}th season {n}»-ի մեկ այլ էպիզոդ։",
+      other: "Հեռացնել՞ {season} սեզոնից ևս մեկ {n} էպիզոդ",
+    },
+    keepOnlyAskNoSeason: {
+      one: "Հեռացնել՞ մեկ այլ {n}-ի արտամրցաշրջանային բաշխում",
+      other: "Հեռացնե՞լ մեկ այլ {n}-ի ոչ մրցաշրջանային գրավչություն։",
+    },
     releaseDelete: "Հեռացնել բաշխումը",
     releaseDeleteAsk: "Հեռացնել «{name}» հեռարձակումը՞ Դիտումների քանակները կփոխանցվեն «{keeper}»-ին։",
     releaseDeleteCurrentAsk: "Դուք ներկայումս դիտում եք այս ձեռքը՝ «{name}»։ Ուզու՞մ եք այն հեռացնել։ Խաղը կշարունակվի «{keeper}»-ում, և նշիչները կտեղափոխվեն այնտեղ։",
@@ -526,7 +568,10 @@ export const hy: EnDict<typeof ru> = {
     releaseDeletePack: "Այս փաթեթը պարունակում է նաև այլ սեզոններ։ Դուք կարող եք այն ջնջել միայն «Իմ փաթեթից»՝ դրանց հետ միասին։",
     releaseCarryFailed: "Դիտման նշանները հնարավոր չէ փոխանցել; բաշխումը չի ջնջվել",
     releaseDeleted: "Տարածումը հեռացվել է",
-    releaseDeleteLossAsk: { one: "{keeper}-ը չի պարունակում {n} շարքը դիտումների քանակներով; դրա դիտումների քանակները կկորցվեն։ Դուք դեռ ուզում եք այն ջնջել՞", other: "«{keeper}»-ում չկան {n}» էպիզոդներ, որոնց դիտումների քանակ կա; դրանց դիտումների քանակը կկորցվի։ Դուք դեռ ուզու՞մ եք դրանք ջնջել։" },
+    releaseDeleteLossAsk: {
+      one: "{keeper}-ը չի պարունակում {n} շարքը դիտումների քանակներով; դրա դիտումների քանակները կկորցվեն։ Դուք դեռ ուզում եք այն ջնջել՞",
+      other: "«{keeper}»-ում չկան {n}» էպիզոդներ, որոնց դիտումների քանակ կա; դրանց դիտումների քանակը կկորցվի։ Դուք դեռ ուզու՞մ եք դրանք ջնջել։",
+    },
     releaseDeleteBusy: "Մնացեք, նախորդ ձեռքը դեռ մաքրվում է։",
     releasesHintDelete: "Հեռացնել բաշխումը",
     releasesHintOk: "Լավ – բացիր ձեռքը",
@@ -546,7 +591,10 @@ export const hy: EnDict<typeof ru> = {
     dubReset: "Ստանդարտ (վերականգնել)",
     dubChange: "Փոխել",
     dubNote: "Գրեք սա այս սեզոնի համար։ Հաջորդ սեզոնին, եթե այն մատչելի լինի, նույն ստուդիան կօգտագործվի ինչպես հեռուստատեսային, այնպես էլ հեռախոսային հեռարձակումների համար։",
-    episodesOf: { one: "{have}-ը {n} շարքից", other: "{have}-ից {n} էպիզոդ" },
+    episodesOf: {
+      one: "{have}-ը {n} շարքից",
+      other: "{have}-ից {n} էպիզոդ",
+    },
     watchedSome: "դիտեց {n}",
     watchedEvery: "դիտված",
     left: "{n} րոպե է մնացել",
@@ -725,6 +773,12 @@ export const hy: EnDict<typeof ru> = {
       lgNoConnect: "LG: Ստուգելու կապ չկա",
       lgProbeFailed: "LG: Ծրագրավորողի ռեժիմի ստուգումը ձախողվել է",
       takeover: "«{target}»-ին միանալը՞ «{other}»-ի հետ ընթացիկ կապը կփակվի։",
+      updateTitle: "OMP-ի թարմացում",
+      updateTitleVersion: "OMP-ի թարմացում {version}",
+      logStartUpdate: "Հրապարակվել է իմ բջջայինից՝ {what}",
+      logDoneUpdate: "OMP-ն թարմացվել է բջջային հեռախոսի միջոցով։",
+      doneUpdate: "OMP-ն թարմացվել է",
+      doneUpdateVersion: "OMP-ն թարմացվել է՝ {version}",
     },
     plan: {
       byModelYear: "{label} (մոդելի տարեթվով)",
@@ -812,6 +866,7 @@ export const hy: EnDict<typeof ru> = {
       yandexSubscriptionNote: "Եթե TV Station-ը գնել եք բաժանորդագրությամբ, APK ֆայլեր տեղադրել չի ստացվի, և «Ֆայլերի կառավարիչը» մատչելի չի լինի մինչև սարքի ամբողջական վճարումը։",
       yandexNoAdbNote: "YaOS-ում սովորաբար չկա «Ծրագրավորողների համար» մենյու կամ ցանցային սխալների վերացում, ուստի հեռախոսը ինքնուրույն չի կարող տեղադրել OMP։",
       yandexFaq: "Յանդեքս՝ տեղադրման բոլոր եղանակները",
+      updateFromPhone: "Թարմացում ձեր բջջային հեռախոսից",
     },
     assistant: {
       title: "Տեղադրեք OMP ձեր հեռուստացույցի վրա",
@@ -914,10 +969,22 @@ export const hy: EnDict<typeof ru> = {
     defaultPhone: "Հեռախոս",
     today: "այսօր",
     yesterday: "երեկ",
-    seeds: { one: "{n} sid", other: "{n}իդով" },
-    leechers: { one: "{n}-ի պրոֆիլ", other: "{n}-ի լիչեր" },
-    downloaded: { one: "{n} անգամ ներբեռնվել է", other: "{n} անգամ ներբեռնվել է" },
-    dhtPeers: { one: "{n}ի առցանց խնջույք", other: "{n} առցանց խաղեր" },
+    seeds: {
+      one: "{n} sid",
+      other: "{n}իդով",
+    },
+    leechers: {
+      one: "{n}-ի պրոֆիլ",
+      other: "{n}-ի լիչեր",
+    },
+    downloaded: {
+      one: "{n} անգամ ներբեռնվել է",
+      other: "{n} անգամ ներբեռնվել է",
+    },
+    dhtPeers: {
+      one: "{n}ի առցանց խնջույք",
+      other: "{n} առցանց խաղեր",
+    },
     jackettHint: "Կայքը արգելափակվա՞ծ է Cloudflare-ի կողմից՞ Մուտք գործեք դրա միջոցով զննարկիչով (կայքի «Մուտք» կոճակը «Search Sources»-ում) կամ միացեք դրան Jackett, Prowlarr կամ FlareSolverr-ով՝ հրահանգների համար տեսեք «Հարցեր և պատասխաններ»։",
     cloudflareTvOne: "{name}-ը արգելափակված է Cloudflare-ի կողմից – մուտք գործեք դրան ձեր բջջայինով «Search Sources»-ի միջոցով։",
     cloudflareTvMany: "{names}»-երը արգելափակված են Cloudflare-ի կողմից – մուտք գործեք դրանց ձեր բջջայինով՝ «Search Sources»-ի միջոցով։",
@@ -926,8 +993,14 @@ export const hy: EnDict<typeof ru> = {
       date: "Ըստ ամսաթվի",
     },
     progress: {
-      line: { one: "{found} · {n} գտան {sources}-ից, որը պատասխանեց", other: "{found} գտնվել է · {n}-ը {sources}-ից պատասխանել է" },
-      sources: { one: "{n}-ի աղբյուր", other: "{n}-ի աղբյուրներ" },
+      line: {
+        one: "{found} · {n} գտան {sources}-ից, որը պատասխանեց",
+        other: "{found} գտնվել է · {n}-ը {sources}-ից պատասխանել է",
+      },
+      sources: {
+        one: "{n}-ի աղբյուր",
+        other: "{n}-ի աղբյուրներ",
+      },
       searchingIn: "Ես դեռ նայում եմ {names}…",
       failed: "Չպատասխանեց: {names}",
     },
@@ -1055,7 +1128,10 @@ export const hy: EnDict<typeof ru> = {
       thanksTitle: "Շնորհակալագրեր",
       thanksEmpty: "Այս պահին դատարկ է։ Անունը երևում է, եթե մարդը ինքն է այն բացել։",
       thanksDown: "Շնորհակալագրերի ցուցակը ներկայումս չի բեռնվել։",
-      daysLeft: { one: "{n} օր է մնացել", other: "{n} օր է մնացել" },
+      daysLeft: {
+        one: "{n} օր է մնացել",
+        other: "{n} օր է մնացել",
+      },
       about: "Կարդալ ավելին",
       tgMenu: "Մենյու",
       renew: "Նորացնել",
@@ -1129,8 +1205,14 @@ export const hy: EnDict<typeof ru> = {
       whereManual: "ձեռքով ավելացված",
       hiddenStates: "Jackett-ը պաշտպանված է գաղտնաբառով – հետագծող սարքերի կարգավիճակը չի երևում",
       noTrackers: "առանց հետևողների",
-      trackers: { one: "{n}ի հետևիչ", other: "{n}-ի հետևիչներ" },
-      working: { one: "{n}-ը աշխատում է", other: "{n}-ը աշխատում են" },
+      trackers: {
+        one: "{n}ի հետևիչ",
+        other: "{n}-ի հետևիչներ",
+      },
+      working: {
+        one: "{n}-ը աշխատում է",
+        other: "{n}-ը աշխատում են",
+      },
       disabledAfterErrors: "սխալների պատճառով անգործունակ",
       direct: "ուղղակիորեն · {rest}",
       directChecking: "ուղղակի · ես ստուգում եմ…",
@@ -1138,9 +1220,18 @@ export const hy: EnDict<typeof ru> = {
       noKeyLine: "Ինձ պետք է API բանալի։",
       badKeyLine: "Սխալ API բանալի",
       justChecked: "Պարզապես ստուգեցի",
-      checkedMin: { one: "{n}-ը ստուգվել է մեկ րոպե առաջ", other: "Ստուգվել է {n} րոպե առաջ" },
-      checkedHour: { one: "Մեկ ժամ առաջ ստուգել է {n}-ը", other: "Ստուգվել է {n} ժամ առաջ" },
-      checkedDay: { one: "Ստուգվել է {n} օր առաջ", other: "Վերջին անգամ ստուգվել է {n} օր առաջ" },
+      checkedMin: {
+        one: "{n}-ը ստուգվել է մեկ րոպե առաջ",
+        other: "Ստուգվել է {n} րոպե առաջ",
+      },
+      checkedHour: {
+        one: "Մեկ ժամ առաջ ստուգել է {n}-ը",
+        other: "Ստուգվել է {n} ժամ առաջ",
+      },
+      checkedDay: {
+        one: "Ստուգվել է {n} օր առաջ",
+        other: "Վերջին անգամ ստուգվել է {n} օր առաջ",
+      },
     },
     screen: {
       builtin: "Ներկառուցված · հեռախոսում",
@@ -1231,16 +1322,25 @@ export const hy: EnDict<typeof ru> = {
     nextAt: "Հաջորդը ստուգեք մոտ {time}",
     nextDayAt: "Հաջորդը ստուգեք մոտ {day}{time}",
     everyHour: "ժամացույցի մեկ հարվածը մեկ ժամը",
-    everyHours: { one: "{n} յուրաքանչյուր ժամ", other: "{n} ժամ" },
+    everyHours: {
+      one: "{n} յուրաքանչյուր ժամ",
+      other: "{n} ժամ",
+    },
     anyQuality: "Ցանկացած",
     anyQualityRule: "ցանկացած որակ",
     fromQuality: "{q}-ից p",
     allSources: "Բոլոր աղբյուրները",
     noSources: "Աղբյուրներ չկան",
-    minSeeds: { one: "{n}-ի Սիդա", other: "{n}-ի կողմից" },
+    minSeeds: {
+      one: "{n}-ի Սիդա",
+      other: "{n}-ի կողմից",
+    },
     maxSize: "մինչև {size} ԳԲ",
     noNotify: "առանց ծանուցման",
-    fresh: { one: "{n} նոր", other: "{n} նոր" },
+    fresh: {
+      one: "{n} նոր",
+      other: "{n} նոր",
+    },
     episodeOut: "Սերիան թողարկվել է {to}",
     episodesOut: "{from}–{to} էպիզոդները թողարկվել են",
     youHave: "{news} · դուք ունեք {range}",
@@ -1254,7 +1354,10 @@ export const hy: EnDict<typeof ru> = {
     foundNew: "Նոր հայտնաբերվածներ՝ {n}",
     noNew: "Չկան նոր բաշխումներ",
     sourcesAnswered: "Աղբյուրներ: {answered}, {asked}-ից, պատասխանեց",
-    skipped: { one: "Մենք դեռ հնարավորություն չենք ունեցել ստուգելու՝ {n} բաժանորդագրություն", other: "Մենք դեռ ժամանակ չենք ունեցել ստուգելու՝ {n} բաժանորդագրությունները" },
+    skipped: {
+      one: "Մենք դեռ հնարավորություն չենք ունեցել ստուգելու՝ {n} բաժանորդագրություն",
+      other: "Մենք դեռ ժամանակ չենք ունեցել ստուգելու՝ {n} բաժանորդագրությունները",
+    },
     notifyBlocked: "Ծանուցումները չեն ցուցադրվում՝ դրանք անջատված են OMP-ի համար։",
     notifyOff: "OMP ծանուցումները անջատված են – խնդրում ենք միացնել դրանք ձեր Android կարգավորումներում, որպեսզի ստանաք ծանուցումներ նոր բաշխումների մասին",
     replace: {
@@ -1290,7 +1393,10 @@ export const hy: EnDict<typeof ru> = {
       allEnabled: "ամենը ներառված",
       allEnabledOption: "Ամենը ներառված է",
       noneChosen: "չընտրված",
-      sourcesN: { one: "{n}-ի աղբյուր", other: "{n}-ի աղբյուրներ" },
+      sourcesN: {
+        one: "{n}-ի աղբյուր",
+        other: "{n}-ի աղբյուրներ",
+      },
       notify: "Հայտնել",
       notifyHint: "յուրաքանչյուր նոր ձեռքի համար",
       telegram: "Թելեգրամ",
@@ -1338,7 +1444,10 @@ export const hy: EnDict<typeof ru> = {
       keepsSkip: "«Pass» կարգավորումները և կատեգորիան փոխանցվում են։",
       removesOld: "Հին բաշխումը սերվերից ջնջվել է։",
       searching: "Ես փնտրում եմ…",
-      moreN: { one: "մեկ այլ տարբերակ: {n}", other: "{n} ավելին" },
+      moreN: {
+        one: "մեկ այլ տարբերակ: {n}",
+        other: "{n} ավելին",
+      },
       noOthers: "չկան ուրիշներ",
       busy: "Փոխարինում… Սա կարող է տևել մինչև մեկ րոպե։",
       replace: "Փոխարինել",
@@ -1365,7 +1474,10 @@ export const hy: EnDict<typeof ru> = {
     },
   },
   notify: {
-    newTorrents: { one: "{n} նոր ձեռք", other: "{n}-ի նոր բաշխումներ" },
+    newTorrents: {
+      one: "{n} նոր ձեռք",
+      other: "{n}-ի նոր բաշխումներ",
+    },
     episodeTitle: "{name}: {to} էպիզոդը թողարկվել է",
     episodesTitle: "{name}: {from}–{to} էպիզոդները թողարկվել են",
     rangeOfTotal: "{range}-ը {total}-ից",
@@ -1575,7 +1687,10 @@ export const hy: EnDict<typeof ru> = {
       empty: "Դեռ բաժանորդագրություններ չկան – ավելացրեք դրանք ձեր հեռախոսով կամ սեղմելով քարտի «Ես ուզում եմ դիտել» կոճակը։",
       noMatch: "'{q}'-ով բաժանորդագրություններ չկան։",
       anyQuality: "ցանկացած որակ",
-      fresh: { one: "{n} նոր", other: "{n} նոր" },
+      fresh: {
+        one: "{n} նոր",
+        other: "{n} նոր",
+      },
       notify: "Հաշվետվություն",
       better: "Լավագույն որակով",
       check: "Ստուգեք հիմա",
@@ -1623,6 +1738,7 @@ export const hy: EnDict<typeof ru> = {
       hintOk: "Լավ՝ ընտրեք ձեռք",
       hintBack: "Վերադառնալ – Փակել",
     },
+    devmodeBanner: "Ծրագրավորողի ռեժիմը շուտով կավարտվի – երկարացրեք այն, որպեսզի OMP-ը չվերանա ձեր հեռուստացույցից։",
   },
   tls: {
     untrustedTitle: "Պետք է վստահե՞նք {host} սերտիֆիկատին։",
@@ -1940,7 +2056,10 @@ export const hy: EnDict<typeof ru> = {
     trackerMark: "(հետագծող)",
     seedsUnknown: "-",
     deadRelease: "Բաշխման սերվերը չի արձագանքում – խնդրում ենք փորձել մեկ այլ սերվեր։",
-    deadSeeds: { one: "Սերվերը չի արձագանքում: {n} sid", other: "Տարածումը չի աջակցում՝ {n} sidov" },
+    deadSeeds: {
+      one: "Սերվերը չի արձագանքում: {n} sid",
+      other: "Տարածումը չի աջակցում՝ {n} sidov",
+    },
     extDubsWebos: "Հեռուստացույցը չի նվագարկում այս թողարկման մեջ ներառված որոշ աուդիո ֆորմատներ (DTS, FLAC և նմանատիպ), և փոխարենը նվագարկվում է տեսանյութի աուդիո ուղին։",
     extDubsBuiltin: "2160 Player-ը թույլ է տալիս առանձին աուդիո հետքեր: «Կարգավորումներ» → «Տեսանյութի նվագարկիչ»",
     deleteAsk: "Սերվերից ջնջե՞լ տորենտը։",
@@ -2022,7 +2141,10 @@ export const hy: EnDict<typeof ru> = {
       saveFailed: "Չհաջողվեց պահպանել",
     },
     screen: {
-      peerCount: { one: "{n}-ի ճաշկերույթ", other: "{n}ի պիրով" },
+      peerCount: {
+        one: "{n}-ի ճաշկերույթ",
+        other: "{n}ի պիրով",
+      },
       loading: "Ցուցադրվում է…",
       notFound: "Բաշխում չի հայտնաբերվել",
       continueOnTv: "Շարունակեք դիտել հեռուստացույցով · {ep}{time}-ով",
@@ -2305,6 +2427,9 @@ export const hy: EnDict<typeof ru> = {
     openOnStartupAllow: "Պատուհանների վրա ցուցադրումը միացնել",
     openOnStartupOverlayAsk: "Համակարգը արգելափակում է ծրագրի մեկնարկը, երբ այն սկսվում է։ Թույլ տվեք, որ այն ցուցադրվի մյուս պատուհանների վերևում, որպեսզի OMP-ը ավտոմատ կերպով բացվի։",
     openOnStartupNoScreen: "Չհաջողվեց բացել համակարգի կարգավորումները։",
+    devmodeExtend: "Ընդլայնել ռեժիմը",
+    devmodeOpened: "Ծրագրավորողի ռեժիմը բաց է – սեղմեք դրա ներսում «Extend»-ը՝ ռեժիմը երկարաձգելու համար։",
+    devmodeOpenFailed: "Ես չկարողացա միացնել հեռուստացույցի մշակողի ռեժիմը։",
   },
   tvSources: {
     tsRutor: "ռուտոր (TorrServer որոնում)",
@@ -2605,11 +2730,20 @@ export const hy: EnDict<typeof ru> = {
     errEmpty: "Պատճենում չկա որևէ տվյալ, որը հնարավոր լինի վերականգնել։",
     sumServers: "TorrServer սերվերներ: {list}",
     sumTvs: "Հեռուստացույցներ: {list}",
-    sumSubs: { one: "{n}-ի մոնիթորինգի բաժանորդագրություն", other: "{n}-ի մոնիթորինգի բաժանորդագրություններ" },
-    sumSources: { one: "Աղբյուրներ որոնել: {n}-ի անջատիչ", other: "Աղբյուրներ որոնել: {n} անջատիչներ" },
+    sumSubs: {
+      one: "{n}-ի մոնիթորինգի բաժանորդագրություն",
+      other: "{n}-ի մոնիթորինգի բաժանորդագրություններ",
+    },
+    sumSources: {
+      one: "Աղբյուրներ որոնել: {n}-ի անջատիչ",
+      other: "Աղբյուրներ որոնել: {n} անջատիչներ",
+    },
     sumIndexers: "Ինդեքսավորիչներ (Jackett, Prowlarr): {n} – API բանալիներ չկան; դուք պետք է կրկին մուտքագրեք բանալիները",
     sumPlaylists: "Սիրելի պլեյլիստներ: {n}",
-    sumTracks: { one: "Երգերի ընտրություն՝ {n}-ի գործարք", other: "Երգերի ընտրություն՝ {n}-ի ռաունդներ" },
+    sumTracks: {
+      one: "Երգերի ընտրություն՝ {n}-ի գործարք",
+      other: "Երգերի ընտրություն՝ {n}-ի ռաունդներ",
+    },
     sumSettings: "Ծրագրի, մոնիտորինգի և թաչփադի կարգավորումներ; կատալոգի դիտում",
     warnNoSecrets: "Այս պատճենը պարունակում է սերվերի հասցեներ – խնդրում ենք ֆայլը պահել անվտանգ վայրում։",
     warnSecrets: "Այս պատճենը պարունակում է սերվերի հասցեները, ձեր TorrServer-ին մուտք գործելու գաղտնաբառը (եթե այն սահմանված է) և ձեր հեռուստացույցների զուգավորման կոդերը – վերաբերվեք այս ֆայլին ինչպես գաղտնաբառին։",
@@ -2803,7 +2937,10 @@ export const hy: EnDict<typeof ru> = {
     noSubsMatch: "Այդ անունով բաժանորդագրություններ չկան։",
     foundReleases: "Գտնվել են ձեռքի պատմություններ",
     noFindingsMatch: "Գտնված ձեռագրերի մեջ համապատասխանություններ չկան։",
-    moreFindings: { one: "և մեկ այլ բաշխում {n} – խնդրում ենք պարզեցնել ձեր հարցումը", other: "և մեկ այլ {n} բաշխում – խնդրում ենք հստակեցնել ձեր հարցումը" },
+    moreFindings: {
+      one: "և մեկ այլ բաշխում {n} – խնդրում ենք պարզեցնել ձեր հարցումը",
+      other: "և մեկ այլ {n} բաշխում – խնդրում ենք հստակեցնել ձեր հարցումը",
+    },
     sortAdded: "ավելացնելու ամսաթվով",
     sortFresh: "Նոր հայտնագործություններ",
     sortName: "անունով",
@@ -2837,7 +2974,10 @@ export const hy: EnDict<typeof ru> = {
     calNextMonth: "Հաջորդ ամիս",
     calDayEmpty: "Այս օրը սերիաներ չկան",
     calEarlier: "Նախկինում ({n})",
-    calReleases: { one: "{n}-ի թողարկում", other: "{n}-ի թողարկումները" },
+    calReleases: {
+      one: "{n}-ի թողարկում",
+      other: "{n}-ի թողարկումները",
+    },
     calEmptySubs: "Այս պահին հոսքային դիտման համար որևէ սերիա մատչելի չէ։",
     calDayAria: "{date}, շարք: {n}",
     calSheet: "Սերիա",

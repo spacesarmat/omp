@@ -1,4 +1,3 @@
-/** The az dictionary (DeepL draft, reviewed). Mirrors ru.ts; plurals one/other. */
 import type { EnDict } from './types';
 import type { ru } from './ru';
 export const az: EnDict<typeof ru> = {
@@ -27,11 +26,17 @@ export const az: EnDict<typeof ru> = {
     originalChip: "Orijinal",
     rusSubsChip: "Rus alt yazıları",
     fullSeasonOnly: "Yalnız tam mövsüm",
-    show: { one: "Əli göstər {n}", other: "{n}-in əllərini göstər" },
+    show: {
+      one: "Əli göstər {n}",
+      other: "{n}-in əllərini göstər",
+    },
   },
   common: {
     signInTo: "{site} ünvanında daxil olun",
-    torrents: { one: "{n}-in paylanması", other: "{n}-in turları" },
+    torrents: {
+      one: "{n}-in paylanması",
+      other: "{n}-in turları",
+    },
     gb: "Böyük Britaniya",
     mb: "Mənim üçün",
     mbps: "MB/s",
@@ -219,6 +224,7 @@ export const az: EnDict<typeof ru> = {
     advanced: "Gelişmiş",
     expert: "Təcrübəli istifadəçilər üçün",
     phoneServer: "Mobil telefonunuzda bir server",
+    diagnosticsHintStore: "Özünüz aktivləşdirənədək qeyri-aktivdir. Quraşdırma, giriş, ödəniş və nasazlıq hesabatları. Heç bir ünvan və ya token yoxdur. Media adları loqda qala bilər.",
   },
   errors: {
     onlyAndroid: "Yalnız Android tətbiqində mövcuddur",
@@ -447,9 +453,18 @@ export const az: EnDict<typeof ru> = {
     watchedDone: "Görüldü",
     addedMany: "Torrentlər əlavə edildi: {n}",
     added: "Əlavə edildi: {titles}",
-    episodes: { one: "{n} seriyası", other: "{n}-in epizodları" },
-    extDubs: { one: "+{n} səsli şərh", other: "+ {n} səs yazıları" },
-    extDubsSubs: { one: "+{n} səs izahı, altyazılar", other: "+{n} səs yazıları, altyazılar" },
+    episodes: {
+      one: "{n} seriyası",
+      other: "{n}-in epizodları",
+    },
+    extDubs: {
+      one: "+{n} səsli şərh",
+      other: "+ {n} səs yazıları",
+    },
+    extDubsSubs: {
+      one: "+{n} səs izahı, altyazılar",
+      other: "+{n} səs yazıları, altyazılar",
+    },
     extSubs: "+alt yazılar",
     select: "Seçin",
     selectCancel: "Seçiliyi ləğv et",
@@ -457,7 +472,10 @@ export const az: EnDict<typeof ru> = {
     selectAll: "Həminləri seçin",
     selectNone: "Seçiliyi ləğv et",
     deleteN: "Sil ({n})",
-    deleteAsk: { one: "Paylamanı serverdən ({n}) silməliyəm?", other: "Serverdən paylama fayllarını ({n}) silməliyəmmi?" },
+    deleteAsk: {
+      one: "Paylamanı serverdən ({n}) silməliyəm?",
+      other: "Serverdən paylama fayllarını ({n}) silməliyəmmi?",
+    },
     deletedN: "Silindi: {n}",
     deleteFailed: "Silə bilmədi: {n}",
     actions: "Hərəkətlər",
@@ -477,8 +495,14 @@ export const az: EnDict<typeof ru> = {
     metaEpisodesOf: "{from}–{to} seriyası {total}-dən",
   },
   series: {
-    seasons: { one: "{n} mövsümü", other: "{n} mövsümləri" },
-    seasonsOf: { one: "Serialın {n} və <img id=\"1\"/> bölümlərindəki {have} epizodunda", other: "{have} seriyasında, {n} mövsümünü əhatə edən" },
+    seasons: {
+      one: "{n} mövsümü",
+      other: "{n} mövsümləri",
+    },
+    seasonsOf: {
+      one: "Serialın {n} və <img id=\"1\"/> bölümlərindəki {have} epizodunda",
+      other: "{have} seriyasında, {n} mövsümünü əhatə edən",
+    },
     rowEnded: "tamamlandı",
     toEpisodes: "seriyaya",
     watchedOf: "{have} {n}-dən izlənilib",
@@ -489,8 +513,14 @@ export const az: EnDict<typeof ru> = {
     notInRelease: "Əldə deyil",
     dubPriority: "Prioritet: {list}",
     findSeason: "Bir mövsüm tap {n}",
-    releases: { one: "{n}-in paylanması", other: "{n}-in turları" },
-    deleteSeries: { one: "Seriyanı silin ({n} epizodu)", other: "Seriyanı sil ({n} epizodları)" },
+    releases: {
+      one: "{n}-in paylanması",
+      other: "{n}-in turları",
+    },
+    deleteSeries: {
+      one: "Seriyanı silin ({n} epizodu)",
+      other: "Seriyanı sil ({n} epizodları)",
+    },
     noSeason: "Mövsüm arası",
     gone: "Bu seriya artıq 'My'də deyil.",
     goneTv: "Seriya media kitabxanasında artıq mövcud deyil",
@@ -513,12 +543,24 @@ export const az: EnDict<typeof ru> = {
     badgeNext: "Yeni seriya {date}",
     badgeEpisode: "Yeni seriya",
     badgeSeason: "Yeni mövsüm",
-    seasonReleases: { one: "{n} bu mövsümün püşkü", other: "{n} bu mövsüm uyğun gəlir" },
-    files: { one: "{n} faylı", other: "{n} faylları" },
+    seasonReleases: {
+      one: "{n} bu mövsümün püşkü",
+      other: "{n} bu mövsüm uyğun gəlir",
+    },
+    files: {
+      one: "{n} faylı",
+      other: "{n} faylları",
+    },
     alreadyHave: "Artıq belə bir əl mövcuddur: {info}",
     keepOnly: "Yalnız bunu saxlayın",
-    keepOnlyAsk: { one: "<img id=\"1\"/> mövsümündən {season}başqa bir epizodu sil{n}?", other: "{season} mövsümündən başqa bir {n} epizodunu silmək?" },
-    keepOnlyAskNoSeason: { one: "Başqa bir {n} mövsüm arası paylanmasını silin?", other: "{n}-un növbəti mövsüm arası cəlb etməsi silinsin?" },
+    keepOnlyAsk: {
+      one: "<img id=\"1\"/> mövsümündən {season}başqa bir epizodu sil{n}?",
+      other: "{season} mövsümündən başqa bir {n} epizodunu silmək?",
+    },
+    keepOnlyAskNoSeason: {
+      one: "Başqa bir {n} mövsüm arası paylanmasını silin?",
+      other: "{n}-un növbəti mövsüm arası cəlb etməsi silinsin?",
+    },
     releaseDelete: "Paylamanı silin",
     releaseDeleteAsk: "Yayım '{name}' silinsin? Baxış sayı '{keeper}' ünvanına köçürüləcək.",
     releaseDeleteCurrentAsk: "Hal-hazırda bu əli görürsünüz: '{name}'. Onu silmək istəyirsinizmi? Oyun '{keeper}' ünvanında davam edəcək və markerlər ora köçəcək.",
@@ -526,7 +568,10 @@ export const az: EnDict<typeof ru> = {
     releaseDeletePack: "Bu paketdə digər mövsümlər də var. Onları da daxil etməklə yalnız 'Mənim paketim'dən silə bilərsiniz.",
     releaseCarryFailed: "Görmə işarələri köçürülə bilmədi; paylanma silinməyib",
     releaseDeleted: "Paylanma silinib",
-    releaseDeleteLossAsk: { one: "{keeper} {n} seriyasını baxış sayları ilə özündə saxlamır; baxış sayları itirəcək. Yenə də onu silmək istəyirsiniz?", other: "'{keeper}'də baxış sayı olan heç bir {n} epizodu yoxdur; onların baxış sayıları itirəcək. Yenə də onları silmək istəyirsiniz?" },
+    releaseDeleteLossAsk: {
+      one: "{keeper} {n} seriyasını baxış sayları ilə özündə saxlamır; baxış sayları itirəcək. Yenə də onu silmək istəyirsiniz?",
+      other: "'{keeper}'də baxış sayı olan heç bir {n} epizodu yoxdur; onların baxış sayıları itirəcək. Yenə də onları silmək istəyirsiniz?",
+    },
     releaseDeleteBusy: "Bir dəqiqə, əvvəlki əl hələ təmizlənir.",
     releasesHintDelete: "Paylamanı sil",
     releasesHintOk: "OK – əli aç",
@@ -546,7 +591,10 @@ export const az: EnDict<typeof ru> = {
     dubReset: "Standart olaraq (sıfırlama)",
     dubChange: "Dəyişiklik",
     dubNote: "Bu mövsüm üçün bunu qeyd edin. Eyni studiya, əgər mövcud olsa, növbəti mövsüm həm televiziya, həm də telefon yayımları üçün istifadə olunacaq.",
-    episodesOf: { one: "{have}, {n} seriyasından", other: "{have} {n} epizodundan" },
+    episodesOf: {
+      one: "{have}, {n} seriyasından",
+      other: "{have} {n} epizodundan",
+    },
     watchedSome: "{n}-i izlədim",
     watchedEvery: "baxıldı",
     left: "{n} dəqiqə qaldı",
@@ -725,6 +773,12 @@ export const az: EnDict<typeof ru> = {
       lgNoConnect: "LG: Yoxlama üçün heç bir əlaqə yoxdur",
       lgProbeFailed: "LG: İnkişaf rejimi yoxlaması uğursuz oldu",
       takeover: "'{target}' ilə əlaqə qurmaq? Cari '{other}' əlaqəsi bağlanacaq.",
+      updateTitle: "OMP-nin yenilənməsi",
+      updateTitleVersion: "OMP-ni yeniləmə{version}",
+      logStartUpdate: "Mobilimdən göndərilib: {what}",
+      logDoneUpdate: "OMP mobil telefon vasitəsilə yenilənib",
+      doneUpdate: "OMP yenilənib",
+      doneUpdateVersion: "OMP {version}-ə yenilənib.",
     },
     plan: {
       byModelYear: "{label} (model ili üzrə)",
@@ -812,6 +866,7 @@ export const az: EnDict<typeof ru> = {
       yandexSubscriptionNote: "Əgər TV Station abunə yolu ilə satın alınıbsa, APK-lar quraşdırıla bilməz və cihazın tam ödənişi həyata keçirilənədək 'File Manager' əlçatan deyil.",
       yandexNoAdbNote: "YaOS-da adətən \"İnkişaf etdiricilər üçün\" menyusu və ya şəbəkə səhvlərinin aradan qaldırılması funksiyası olmadığından, telefon OMP-ni özü quraşdıra bilmir.",
       yandexFaq: "Yandex: bütün quraşdırma üsulları",
+      updateFromPhone: "Mobil telefonunuzdan yenilənmə",
     },
     assistant: {
       title: "TV-nizə OMP quraşdırın",
@@ -914,10 +969,22 @@ export const az: EnDict<typeof ru> = {
     defaultPhone: "Telefon",
     today: "bu gün",
     yesterday: "dünən",
-    seeds: { one: "{n} sid", other: "{n} Sidov" },
-    leechers: { one: "{n} profili", other: "{n}-in ruhları" },
-    downloaded: { one: "{n} dəfə yüklənib", other: "{n} dəfə yüklənib" },
-    dhtPeers: { one: "{n} Şənlik Onlayn", other: "{n} onlayn oyunları" },
+    seeds: {
+      one: "{n} sid",
+      other: "{n} Sidov",
+    },
+    leechers: {
+      one: "{n} profili",
+      other: "{n}-in ruhları",
+    },
+    downloaded: {
+      one: "{n} dəfə yüklənib",
+      other: "{n} dəfə yüklənib",
+    },
+    dhtPeers: {
+      one: "{n} Şənlik Onlayn",
+      other: "{n} onlayn oyunları",
+    },
     jackettHint: "Sayt Cloudflare tərəfindən bloklanıb? Onu brauzer vasitəsilə (saytdakı 'Search Sources' bölməsindəki 'Log in' düyməsini istifadə edərək) daxil edin və ya Jackett, Prowlarr və ya FlareSolverr vasitəsilə qoşulun – təlimatlar üçün 'Suallar və cavablar' bölməsinə baxın.",
     cloudflareTvOne: "{name} Cloudflare tərəfindən bloklanıb – onu mobil cihazınızda 'Search Sources' vasitəsilə açın",
     cloudflareTvMany: "{names} Cloudflare tərəfindən bloklanıb – mobil cihazınızda 'Search Sources' vasitəsilə onlara daxil olun",
@@ -926,8 +993,14 @@ export const az: EnDict<typeof ru> = {
       date: "Tarixə görə",
     },
     progress: {
-      line: { one: "{found} · {n} {sources}-dən tapıldı, cavab verdi", other: "{found} tapıldı · {n} {sources}-dən cavab verdi" },
-      sources: { one: "{n} mənbəyi", other: "{n} mənbələri" },
+      line: {
+        one: "{found} · {n} {sources}-dən tapıldı, cavab verdi",
+        other: "{found} tapıldı · {n} {sources}-dən cavab verdi",
+      },
+      sources: {
+        one: "{n} mənbəyi",
+        other: "{n} mənbələri",
+      },
       searchingIn: "Mən hələ də {names}-də axtarıram…",
       failed: "Cavab vermədi: {names}",
     },
@@ -1055,7 +1128,10 @@ export const az: EnDict<typeof ru> = {
       thanksTitle: "Təşəkkürlər",
       thanksEmpty: "Hal-hazırda boşdur. Ad, şəxsin onu özü açmışsa görünür.",
       thanksDown: "Təşəkkürlər siyahısı hazırda yüklənməyib.",
-      daysLeft: { one: "{n} gün qaldı", other: "{n} gün qaldı" },
+      daysLeft: {
+        one: "{n} gün qaldı",
+        other: "{n} gün qaldı",
+      },
       about: "Daha çox oxu",
       tgMenu: "Menyu",
       renew: "Yenilə",
@@ -1129,8 +1205,14 @@ export const az: EnDict<typeof ru> = {
       whereManual: "Əldə əlavə edildi",
       hiddenStates: "Jackett şifrə ilə qorunur – izləyicilərin vəziyyəti görünmür",
       noTrackers: "Heç bir izləyici yoxdur",
-      trackers: { one: "{n} izləyicisi", other: "{n} izləyiciləri" },
-      working: { one: "{n} işləyir", other: "{n} işləyir" },
+      trackers: {
+        one: "{n} izləyicisi",
+        other: "{n} izləyiciləri",
+      },
+      working: {
+        one: "{n} işləyir",
+        other: "{n} işləyir",
+      },
       disabledAfterErrors: "Səhvlərdən sonra əlilləşib",
       direct: "birbaşa · {rest}",
       directChecking: "Birbaşa · Mən yoxlayıram…",
@@ -1138,9 +1220,18 @@ export const az: EnDict<typeof ru> = {
       noKeyLine: "Mənə API açarı lazımdır",
       badKeyLine: "Səhv API açarı",
       justChecked: "Yalnız yoxladım",
-      checkedMin: { one: "{n} bir dəqiqə əvvəl yoxlanıldı", other: "{n} dəqiqə əvvəl yoxlanıldı" },
-      checkedHour: { one: "{n}-i bir saat əvvəl yoxladım", other: "{n} saat əvvəl yoxlanılıb" },
-      checkedDay: { one: "{n} gün əvvəl yoxlanılıb", other: "Sonuncu dəfə {n} gün əvvəl yoxlanılıb" },
+      checkedMin: {
+        one: "{n} bir dəqiqə əvvəl yoxlanıldı",
+        other: "{n} dəqiqə əvvəl yoxlanıldı",
+      },
+      checkedHour: {
+        one: "{n}-i bir saat əvvəl yoxladım",
+        other: "{n} saat əvvəl yoxlanılıb",
+      },
+      checkedDay: {
+        one: "{n} gün əvvəl yoxlanılıb",
+        other: "Sonuncu dəfə {n} gün əvvəl yoxlanılıb",
+      },
     },
     screen: {
       builtin: "Telefonun daxili · telefonda",
@@ -1231,16 +1322,25 @@ export const az: EnDict<typeof ru> = {
     nextAt: "Sonra {time} yaxınlığında yoxlayın",
     nextDayAt: "Sonra {day}{time} yaxınlığında yoxlayın.",
     everyHour: "saatda bir dəfə",
-    everyHours: { one: "{n} hər saat", other: "{n} saat" },
+    everyHours: {
+      one: "{n} hər saat",
+      other: "{n} saat",
+    },
     anyQuality: "Hər hansı",
     anyQualityRule: "hər hansı keyfiyyət",
     fromQuality: "{q}dan p",
     allSources: "Bütün mənbələr",
     noSources: "Heç bir mənbə yoxdur",
-    minSeeds: { one: "{n}-dən Sida", other: "{n}-un səhifəsindən" },
+    minSeeds: {
+      one: "{n}-dən Sida",
+      other: "{n}-un səhifəsindən",
+    },
     maxSize: "{size} GB-dək",
     noNotify: "qabaqcadan xəbərdarlıq edilmədən",
-    fresh: { one: "{n}u", other: "{n}u" },
+    fresh: {
+      one: "{n}u",
+      other: "{n}u",
+    },
     episodeOut: "Seriya {to}-də yayımlanıb.",
     episodesOut: "{from}–{to} epizodları yayımlanıb",
     youHave: "{news} · sizdə {range} var",
@@ -1254,7 +1354,10 @@ export const az: EnDict<typeof ru> = {
     foundNew: "Yeni tapılanlar: {n}",
     noNew: "Yeni paylamalar yoxdur",
     sourcesAnswered: "Mənbələr: {answered}, {asked}-dən, cavab verdi",
-    skipped: { one: "Hələ yoxlamağa imkanımız olmayıb: {n} abunəlik", other: "Hələ yoxlamağa vaxtımız olmayıb: {n} abunəlikləri" },
+    skipped: {
+      one: "Hələ yoxlamağa imkanımız olmayıb: {n} abunəlik",
+      other: "Hələ yoxlamağa vaxtımız olmayıb: {n} abunəlikləri",
+    },
     notifyBlocked: "Bildirişlər göstərilmir: onlar OMP üçün deaktiv edilib.",
     notifyOff: "OMP bildirişləri söndürülüb – yeni paylamalardan xəbərdar olmaq üçün Android parametrlərinizdə onları aktivləşdirin",
     replace: {
@@ -1290,7 +1393,10 @@ export const az: EnDict<typeof ru> = {
       allEnabled: "Hər şey daxil",
       allEnabledOption: "Hər şey daxil",
       noneChosen: "Seçilməlidir",
-      sourcesN: { one: "{n} mənbəyi", other: "{n} mənbələri" },
+      sourcesN: {
+        one: "{n} mənbəyi",
+        other: "{n} mənbələri",
+      },
       notify: "Bildir",
       notifyHint: "hər yeni əl üçün",
       telegram: "Telegram",
@@ -1338,7 +1444,10 @@ export const az: EnDict<typeof ru> = {
       keepsSkip: "'Pass' parametrləri və kateqoriya ötürülür",
       removesOld: "Köhnə paylanma serverdən silindi.",
       searching: "Mən axtarıram…",
-      moreN: { one: "Başqa bir seçim: {n}", other: "{n} daha çox seçimlər" },
+      moreN: {
+        one: "Başqa bir seçim: {n}",
+        other: "{n} daha çox seçimlər",
+      },
       noOthers: "Başqaları yoxdur",
       busy: "Əvəzlənir… Bu, bir dəqiqəyə qədər çəkə bilər.",
       replace: "Əvəz et",
@@ -1365,7 +1474,10 @@ export const az: EnDict<typeof ru> = {
     },
   },
   notify: {
-    newTorrents: { one: "{n}nun yeni əli", other: "{n}nun yeni paylamaları" },
+    newTorrents: {
+      one: "{n}nun yeni əli",
+      other: "{n}nun yeni paylamaları",
+    },
     episodeTitle: "{name}: {to} epizodu yayımlanıb",
     episodesTitle: "{name}: {from}–{to} epizodları yayımlanıb",
     rangeOfTotal: "{range} {total}-dən",
@@ -1575,7 +1687,10 @@ export const az: EnDict<typeof ru> = {
       empty: "Hələ abunəliklər yoxdur – onları telefonunuza əlavə edin və ya kartdakı \"İzləmək istəyirəm\" düyməsini basaraq əlavə edin.",
       noMatch: "{q} ilə heç bir abunə yoxdur",
       anyQuality: "hər hansı keyfiyyət",
-      fresh: { one: "{n}u", other: "{n}u" },
+      fresh: {
+        one: "{n}u",
+        other: "{n}u",
+      },
       notify: "Hesabat",
       better: "Ən yüksək keyfiyyətdə",
       check: "İndi yoxlayın",
@@ -1623,6 +1738,7 @@ export const az: EnDict<typeof ru> = {
       hintOk: "OK – bir əl seçin",
       hintBack: "Arxaya qayıt – Bağla",
     },
+    devmodeBanner: "İnkişafçı rejimi tezliklə başa çatacaq – onu uzadın ki, OMP televizorunuzdan yox olmasın",
   },
   tls: {
     untrustedTitle: "{host} sertifikatına etibar etməliyikmi?",
@@ -1940,7 +2056,10 @@ export const az: EnDict<typeof ru> = {
     trackerMark: "(izləyici)",
     seedsUnknown: "-",
     deadRelease: "Paylama serveri cavab vermir – zəhmət olmasa başqa birini sınayın",
-    deadSeeds: { one: "Server cavab vermir: {n} sid", other: "Paylama bunları dəstəkləmir: {n} sidov" },
+    deadSeeds: {
+      one: "Server cavab vermir: {n} sid",
+      other: "Paylama bunları dəstəkləmir: {n} sidov",
+    },
     extDubsWebos: "TV bu buraxılışda daxil edilmiş bəzi audio formatları (DTS, FLAC və oxşar) oynatmayacaq. Bunun əvəzinə videodakı audio treki səsləndirilir.",
     extDubsBuiltin: "2160 Player fərdi audio izlərə imkan verir: 'Tənzimləmələr' → 'Video Player'",
     deleteAsk: "Torrenti serverdən silin?",
@@ -2022,7 +2141,10 @@ export const az: EnDict<typeof ru> = {
       saveFailed: "Yadda saxlamaq mümkün deyil",
     },
     screen: {
-      peerCount: { one: "{n} bir ziyafət", other: "{n}-in pirovu" },
+      peerCount: {
+        one: "{n} bir ziyafət",
+        other: "{n}-in pirovu",
+      },
       loading: "Yüklənir…",
       notFound: "Paylanma tapılmadı",
       continueOnTv: "TV-də izləməyə davam edin · {ep}{time}ilə",
@@ -2305,6 +2427,9 @@ export const az: EnDict<typeof ru> = {
     openOnStartupAllow: "Pəncərələrin üzərində göstərməni aktivləşdirin",
     openOnStartupOverlayAsk: "Sistem proqramın işə salınmasını bloklayır. Proqramın digər pəncərələrin üstündə görünməsinə icazə verin ki, OMP avtomatik açılsın.",
     openOnStartupNoScreen: "Sistem parametrlərini aça bilmirəm.",
+    devmodeExtend: "Hökumətin səlahiyyət müddətini uzatmaq",
+    devmodeOpened: "İnkişafçı rejimi açıqdır – rejimi uzatmaq üçün içindəki 'Uzad' düyməsini vurun",
+    devmodeOpenFailed: "Mən televizorda İnkişaf rejimini aktivləşdirə bilmədim.",
   },
   tvSources: {
     tsRutor: "rutor (TorrServer axtarışı)",
@@ -2605,11 +2730,20 @@ export const az: EnDict<typeof ru> = {
     errEmpty: "Nüsxədə bərpa edilə biləcək heç bir məlumat yoxdur",
     sumServers: "TorrServer serverləri: {list}",
     sumTvs: "Televizorlar: {list}",
-    sumSubs: { one: "{n} monitorinqi abunəlik", other: "{n}-in monitorinq abunəlikləri" },
-    sumSources: { one: "Mənbələri axtar: {n}-dəyişdirici", other: "Axtarış mənbələri: {n} keçidləri" },
+    sumSubs: {
+      one: "{n} monitorinqi abunəlik",
+      other: "{n}-in monitorinq abunəlikləri",
+    },
+    sumSources: {
+      one: "Mənbələri axtar: {n}-dəyişdirici",
+      other: "Axtarış mənbələri: {n} keçidləri",
+    },
     sumIndexers: "İndeksləyicilər (Jackett, Prowlarr): {n} – API açarları yoxdur; açarları yenidən daxil etməlisiniz",
     sumPlaylists: "Sevimli pleylistlər: {n}",
-    sumTracks: { one: "Trek seçimi: {n}-dəal", other: "Treklərin seçimi: {n} turları" },
+    sumTracks: {
+      one: "Trek seçimi: {n}-dəal",
+      other: "Treklərin seçimi: {n} turları",
+    },
     sumSettings: "Proqram, monitorinq və toxunma lövhəsi parametrləri; kataloq görünüşü",
     warnNoSecrets: "Nüsxə server ünvanlarını ehtiva edir – faylı təhlükəsiz yerdə saxlayın.",
     warnSecrets: "Bu nüsxədə server ünvanları, TorrServer-inizə giriş parolu (əgər təyin olunubsa) və TV-ləriniz üçün qoşulma kodları yer alır – bu faylı parol kimi qoruyun.",
@@ -2803,7 +2937,10 @@ export const az: EnDict<typeof ru> = {
     noSubsMatch: "Bu adla abunəlik yoxdur",
     foundReleases: "Əl tarixçələri tapıldı",
     noFindingsMatch: "Tapılan əllər arasında heç bir uyğunluq yoxdur",
-    moreFindings: { one: "və başqa bir paylama {n} – sorğunuzu aydınlaşdırın", other: "və başqa bir {n} paylanması – xahiş edirəm sorğunuzu aydınlaşdırın" },
+    moreFindings: {
+      one: "və başqa bir paylama {n} – sorğunuzu aydınlaşdırın",
+      other: "və başqa bir {n} paylanması – xahiş edirəm sorğunuzu aydınlaşdırın",
+    },
     sortAdded: "əlavə olunma tarixi üzrə",
     sortFresh: "Yeni kəşflər",
     sortName: "adına görə",
@@ -2837,7 +2974,10 @@ export const az: EnDict<typeof ru> = {
     calNextMonth: "Gələn ay",
     calDayEmpty: "Bu gün heç bir serial yoxdur",
     calEarlier: "Əvvəllər ({n})",
-    calReleases: { one: "{n}-in buraxılışı", other: "{n} buraxılışları" },
+    calReleases: {
+      one: "{n}-in buraxılışı",
+      other: "{n} buraxılışları",
+    },
     calEmptySubs: "Hazırda axın üçün heç bir serial mövcud deyil",
     calDayAria: "{date}, bölümlər: {n}",
     calSheet: "Seri",

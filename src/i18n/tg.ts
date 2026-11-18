@@ -1,4 +1,3 @@
-/** The tg dictionary (DeepL draft, reviewed). Mirrors ru.ts; plurals one/other. */
 import type { EnDict } from './types';
 import type { ru } from './ru';
 export const tg: EnDict<typeof ru> = {
@@ -27,11 +26,17 @@ export const tg: EnDict<typeof ru> = {
     originalChip: "Аслӣ",
     rusSubsChip: "Субтитрҳои русӣ",
     fullSeasonOnly: "Танҳо тамоми мавсим",
-    show: { one: "Дастро нишон диҳед {n}", other: "Намоиш додани дасти {n}" },
+    show: {
+      one: "Дастро нишон диҳед {n}",
+      other: "Намоиш додани дасти {n}",
+    },
   },
   common: {
     signInTo: "Дар {site} ворид шавед",
-    torrents: { one: "Тақсимоти {n}", other: "{n}-давраҳо" },
+    torrents: {
+      one: "Тақсимоти {n}",
+      other: "{n}-давраҳо",
+    },
     gb: "ГБ",
     mb: "МБ",
     mbps: "МБ/с",
@@ -219,6 +224,7 @@ export const tg: EnDict<typeof ru> = {
     advanced: "Пешрафта",
     expert: "Барои корбарони ботаҷриба",
     phoneServer: "Сервер дар телефони мобилии шумо",
+    diagnosticsHintStore: "Номумкин аст, то даме ки шумо онро худатон фаъол накунед. Танзимот, воридшавӣ, пардохт ва гузоришҳои хатогӣ. Ҳеҷ суроға ё токен вуҷуд надорад. Номи расонаҳо метавонанд дар сабт бимонанд.",
   },
   errors: {
     onlyAndroid: "Танҳо дар барномаи Android дастрас аст",
@@ -447,9 +453,18 @@ export const tg: EnDict<typeof ru> = {
     watchedDone: "Дида шуд",
     addedMany: "Торрентҳо илова шуданд: {n}",
     added: "Илова карда шуд: {titles}",
-    episodes: { one: "Силсилаи {n}", other: "Эпизодҳои {n}" },
-    extDubs: { one: "+{n}-овозӣ", other: "+ {n}-овозҳо" },
-    extDubsSubs: { one: "+{n}, овозбарорӣ, субтитрҳо", other: "+{n}, овозгузориҳо, субтитрҳо" },
+    episodes: {
+      one: "Силсилаи {n}",
+      other: "Эпизодҳои {n}",
+    },
+    extDubs: {
+      one: "+{n}-овозӣ",
+      other: "+ {n}-овозҳо",
+    },
+    extDubsSubs: {
+      one: "+{n}, овозбарорӣ, субтитрҳо",
+      other: "+{n}, овозгузориҳо, субтитрҳо",
+    },
     extSubs: "+сарлавҳаҳо",
     select: "Интихоб кунед",
     selectCancel: "Бардоштан",
@@ -457,7 +472,10 @@ export const tg: EnDict<typeof ru> = {
     selectAll: "Ҳамаашро интихоб кунед",
     selectNone: "Бардоштан",
     deleteN: "Ҳазф кардан ({n})",
-    deleteAsk: { one: "Оё ман бояд паҳнкуниро аз сервер ({n}) нест кунам?", other: "Оё ман бояд файлҳои паҳнкунӣ ({n})-ро аз сервер ҳазф кунам?" },
+    deleteAsk: {
+      one: "Оё ман бояд паҳнкуниро аз сервер ({n}) нест кунам?",
+      other: "Оё ман бояд файлҳои паҳнкунӣ ({n})-ро аз сервер ҳазф кунам?",
+    },
     deletedN: "Ҳазф шуд: {n}",
     deleteFailed: "Ҳозир карда намешавад: {n}",
     actions: "Амалҳо",
@@ -477,8 +495,14 @@ export const tg: EnDict<typeof ru> = {
     metaEpisodesOf: "серия {from}–{to} аз {total}",
   },
   series: {
-    seasons: { one: "Мавсими {n}", other: "Мавсимҳои {n}" },
-    seasonsOf: { one: "Дар эпизоди {have} аз {n} дар ин силсила", other: "Дар силсилаи {have}, ки дар тӯли {n} фаслҳо паҳн шудааст" },
+    seasons: {
+      one: "Мавсими {n}",
+      other: "Мавсимҳои {n}",
+    },
+    seasonsOf: {
+      one: "Дар эпизоди {have} аз {n} дар ин силсила",
+      other: "Дар силсилаи {have}, ки дар тӯли {n} фаслҳо паҳн шудааст",
+    },
     rowEnded: "анҷомёфта",
     toEpisodes: "ба силсила",
     watchedOf: "{have} аз {n} тамошо шуд",
@@ -489,8 +513,14 @@ export const tg: EnDict<typeof ru> = {
     notInRelease: "на дар даст",
     dubPriority: "Афзалият: {list}",
     findSeason: "{n}-ро барои як фасл пайдо кунед",
-    releases: { one: "Тақсимоти {n}", other: "{n}-давраҳо" },
-    deleteSeries: { one: "Серияро (эпизод {n}) нест кунед", other: "Ҳазфи силсила (эпизодҳои {n})" },
+    releases: {
+      one: "Тақсимоти {n}",
+      other: "{n}-давраҳо",
+    },
+    deleteSeries: {
+      one: "Серияро (эпизод {n}) нест кунед",
+      other: "Ҳазфи силсила (эпизодҳои {n})",
+    },
     noSeason: "Миёнаи мавсим",
     gone: "Ин силсила дигар дар «My» нест.",
     goneTv: "Ин силсила дигар дар китобхонаи расонаӣ дастрас нест.",
@@ -513,12 +543,24 @@ export const tg: EnDict<typeof ru> = {
     badgeNext: "серияи нав {date}",
     badgeEpisode: "серияи нав",
     badgeSeason: "мавсими нав",
-    seasonReleases: { one: "{n}, ҷадвали ин мавсим", other: "{n} дар ин мавсим мувофиқ аст" },
-    files: { one: "Файли {n}", other: "Файлҳои {n}" },
+    seasonReleases: {
+      one: "{n}, ҷадвали ин мавсим",
+      other: "{n} дар ин мавсим мувофиқ аст",
+    },
+    files: {
+      one: "Файли {n}",
+      other: "Файлҳои {n}",
+    },
     alreadyHave: "Алҳол чунин даст вуҷуд дорад: {info}",
     keepOnly: "Фақат ҳаминро нигоҳ доред",
-    keepOnlyAsk: { one: "Эпизоди дигари {n}-ро аз фасли {season} ҳазф кунед?", other: "Эпизоди дигари {n}-ро аз мавсими {season} ҳазф кунед?" },
-    keepOnlyAskNoSeason: { one: "Оё боз як паҳнкунии ғайрифаслӣ аз {n}-ро ҳазф кунем?", other: "Оё боз як ҷадвали ғайрифаслӣ аз {n}-ро ҳазф мекунед?" },
+    keepOnlyAsk: {
+      one: "Эпизоди дигари {n}-ро аз фасли {season} ҳазф кунед?",
+      other: "Эпизоди дигари {n}-ро аз мавсими {season} ҳазф кунед?",
+    },
+    keepOnlyAskNoSeason: {
+      one: "Оё боз як паҳнкунии ғайрифаслӣ аз {n}-ро ҳазф кунем?",
+      other: "Оё боз як ҷадвали ғайрифаслӣ аз {n}-ро ҳазф мекунед?",
+    },
     releaseDelete: "Тақсимотро нест кунед",
     releaseDeleteAsk: "Пахши «{name}»-ро нест кунед? Шумораи тамошоҳо ба «{keeper}» интиқол дода мешаванд.",
     releaseDeleteCurrentAsk: "Шумо ҳоло ин даст: «{name}»-ро мебинед. Оё мехоҳед онро ҳазф кунед? Бозӣ дар «{keeper}» идома меёбад ва маркерҳо ба он ҷо мегузаранд.",
@@ -526,7 +568,10 @@ export const tg: EnDict<typeof ru> = {
     releaseDeletePack: "Ин пакет мавсимҳои дигарро низ дар бар мегирад. Шумо метавонед онро танҳо аз «Пакетҳои ман» ҳамроҳ бо онҳо ҳазф кунед.",
     releaseCarryFailed: "Нишонаҳоро интиқол додан ғайриимкон аст; паҳнкунӣ ҳазф нашудааст.",
     releaseDeleted: "Тақсимот хориҷ карда шудааст",
-    releaseDeleteLossAsk: { one: "{keeper} дорои силсилаи {n} бо шумораи тамошоҳо нест; шумораи тамошоҳояш гум мешавад. Оё шумо ҳанӯз ҳам мехоҳед онро ҳазф кунед?", other: "Дар «{keeper}» ягон эпизодҳои {n} бо шумораи тамошоҳо вуҷуд надоранд; шумораи тамошоҳояшон гум мешавад. Оё шумо ҳанӯз ҳам мехоҳед онҳоро ҳазф кунед?" },
+    releaseDeleteLossAsk: {
+      one: "{keeper} дорои силсилаи {n} бо шумораи тамошоҳо нест; шумораи тамошоҳояш гум мешавад. Оё шумо ҳанӯз ҳам мехоҳед онро ҳазф кунед?",
+      other: "Дар «{keeper}» ягон эпизодҳои {n} бо шумораи тамошоҳо вуҷуд надоранд; шумораи тамошоҳояшон гум мешавад. Оё шумо ҳанӯз ҳам мехоҳед онҳоро ҳазф кунед?",
+    },
     releaseDeleteBusy: "Сабр кунед, дасти қаблӣ ҳанӯз тоза карда мешавад.",
     releasesHintDelete: "Тақсимотро нест кунед",
     releasesHintOk: "ОК – дастро боз кун",
@@ -546,7 +591,10 @@ export const tg: EnDict<typeof ru> = {
     dubReset: "Ба таври пешфарз (барқарорсозӣ)",
     dubChange: "Тағйир",
     dubNote: "Барои ин мавсим инро қайд кунед. Ҳамин студия дар мавсими оянда, агар дастрас бошад, ҳам барои пахшҳои телевизионӣ ва ҳам пахшҳои телефонӣ истифода мешавад.",
-    episodesOf: { one: "{have} аз силсилаи {n}", other: "{have} аз {n} серия" },
+    episodesOf: {
+      one: "{have} аз силсилаи {n}",
+      other: "{have} аз {n} серия",
+    },
     watchedSome: "{n}-ро тамошо кард",
     watchedEvery: "нигариста",
     left: "{n} дақиқа мондааст",
@@ -725,6 +773,12 @@ export const tg: EnDict<typeof ru> = {
       lgNoConnect: "LG: Барои санҷиш пайваст нест",
       lgProbeFailed: "LG: Санҷиши режими таҳиякунанда ноком шуд",
       takeover: "Ба «{target}» пайваст шавед? Пайванди ҷории ба «{other}» баста мешавад.",
+      updateTitle: "Навсозии OMP",
+      updateTitleVersion: "Навсозии OMP {version}",
+      logStartUpdate: "Аз телефони мобилиам нашр шудааст: {what}",
+      logDoneUpdate: "OMP тавассути телефони мобилӣ навсозӣ шудааст.",
+      doneUpdate: "OMP навсозӣ шудааст",
+      doneUpdateVersion: "OMP ба {version} навсозӣ шудааст.",
     },
     plan: {
       byModelYear: "{label} (бар асоси соли модел)",
@@ -812,6 +866,7 @@ export const tg: EnDict<typeof ru> = {
       yandexSubscriptionNote: "Агар TV Station тавассути обуна харидорӣ карда шавад, насби APKҳо ғайриимкон аст ва «Идоракунандаи файл» дастрас нест, то он даме ки пурра барои дастгоҳ пардохт нашавад.",
       yandexNoAdbNote: "Одатан дар YaOS менюи «Барои таҳиягарон» ё имконияти ислоҳи хатоҳои шабакавӣ вуҷуд надорад, бинобар ин телефон наметавонад OMP-ро худаш насб кунад.",
       yandexFaq: "Яндекс: ҳамаи усулҳои насб",
+      updateFromPhone: "Навсозӣ аз телефони мобилии шумо",
     },
     assistant: {
       title: "OMP-ро дар телевизори худ насб кунед",
@@ -914,10 +969,22 @@ export const tg: EnDict<typeof ru> = {
     defaultPhone: "Телефон",
     today: "имрӯз",
     yesterday: "дирӯз",
-    seeds: { one: "{n}-сид", other: "{n}-сидов" },
-    leechers: { one: "Профили {n}", other: "{n}-личеҳо" },
-    downloaded: { one: "{n} маротиба зеркашӣ шудааст", other: "{n} маротиба зеркашӣ шудааст" },
-    dhtPeers: { one: "{n} Фестивали онлайн", other: "{n} бозиҳои онлайнӣ" },
+    seeds: {
+      one: "{n}-сид",
+      other: "{n}-сидов",
+    },
+    leechers: {
+      one: "Профили {n}",
+      other: "{n}-личеҳо",
+    },
+    downloaded: {
+      one: "{n} маротиба зеркашӣ шудааст",
+      other: "{n} маротиба зеркашӣ шудааст",
+    },
+    dhtPeers: {
+      one: "{n} Фестивали онлайн",
+      other: "{n} бозиҳои онлайнӣ",
+    },
     jackettHint: "Оё сайт аз ҷониби Cloudflare баста шудааст? Онро тавассути браузер дастрас кунед (тугмаи «Воридшавӣ» дар сайти «Search Sources») ё тавассути Jackett, Prowlarr ё FlareSolverr пайваст шавед – барои дастурҳо ба бахши «Саволҳо ва ҷавобҳо» нигаред.",
     cloudflareTvOne: "{name} аз ҷониби Cloudflare манъ шудааст – онро дар телефони мобилии худ тавассути «Search Sources» дастрас кунед.",
     cloudflareTvMany: "{names} аз ҷониби Cloudflare манъ шудаанд – онҳоро дар телефони мобилии худ тавассути «Search Sources» дастрас кунед.",
@@ -926,8 +993,14 @@ export const tg: EnDict<typeof ru> = {
       date: "Ба рӯз",
     },
     progress: {
-      line: { one: "{found} · {n} аз {sources} ҷавоб доданд", other: "{found} ёфта шуд · {n} аз {sources} ҷавоб дод" },
-      sources: { one: "{n} манбаъ", other: "Манбаъҳои {n}" },
+      line: {
+        one: "{found} · {n} аз {sources} ҷавоб доданд",
+        other: "{found} ёфта шуд · {n} аз {sources} ҷавоб дод",
+      },
+      sources: {
+        one: "{n} манбаъ",
+        other: "Манбаъҳои {n}",
+      },
       searchingIn: "Ман ҳанӯз дар {names} меҷӯям…",
       failed: "Ҷавоб надод: {names}",
     },
@@ -1055,7 +1128,10 @@ export const tg: EnDict<typeof ru> = {
       thanksTitle: "Сипоснома",
       thanksEmpty: "Ҳоло он холист. Номи шахс пайдо мешавад, агар худи ӯ онро кушода бошад.",
       thanksDown: "Феҳристи сипосномаҳо дар айни замон бор нашудааст.",
-      daysLeft: { one: "{n} рӯз мондааст", other: "{n} рӯз мондааст" },
+      daysLeft: {
+        one: "{n} рӯз мондааст",
+        other: "{n} рӯз мондааст",
+      },
       about: "Бештар маълумот гиред",
       tgMenu: "Рӯйхат",
       renew: "Навсозӣ",
@@ -1129,8 +1205,14 @@ export const tg: EnDict<typeof ru> = {
       whereManual: "дастӣ илова карда шуд",
       hiddenStates: "Jackett бо парол муҳофизат шудааст – ҳолати трекерҳо намоён нест.",
       noTrackers: "бе трекерҳо",
-      trackers: { one: "{n}-трекер", other: "Трекерҳои {n}" },
-      working: { one: "{n} кор мекунад", other: "{n} кор мекунанд" },
+      trackers: {
+        one: "{n}-трекер",
+        other: "Трекерҳои {n}",
+      },
+      working: {
+        one: "{n} кор мекунад",
+        other: "{n} кор мекунанд",
+      },
       disabledAfterErrors: "нофаъол шуд пас аз хатогиҳо",
       direct: "мустақиман · {rest}",
       directChecking: "мустақиман · Ман тафтиш мекунам…",
@@ -1138,9 +1220,18 @@ export const tg: EnDict<typeof ru> = {
       noKeyLine: "Ман ба калиди API ниёз дорам.",
       badKeyLine: "Калиди нодурусти API",
       justChecked: "Ҳоло санҷида шуд",
-      checkedMin: { one: "{n}-ро як дақиқа пеш санҷида шуд", other: "{n} дақиқа пеш санҷида шуд" },
-      checkedHour: { one: "{n}-ро як соат пеш санҷида шуд", other: "{n} соат пеш санҷида шуд" },
-      checkedDay: { one: "{n} рӯз пеш санҷида шуд", other: "Охирин бор {n} рӯз пеш санҷида шуд" },
+      checkedMin: {
+        one: "{n}-ро як дақиқа пеш санҷида шуд",
+        other: "{n} дақиқа пеш санҷида шуд",
+      },
+      checkedHour: {
+        one: "{n}-ро як соат пеш санҷида шуд",
+        other: "{n} соат пеш санҷида шуд",
+      },
+      checkedDay: {
+        one: "{n} рӯз пеш санҷида шуд",
+        other: "Охирин бор {n} рӯз пеш санҷида шуд",
+      },
     },
     screen: {
       builtin: "Дарунсохт · дар телефон",
@@ -1231,16 +1322,25 @@ export const tg: EnDict<typeof ru> = {
     nextAt: "Баъд наздик ба {time}-ро санҷед.",
     nextDayAt: "Баъд наздик ба {day} {time} санҷед.",
     everyHour: "як бор дар як соат",
-    everyHours: { one: "{n} ҳар соат", other: "{n} соат" },
+    everyHours: {
+      one: "{n} ҳар соат",
+      other: "{n} соат",
+    },
     anyQuality: "Ҳар кадом",
     anyQualityRule: "ҳар сифат",
     fromQuality: "аз {q}p",
     allSources: "Ҳамаи манбаъҳо",
     noSources: "Ҳеҷ манбаъ",
-    minSeeds: { one: "аз {n} Сида", other: "аз {n} Сидов" },
+    minSeeds: {
+      one: "аз {n} Сида",
+      other: "аз {n} Сидов",
+    },
     maxSize: "то {size} ГБ",
     noNotify: "бидуни огоҳӣ",
-    fresh: { one: "{n} нав", other: "{n} нав" },
+    fresh: {
+      one: "{n} нав",
+      other: "{n} нав",
+    },
     episodeOut: "Серия нашр шудааст {to}",
     episodesOut: "Эпизодҳои{from}–{to} нашр шудаанд.",
     youHave: "{news} · шумо доред {range}",
@@ -1254,7 +1354,10 @@ export const tg: EnDict<typeof ru> = {
     foundNew: "Навҳо пайдо шуданд: {n}",
     noNew: "Тақсимоти нав вуҷуд надорад",
     sourcesAnswered: "Манбаъҳо: {answered}, аз {asked}, ҷавоб дод",
-    skipped: { one: "Мо ҳанӯз фурсат надоштем, ки санҷем: обунаи {n}", other: "Мо ҳанӯз вақт надоштем, ки санҷем: обунаҳои {n}" },
+    skipped: {
+      one: "Мо ҳанӯз фурсат надоштем, ки санҷем: обунаи {n}",
+      other: "Мо ҳанӯз вақт надоштем, ки санҷем: обунаҳои {n}",
+    },
     notifyBlocked: "Огоҳиномаҳо нишон дода намешаванд: онҳо барои OMP ғайрифаъоланд.",
     notifyOff: "Огоҳиномаҳои OMP хомӯш карда шудаанд – лутфан онҳоро дар танзимоти Android-и худ фаъол созед, то дар бораи паҳнкуниҳои нав огоҳ шавед",
     replace: {
@@ -1290,7 +1393,10 @@ export const tg: EnDict<typeof ru> = {
       allEnabled: "ҳамаҷониба",
       allEnabledOption: "Ҳама чиз дохил",
       noneChosen: "интихоб нашудааст",
-      sourcesN: { one: "{n} манбаъ", other: "Манбаъҳои {n}" },
+      sourcesN: {
+        one: "{n} манбаъ",
+        other: "Манбаъҳои {n}",
+      },
       notify: "Огоҳ кардан",
       notifyHint: "барои ҳар дасти нав",
       telegram: "Телеграм",
@@ -1338,7 +1444,10 @@ export const tg: EnDict<typeof ru> = {
       keepsSkip: "Танзимот ва категорияи «Pass» интиқол дода мешаванд.",
       removesOld: "Тақсимоти кӯҳна аз сервер ҳазф карда шуд.",
       searching: "Ман меҷӯям…",
-      moreN: { one: "имконияти дигар: {n}", other: "{n} имконоти бештар" },
+      moreN: {
+        one: "имконияти дигар: {n}",
+        other: "{n} имконоти бештар",
+      },
       noOthers: "Дигарҳое нестанд",
       busy: "Иваз кардан… Ин метавонад то як дақиқа вақт гирад.",
       replace: "Ҷоигузор кардан",
@@ -1365,7 +1474,10 @@ export const tg: EnDict<typeof ru> = {
     },
   },
   notify: {
-    newTorrents: { one: "{n} дасти нав", other: "{n} тақсимоти нав" },
+    newTorrents: {
+      one: "{n} дасти нав",
+      other: "{n} тақсимоти нав",
+    },
     episodeTitle: "{name}: эпизод {to} нашр шуд",
     episodesTitle: "{name}: серияҳои {from}–{to} нашр шудаанд",
     rangeOfTotal: "{range} аз {total}",
@@ -1575,7 +1687,10 @@ export const tg: EnDict<typeof ru> = {
       empty: "Ҳанӯз обунаҳо вуҷуд надоранд – онҳоро дар телефони худ илова кунед ё бо пахш кардани тугмаи «Ман мехоҳам тамошо кунам» дар корт илова кунед.",
       noMatch: "Бо '{q}' обунаҳо вуҷуд надоранд.",
       anyQuality: "ҳар сифат",
-      fresh: { one: "{n} нав", other: "{n} нав" },
+      fresh: {
+        one: "{n} нав",
+        other: "{n} нав",
+      },
       notify: "Ҳисобот",
       better: "Дар беҳтарин сифат",
       check: "Ҳоло санҷед",
@@ -1623,6 +1738,7 @@ export const tg: EnDict<typeof ru> = {
       hintOk: "Хуб – дастро интихоб кунед",
       hintBack: "Баргаштан – Пӯшидан",
     },
+    devmodeBanner: "Режими таҳиягар ба поён расидан наздик аст – онро тамдид кунед, то OMP аз телевизиони шумо нопадид нашавад.",
   },
   tls: {
     untrustedTitle: "Оё мо бояд ба шаҳодатномаи {host} эътимод кунем?",
@@ -1940,7 +2056,10 @@ export const tg: EnDict<typeof ru> = {
     trackerMark: "(трекер)",
     seedsUnknown: "-",
     deadRelease: "Сервери тақсимот посух намедиҳад – лутфан сервери дигареро санҷед",
-    deadSeeds: { one: "Тақсимот посух намедиҳад: {n} sid", other: "Тақсимот ҷавоб намедиҳад: {n} sidov" },
+    deadSeeds: {
+      one: "Тақсимот посух намедиҳад: {n} sid",
+      other: "Тақсимот ҷавоб намедиҳад: {n} sidov",
+    },
     extDubsWebos: "Телевизор форматҳои аудиои муайянро, ки дар ин нашр дохил шудаанд (DTS, FLAC ва монанди он), наметавонад бозӣ кунад. Ба ҷои он треки аудио аз видео бозӣ мешавад.",
     extDubsBuiltin: "Плеер 2160 трекҳои аудиои инфиродиро фаъол мекунад: «Танзимот» → «Плеер видео»",
     deleteAsk: "Торрентро аз сервер ҳазф кунед?",
@@ -2022,7 +2141,10 @@ export const tg: EnDict<typeof ru> = {
       saveFailed: "Наҷот додан ғайриимкон аст",
     },
     screen: {
-      peerCount: { one: "{n} як идона", other: "{n} пиров" },
+      peerCount: {
+        one: "{n} як идона",
+        other: "{n} пиров",
+      },
       loading: "Мунтазир ба боршавӣ…",
       notFound: "Тақсимот пайдо нашуд",
       continueOnTv: "Идома дар телевизион · {ep}бо {time}",
@@ -2305,6 +2427,9 @@ export const tg: EnDict<typeof ru> = {
     openOnStartupAllow: "Намоишро бар болои равзанаҳо фаъол созед",
     openOnStartupOverlayAsk: "Система ҳангоми оғозшавии барнома онро аз иҷро шудан манъ мекунад. Иҷозат диҳед, ки он дар болои дигар равзанаҳо нишон дода шавад, то OMP ба таври худкор кушода шавад.",
     openOnStartupNoScreen: "Намуд гирифтан ба танзимоти система ғайриимкон аст.",
+    devmodeExtend: "Низомиро дароз кунед",
+    devmodeOpened: "Режими таҳиягар кушода аст – дар он «Танзим кардан»-ро пахш кунед, то режими мазкурро васеъ кунед.",
+    devmodeOpenFailed: "Ман натавонистам режими таҳиягарро дар телевизор фаъол кунам.",
   },
   tvSources: {
     tsRutor: "рутор (ҷустуҷӯи TorrServer)",
@@ -2605,11 +2730,20 @@ export const tg: EnDict<typeof ru> = {
     errEmpty: "Дар нусха ягон маълумот нест, ки барқарор карда шавад.",
     sumServers: "Серверҳои TorrServer: {list}",
     sumTvs: "Телевизорҳо: {list}",
-    sumSubs: { one: "Абоненти назорати {n}", other: "Обунаҳои назорати {n}" },
-    sumSources: { one: "Манобеи ҷустуҷӯ: {n}-switch", other: "Манбаъҳои ҷустуҷӯ: коммутаторҳои {n}" },
+    sumSubs: {
+      one: "Абоненти назорати {n}",
+      other: "Обунаҳои назорати {n}",
+    },
+    sumSources: {
+      one: "Манобеи ҷустуҷӯ: {n}-switch",
+      other: "Манбаъҳои ҷустуҷӯ: коммутаторҳои {n}",
+    },
     sumIndexers: "Индексаторҳо (Jackett, Prowlarr): {n} – бе калидҳои API; шумо бояд калидҳоро дубора ворид кунед",
     sumPlaylists: "Плелистҳои дӯстдошта: {n}",
-    sumTracks: { one: "Интихоби трекҳо: {n} deal", other: "Интихоби трекҳо: давраҳои{n}" },
+    sumTracks: {
+      one: "Интихоби трекҳо: {n} deal",
+      other: "Интихоби трекҳо: давраҳои{n}",
+    },
     sumSettings: "Танзимоти барнома, назорат ва тачпад; намоиши каталог",
     warnNoSecrets: "Дар нусха суроғаҳои сервер ҳастанд – лутфан файлро дар ҷои бехатар нигоҳ доред.",
     warnSecrets: "Ин нусха суроғаҳои сервер, парол барои дастрасӣ ба TorrServer-и шумо (агар муқаррар шуда бошад) ва кодҳои ҷуфтсозӣ барои телевизорҳои шуморо дар бар мегирад – ин файлро мисли парол бехатар нигоҳ доред.",
@@ -2803,7 +2937,10 @@ export const tg: EnDict<typeof ru> = {
     noSubsMatch: "Бо ин ном обунаҳо вуҷуд надоранд.",
     foundReleases: "Таърихи дастҳо ёфт шуд",
     noFindingsMatch: "Дар байни дастҳое, ки пайдо шуданд, мувофиқат нест.",
-    moreFindings: { one: "ва дигар паҳнкунӣ {n} – лутфан пурсиши худро равшан кунед", other: "ва як тақсимоти дигари {n} – лутфан пурсиши худро равшан кунед" },
+    moreFindings: {
+      one: "ва дигар паҳнкунӣ {n} – лутфан пурсиши худро равшан кунед",
+      other: "ва як тақсимоти дигари {n} – лутфан пурсиши худро равшан кунед",
+    },
     sortAdded: "бар асоси санаи иловашуда",
     sortFresh: "кашфиётҳои нав",
     sortName: "ба ном",
@@ -2837,7 +2974,10 @@ export const tg: EnDict<typeof ru> = {
     calNextMonth: "Моҳи оянда",
     calDayEmpty: "Дар ин рӯз ягон силсила нест.",
     calEarlier: "Пештар ({n})",
-    calReleases: { one: "Озодсозии {n}", other: "Нашрҳои {n}" },
+    calReleases: {
+      one: "Озодсозии {n}",
+      other: "Нашрҳои {n}",
+    },
     calEmptySubs: "Дар айни замон ягон сериал барои тамошо дастрас нест.",
     calDayAria: "{date}, силсила: {n}",
     calSheet: "Силсила",

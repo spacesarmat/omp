@@ -1,5 +1,5 @@
-/** The ro dictionary (DeepL draft, reviewed). Mirrors ru.ts; plurals one/few/many. */
-export const ro = {
+import type { ru } from './ru';
+export const ro: typeof ru = {
   filters: {
     noCam: "fără ecrane",
     seeds: "siduri ≥ {n}",
@@ -217,6 +217,7 @@ export const ro = {
     advanced: "Avansate",
     expert: "Pentru cei cu experiență",
     phoneServer: "Serverul de pe telefon",
+    diagnosticsHintStore: "Este dezactivat până când îl activați voi înșivă. Configurare, autentificare, plată și rapoarte privind erorile. Fără adrese și tokenuri. În jurnal pot rămâne numele fișierelor media.",
   },
   errors: {
     onlyAndroid: "Disponibil numai în aplicația pentru Android",
@@ -723,6 +724,12 @@ export const ro = {
       lgNoConnect: "LG: nu există conexiune pentru verificare",
       lgProbeFailed: "LG: verificarea modului pentru dezvoltatori nu a reușit",
       takeover: "Doriți să vă conectați la „{target}”? Conexiunea curentă la „{other}” va fi închisă.",
+      updateTitle: "Actualizez OMP",
+      updateTitleVersion: "Actualizez OMP {version}",
+      logStartUpdate: "Actualizare de pe telefon: {what}",
+      logDoneUpdate: "OMP a fost actualizat de pe telefon",
+      doneUpdate: "OMP a fost actualizat",
+      doneUpdateVersion: "OMP a fost actualizat la {version}",
     },
     plan: {
       byModelYear: "{label} (în funcție de anul de fabricație)",
@@ -810,6 +817,7 @@ export const ro = {
       yandexSubscriptionNote: "Dacă aplicația TV Station a fost achiziționată prin abonament, nu se instalează fișiere APK, iar „Managerul de fișiere” nu este disponibil până la achitarea integrală a costului dispozitivului.",
       yandexNoAdbNote: "Pe YaOS nu există, de obicei, meniul „Pentru dezvoltatori” și opțiunea de depanare prin rețea, așa că telefonul nu poate instala OMP singur.",
       yandexFaq: "Yandex: toate modalitățile de instalare",
+      updateFromPhone: "Actualizează de pe telefon",
     },
     assistant: {
       title: "Instalați OMP pe televizor",
@@ -1621,6 +1629,7 @@ export const ro = {
       hintOk: "OK – selectează distribuția",
       hintBack: "Înapoi - închide",
     },
+    devmodeBanner: "Regimul pentru dezvoltatori va expira în curând – prelungiți-l pentru ca OMP să nu dispară de pe televizor",
   },
   tls: {
     untrustedTitle: "Să avem încredere în certificatul {host}?",
@@ -2303,6 +2312,9 @@ export const ro = {
     openOnStartupAllow: "Permite afișarea peste ferestre",
     openOnStartupOverlayAsk: "Sistemul blochează pornirea la activare. Activați opțiunea „Afișare peste alte ferestre” pentru ca OMP să se deschidă automat.",
     openOnStartupNoScreen: "Nu s-au putut deschide setările sistemului.",
+    devmodeExtend: "Prelungirea regimului",
+    devmodeOpened: "Modul pentru dezvoltatori este activat – apăsați butonul „Extend” din acesta pentru a prelungi durata modului",
+    devmodeOpenFailed: "Nu s-a reușit activarea modului pentru dezvoltatori pe televizor",
   },
   tvSources: {
     tsRutor: "rutor (căutare TorrServer)",
@@ -2964,4 +2976,4 @@ export const ro = {
     friendsText: "OMP – un player pentru filme și seriale",
     seasonOut: "Sezonul {n} începe {date}",
   },
-} as typeof import('./ru').ru;
+};

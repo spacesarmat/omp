@@ -1,4 +1,3 @@
-/** The tk dictionary (DeepL draft, reviewed). Mirrors ru.ts; plurals one/other. */
 import type { EnDict } from './types';
 import type { ru } from './ru';
 export const tk: EnDict<typeof ru> = {
@@ -27,11 +26,17 @@ export const tk: EnDict<typeof ru> = {
     originalChip: "Asyl",
     rusSubsChip: "Rusça altyntylar",
     fullSeasonOnly: "Diňe doly möwsüm",
-    show: { one: "Eli görkez {n}", other: "{n}-iň ellerini görkez" },
+    show: {
+      one: "Eli görkez {n}",
+      other: "{n}-iň ellerini görkez",
+    },
   },
   common: {
     signInTo: "{site}-e giriň",
-    torrents: { one: "{n} paýlanyşy", other: "{n}-iň aýlawlary" },
+    torrents: {
+      one: "{n} paýlanyşy",
+      other: "{n}-iň aýlawlary",
+    },
     gb: "Böyük Britaniýa",
     mb: "MB",
     mbps: "megabayt sekuntda",
@@ -219,6 +224,7 @@ export const tk: EnDict<typeof ru> = {
     advanced: "Ösen",
     expert: "Tejribeli ulanyjylar üçin",
     phoneServer: "Siziň mobil telefonyňyzda bir server",
+    diagnosticsHintStore: "Özüňiz işjeňleşdirýänçä öçürilip dur.   Gurnama, giriş, töleg we näsazlyk hasabatlary.   Adresler ýa-da tokenler ýok.   Media atlary ýazgyda galyp biler.",
   },
   errors: {
     onlyAndroid: "Diňe Android programmasynda elýeterli",
@@ -447,9 +453,18 @@ export const tk: EnDict<typeof ru> = {
     watchedDone: "Görüldi",
     addedMany: "Torrentler goşuldy: {n}",
     added: "Goşuldy: {titles}",
-    episodes: { one: "{n} seriýasy", other: "{n}-nyň bölümleri" },
-    extDubs: { one: "+{n} ses ýazgy", other: "{n} ses ýazgylary" },
-    extDubsSubs: { one: "{n} ses ýazgy, alty ýazgylar", other: "{n} ses ýazgylary, alty ýazgylar" },
+    episodes: {
+      one: "{n} seriýasy",
+      other: "{n}-nyň bölümleri",
+    },
+    extDubs: {
+      one: "+{n} ses ýazgy",
+      other: "{n} ses ýazgylary",
+    },
+    extDubsSubs: {
+      one: "{n} ses ýazgy, alty ýazgylar",
+      other: "{n} ses ýazgylary, alty ýazgylar",
+    },
     extSubs: "+alt ýazgylary",
     select: "Saýlaň",
     selectCancel: "Saýlamagy aýyrmak",
@@ -457,7 +472,10 @@ export const tk: EnDict<typeof ru> = {
     selectAll: "Hemmesini saýlaň",
     selectNone: "Saýlamagy aýyrmak",
     deleteN: "Öçür ({n})",
-    deleteAsk: { one: "Serverden ({n}) paýlamany öçürmeli mi?", other: "Serverden paýlama faýllaryny ({n}) öçürmeli mi?" },
+    deleteAsk: {
+      one: "Serverden ({n}) paýlamany öçürmeli mi?",
+      other: "Serverden paýlama faýllaryny ({n}) öçürmeli mi?",
+    },
     deletedN: "Aýryldy: {n}",
     deleteFailed: "Öçürip bolmady: {n}",
     actions: "Hereketler",
@@ -477,8 +495,14 @@ export const tk: EnDict<typeof ru> = {
     metaEpisodesOf: "{from}–{to} {total}-den",
   },
   series: {
-    seasons: { one: "{n} möwsümi", other: "{n} möwsümleri" },
-    seasonsOf: { one: "Serialyň <img id=\"1\"/> we {n} bölümlerinden {have} bölümindäki", other: "{have} seriýasy, {n} möwsümlerini öz içine alýar" },
+    seasons: {
+      one: "{n} möwsümi",
+      other: "{n} möwsümleri",
+    },
+    seasonsOf: {
+      one: "Serialyň <img id=\"1\"/> we {n} bölümlerinden {have} bölümindäki",
+      other: "{have} seriýasy, {n} möwsümlerini öz içine alýar",
+    },
     rowEnded: "Täze tapgyra geçdi",
     toEpisodes: "seriýa boýunça",
     watchedOf: "{have} {n}-dan görüldi",
@@ -489,8 +513,14 @@ export const tk: EnDict<typeof ru> = {
     notInRelease: "Elimde däl",
     dubPriority: "Prioritet: {list}",
     findSeason: "Bir möwsüm tap{n}",
-    releases: { one: "{n} paýlamasy", other: "{n}-iň aýlawlary" },
-    deleteSeries: { one: "Serialy pozmak ({n} bölüm)", other: "Serini ({n} bölümlerini) pozmak" },
+    releases: {
+      one: "{n} paýlamasy",
+      other: "{n}-iň aýlawlary",
+    },
+    deleteSeries: {
+      one: "Serialy pozmak ({n} bölüm)",
+      other: "Serini ({n} bölümlerini) pozmak",
+    },
     noSeason: "Möwsümiň daşyndaky döwür",
     gone: "Bu seriýa indi 'My'-de ýok.",
     goneTv: "Bu seriýa media kitaphanasynda indi elýeterli däl.",
@@ -513,12 +543,24 @@ export const tk: EnDict<typeof ru> = {
     badgeNext: "Täze seriýa {date}",
     badgeEpisode: "täze seriýa",
     badgeSeason: "täze möwsüm",
-    seasonReleases: { one: "{n} bu möwsümiň çekilişi", other: "{n} bu möwsümde gabat gelýär" },
-    files: { one: "{n} faýly", other: "{n} faýllary" },
+    seasonReleases: {
+      one: "{n} bu möwsümiň çekilişi",
+      other: "{n} bu möwsümde gabat gelýär",
+    },
+    files: {
+      one: "{n} faýly",
+      other: "{n} faýllary",
+    },
     alreadyHave: "Şeýle bir el eýýäm bar: {info}",
     keepOnly: "Diňe şuny sakla",
-    keepOnlyAsk: { one: "{season}-nji möwsümiň başga bir {n}bölümini pozmak?", other: "{season} möwsüminden başga bir {n} epizody hem pozalyňmy?" },
-    keepOnlyAskNoSeason: { one: "{n}-iň başga bir möwsümi däl paýlamasyny hem pozalyňmy?", other: "{n}-iň başga bir möwsüm arakesmesi çekilişini hem pozalyňmy?" },
+    keepOnlyAsk: {
+      one: "{season}-nji möwsümiň başga bir {n}bölümini pozmak?",
+      other: "{season} möwsüminden başga bir {n} epizody hem pozalyňmy?",
+    },
+    keepOnlyAskNoSeason: {
+      one: "{n}-iň başga bir möwsümi däl paýlamasyny hem pozalyňmy?",
+      other: "{n}-iň başga bir möwsüm arakesmesi çekilişini hem pozalyňmy?",
+    },
     releaseDelete: "Paýlamany pozuň",
     releaseDeleteAsk: "'{name}' ýaýlymyny pozmak? Görme sany '{keeper}' ýaýlymyna geçiriljek.",
     releaseDeleteCurrentAsk: "Häzirki wagtda bu eli görýärsiňiz: '{name}'. Ony aýyrmak isleýärsiňizmi? Oýun '{keeper}'de dowam eder we bellikler şol ýere geçirilýär.",
@@ -526,7 +568,10 @@ export const tk: EnDict<typeof ru> = {
     releaseDeletePack: "Bu paket beýleki möwsümleri hem öz içine alýar. Ony diňe 'Meniň paketim'den olaryň bilen bilelikde pozup bilersiňiz.",
     releaseCarryFailed: "Görüliş bellikleri geçirip bolmady; paýlama pozulmady.",
     releaseDeleted: "Paýlama aýryldy",
-    releaseDeleteLossAsk: { one: "{keeper} {n} seriýasynyň tomaşa sanyny özünde saklamaýar; onuň tomaşa sany ýitiriljek. Ony ýok etmek isleýärsiňizmi?", other: "{keeper}-de {n} epizodlarynyň hiç birinde tomaşa sany ýok; olaryň tomaşa sany ýitiriljek. Olary ýok etmek isleýärsiňizmi?" },
+    releaseDeleteLossAsk: {
+      one: "{keeper} {n} seriýasynyň tomaşa sanyny özünde saklamaýar; onuň tomaşa sany ýitiriljek. Ony ýok etmek isleýärsiňizmi?",
+      other: "{keeper}-de {n} epizodlarynyň hiç birinde tomaşa sany ýok; olaryň tomaşa sany ýitiriljek. Olary ýok etmek isleýärsiňizmi?",
+    },
     releaseDeleteBusy: "Garaş, öňki el henizem arassalanýar.",
     releasesHintDelete: "Paýlamany öçür",
     releasesHintOk: "OK – eli aç",
@@ -546,7 +591,10 @@ export const tk: EnDict<typeof ru> = {
     dubReset: "Öňki ýagdaý (täzeden sazlamak)",
     dubChange: "Üýtgetmek",
     dubNote: "Bu möwsüm üçin muny bellige alyň. Eger elýeterli bolsa, geljek möwsümde şol bir studýa hem telewideniýe, hem-de telefon efirleri üçin ulanylýar.",
-    episodesOf: { one: "{have}, {n} seriýasyndan", other: "{have} sany {n} bölüminden" },
+    episodesOf: {
+      one: "{have}, {n} seriýasyndan",
+      other: "{have} sany {n} bölüminden",
+    },
     watchedSome: "{n}-i synlady",
     watchedEvery: "Gördi",
     left: "{n} minut galdy",
@@ -725,6 +773,12 @@ export const tk: EnDict<typeof ru> = {
       lgNoConnect: "LG: Baglanyşyk barlaýyş üçin ýok",
       lgProbeFailed: "LG: Ösüş režimi barlagy şowsuz boldy",
       takeover: "'{target}'-e birikmek? Häzirki '{other}'-e bolan baglanyşyk ýapylar.",
+      updateTitle: "OMP-i täzeläp",
+      updateTitleVersion: "OMP-i täzeläp{version}",
+      logStartUpdate: "Mobilimden ýerleşdirildi: {what}",
+      logDoneUpdate: "OMP mobil telefon arkaly täzelendi.",
+      doneUpdate: "OMP täzelendi",
+      doneUpdateVersion: "OMP {version}-e täzelendi.",
     },
     plan: {
       byModelYear: "{label} (model ýyly boýunça)",
@@ -812,6 +866,7 @@ export const tk: EnDict<typeof ru> = {
       yandexSubscriptionNote: "Eger TV Station abuna arkaly satyn alynsa, APK-lary gurnap bolmaýar we enjam doly tölenýänçä 'File Manager' elýeterli bolmaz.",
       yandexNoAdbNote: "YaOS adatça \"Döredijiler üçin\" menýusyna ýa-da tor näsazlyklaryny düzetmek mümkinçiligine eýe däl, şonuň üçin telefon OMP-i özbaşdak gurnap bilmeýär.",
       yandexFaq: "Yandex: gurnamagyň ähli usullary",
+      updateFromPhone: "Mobil telefonyňyzdan täzelik",
     },
     assistant: {
       title: "Telewizionyňyza OMP-i gurnap goýuň",
@@ -914,10 +969,22 @@ export const tk: EnDict<typeof ru> = {
     defaultPhone: "Telefon",
     today: "bugün",
     yesterday: "Düýn",
-    seeds: { one: "{n} sid", other: "{n} Sidov" },
-    leechers: { one: "{n} profili", other: "{n}likleri" },
-    downloaded: { one: "{n} gezek göçürildi", other: "{n} gezek göçürildi" },
-    dhtPeers: { one: "{n} Onlaýn Dabarasy", other: "{n} onlaýn oýunlary" },
+    seeds: {
+      one: "{n} sid",
+      other: "{n} Sidov",
+    },
+    leechers: {
+      one: "{n} profili",
+      other: "{n}likleri",
+    },
+    downloaded: {
+      one: "{n} gezek göçürildi",
+      other: "{n} gezek göçürildi",
+    },
+    dhtPeers: {
+      one: "{n} Onlaýn Dabarasy",
+      other: "{n} onlaýn oýunlary",
+    },
     jackettHint: "Saýt Cloudflare tarapyndan bloklandymy? Oňa brauzer arkaly (saytdaky 'Search Sources' bölümindäki 'Log in' düwmesine basyp) ýa-da Jackett, Prowlarr ýa-da FlareSolverr arkaly baglanyşyň – görkezmeler üçin 'Soraglar we Jogaplar' bölümine serediň.",
     cloudflareTvOne: "{name} Cloudflare tarapyndan bloklanyp dur – ony mobil enjamyňyzda 'Search Sources' arkaly girip görüň.",
     cloudflareTvMany: "{names} Cloudflare tarapyndan bloklanypdyr – mobil enjamyňyzda olara 'Search Sources' arkaly girip bilersiňiz.",
@@ -926,8 +993,14 @@ export const tk: EnDict<typeof ru> = {
       date: "Senä görä",
     },
     progress: {
-      line: { one: "{found} · {n} tapdy {sources} jogap berdi", other: "{found} tapyldy · {n} {sources}-den jogap berdi" },
-      sources: { one: "{n} çeşmesi", other: "{n} çeşmeleri" },
+      line: {
+        one: "{found} · {n} tapdy {sources} jogap berdi",
+        other: "{found} tapyldy · {n} {sources}-den jogap berdi",
+      },
+      sources: {
+        one: "{n} çeşmesi",
+        other: "{n} çeşmeleri",
+      },
       searchingIn: "Men henizem {names}-de gözleýärin…",
       failed: "Jogap bermedi: {names}",
     },
@@ -1055,7 +1128,10 @@ export const tk: EnDict<typeof ru> = {
       thanksTitle: "Minnetdarlyk bildirişleri",
       thanksEmpty: "Häzirlikçe boş.  Ady, eger adam ony özü açan bolsa, görünýär.",
       thanksDown: "Təşekürler sanawy häzirki wagtda ýüklenmedi.",
-      daysLeft: { one: "{n} gün galýar", other: "{n} gün galdy" },
+      daysLeft: {
+        one: "{n} gün galýar",
+        other: "{n} gün galdy",
+      },
       about: "Has köp maglumat alyň",
       tgMenu: "Menýu",
       renew: "Täzeden",
@@ -1129,8 +1205,14 @@ export const tk: EnDict<typeof ru> = {
       whereManual: "El bilen goşuldy",
       hiddenStates: "Jackett parol bilen goralan – yzlaýjylaryň ýagdaýy görünmeýär",
       noTrackers: "izleýjiler ýok",
-      trackers: { one: "{n}-nyň yzlaýjysy", other: "{n} yzlaýjylary" },
-      working: { one: "{n} işleýär", other: "{n} işleýär" },
+      trackers: {
+        one: "{n}-nyň yzlaýjysy",
+        other: "{n} yzlaýjylary",
+      },
+      working: {
+        one: "{n} işleýär",
+        other: "{n} işleýär",
+      },
       disabledAfterErrors: "Ýalňyşlyklardan soň işden çykaryldy",
       direct: "göni · {rest}",
       directChecking: "Göni · Men barlaýaryn…",
@@ -1138,9 +1220,18 @@ export const tk: EnDict<typeof ru> = {
       noKeyLine: "Maňa API açary gerek",
       badKeyLine: "Nädogry API açary",
       justChecked: "Diňe barlady",
-      checkedMin: { one: "{n}-i bir minut ozal barlady", other: "{n} minut öň barlady" },
-      checkedHour: { one: "{n}-i bir sagat ozal barlady", other: "{n} sagat ozal barlady" },
-      checkedDay: { one: "{n} gün ozal barlan", other: "Soňky gezek {n} gün ozal barlan" },
+      checkedMin: {
+        one: "{n}-i bir minut ozal barlady",
+        other: "{n} minut öň barlady",
+      },
+      checkedHour: {
+        one: "{n}-i bir sagat ozal barlady",
+        other: "{n} sagat ozal barlady",
+      },
+      checkedDay: {
+        one: "{n} gün ozal barlan",
+        other: "Soňky gezek {n} gün ozal barlan",
+      },
     },
     screen: {
       builtin: "Gurnalan · telefonda",
@@ -1231,16 +1322,25 @@ export const tk: EnDict<typeof ru> = {
     nextAt: "Indiki barlagy {time} golaýynda ediň",
     nextDayAt: "Indiki barlagy {day}{time} golaýynda geçiriň.",
     everyHour: "her sagat bir gezek",
-    everyHours: { one: "{n} her sagat", other: "{n} sagat" },
+    everyHours: {
+      one: "{n} her sagat",
+      other: "{n} sagat",
+    },
     anyQuality: "Haýsydyr",
     anyQualityRule: "haýsydyr bir hil",
     fromQuality: "{q}p-den",
     allSources: "Ähli çeşmeler",
     noSources: "Çeşmeler ýok",
-    minSeeds: { one: "{n}-den Sida", other: "{n}-den Sidov" },
+    minSeeds: {
+      one: "{n}-den Sida",
+      other: "{n}-den Sidov",
+    },
     maxSize: "{size} GB-a çenli",
     noNotify: "duýduryşsyz",
-    fresh: { one: "{n} täze", other: "{n} täze" },
+    fresh: {
+      one: "{n} täze",
+      other: "{n} täze",
+    },
     episodeOut: "Serial{to}-de çykaryldy.",
     episodesOut: "{from}–{to} bölümleri çykaryldy.",
     youHave: "{news} · siziňde {range} bar",
@@ -1254,7 +1354,10 @@ export const tk: EnDict<typeof ru> = {
     foundNew: "Täze tapylanlar: {n}",
     noNew: "Täze paýlamalar ýok",
     sourcesAnswered: "Çeşmeler: {answered}, {asked}-den, jogap berdi",
-    skipped: { one: "Biz heniz barlap görmäge mümkinçilik tapmadyk: {n} abunalygy", other: "Heniz barlamaga wagtymyz bolmady: {n} abunalyklary" },
+    skipped: {
+      one: "Biz heniz barlap görmäge mümkinçilik tapmadyk: {n} abunalygy",
+      other: "Heniz barlamaga wagtymyz bolmady: {n} abunalyklary",
+    },
     notifyBlocked: "Bildirişler görkezilmeýär: olar OMP üçin öçürilipdir.",
     notifyOff: "OMP bildirişleri öçürilipdir – täze paýlamalar barada habar almak üçin olary Android sazlamalaryňyzda ýakmagyňyzy haýyş edýäris.",
     replace: {
@@ -1290,7 +1393,10 @@ export const tk: EnDict<typeof ru> = {
       allEnabled: "Ähli zady öz içine alýan",
       allEnabledOption: "Ähli zady öz içine alýan",
       noneChosen: "Saýlanmady",
-      sourcesN: { one: "{n} çeşmesi", other: "{n} çeşmeleri" },
+      sourcesN: {
+        one: "{n} çeşmesi",
+        other: "{n} çeşmeleri",
+      },
       notify: "Habar ber",
       notifyHint: "Her täze el üçin",
       telegram: "Telegram",
@@ -1338,7 +1444,10 @@ export const tk: EnDict<typeof ru> = {
       keepsSkip: "'Pass' sazlamalary we kategoriýasy geçirildi.",
       removesOld: "Köhnä paýlama serwerden pozuldy.",
       searching: "Men gözleýärin…",
-      moreN: { one: "Başga bir wariant: {n}", other: "{n} has köp opsiýalar" },
+      moreN: {
+        one: "Başga bir wariant: {n}",
+        other: "{n} has köp opsiýalar",
+      },
       noOthers: "Başga hiç zat ýok",
       busy: "Çalyşýar… Bu bir minut çenli dowam edip biler.",
       replace: "Çalyşmak",
@@ -1365,7 +1474,10 @@ export const tk: EnDict<typeof ru> = {
     },
   },
   notify: {
-    newTorrents: { one: "{n} täze el", other: "{n}-iň täze paýlamalary" },
+    newTorrents: {
+      one: "{n} täze el",
+      other: "{n}-iň täze paýlamalary",
+    },
     episodeTitle: "{name}: {to} epizody çykaryldy",
     episodesTitle: "{name}: {from}–{to} bölümleri çykaryldy",
     rangeOfTotal: "{range} {total}-den",
@@ -1575,7 +1687,10 @@ export const tk: EnDict<typeof ru> = {
       empty: "Heniz abunalar ýok – olary telefonda ýa-da kartoçkada \"Men synlamak isleýärin\" düwmesine basyp goşuň",
       noMatch: "{q} bilen abunelik ýok.",
       anyQuality: "islenýän hil",
-      fresh: { one: "{n} täze", other: "{n} täze" },
+      fresh: {
+        one: "{n} täze",
+        other: "{n} täze",
+      },
       notify: "Hasabat",
       better: "Iň ýokary hili",
       check: "Häzir barlaň",
@@ -1623,6 +1738,7 @@ export const tk: EnDict<typeof ru> = {
       hintOk: "OK – eli saýlaň",
       hintBack: "Arka – Ýapmak",
     },
+    devmodeBanner: "Ösüşçi režimi ýok bolmaga golaý – ony uzadyň, şonda OMP telewizoryňyzdan ýitip gitmez.",
   },
   tls: {
     untrustedTitle: "{host} şahadatnamasyna ynanmalymy?",
@@ -1940,7 +2056,10 @@ export const tk: EnDict<typeof ru> = {
     trackerMark: "(izleýji)",
     seedsUnknown: "-",
     deadRelease: "Paýlaýyş serweri jogap bermeýär – haýyş edýäris, başga birini synap görüň",
-    deadSeeds: { one: "Paýlama jogap bermeýär: {n} sid", other: "Paýlama jogap bermeýär: {n} sidov" },
+    deadSeeds: {
+      one: "Paýlama jogap bermeýär: {n} sid",
+      other: "Paýlama jogap bermeýär: {n} sidov",
+    },
     extDubsWebos: "TV bu çykarmada goşulan käbir ses formatlaryny (DTS, FLAC we ş.m.) çalmaýar. Munuň ýerine wideodaky ses ýoly çalynýar.",
     extDubsBuiltin: "2160 Player şahsy ses ýollaryny işjeňleşdirýär: 'Täze goýmaklar' → 'Wideo pleýeri'",
     deleteAsk: "Torrent faýlyny serverden pozmak?",
@@ -2022,7 +2141,10 @@ export const tk: EnDict<typeof ru> = {
       saveFailed: "Saklap bolmaýar",
     },
     screen: {
-      peerCount: { one: "{n} baýramy", other: "{n}-iň pirowo" },
+      peerCount: {
+        one: "{n} baýramy",
+        other: "{n}-iň pirowo",
+      },
       loading: "Ýüklenýär…",
       notFound: "Paýlama tapylmady",
       continueOnTv: "Telewideniýede tomaşa etmegi dowam etdirin · {ep}{time} bilen",
@@ -2305,6 +2427,9 @@ export const tk: EnDict<typeof ru> = {
     openOnStartupAllow: "Penjereleriň üstünde görkezmegi ýaňaltdyň",
     openOnStartupOverlayAsk: "Ulgam programma işe girende ony işledip başlamaga rugsat bermeýär. OMP-iň awtomatik açylmagy üçin onuň beýleki penjireleriň üstünde görünmegine rugsat beriň.",
     openOnStartupNoScreen: "Sistemanyň sazlamalaryny açyp bolmaýar.",
+    devmodeExtend: "Rejimi uzaldyň",
+    devmodeOpened: "Ösüşçi režimi açyk – režimi uzaltmak üçin içindäki 'Uzalt' düwmesine basyň",
+    devmodeOpenFailed: "Men telewizorda işläp düzüjiniň režimini işjeňleşdirip bilmedim.",
   },
   tvSources: {
     tsRutor: "rutor (TorrServer gözlegi)",
@@ -2605,11 +2730,20 @@ export const tk: EnDict<typeof ru> = {
     errEmpty: "Kopýada gaýtadan dikeldilip boljak hiç hili maglumat ýok.",
     sumServers: "TorrServer serwerleri: {list}",
     sumTvs: "Telewizionlar: {list}",
-    sumSubs: { one: "{n} gözegçilik abunalygy", other: "{n}-iň gözegçilik abunelikleri" },
-    sumSources: { one: "Gözleg çeşmeleri: {n}-çaltma", other: "Gözleg çeşmeleri: {n} öwrüjileri" },
+    sumSubs: {
+      one: "{n} gözegçilik abunalygy",
+      other: "{n}-iň gözegçilik abunelikleri",
+    },
+    sumSources: {
+      one: "Gözleg çeşmeleri: {n}-çaltma",
+      other: "Gözleg çeşmeleri: {n} öwrüjileri",
+    },
     sumIndexers: "Indeksleýjiler (Jackett, Prowlarr): {n} – API açarlary ýok; açarlary gaýtadan girizmeli bolarsyňyz",
     sumPlaylists: "Sevimli pleýlistler: {n}",
-    sumTracks: { one: "Ýollaryň saýlamasy: {n} deal", other: "Ýollaryň saýlamasy: {n}-in raundlary" },
+    sumTracks: {
+      one: "Ýollaryň saýlamasy: {n} deal",
+      other: "Ýollaryň saýlamasy: {n}-in raundlary",
+    },
     sumSettings: "Programma, gözegçilik we touchpad sazlamalary; katalog görnüşi",
     warnNoSecrets: "Bu nusga server salgylaryny öz içine alýar – faýly howpsuz ýerde saklaň.",
     warnSecrets: "Bu nusga server salgylaryny, TorrServer-e girmegiň parolyny (eýse goýlan bolsa) we telewizorlaryňyz üçin jübütleýiş kodlaryny öz içine alýar – bu faýly parolyňyz ýaly howpsuz saklaň.",
@@ -2803,7 +2937,10 @@ export const tk: EnDict<typeof ru> = {
     noSubsMatch: "Şol at bilen abunelik ýok.",
     foundReleases: "Tapylan el taryhlary",
     noFindingsMatch: "Tapylan eller arasynda gabat gelýän ýok.",
-    moreFindings: { one: "we başga bir paýlama {n} – haýyş edýärin, soragyňyzy anyklaşdyryň", other: "we başga bir {n} paýlamasy – haýyş edýärin, soragyňyzy anyklaşdyryň" },
+    moreFindings: {
+      one: "we başga bir paýlama {n} – haýyş edýärin, soragyňyzy anyklaşdyryň",
+      other: "we başga bir {n} paýlamasy – haýyş edýärin, soragyňyzy anyklaşdyryň",
+    },
     sortAdded: "goşulan senesine görä",
     sortFresh: "täze tapyndylar",
     sortName: "ad bilen",
@@ -2837,7 +2974,10 @@ export const tk: EnDict<typeof ru> = {
     calNextMonth: "Indiki aý",
     calDayEmpty: "Bu günde hiç hili seriýa ýok.",
     calEarlier: "Öňki ({n})",
-    calReleases: { one: "{n}iň çykarylmagy", other: "{n}-iň çykarmalary" },
+    calReleases: {
+      one: "{n}iň çykarylmagy",
+      other: "{n}-iň çykarmalary",
+    },
     calEmptySubs: "Häzirlikçe akym arkaly tomaşa etmek üçin hiç hili seriýa elýeterli däl.",
     calDayAria: "{date}, seriýa: {n}",
     calSheet: "Seriýa",
