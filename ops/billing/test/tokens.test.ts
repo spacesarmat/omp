@@ -490,6 +490,77 @@ describe('refresh rotation', () => {
     expect((await db.activeRowForCode(s.codeId))).toMatchObject({ status: 'active', clone_count: 3 });
   });
 
+  it('a second replay of a rotated token inside the grace window is a clone, not another lost-response retry', async () => {
+    const file = await testStore();
+    const s = base(Date.now());
+    await writeState(file, s.state);
+    const db = file.registry;
+    const secret = await db.tokenSecret({});
+    const row = await db.activeRowForCode(s.codeId);
+    const now = Date.now();
+    const issued = (await db.issuePair(secret, row, now)).pair.refreshToken;
+    await db.refreshPair(secret, { refreshToken: issued, deviceId: DEV_A, now: now + 1000 });
+    // First replay inside grace: the single intended lost-response recovery.
+    const retry = await db.refreshPair(secret, { refreshToken: issued, deviceId: DEV_A, now: now + 2000 });
+    expect(retry.retry).toBe(true);
+    const live = retry.pair.refreshToken;
+    // A second replay inside grace must not revoke the live token again: it is a suspected clone.
+    const again = await db.refreshPair(secret, { refreshToken: issued, deviceId: DEV_A, now: now + 3000 });
+    expect(again.clone).toBe(true);
+    expect(again.retry).toBeUndefined();
+    // The legitimate holder's token still works.
+    const ok = await db.refreshPair(secret, { refreshToken: live, deviceId: DEV_A, now: now + 4000 });
+    expect(ok.error).toBeUndefined();
+    expect(ok.pair).toBeTruthy();
+  });
+
+  it('a replay in the same millisecond as the rotation cannot spend the grace retry twice', async () => {
+    const file = await testStore();
+    const s = base(Date.now());
+    await writeState(file, s.state);
+    const db = file.registry;
+    const secret = await db.tokenSecret({});
+    const row = await db.activeRowForCode(s.codeId);
+    const now = Date.now();
+    const issued = (await db.issuePair(secret, row, now)).pair.refreshToken;
+    // Rotation and the lost-response retry share the same timestamp.
+    await db.refreshPair(secret, { refreshToken: issued, deviceId: DEV_A, now });
+    const retry = await db.refreshPair(secret, { refreshToken: issued, deviceId: DEV_A, now });
+    expect(retry.retry).toBe(true);
+    const live = retry.pair.refreshToken;
+    // Same-millisecond replay: the spent retry is tracked explicitly, so this is a clone, not a retry.
+    const again = await db.refreshPair(secret, { refreshToken: issued, deviceId: DEV_A, now });
+    expect(again.clone).toBe(true);
+    expect(again.retry).toBeUndefined();
+    const ok = await db.refreshPair(secret, { refreshToken: live, deviceId: DEV_A, now });
+    expect(ok.error).toBeUndefined();
+    expect(ok.pair).toBeTruthy();
+  });
+
+  it('a clone-issued replacement cannot be revoked by a later old-token replay inside grace', async () => {
+    const file = await testStore();
+    const s = base(Date.now());
+    await writeState(file, s.state);
+    const db = file.registry;
+    const secret = await db.tokenSecret({});
+    const row = await db.activeRowForCode(s.codeId);
+    const now = Date.now();
+    const issued = (await db.issuePair(secret, row, now)).pair.refreshToken;
+    const r1 = await db.refreshPair(secret, { refreshToken: issued, deviceId: DEV_A, now: now + 1000 });
+    // The successor is used, so the next old-token presentation is a clone, not a lost response.
+    await db.refreshPair(secret, { refreshToken: r1.pair.refreshToken, deviceId: DEV_A, now: now + 2000 });
+    const clone = await db.refreshPair(secret, { refreshToken: issued, deviceId: DEV_A, now: now + 3000 });
+    expect(clone.clone).toBe(true);
+    const legit = clone.pair.refreshToken;
+    // A replay inside grace must not take the retry branch and revoke the clone-issued token.
+    const replay = await db.refreshPair(secret, { refreshToken: issued, deviceId: DEV_A, now: now + 4000 });
+    expect(replay.retry).toBeUndefined();
+    expect(replay.clone).toBe(true);
+    const ok = await db.refreshPair(secret, { refreshToken: legit, deviceId: DEV_A, now: now + 5000 });
+    expect(ok.error).toBeUndefined();
+    expect(ok.pair).toBeTruthy();
+  });
+
   it('refuses unknown, other-device and expired refresh tokens, and rate-limits per IP', async () => {
     const t = await setup({ env: { BILLING_TOKEN_IP_MAX: '5' } });
     const pair = await pairFor(t, DEV_B);
