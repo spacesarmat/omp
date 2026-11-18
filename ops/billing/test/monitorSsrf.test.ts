@@ -79,4 +79,30 @@ describe('monitorGet publicOnly resolve+pin', () => {
     const r = await monitorGet(`http://127.0.0.1:${port}/`, { timeoutMs: 2000 });
     expect(r).toMatchObject({ ok: true, status: 200 });
   });
+
+  it('a 1 ms budget returns promptly instead of stalling on DNS', async () => {
+    const r = await monitorGet(`http://localhost:${port}/`, { publicOnly: true, timeoutMs: 1 });
+    expect(r.ok).toBe(false);
+    expect(['timeout', 'dns', 'private_address']).toContain(r.error);
+  });
+});
+
+describe('CONNECT target keeps IPv6 brackets', () => {
+  it('sends [::1]:port as the CONNECT path and Host', async () => {
+    const seen: string[] = [];
+    const proxy = http.createServer((req, res) => {
+      res.writeHead(400);
+      res.end();
+    });
+    proxy.on('connect', (req, socket) => {
+      seen.push(req.url || '');
+      socket.write('HTTP/1.1 400 Bad Request\r\n\r\n');
+      socket.destroy();
+    });
+    await new Promise<void>((r) => proxy.listen(0, '127.0.0.1', r));
+    const pport = (proxy.address() as { port: number }).port;
+    await monitorGet('http://[::1]:9/', { proxy: `http://127.0.0.1:${pport}`, timeoutMs: 2000 });
+    await new Promise<void>((r) => proxy.close(() => r()));
+    expect(seen[0]).toBe('[::1]:9');
+  });
 });

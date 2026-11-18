@@ -344,10 +344,23 @@ async function getOnce(url, opts) {
     let addrs;
     if (net.isIP(hostBare)) addrs = [{ address: hostBare }];
     else {
+      // DNS shares the check deadline: a slow resolver must not stall the whole monitor run.
       try {
-        addrs = await lookup(hostBare, { all: true, verbatim: true });
+        addrs = await new Promise((resolve, reject) => {
+          const t = setTimeout(() => reject(fail('timeout')), Math.max(1, deadline - Date.now()));
+          lookup(hostBare, { all: true, verbatim: true }).then(
+            (a) => {
+              clearTimeout(t);
+              resolve(a);
+            },
+            (e) => {
+              clearTimeout(t);
+              reject(e);
+            },
+          );
+        });
       } catch (e) {
-        return { ok: false, error: 'dns', ms: Date.now() - started };
+        return { ok: false, error: e && e.kind === 'timeout' ? 'timeout' : 'dns', ms: Date.now() - started };
       }
     }
     if (!addrs.length || !addrs.every((a) => isPublicAddress(a.address))) {
@@ -369,7 +382,9 @@ async function getOnce(url, opts) {
       let createConnection = null;
       if (o.proxy) {
         // CONNECT to a checked address so the proxy does not do a fresh, unchecked lookup; TLS SNI/Host stay the name.
-        const raw = track(await tunnel(o.proxy, checked ? checked[0] : target.hostname, port, deadline, track));
+        // IPv6 literals must keep brackets in the CONNECT target and Host header.
+        const connectHost = checked ? (net.isIPv6(checked[0]) ? '[' + checked[0] + ']' : checked[0]) : target.hostname;
+        const raw = track(await tunnel(o.proxy, connectHost, port, deadline, track));
         let sock = raw;
         if (secure) {
           const t = track(tls.connect({ socket: raw, servername: target.hostname, ...(o.ca ? { ca: o.ca } : {}) }));
