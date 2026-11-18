@@ -7,11 +7,14 @@ const enHtml = readFileSync('ops/vps/site/en/index.html', 'utf8');
 const appJs = readFileSync('ops/vps/site/app.js', 'utf8');
 
 const CYRILLIC = /\p{Script=Cyrillic}/u;
+const LANGS = ['ru', 'en', 'uk', 'be', 'kk', 'ky', 'uz', 'tg', 'tk', 'hy', 'az', 'ka', 'ro'];
+const langUrl = (l: string) => (l === 'ru' ? 'https://omp-player.online/' : `https://omp-player.online/${l}/`);
 const ALTERNATES = [
-  { hreflang: 'ru', href: 'https://omp-player.online/' },
-  { hreflang: 'en', href: 'https://omp-player.online/en/' },
+  ...LANGS.map((l) => ({ hreflang: l, href: langUrl(l) })),
   { hreflang: 'x-default', href: 'https://omp-player.online/' },
 ];
+const switcherFor = (page: string) =>
+  LANGS.map((l) => ({ lang: l, text: l.toUpperCase(), href: l === 'ru' ? '/' : `/${l}/`, current: l === page ? 'page' : null }));
 
 function parse(html: string) {
   return new DOMParser().parseFromString(html, 'text/html');
@@ -70,7 +73,7 @@ type LangState = {
 };
 
 function loadDecide() {
-  const start = appJs.indexOf('function decideLangRedirect');
+  const start = appJs.indexOf('const SITE_LANGS');
   const end = appJs.indexOf('// end decideLangRedirect');
   const context: { decideLangRedirect?: (state: LangState) => string | null } = {};
   vm.runInNewContext(`${appJs.slice(start, end)}\nthis.decideLangRedirect = decideLangRedirect;`, context);
@@ -84,14 +87,8 @@ describe('public site languages', () => {
   it('serves Russian at / and English at /en/ with a RU | EN switcher', () => {
     expect(parse(ruHtml).documentElement.lang).toBe('ru');
     expect(parse(enHtml).documentElement.lang).toBe('en');
-    expect(switcher(ruHtml)).toEqual([
-      { lang: 'ru', text: 'RU', href: '/', current: 'page' },
-      { lang: 'en', text: 'EN', href: '/en/', current: null },
-    ]);
-    expect(switcher(enHtml)).toEqual([
-      { lang: 'ru', text: 'RU', href: '/', current: null },
-      { lang: 'en', text: 'EN', href: '/en/', current: 'page' },
-    ]);
+    expect(switcher(ruHtml)).toEqual(switcherFor('ru'));
+    expect(switcher(enHtml)).toEqual(switcherFor('en'));
   });
 
   it('advertises ru, en and x-default on both pages', () => {
@@ -122,10 +119,14 @@ describe('public site languages', () => {
     expect(decide({ ...home, language: 'de', hash: '#how', search: '?from=nav' })).toBe('/en/?from=nav#how');
     expect(decide({ ...home, pathname: '/index.html', language: 'fr', hash: '#download' })).toBe('/en/#download');
 
-    for (const language of ['ru', 'ru-RU', 'uk-UA', 'be', 'kk-KZ']) {
+    for (const language of ['ru', 'ru-RU']) {
       expect(decide({ ...home, language })).toBeNull();
     }
-    for (const choice of ['ru', 'en']) {
+    expect(decide({ ...home, language: 'uk-UA' })).toBe('/uk/');
+    expect(decide({ ...home, language: 'be' })).toBe('/be/');
+    expect(decide({ ...home, language: 'kk-KZ' })).toBe('/kk/');
+    expect(decide({ ...home, language: 'ka' })).toBe('/ka/');
+    for (const choice of ['ru', 'en', 'uk']) {
       expect(decide({ ...home, choice, language: 'en-US' })).toBeNull();
     }
 

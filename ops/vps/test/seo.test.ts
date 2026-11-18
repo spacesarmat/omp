@@ -6,7 +6,19 @@ const ORIGIN = 'https://omp-player.online';
 const PAGES = [
   { file: `${SITE}/index.html`, url: `${ORIGIN}/`, lang: 'ru', locale: 'ru_RU' },
   { file: `${SITE}/en/index.html`, url: `${ORIGIN}/en/`, lang: 'en', locale: 'en_US' },
+  { file: `${SITE}/uk/index.html`, url: `${ORIGIN}/uk/`, lang: 'uk', locale: 'uk_UA' },
+  { file: `${SITE}/be/index.html`, url: `${ORIGIN}/be/`, lang: 'be', locale: 'be_BY' },
+  { file: `${SITE}/kk/index.html`, url: `${ORIGIN}/kk/`, lang: 'kk', locale: 'kk_KZ' },
+  { file: `${SITE}/ky/index.html`, url: `${ORIGIN}/ky/`, lang: 'ky', locale: 'ky_KG' },
+  { file: `${SITE}/uz/index.html`, url: `${ORIGIN}/uz/`, lang: 'uz', locale: 'uz_UZ' },
+  { file: `${SITE}/tg/index.html`, url: `${ORIGIN}/tg/`, lang: 'tg', locale: 'tg_TJ' },
+  { file: `${SITE}/tk/index.html`, url: `${ORIGIN}/tk/`, lang: 'tk', locale: 'tk_TM' },
+  { file: `${SITE}/hy/index.html`, url: `${ORIGIN}/hy/`, lang: 'hy', locale: 'hy_AM' },
+  { file: `${SITE}/az/index.html`, url: `${ORIGIN}/az/`, lang: 'az', locale: 'az_AZ' },
+  { file: `${SITE}/ka/index.html`, url: `${ORIGIN}/ka/`, lang: 'ka', locale: 'ka_GE' },
+  { file: `${SITE}/ro/index.html`, url: `${ORIGIN}/ro/`, lang: 'ro', locale: 'ro_RO' },
 ];
+const LANGS = PAGES.map((p) => p.lang);
 const CYRILLIC = /\p{Script=Cyrillic}/u;
 
 const doc = (file: string) => new DOMParser().parseFromString(readFileSync(file, 'utf8'), 'text/html');
@@ -137,7 +149,7 @@ describe('landing SEO', () => {
       const card = [...d.querySelectorAll('article h3')].find((h) => h.textContent?.startsWith('Windows'));
       expect(card?.parentElement?.textContent).toContain('x86_64-v3');
       const installFaq = [...d.querySelectorAll('#faq details')].find((details) =>
-        /Как установить|How do I install/.test(details.querySelector('summary')?.textContent ?? ''),
+        details.querySelector('[data-download="desktop-windows"]:not([data-asset])'),
       );
       expect(installFaq?.textContent).toContain('xattr -d com.apple.quarantine "/Applications/OMP.app"');
       expect(installFaq?.querySelector('[data-download="desktop-windows"]:not([data-asset])')).not.toBeNull();
@@ -157,7 +169,7 @@ describe('landing SEO', () => {
       `${ORIGIN}/privacy`,
       `${ORIGIN}/privacy/en`,
     ]);
-    const homeAlts = [`ru ${ORIGIN}/`, `en ${ORIGIN}/en/`, `x-default ${ORIGIN}/`];
+    const homeAlts = [...LANGS.map((l) => `${l} ${l === 'ru' ? ORIGIN + '/' : ORIGIN + '/' + l + '/'}`), `x-default ${ORIGIN}/`];
     const privacyAlts = [`ru ${ORIGIN}/privacy`, `en ${ORIGIN}/privacy/en`, `x-default ${ORIGIN}/privacy`];
     for (const url of sitemap.getElementsByTagName('url')) {
       const loc = url.getElementsByTagName('loc')[0]?.textContent ?? '';
