@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { codeHash } from '../src/crypto.mjs';
 import { searchDesk } from '../src/desk.mjs';
 import { ADMIN_PAGES } from '../admin/src/lib/nav.ts';
 import { tabFromSearch, urlForTab } from '../admin/src/lib/tabUrl.ts';
@@ -70,5 +71,40 @@ describe('searchDesk', () => {
     const ref = searchDesk(state, [], 'acc2')[0];
     expect(ref.kind).toBe('referral');
     expect(ref.href).toBe('/admin/?tab=referral');
+    expect(ref.title).toContain('acc2');
+  });
+
+  it('keeps the old find paths: @name and an activation code', () => {
+    const hash = codeHash('ABCD-2345');
+    const found = {
+      accounts: [{ id: 'acc1', telegramUsername: 'mira' }],
+      subscriptions: [{ id: 'sub1', accountId: 'acc1' }],
+      codes: [{ id: 'c1', hash, subscriptionId: 'sub1' }],
+      payments: [],
+      watchRank: [],
+      donations: [],
+      promos: [],
+      referralJournal: [],
+    };
+    expect(searchDesk(found, [], '@mira')[0]).toMatchObject({ kind: 'account', id: 'acc1', href: '/admin/?id=acc1' });
+    expect(searchDesk(found, [], 'ABCD-2345')[0]).toMatchObject({ kind: 'account', id: 'acc1' });
+  });
+
+  it('names the friend and the referrer on a referral hit', () => {
+    const named = {
+      accounts: [
+        { id: 'acc1', telegramUsername: 'mira' },
+        { id: 'acc2', telegramName: 'Олег' },
+      ],
+      payments: [],
+      watchRank: [],
+      donations: [],
+      promos: [],
+      referralJournal: [{ id: 'r1', referrerId: 'acc1', friendId: 'acc2', status: 'granted', variant: 'days' }],
+    };
+    const hit = searchDesk(named, [], 'олег').find((row: { kind: string }) => row.kind === 'referral');
+    expect(hit).toBeTruthy();
+    expect(hit.title).toContain('@mira');
+    expect(hit.title).toContain('Олег');
   });
 });
