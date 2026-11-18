@@ -1,5 +1,15 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, afterAll } from 'vitest';
+import http from 'node:http';
 import { isPublicSiteUrl } from '../src/monitorChecks.mjs';
+import { monitorGet } from '../src/monitorHttp.mjs';
+
+const server = http.createServer((req, res) => {
+  res.writeHead(200, { 'content-type': 'text/plain' });
+  res.end('ok');
+});
+await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
+const port = (server.address() as { port: number }).port;
+afterAll(() => new Promise<void>((r) => server.close(() => r())));
 
 describe('monitor site SSRF guard', () => {
   it('accepts public http(s) tracker hosts', () => {
@@ -46,5 +56,27 @@ describe('monitor site SSRF guard', () => {
 
   it('still accepts public IPv6 and bracketed public hosts', () => {
     expect(isPublicSiteUrl('https://[2001:4860:4860::8888]/')).toBe(true);
+  });
+
+  it('rejects a trailing-dot internal name', () => {
+    expect(isPublicSiteUrl('http://localhost./')).toBe(false);
+    expect(isPublicSiteUrl('http://nas.local./')).toBe(false);
+  });
+});
+
+describe('monitorGet publicOnly resolve+pin', () => {
+  it('refuses a loopback IP literal without connecting', async () => {
+    const r = await monitorGet(`http://127.0.0.1:${port}/`, { publicOnly: true, timeoutMs: 2000 });
+    expect(r).toMatchObject({ ok: false, error: 'private_address' });
+  });
+
+  it('refuses a name that resolves to a private address (DNS rebinding)', async () => {
+    const r = await monitorGet(`http://localhost:${port}/`, { publicOnly: true, timeoutMs: 2000 });
+    expect(r).toMatchObject({ ok: false, error: 'private_address' });
+  });
+
+  it('without publicOnly the same local server is reachable (tests/AIA keep working)', async () => {
+    const r = await monitorGet(`http://127.0.0.1:${port}/`, { timeoutMs: 2000 });
+    expect(r).toMatchObject({ ok: true, status: 200 });
   });
 });

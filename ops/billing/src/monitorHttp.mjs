@@ -336,6 +336,25 @@ async function getOnce(url, opts) {
   }
   const secure = target.protocol === 'https:';
   const port = Number(target.port) || (secure ? 443 : 80);
+  // publicOnly (tracker site checks): resolve every address up front, refuse private/reserved ones, and pin
+  // the connection to the checked addresses so the name cannot resolve to something else at connect time.
+  let checked = null;
+  if (o.publicOnly) {
+    const hostBare = target.hostname.replace(/^\[|\]$/g, '').replace(/\.+$/, '');
+    let addrs;
+    if (net.isIP(hostBare)) addrs = [{ address: hostBare }];
+    else {
+      try {
+        addrs = await lookup(hostBare, { all: true, verbatim: true });
+      } catch (e) {
+        return { ok: false, error: 'dns', ms: Date.now() - started };
+      }
+    }
+    if (!addrs.length || !addrs.every((a) => isPublicAddress(a.address))) {
+      return { ok: false, error: 'private_address', ms: Date.now() - started };
+    }
+    checked = [...new Set(addrs.map((a) => a.address))];
+  }
   const open = [];
   const track = (x) => {
     open.push(x);
@@ -349,7 +368,8 @@ async function getOnce(url, opts) {
     const work = (async () => {
       let createConnection = null;
       if (o.proxy) {
-        const raw = track(await tunnel(o.proxy, target.hostname, port, deadline, track));
+        // CONNECT to a checked address so the proxy does not do a fresh, unchecked lookup; TLS SNI/Host stay the name.
+        const raw = track(await tunnel(o.proxy, checked ? checked[0] : target.hostname, port, deadline, track));
         let sock = raw;
         if (secure) {
           const t = track(tls.connect({ socket: raw, servername: target.hostname, ...(o.ca ? { ca: o.ca } : {}) }));
@@ -374,6 +394,13 @@ async function getOnce(url, opts) {
           servername: target.hostname,
         };
         if (o.ca) options.ca = o.ca;
+        // Pin direct connections to the checked addresses (no fresh lookup at connect time).
+        if (checked && !createConnection) {
+          options.lookup = (h, lo, cb) => {
+            if (lo && lo.all) cb(null, checked.map((ip) => ({ address: ip, family: net.isIP(ip) })));
+            else cb(null, checked[0], net.isIP(checked[0]));
+          };
+        }
         // Never the global agents: with NODE_USE_ENV_PROXY they carry the env proxy. Through the tunnel no
         // agent at all: `agent: false` would make a fresh agent that ignores createConnection and goes direct.
         if (createConnection) {

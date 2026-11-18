@@ -80,6 +80,7 @@ const ERROR_TEXT = {
   tls: 'ошибка TLS',
   unreachable: 'сеть недоступна',
   bad_url: 'неверный адрес',
+  private_address: 'адрес ведёт во внутреннюю сеть',
   down: 'нет ответа',
 };
 
@@ -162,7 +163,7 @@ export function isPublicSiteUrl(url) {
     return false;
   }
   if (u.protocol !== 'http:' && u.protocol !== 'https:') return false;
-  const h = u.hostname.toLowerCase().replace(/^\[|\]$/g, '');
+  const h = u.hostname.toLowerCase().replace(/^\[|\]$/g, '').replace(/\.+$/, '');
   if (!h || isPrivateIp(h)) return false;
   if (h === 'localhost' || /\.(localhost|local|internal|lan|home|corp)$/.test(h)) return false;
   if (h.indexOf('.') < 0 && h.indexOf(':') < 0) return false;
@@ -393,7 +394,7 @@ function sitePair(out, group, idBase, name, url, cfg, get) {
     target,
     alert: false,
     pair: idBase,
-    run: timed(async () => siteVerdict(await get(url, { timeoutMs: SITE_TIMEOUT_MS, headersOnly: true, ...SITE_PEEK }), url)),
+    run: timed(async () => siteVerdict(await get(url, { publicOnly: true, timeoutMs: SITE_TIMEOUT_MS, headersOnly: true, ...SITE_PEEK }), url)),
   });
   out.push({
     id: idBase + ':warp',
@@ -404,7 +405,7 @@ function sitePair(out, group, idBase, name, url, cfg, get) {
     alert: false,
     pairAlert: true,
     pair: idBase,
-    run: timed(async () => siteVerdict(await get(url, { proxy: cfg.warpProxy, timeoutMs: SITE_TIMEOUT_MS, headersOnly: true, ...SITE_PEEK }), url)),
+    run: timed(async () => siteVerdict(await get(url, { publicOnly: true, proxy: cfg.warpProxy, timeoutMs: SITE_TIMEOUT_MS, headersOnly: true, ...SITE_PEEK }), url)),
   });
 }
 
