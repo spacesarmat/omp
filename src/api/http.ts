@@ -105,6 +105,9 @@ export interface FetchLike {
 async function readCapped(res: FetchLike, maxBytes: number, type: 'json' | 'text' | 'arraybuffer'): Promise<Uint8Array> {
   if (res.body) {
     const reader = res.body.getReader();
+    // Chrome 53 (LG webOS) rejects reader.closed on releaseLock and surfaces it as an
+    // unhandled rejection; park a catch so periodic requests do not spam the TV log.
+    reader.closed.catch(() => undefined);
     const chunks: Uint8Array[] = [];
     let size = 0;
     try {

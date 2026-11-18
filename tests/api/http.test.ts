@@ -59,6 +59,7 @@ describe('request', () => {
     const text = vi.fn(() => Promise.resolve('{}'));
     const body = {
       getReader: () => ({
+        closed: Promise.resolve(),
         read: () => Promise.resolve({ done: false, value: new Uint8Array([1, 2, 3]) }),
         cancel: () => {
           cancelled = true;
@@ -71,6 +72,23 @@ describe('request', () => {
     await expect(request('http://h/x', { maxBytes: 2 })).rejects.toMatchObject({ kind: 'http', status: 413 });
     expect(cancelled).toBe(true);
     expect(text).not.toHaveBeenCalled();
+  });
+  it('parks the reader.closed rejection old WebViews raise on releaseLock', async () => {
+    let release!: () => void;
+    const closed = new Promise<void>((_, reject) => {
+      release = () => reject(new TypeError('This readable stream reader has been released'));
+    });
+    let reads = 0;
+    const body = {
+      getReader: () => ({
+        closed,
+        read: () => Promise.resolve(reads++ ? { done: true, value: undefined } : { done: false, value: new TextEncoder().encode('{}') }),
+        cancel: () => Promise.resolve(),
+        releaseLock: () => release(),
+      }),
+    };
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({ ok: true, status: 200, body })));
+    await expect(request('http://h/x')).resolves.toEqual({});
   });
   it('rejects an oversized binary response', async () => {
     mockFetch(() => ({ body: 'x'.repeat(5 * 1024 * 1024 + 1) }));
