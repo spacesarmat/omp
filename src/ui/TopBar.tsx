@@ -12,8 +12,10 @@ import { useEffect, useRef } from 'preact/hooks';
 import { deviceName, loadDeviceName } from '../platform/deviceName';
 import { tvGlyphs } from './tvText';
 import { barArrow, stepKey } from './focus';
+import { STORE_BUILD } from '../storeMode';
 
-const ICON_KEYS = ['lib-btn-search', 'lib-btn-view', 'lib-btn-sort', 'lib-btn-add', 'lib-btn-playlist', 'lib-btn-settings'];
+// store build: the «add / find a release» button opens public torrent search, so it is not offered
+const ICON_KEYS = ['lib-btn-search', 'lib-btn-view', 'lib-btn-sort', ...(STORE_BUILD ? [] : ['lib-btn-add']), 'lib-btn-playlist', 'lib-btn-settings'];
 
 /** Tabs then icons, left to right. Geometry skips across the scroll clip; this order does not. */
 export function topBarKeys(): string[] {
@@ -198,7 +200,7 @@ export function TopBar(p: TopBarProps) {
         <IconButton focusKey="lib-btn-search" icon="search" label={p.searchOpen ? t('tv.topbar.closeSearch') : t('tv.topbar.search')} onPress={p.onSearch} onFocused={p.onFocused} onArrow={arrow('lib-btn-search')} expand disabled={discover} />
         <IconButton focusKey="lib-btn-view" testValue={p.view} icon={listView ? 'list' : 'grid'} label={t('tv.topbar.view', { name: viewLabel(p.view) })} onPress={p.onView} onFocused={p.onFocused} onArrow={arrow('lib-btn-view')} expand disabled={p.tab === 'history' || discover} />
         <IconButton focusKey="lib-btn-sort" testValue={p.sort} icon="sort" label={t('tv.topbar.sort', { name: sortLabel(p.sort) })} onPress={p.onSort} onFocused={p.onFocused} onArrow={arrow('lib-btn-sort')} expand disabled={discover} />
-        <IconButton focusKey="lib-btn-add" icon="plus" label={t('add.findRelease')} onPress={() => navigate({ name: 'add' })} onFocused={p.onFocused} onArrow={arrow('lib-btn-add')} expand />
+        {!STORE_BUILD && <IconButton focusKey="lib-btn-add" icon="plus" label={t('add.findRelease')} onPress={() => navigate({ name: 'add' })} onFocused={p.onFocused} onArrow={arrow('lib-btn-add')} expand />}
         <IconButton focusKey="lib-btn-playlist" icon="playlist" label={t('tv.topbar.playlists')} onPress={() => navigate({ name: 'playlist' })} onFocused={p.onFocused} onArrow={arrow('lib-btn-playlist')} expand labelEdge="end" />
         <IconButton focusKey="lib-btn-settings" icon="settings" label={t('common.settings')} onPress={() => navigate({ name: 'settings' })} onFocused={p.onFocused} onArrow={arrow('lib-btn-settings')} expand labelEdge="end" dot={!!latestUpdate.value} />
       </div>

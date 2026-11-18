@@ -2,6 +2,10 @@
 
 <!-- Markers [phone] [tv] [lg] [atv] [tech]: see docs/changelog-markers.md. [tech] bullets are technical or admin-only and never reach users. -->
 
+## Не выпущено
+
+- [tech] Store-сборка для LG Content Store: флаг __STORE_BUILD__ (npm run build:store / package:store) отключает публичный поиск и discovery - остаётся плеер своего TorrServer (каталог, M3U/HLS, плеер); обычные сборки не меняются
+
 ## 0.30.1-beta.13
 
 - [lg] Кнопка «Продлить режим» в настройках ТВ и баннер в каталоге за 3 дня до конца 1000-часового режима разработчика: открывают Developer Mode, где продление - кнопка Extend; баннер перечитывает срок, пока каталог открыт, чтобы OMP не пропал с телевизора

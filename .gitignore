@@ -2,6 +2,7 @@ node_modules/
 # CI apt deb cache (actions/cache). Not source.
 .apt-cache/
 dist/
+dist-store/
 build/
 *.ipk
 .vite/

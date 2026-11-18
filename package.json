@@ -13,6 +13,8 @@
     "donate:code": "node scripts/donate-code.mjs",
     "screenshots": "node scripts/screenshots.mjs",
     "package": "npm run build && node scripts/package.mjs",
+    "build:store": "tsc --noEmit && vite build --config vite.store.config.ts",
+    "package:store": "npm run build:store && node scripts/package-store.mjs",
     "check:boot": "node scripts/boot-check.mjs",
     "check:changelog": "node scripts/check-changelog-encoding.mjs",
     "check:overflow": "node scripts/overflow-check.mjs",
