@@ -4,7 +4,7 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
-## Unreleased
+## 0.30.1-beta.11
 
 - [tech] TV: the journal records which launch params arrived from the phone (presence of server/action/open, no secrets) - diagnostics for "Watch on TV" when the TV opens the catalog instead of the player
 

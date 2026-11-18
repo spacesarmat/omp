@@ -2,7 +2,7 @@
 
 <!-- Markers [phone] [tv] [lg] [atv] [tech]: see docs/changelog-markers.md. [tech] bullets are technical or admin-only and never reach users. -->
 
-## Не выпущено
+## 0.30.1-beta.11
 
 - [tech] ТВ: журнал пишет, какие launch-параметры пришли с телефона (наличие server/action/open, без секретов) - диагностика запуска «Смотреть на ТВ», когда ТВ открывает каталог вместо плеера
 
