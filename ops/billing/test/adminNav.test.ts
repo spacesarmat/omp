@@ -67,6 +67,11 @@ describe('searchDesk', () => {
 
   it('finds a donation, a promo and a referral', () => {
     expect(searchDesk(state, [], 'кофе').map((h: { kind: string }) => h.kind)).toContain('donation');
+    const hidden = {
+      ...state,
+      donations: [{ id: 'd2', accountId: 'acc1', displayName: 'Мира', comment: 'черновик', status: 'draft', amountRub: 50 }],
+    };
+    expect(searchDesk(hidden, [], 'черновик')).toEqual([]);
     expect(searchDesk(state, [], 'welcome')[0]).toMatchObject({ kind: 'promo', href: '/admin/?tab=promos' });
     const ref = searchDesk(state, [], 'acc2')[0];
     expect(ref.kind).toBe('referral');

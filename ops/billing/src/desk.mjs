@@ -456,7 +456,7 @@ export function searchDesk(state, devices, q) {
   const donations = state.donations || [];
   for (let i = donations.length - 1; i >= 0 && out.length < 20; i--) {
     const d = donations[i];
-    if (!d) continue;
+    if (!d || d.status === 'draft' || d.status === 'cancelled') continue;
     const hay = [d.id, d.comment, d.displayName, d.telegramId, d.amountRub, d.operationId, d.accountId].join(' ').toLowerCase();
     if (hay.indexOf(query) < 0) continue;
     out.push({
