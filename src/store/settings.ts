@@ -6,6 +6,7 @@ import type { LibraryView } from '../lib/libraryView';
 import { isHistoryFilter, type HistoryFilter } from '../lib/history';
 import type { PlayerEngineSetting } from '../player/nativeEngine';
 import { applyLanguageSetting, type LanguageSetting } from '../i18n';
+import { STORE_BUILD } from '../storeMode';
 
 export type PhonePlayer = 'embedded' | 'p2160' | 'chooser';
 
@@ -25,8 +26,13 @@ export interface AppSettings {
   updateCheck: boolean;
   /** «Получать бета-версии»: the beta feed (update-beta.json); off = a beta stays until the next release. */
   betaUpdates: boolean;
-  /** Send install/login steps and, later, crash reports. On by default. Heartbeat of an already linked device stays. */
+  /** Send install/login steps and crash reports. On by default. Off in the LG store build until the person turns it on. */
   diagnostics: boolean;
+  /**
+   * True after the person moves the diagnostics switch. The store build treats a saved "on"
+   * without this flag as the old default, not as a choice, and stays off.
+   */
+  diagnosticsTouched: boolean;
   historyFilter: HistoryFilter;
   /** Android TV: «Плеер» — Авто / Встроенный / VLC. */
   playerEngine: PlayerEngineSetting;
@@ -80,7 +86,7 @@ export interface AppSettings {
   liveSeeds: boolean;
   /**
    * «Помогать улучшать подбор». On: the app sends anonymous playback stats so billing can rank releases.
-   * Off: nothing is sent. Default on.
+   * Off: nothing is sent. Default on. The LG store build has no ranking switch and does not send these stats.
    */
   helpRank: boolean;
   /**
@@ -128,7 +134,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   librarySort: 'new',
   updateCheck: true,
   betaUpdates: false,
-  diagnostics: true,
+  diagnostics: !STORE_BUILD,
+  diagnosticsTouched: false,
   historyFilter: 'all',
   playerEngine: 'auto',
   videoPlayer: 'builtin',
@@ -143,7 +150,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   setupDone: false,
   seenHints: {},
   liveSeeds: true,
-  helpRank: true,
+  helpRank: !STORE_BUILD,
   testMode: false,
   testLabelPx: 20,
   testLabelPhonePx: 12,
@@ -221,6 +228,10 @@ export function sanitizeSettings(v: unknown): AppSettings {
   const touched = isObject(v) && v.backgroundAudioTouched === true;
   out.backgroundAudioTouched = touched;
   if (!touched) out.backgroundAudio = true;
+  // The store settings screen does not offer this switch, so a saved "on" must not keep sending.
+  if (STORE_BUILD) out.helpRank = false;
+  // A sideload install of the same app id stored diagnostics:true as the old default.
+  if (STORE_BUILD && v.diagnosticsTouched !== true) out.diagnostics = false;
   return out;
 }
 

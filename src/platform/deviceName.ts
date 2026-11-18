@@ -4,6 +4,7 @@
 import { signal } from '@preact/signals';
 import { nativePlugin } from './androidNative';
 import { hasLuna, lunaCall } from './luna';
+import { STORE_BUILD } from '../storeMode';
 
 export const WEBOS_FALLBACK_NAME = 'LG webOS TV';
 const NAME_MAX = 60;
@@ -27,6 +28,11 @@ export function loadDeviceName(): Promise<void> {
       (r) => { deviceName.value = clean(r && r.name); },
       () => undefined,
     );
+  }
+  // Store build: settings.query is not requested. The bar shows the fallback name and does not call Luna.
+  if (STORE_BUILD) {
+    if (hasLuna()) deviceName.value = WEBOS_FALLBACK_NAME;
+    return Promise.resolve();
   }
   if (!hasLuna()) return Promise.resolve();
   return lunaCall<{ settings?: { deviceName?: unknown } }>(

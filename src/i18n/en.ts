@@ -99,6 +99,7 @@ export const en: EnDict<typeof ru> = {
     betaHint: 'There may be bugs. When the main version is out, it replaces the beta',
     diagnosticsTitle: 'Send usage steps',
     diagnosticsHint: 'Install, sign-in, payment and crash reports. No release names, addresses or tokens. You can turn it off.',
+    diagnosticsHintStore: 'Off until you turn it on. Install, sign-in, payment and crash reports. No release names, addresses or tokens.',
     promoTitle: 'Promo code',
     promoApply: 'Apply',
     promoOk: 'Promo code applied',

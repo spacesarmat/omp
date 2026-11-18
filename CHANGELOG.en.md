@@ -6,6 +6,7 @@ The English translation covers the latest versions only; the full history (in Ru
 
 ## Unreleased
 
+- [tech] LG store build: the ipk appinfo sets requiredACG to network.query (the TV address, used to find the user's TorrServer). Homebrew Channel, Developer Mode and the settingsservice device-name call are left out of the store bundle. ipk icons are opaque on #181B22. Diagnostics, crash reports and ranking stats stay off in the store build until diagnostics are turned on in Settings. The site privacy policy and docs/lg-store-submission say the same. Drafts: Self Checklist and UX Scenario. A real TV smoke test is still required
 - [tech] LG Content Store build: the __STORE_BUILD__ flag (npm run build:store / package:store) disables public search and discovery - a player for the user's own TorrServer (catalog, M3U/HLS, playback) remains; regular builds are unchanged
 - [tech] The developer mode expiry banner test is no longer flaky: after fake timers it deterministically waits for Preact's deferred rAF render, which had failed the full release test run
 
