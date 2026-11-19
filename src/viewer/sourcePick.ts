@@ -40,7 +40,7 @@ export function codecFit(title: string, device: DeviceCaps): number {
   const info = parseReleaseInfo(title || '');
   const res = resOf(title || '');
   const hevc = info.codec === 'HEVC' || info.codec === 'AV1';
-  const dv = info.hdr === 'DV';
+  const dv = !!info.dv || info.hdr === 'DV';
   const hdr = info.hdr === 'HDR' || info.hdr === 'HDR10+';
   if (device.kind === 'phone') {
     let n = 0;

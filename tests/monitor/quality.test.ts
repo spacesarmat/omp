@@ -16,6 +16,9 @@ describe('qualityRank', () => {
     expect(qualityRank(T('BDRemux 1080p'))).toBe(24);
     expect(qualityRank(T('2160p WEB-DL HDR'))).toBe(32);
     expect(qualityRank(T('2160p Remux'))).toBe(34);
+    expect(qualityRank(T('FHDR+DV'))).toBe(21);
+    expect(qualityRank(T('HD'))).toBe(11);
+    expect(qualityRank(T('HDRip'))).toBe(3);
   });
 });
 
@@ -58,5 +61,6 @@ describe('qualityLabel', () => {
     expect(qualityLabel(T('CAMRip'))).toBe('CAMRip');
     expect(qualityLabel(T('TS 1080p'))).toBe('1080p CAMRip');
     expect(qualityLabel(T(''))).toBe('');
+    expect(qualityLabel(T('FHDR+DV'))).toBe('1080p');
   });
 });

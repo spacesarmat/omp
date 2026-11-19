@@ -85,6 +85,15 @@ describe('viewer source rank', () => {
     expect(pick && pick.reason).toBe('speed');
   });
 
+  it('a phone still prefers AVC when the other 1080p is only Dolby Vision', () => {
+    const list = [
+      row({ Title: 'Film 2020 1080p DV', Seed: 10, seedCheck: 'live', seedCheckAt: NOW, sizeBytes: 4 * 1024 * 1024 * 1024 }),
+      row({ Title: 'Film 2020 1080p AVC', Seed: 10, seedCheck: 'live', seedCheckAt: NOW, sizeBytes: 4 * 1024 * 1024 * 1024 }),
+    ];
+    const pick = pickDefaultSource(list, 'film', phone);
+    expect(pick && pick.row.Title).toContain('AVC');
+  });
+
   it('does not invent a pick for an empty list', () => {
     expect(pickDefaultSource([], 'q', phone)).toBeNull();
   });

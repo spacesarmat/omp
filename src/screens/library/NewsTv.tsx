@@ -40,7 +40,7 @@ import type { RpcFinding, RpcSub } from '../../phone/rpcTypes';
 import { replaceWithLink } from '../../monitor/replaceTv';
 import { failureOf } from '../../monitor/upgradeText';
 import { isHotChip, releaseChips, releaseTitle } from '../../sources/releaseRow';
-import { resultSizeText } from '../../sources/resultSize';
+import { resultBytes, resultSizeText } from '../../sources/resultSize';
 import { TvSearchSize } from '../../ui/LiveSeeds';
 import { sourceBadge } from '../../sources/view';
 import { sharpPosterUrl } from '../../catalog/tmdb';
@@ -418,7 +418,7 @@ export function NewsTv(p: NewsTvProps) {
         {shown.map((x) => {
           const key = rowKey(x.f);
           const s = releaseTitle(x.r.Title);
-          const chips = releaseChips(x.r.Title);
+          const chips = releaseChips(x.r.Title, { quality: x.r.qualityHint, sizeBytes: resultBytes(x.r) });
           return (
             <Focusable key={key} focusKey={key} className="list-item search-result news-row" onPress={() => open(x)} onFocused={onRow}>
               <div class="search-main">

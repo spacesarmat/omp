@@ -4,11 +4,14 @@
 import { useEffect, useState } from 'preact/hooks';
 import type { Torrent } from '../api/types';
 import { rememberEpisodeName, seasonEpisodes, showForTorrent, showOf, type EpisodeMap, type ShowInfo } from './episodeNames';
+import { seriesMatchVersion } from './seriesMatch';
 
 export function useTmdbEpisodes(tor: Torrent | null | undefined, seasons: number[], enabled: boolean, viaSeries = false): { show: ShowInfo | null; eps: EpisodeMap } {
   const [show, setShow] = useState<ShowInfo | null>(null);
   const [eps, setEps] = useState<EpisodeMap>({});
   const hash = tor ? tor.hash : '';
+  const title = tor ? tor.title || '' : '';
+  const matchVersion = seriesMatchVersion.value;
   useEffect(() => {
     setShow(null);
     if (!tor || !enabled) return;
@@ -17,7 +20,7 @@ export function useTmdbEpisodes(tor: Torrent | null | undefined, seasons: number
     return () => {
       alive = false;
     };
-  }, [hash, enabled, viaSeries]);
+  }, [hash, title, enabled, viaSeries, matchVersion]);
   const wanted = seasons.join(',');
   useEffect(() => {
     setEps({});

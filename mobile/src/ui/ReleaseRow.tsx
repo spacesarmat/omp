@@ -2,7 +2,7 @@
 // quality chips, the full tracker title (one muted line, the whole of it on tap: people pick releases by it) and a
 // small poster that is looked up only once the row is on screen.
 import { useEffect, useRef, useState } from 'preact/hooks';
-import { posterColor } from '../../../src/lib/libraryView';
+import { libraryTitle, posterColor } from '../../../src/lib/libraryView';
 import { releaseChips, releaseTitle } from '../../../src/sources/releaseRow';
 import { posterKey, requestPoster } from './resultPosters';
 
@@ -20,8 +20,8 @@ export function ReleaseName({ raw, class: cls = 'm-result-title' }: { raw: strin
 }
 
 /** The quality chips; `kind` («Фильм», «Сериал · S02 · 1-8 из 8») comes first, framed. */
-export function ReleaseChips({ raw, kind }: { raw: string; kind?: string }) {
-  const chips = releaseChips(raw);
+export function ReleaseChips({ raw, kind, quality, sizeBytes }: { raw: string; kind?: string; quality?: string; sizeBytes?: number }) {
+  const chips = releaseChips(raw, { quality: quality, sizeBytes: sizeBytes });
   if (!chips.length && !kind) return null;
   return (
     <div class="m-rel-chips">
@@ -84,8 +84,14 @@ export function ResultThumb({ title, poster }: { title: string; poster?: string 
       if (cancel) cancel();
     };
   }, [title, own]);
+  const named = libraryTitle({ hash: '', title: title || '' }).title.split(' · ')[0] || title || '?';
+  const letter = named.trim().charAt(0).toUpperCase() || '?';
   const color = posterColor(posterKey(title) || title || '?');
   const bg = `linear-gradient(160deg, ${color}, #14161C)`;
   const style = url ? `background: url("${cssUrl(url)}") center / cover, ${bg}` : `background: ${bg}`;
-  return <div ref={ref} class="m-rel-thumb" style={style} data-poster-url={url || undefined} aria-hidden="true" />;
+  return (
+    <div ref={ref} class="m-rel-thumb" style={style} data-poster-url={url || undefined} aria-hidden="true">
+      {url ? null : <span class="m-rel-initial">{letter}</span>}
+    </div>
+  );
 }

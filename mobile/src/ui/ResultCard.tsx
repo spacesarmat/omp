@@ -12,7 +12,7 @@ import { phoneSeedBits, useSeedRow } from '../../../src/ui/LiveSeeds';
 import { SeedCheck, useSeedProbe } from '../../../src/ui/SeedCheck';
 import type { RowBusy } from '../addResult';
 import { t } from '../../../src/i18n';
-import { resultSizeText } from '../../../src/sources/resultSize';
+import { resultBytes, resultSizeText } from '../../../src/sources/resultSize';
 import { Icon } from './Icon';
 import { Sheet } from './Sheet';
 import { ReleaseChips, ReleaseName, ResultThumb } from './ReleaseRow';
@@ -95,6 +95,8 @@ export function ResultCard(p: {
   round?: boolean;
   /** Under a shared title: the release row, without repeating the name. */
   nested?: boolean;
+  /** Poster already resolved for this show. Skips a second lookup. */
+  poster?: string;
 }) {
   const { r } = p;
   const [, setBillingTick] = useState(0);
@@ -150,10 +152,10 @@ export function ResultCard(p: {
             setOpen(true);
           }}
         />
-        <ResultThumb title={r.Title} />
+        <ResultThumb title={r.Title} poster={p.poster} />
         <div class="m-rc-text">
           {!p.nested && <ReleaseName raw={r.Title} />}
-          <ReleaseChips raw={r.Title} kind={kind} />
+          <ReleaseChips raw={r.Title} kind={kind} quality={r.qualityHint} sizeBytes={resultBytes(r)} />
           <div class="m-rc-meta m-small m-muted">
             {p.mark && <span class="m-flag" data-pack="">{p.mark}</span>}
             {p.flag && <span class="m-flag">{p.flag}</span>}
@@ -272,7 +274,7 @@ export function ResultCard(p: {
         <Sheet label={t('common.more')} testId="PD31" onClose={() => setOpen(false)}>
           <div class="m-sheet-scroll m-rc-sheet" data-result-details="">
             <ReleaseName raw={r.Title} class="m-rc-sheet-title" />
-            <ReleaseChips raw={r.Title} kind={kind} />
+            <ReleaseChips raw={r.Title} kind={kind} quality={r.qualityHint} sizeBytes={resultBytes(r)} />
             <div class="m-rc-raw m-small m-muted" data-raw-title="">
               {r.Title}
             </div>

@@ -18,7 +18,7 @@ import { airDateText, upcomingSeasons, type Upcoming } from '../../../src/lib/se
 import { mainButtonLines } from '../../../src/lib/phoneContinue';
 import { pickSeasonVoice, studiosOf, voiceDiffers } from '../../../src/lib/seasonVoice';
 import { Poster } from '../ui/Poster';
-import { Sheet } from '../ui/Sheet';
+import { WrongShowSheet } from '../ui/WrongShowSheet';
 import { torrentQuality } from '../../../src/lib/keptQuality';
 import { LaunchError } from '../ui/LaunchError';
 import { currentRoute, goBack, navigate, switchTab, type MRoute } from '../nav';
@@ -35,7 +35,7 @@ import { libraryTitle } from '../../../src/lib/libraryView';
 import { baseName, episodeLabel, playableFiles, spansSeasons, stripExt } from '../../../src/lib/episodes';
 import type { Torrent } from '../../../src/api/types';
 import { findGroup, groupLabel, NO_SEASON, onlyThisSeason, otherSeasonReleases, seasonMembers, type SeriesGroup } from '../../../src/lib/seriesGroups';
-import { cachedSeriesMatch, chooseSeries, matchSeries, seriesMatchVersion } from '../../../src/lib/seriesMatch';
+import { cachedSeriesMatch, matchSeries, seriesMatchVersion } from '../../../src/lib/seriesMatch';
 import { releaseName } from '../lib/duplicates';
 import { isDeadRelease, useLiveSwarm } from '../../../src/lib/swarmWatch';
 import { canUpgrade } from '../../../src/ui/BetterDialog';
@@ -43,7 +43,7 @@ import { BetterSheet } from '../ui/BetterSheet';
 import { phoneCatalog } from '../catalog/phoneCatalog';
 import { artKey, artVersion, pickedArt } from '../catalog/artPick';
 import { CastStrip } from '../ui/CastStrip';
-import { torrentQuery, type CatalogCard, type CatalogTitle, type Season, type SeasonDetails } from '../../../src/catalog/tmdb';
+import { torrentQuery, type CatalogCard, type Season, type SeasonDetails } from '../../../src/catalog/tmdb';
 import { ratingText } from './catalog/CatalogSearch';
 import { dubChoices, DUB_RESET, useSeriesDub } from '../../../src/ui/seriesDub';
 import { saveSeriesTracks } from '../../../src/store/journal';
@@ -54,7 +54,7 @@ import { parseEpisode, type TorrentFile } from '../../../src/lib/episodes';
 import { useTmdbEpisodes } from '../../../src/lib/useTmdbEpisodes';
 import { TmdbEpisodeRows, WatchSheet } from './Torrent';
 import { SeasonEpisodes } from './catalog/SeasonEpisodes';
-import { forgetEpisodeNames, realEpisodeName, rememberEpisodeName, seasonEpisodeList } from '../../../src/lib/episodeNames';
+import { realEpisodeName, rememberEpisodeName, seasonEpisodeList } from '../../../src/lib/episodeNames';
 import { ReleaseSwitch, ReleasesSheet } from '../ui/ReleasesSheet';
 import { playOnPhone } from '../watchHere';
 import { playWhere } from '../../../src/lib/playWhere';
@@ -193,31 +193,6 @@ function HeroOverview({ text }: { text: string }) {
         </button>
       )}
     </div>
-  );
-}
-
-function WrongShowSheet({ group, onClose }: { group: SeriesGroup; onClose: () => void }) {
-  const [q, setQ] = useState(libraryTitle(group.named).title);
-  const [items, setItems] = useState<CatalogTitle[]>([]);
-  const run = (query: string) => {
-    phoneCatalog().then((c) => c.search(query, 1)).then(
-      (r) => setItems(r.items.filter((x) => x.kind === 'tv')),
-      () => undefined,
-    );
-  };
-  useEffect(() => { run(q); }, []);
-  return (
-    <Sheet label={t('titleCard.wrongShow')} testId="wrong-show" onClose={onClose}>
-      <div class="m-sheet-title">{t('titleCard.wrongShow')}</div>
-      <form onSubmit={(e) => { e.preventDefault(); run(q); }}>
-        <input class="m-input" value={q} onInput={(e) => setQ((e.currentTarget as HTMLInputElement).value)} />
-      </form>
-      {items.map((it) => (
-        <button key={it.id} type="button" class="m-opt" onClick={() => { forgetEpisodeNames(group.members.map((m) => m.hash)); void chooseSeries(group, it.id).then(() => onClose()); }}>
-          <span class="m-opt-name">{it.title + (it.year ? ' (' + it.year + ')' : '')}</span>
-        </button>
-      ))}
-    </Sheet>
   );
 }
 
@@ -865,7 +840,7 @@ function Body({ group, card }: { group: SeriesGroup; card: CatalogCard | null })
           onClose={() => setEpisode(null)}
         />
       )}
-      {better && <BetterSheet torrent={better} files={filesOf(better)} onClose={() => setBetter(null)} />}
+      {better && <BetterSheet torrent={better} files={filesOf(better)} season={season !== NO_SEASON ? season : 0} onClose={() => setBetter(null)} />}
       {wrongOpen && <WrongShowSheet group={group} onClose={() => setWrongOpen(false)} />}
       {launch.sheet}
     </>

@@ -40,6 +40,18 @@ const ITEMS =
 describe('parseTorznab', () => {
   const list = parseTorznab(RSS(ITEMS), 'indexer-x', 'jackett');
 
+  it('keeps a resolution the indexer named', () => {
+    const xml = RSS(
+      '<item><title>Star Trek Discovery · 5 сезон</title><link>magnet:?xt=urn:btih:' + H1 + '</link>' +
+      '<torznab:attr name="video_resolution" value="1080p"/></item>' +
+      '<item><title>Звёздный путь: Дискавери · 5 сезон WEBRip</title><link>magnet:?xt=urn:btih:' + H2 + '</link>' +
+      '<torznab:attr name="quality" value="720"/></item>',
+    );
+    const rows = parseTorznab(xml, 'x');
+    expect(rows[0].qualityHint).toBe('1080p');
+    expect(rows[1].qualityHint).toBe('720');
+  });
+
   it('keeps billing reasons seeds and dht', () => {
     const xml = RSS(
       '<item><title>Cold</title><link>magnet:?xt=urn:btih:' + H1 + '</link>' +

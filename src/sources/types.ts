@@ -62,6 +62,8 @@ export interface SourceResult extends SearchResult {
   torrentUrl?: string;
   /** Lowercase 40-hex infohash when known. */
   hash?: string;
+  /** Resolution from the indexer (bitmagnet video_resolution, JacRed quality), not from the title. */
+  qualityHint?: string;
   /**
    * Server seed check for this search. `live`: scrape answered. `dht`: a seed estimate, not a verified
    * count - BEP 33, bitmagnet counts (seedSource 'bitmagnet') or the devices' crowd median
