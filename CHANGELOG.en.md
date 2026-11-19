@@ -4,7 +4,7 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
-## Unreleased
+## 0.30.1-beta.15
 
 - [phone] Settings rows share one height inside grouped cards, and a row that opens a screen has a chevron. The update check no longer splits the card
 - [phone] Help: "Did it help?" sits with Useful and Not useful, with a gap between them. The action under an answer is full width
