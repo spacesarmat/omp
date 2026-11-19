@@ -1,6 +1,6 @@
 // Push and pull remembered rows. A refused sync (no subscription) leaves the local copy as it is.
 import { BILLING_ORIGIN } from './config';
-import { billingSession, deviceId } from './session';
+import { billingSession, deviceId, onBillingChange } from './session';
 import { ackSent, markSynced, noteSyncAccount, onDeviceWrite, putDeviceRecords, setSyncCursor, syncCursor, syncEnabled, unsentRecords } from '../store/deviceDb';
 import { applyPulled } from '../store/applyPulled';
 import type { SyncRecord } from '../store/syncMerge';
@@ -35,10 +35,18 @@ function post(access: string, since: number, records: SyncRecord[]): Promise<{ s
   );
 }
 
-function pump(access: string, since: number, pending: SyncRecord[]): Promise<string> {
+function accountNow(): string {
+  const session = billingSession();
+  const access = session && (session.access || session.token);
+  if (!access) return '';
+  return session && session.id ? session.id : access.slice(0, 16);
+}
+
+function pump(access: string, owner: string, since: number, pending: SyncRecord[]): Promise<string> {
   const chunk = pending.slice(0, BATCH);
   const rest = pending.slice(BATCH);
   return post(access, since, chunk).then((ans) => {
+    if (accountNow() !== owner) return 'switched';
     if (ans.status === 403) return 'subscribers';
     if (ans.status !== 200 || !ans.data.ok) return 'error';
     const incoming = ans.data.records || [];
@@ -56,8 +64,8 @@ function pump(access: string, since: number, pending: SyncRecord[]): Promise<str
     const next = typeof ans.data.nextSeq === 'number' ? ans.data.nextSeq : since;
     setSyncCursor(next);
     markSynced(Date.now());
-    if (rest.length) return pump(access, next, rest);
-    if (incoming.length >= 500) return pump(access, next, []);
+    if (rest.length) return pump(access, owner, next, rest);
+    if (incoming.length >= 500) return pump(access, owner, next, []);
     return 'ok';
   });
 }
@@ -83,12 +91,22 @@ export function runDeviceSync(): Promise<string> {
     return Promise.resolve('busy');
   }
   syncing = true;
-  const epoch = noteSyncAccount(session && session.id ? session.id : access.slice(0, 16));
+  const owner = accountNow();
+  seenAccount = owner;
+  const epoch = noteSyncAccount(owner);
   const pending = unsentRecords(epoch);
-  return pump(access, syncCursor(), pending).then(
+  return pump(access, owner, syncCursor(), pending).then(
     (status) => finish(status),
     () => finish('error'),
   );
 }
+
+let seenAccount = accountNow();
+onBillingChange(() => {
+  const id = accountNow();
+  if (id === seenAccount) return;
+  seenAccount = id;
+  if (id) scheduleDeviceSync();
+});
 
 onDeviceWrite(scheduleDeviceSync);
