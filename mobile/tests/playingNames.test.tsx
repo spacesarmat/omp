@@ -10,7 +10,7 @@ import { setCatalogClientForTests } from '../src/catalog/phoneCatalog';
 import { resetEpisodeNames } from '../../src/lib/episodeNames';
 import { matchSeries, resetSeriesMatches } from '../../src/lib/seriesMatch';
 import { singleGroup } from '../../src/lib/seriesGroups';
-import { episodeLine, launchLabel, looksLikeName, nextCardTitle, readableFileLabel, torrentName } from '../src/lib/playingNames';
+import { episodeLine, launchLabel, looksLikeName, nextCardTitle, nextPlayablePath, readableFileLabel, torrentName } from '../src/lib/playingNames';
 import { torrentName as tvTorrentName } from '../../src/lib/cleanNames';
 import { miniTitle } from '../src/ui/MiniPlayer';
 import { torrents } from '../../src/store/library';
@@ -94,6 +94,13 @@ describe('playing names', () => {
     expect(nextCardTitle('S02E04 · Граница')).toBe('4 серия · Граница');
     expect(readableFileLabel('Show - 01 [1080p]')).toBe('Show - 01');
     expect(readableFileLabel('Show - 02 [1080p]')).toBe('Show - 02');
+    expect(readableFileLabel('Show (01)')).toBe('Show (01)');
+    expect(readableFileLabel('Show (02)')).toBe('Show (02)');
+    expect(nextPlayablePath({ file_stats: [
+      { id: 1, path: 'Show.S01E01.mkv', length: 1 },
+      { id: 2, path: 'Show.S01E01.srt', length: 1 },
+      { id: 3, path: 'Show.S01E02.mkv', length: 1 },
+    ] } as Torrent, 1)).toBe('Show.S01E02.mkv');
   });
 
   it('the mini player line: the episode name when real, else the code with the series; a film by its name', () => {

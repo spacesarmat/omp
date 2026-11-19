@@ -6,7 +6,7 @@ import { t } from '../../../src/i18n';
 import type { Torrent } from '../../../src/api/types';
 import type { PlayerState } from '../../../src/phone/protocol';
 import { displayTitle } from '../ui/displayTitle';
-import { episodeLabel, parseEpisode, spansSeasons } from '../../../src/lib/episodes';
+import { episodeLabel, parseEpisode, playableFiles, spansSeasons } from '../../../src/lib/episodes';
 import { libraryTitle } from '../../../src/lib/libraryView';
 import { parseTorrentData } from '../../../src/api/torrserver';
 import { seriesMatchVersion } from '../../../src/lib/seriesMatch';
@@ -43,10 +43,12 @@ export function looksLikeName(title: string): boolean {
   return !!s && !FILE_EXT.test(s) && !episodeLabel(s) && !/\b(1080p|2160p|720p|WEB-?DL|BDRip|HDTV)\b/i.test(s);
 }
 
-/** A file name with the quality tags taken out, so two files stay distinct without the raw name. */
+const QUALITY_TAG = /^(?:\d{3,4}p|4k|uhd|web-?dl|bdrip|hdtv)$/i;
+
+/** A file name with the quality tags taken out. A number in parentheses stays, so two files stay distinct. */
 export function readableFileLabel(name: string): string {
   const cleaned = (name || '')
-    .replace(/\[[^\]]*\]|\([^)]*\)/g, ' ')
+    .replace(/\[([^\]]*)\]|\(([^)]*)\)/g, (all, bracket, paren) => (QUALITY_TAG.test(String(bracket || paren || '').trim()) ? ' ' : all))
     .replace(/\b(?:\d{3,4}p|4k|uhd|web-?dl|bdrip|hdtv)\b/gi, ' ')
     .replace(/[._]+/g, ' ')
     .replace(/\s{2,}/g, ' ')
@@ -176,19 +178,11 @@ export function usePlayingPoster(s: PlayerState | null): string {
  * library torrent when it is in «Мои» (TMDB's names once known), else from what the TV sent, raw tracker titles and
  * file names cut down to the short name and the episode code.
  */
-function nextPlayablePath(tor: Torrent | undefined, file: number | undefined): string {
+/** The next video the player will open, skipping subtitles and other files that do not play. */
+export function nextPlayablePath(tor: Torrent | undefined, file: number | undefined): string {
   if (!tor || file === undefined) return '';
-  const files = (tor.file_stats && tor.file_stats.length ? tor.file_stats : parseTorrentData(tor.data)).slice().sort((a, b) => {
-    const pa = parseEpisode(a.path);
-    const pb = parseEpisode(b.path);
-    const sa = pa.season === null ? 0 : pa.season;
-    const sb = pb.season === null ? 0 : pb.season;
-    if (sa !== sb) return sa - sb;
-    const ea = pa.episode === null ? 999 : pa.episode;
-    const eb = pb.episode === null ? 999 : pb.episode;
-    if (ea !== eb) return ea - eb;
-    return a.id - b.id;
-  });
+  const all = tor.file_stats && tor.file_stats.length ? tor.file_stats : parseTorrentData(tor.data);
+  const files = playableFiles(all);
   const i = files.findIndex((f) => f.id === file);
   return i >= 0 && files[i + 1] ? files[i + 1].path : '';
 }
