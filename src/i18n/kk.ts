@@ -2327,6 +2327,8 @@ export const kk: EnDict<typeof ru> = {
     magnetLabel: "Магнит сілтемесі немесе хеш",
     byMagnet: "Магниттік сілтеме арқылы қосу",
     pasteMagnet: "Магнитті енгізіңіз",
+    magnetBtn: "Magnet",
+    torrentBtn: "Торрент",
     recent: "Соңғы сұраулар",
     clipMagnet: "Клипбордта: магнитті сілтеме",
     openTorrent: ".torrent файлын ашыңыз",

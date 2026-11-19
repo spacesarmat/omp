@@ -2327,6 +2327,8 @@ export const tk: EnDict<typeof ru> = {
     magnetLabel: "Magnit baglanyşygy ýa-da haş",
     byMagnet: "Magnit baglanyşygy arkaly goşmak",
     pasteMagnet: "Magniti giriziň",
+    magnetBtn: "Magnet",
+    torrentBtn: "Torrent",
     recent: "Soňky soraglar",
     clipMagnet: "Klipbordda: magnet baglanyşygy",
     openTorrent: ".torrent faýlyny açyň",

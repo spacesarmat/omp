@@ -2245,6 +2245,8 @@ export const en: EnDict<typeof ru> = {
     magnetLabel: 'Magnet link or hash',
     byMagnet: 'Add by magnet link',
     pasteMagnet: 'Paste magnet',
+    magnetBtn: 'Magnet',
+    torrentBtn: 'Torrent',
     recent: 'Recent searches',
     clipMagnet: 'A magnet link is on the clipboard',
     openTorrent: 'Open a .torrent file',

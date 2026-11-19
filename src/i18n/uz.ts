@@ -2327,6 +2327,8 @@ export const uz: EnDict<typeof ru> = {
     magnetLabel: "Magnit havolasi yoki xesh",
     byMagnet: "Magnit havolasi orqali qo'shish",
     pasteMagnet: "Magnitni joylashtiring",
+    magnetBtn: "Magnet",
+    torrentBtn: "Torrent",
     recent: "So'nggi so'rovlar",
     clipMagnet: "Klipbordda: magnet havolasi",
     openTorrent: ".torrent faylini oching",
