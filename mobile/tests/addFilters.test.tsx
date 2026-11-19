@@ -154,7 +154,7 @@ describe('Add filters sheet', () => {
     await flush();
     expect(titles().length).toBe(5);
     click(filtersChip());
-    click(sheetBtn('Сезон 2'));
+    click(buttons(el.querySelector('.m-sheet')!).find((b) => (b.textContent || '').indexOf('Сезон 2') === 0)!);
     expect(sheetBtn('Показать 4 раздачи')).toBeTruthy();
     click(sheetBtn('Показать 4 раздачи'));
     expect(titles()).toEqual([

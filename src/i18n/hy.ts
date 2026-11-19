@@ -26,6 +26,7 @@ export const hy: EnDict<typeof ru> = {
     originalChip: "Առաջնօրինակ",
     rusSubsChip: "ռուսերեն ենթագրեր",
     fullSeasonOnly: "Միայն ամբողջ մրցաշրջան",
+    seasonChip: "Մրցաշրջան {n} · {count}",
     show: {
       one: "Ցուցադրել ձեռքը {n}",
       other: "Ցույց տալ {n}-ի ձեռքերը",
@@ -2319,6 +2320,8 @@ export const hy: EnDict<typeof ru> = {
     magnetLabel: "Մագնիսային հղում կամ հեշ",
     byMagnet: "Ավելացնել մագնիսական հղման միջոցով",
     pasteMagnet: "Մագնիս տեղադրել",
+    magnetBtn: "Magnet",
+    torrentBtn: "Տորենտ",
     recent: "Վերջին հարցումներ",
     clipMagnet: "Կլիպբորդում՝ մագնիսային հղում",
     openTorrent: "Բացեք .torrent ֆայլը",

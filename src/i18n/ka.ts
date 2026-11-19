@@ -26,6 +26,7 @@ export const ka: EnDict<typeof ru> = {
     originalChip: "ორიგინალი",
     rusSubsChip: "რუსული სუბტიტრები",
     fullSeasonOnly: "მხოლოდ სრული სეზონი",
+    seasonChip: "სეზონი {n} · {count}",
     show: {
       one: "აჩვენეთ ხელი {n}",
       other: "{n}-ის ხელები",
@@ -2319,6 +2320,8 @@ export const ka: EnDict<typeof ru> = {
     magnetLabel: "მაგნიტური ბმული ან ჰეში",
     byMagnet: "დამატება მაგნიტური ბმულით",
     pasteMagnet: "ჩასვით მაგნიტი",
+    magnetBtn: "Magnet",
+    torrentBtn: "ტორენტი",
     recent: "ბოლო მოთხოვნები",
     clipMagnet: "მონაცემთა ბუფერში: მაგნიტური ბმული",
     openTorrent: "გახსენით .torrent ფაილი",
