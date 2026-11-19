@@ -13,7 +13,8 @@ import { Sheet } from '../ui/Sheet';
 import { TorrentRenameSheet } from '../ui/TorrentRenameSheet';
 import { PosterPickSheet } from '../ui/PosterPickSheet';
 import { posterTargets } from '../../../src/lib/posterPick';
-import { qualityBadge, posterStyle } from '../ui/Poster';
+import { posterStyle } from '../ui/Poster';
+import { torrentQuality } from '../../../src/lib/keptQuality';
 import { showToast } from '../ui/toast';
 import { LaunchError } from '../ui/LaunchError';
 import { currentRoute, goBack, navigate, replaceTop } from '../nav';
@@ -693,7 +694,7 @@ export function Torrent({ hash }: { hash: string }) {
       },
     );
   };
-  const badges = [qualityBadge(title)].filter(Boolean);
+  const badges = [torrentQuality(tor)].filter(Boolean);
   // the releases of this film in «Мои» (one card there): the «Раздачи (N)» block under the watch buttons
   const releases = book ? [] : filmReleases(torrents.value, tor);
   // the trash in «Раздачи (N)»: the shown one going opens the one that stays
@@ -1029,7 +1030,7 @@ export function Torrent({ hash }: { hash: string }) {
           </>
         )}
       </div>
-      {renaming && <TorrentRenameSheet initial={title} onSave={rename} onClose={() => setRenaming(false)} />}
+      {renaming && <TorrentRenameSheet initial={libraryTitle(tor).title || title} onSave={rename} onClose={() => setRenaming(false)} />}
       {picking && <PosterPickSheet
           tor={tor}
           targets={posterTargets(torrents.value, tor)}

@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { fixPlaceholderTitles, resetTitleFix, RETRY_MS, MAX_TRIES } from '../../src/lib/titleFix';
+import { cleanReleaseTitles, fixPlaceholderTitles, resetTitleFix, RETRY_MS, MAX_TRIES } from '../../src/lib/titleFix';
+import { rememberedRawTitle, resetKeptQuality, torrentQuality } from '../../src/lib/keptQuality';
 import { renameTorrent, checkTitle, TITLE_MAX } from '../../src/lib/renameTorrent';
 import { TorrServerClient } from '../../src/api/torrserver';
 import { torrents, refreshTorrents, resetLibrary } from '../../src/store/library';
@@ -11,18 +12,32 @@ const H3 = '3'.repeat(40);
 const data = JSON.stringify({ TorrServer: { Files: [{ id: 1, path: 'Moon.Garden.S02E01.1080p.mkv', length: 5 }, { id: 2, path: 'Moon.Garden.S02E02.1080p.mkv', length: 5 }] } });
 const tor = (hash: string, title: string, extra: Partial<Torrent> = {}): Torrent => ({ hash, title, stat: 0, data, ...extra });
 
-function fake(fail = false) {
-  const calls: { hash: string; title: string; poster?: string; category?: string }[] = [];
-  return {
+function fake(fail = false, withData = false) {
+  const calls: { hash: string; title: string; poster?: string; category?: string; data?: string }[] = [];
+  const out: {
+    calls: typeof calls;
+    setTitle: (t: any, title: string) => Promise<void>;
+    setData?: (t: any, data: string) => Promise<void>;
+  } = {
     calls,
     setTitle: (t: any, title: string) => {
       calls.push({ hash: t.hash, title, poster: t.poster, category: t.category });
       return fail ? Promise.reject(new Error('down')) : Promise.resolve();
     },
   };
+  if (withData) {
+    out.setData = (t: any, data: string) => {
+      calls.push({ hash: t.hash, title: t.title, poster: t.poster, category: t.category, data });
+      return fail ? Promise.reject(new Error('down')) : Promise.resolve();
+    };
+  }
+  return out;
 }
 
-beforeEach(() => resetTitleFix());
+beforeEach(() => {
+  resetTitleFix();
+  resetKeptQuality();
+});
 
 describe('fixPlaceholderTitles', () => {
   it('writes the derived title only for placeholders and passes poster/category along', async () => {
@@ -57,6 +72,45 @@ describe('fixPlaceholderTitles', () => {
     expect(c.calls).toHaveLength(0);
     await fixPlaceholderTitles(c, [tor(H3, 'infohash:' + H3)]);
     expect(c.calls).toHaveLength(1);
+  });
+});
+
+describe('cleanReleaseTitles', () => {
+  it('writes the clean name only after the release string is stored on the torrent', async () => {
+    const c = fake(false, true);
+    const raw = 'Локи (2 сезон: 1-6 серии из 6) / Loki WEB-DL 1080p';
+    const done = await cleanReleaseTitles(c, [tor(H1, raw, { data: '{}' }), tor(H2, 'Локи')]);
+    expect(done.map((d) => ({ hash: d.hash, title: d.title }))).toEqual([{ hash: H1, title: 'Локи' }]);
+    expect(c.calls[0].data).toContain(raw);
+    expect(c.calls[1]).toMatchObject({ hash: H1, title: 'Локи' });
+    expect(torrentQuality({ hash: H1, title: 'Локи', data: c.calls[0].data })).toBe('1080p');
+  });
+  it('calls setData on the client, so this stays the client', async () => {
+    const seen: string[] = [];
+    const client = {
+      mark: 'client',
+      setTitle() {
+        return Promise.resolve();
+      },
+      setData(this: { mark: string }) {
+        seen.push(this.mark);
+        return Promise.resolve();
+      },
+    };
+    const raw = 'Локи (2 сезон: 1-6 серии из 6) / Loki WEB-DL 1080p';
+    await cleanReleaseTitles(client, [tor(H1, raw, { data: '{}' })]);
+    expect(seen).toEqual(['client']);
+  });
+  it('does not rewrite a name the person saved', async () => {
+    const c = fake(false, true);
+    const data = JSON.stringify({ omp: { v: 1, h: [], nm: true } });
+    const done = await cleanReleaseTitles(c, [tor(H1, 'Дюна [1984] WEB-DL 1080p', { data })]);
+    expect(done).toEqual([]);
+    expect(c.calls).toHaveLength(0);
+  });
+  it('reads the badge from a file when the title was already clean', () => {
+    const files = [{ id: 1, path: 'Loki.S02E01.2160p.mkv', length: 1 }];
+    expect(torrentQuality({ hash: H2, title: 'Локи', file_stats: files })).toBe('4K');
   });
 });
 

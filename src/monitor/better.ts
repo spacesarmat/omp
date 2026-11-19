@@ -8,6 +8,7 @@ import { guessCategory } from '../lib/categoryGuess';
 import { watchesBetterQuality } from '../lib/journal';
 import { posterQuery } from '../lib/posterSearch';
 import { displayTitle } from '../lib/torrentName';
+import { releaseText } from '../lib/keptQuality';
 import { searchAll, type SearchHandle } from '../sources/search';
 import type { SourceContext, SourceResult } from '../sources/types';
 import { isObject, loadJson, saveJson } from '../store/storage';
@@ -71,9 +72,10 @@ export function rankReleases(list: SourceResult[]): SourceResult[] {
  */
 export function betterFilmReleases(t: LibraryTorrent, results: SourceResult[]): SourceResult[] {
   const title = displayTitle(t);
+  const release = releaseText(t);
   const names = seriesNames(title);
   if (!names.length) return [];
-  const haveYear = yearOf(title);
+  const haveYear = yearOf(release);
   const hash = (t.hash || '').toLowerCase();
   return rankReleases(
     results.filter((r) => {
@@ -84,7 +86,7 @@ export function betterFilmReleases(t: LibraryTorrent, results: SourceResult[]): 
       const year = yearOf(r.Title);
       if (haveYear !== null && (year === null || Math.abs(year - haveYear) > 1)) return false;
       if (!seriesNames(r.Title).some((n) => names.indexOf(n) >= 0)) return false;
-      return isBetter(r.Title, title);
+      return isBetter(r.Title, release);
     }),
   );
 }

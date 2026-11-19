@@ -177,6 +177,7 @@ describe('Sheet grab handle and pull', () => {
       'mobile/src/screens/News.tsx',
       'mobile/src/screens/NowPlaying.tsx',
       'mobile/src/screens/Remote.tsx',
+      'mobile/src/screens/Series.tsx',
       'mobile/src/screens/ServerSettings.tsx',
       'mobile/src/screens/Settings.tsx',
       'mobile/src/screens/SourcesIndexers.tsx',

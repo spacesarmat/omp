@@ -51,7 +51,14 @@ export interface CatalogCard extends CatalogTitle {
   firstAirDate?: string;
   /** Films only; absent in film cards cached before 0.17.0-beta.6 (they are fetched again). */
   releases?: Releases;
+  /**
+   * Films only: the TMDB collection, or null when the film is not in one.
+   * Absent on cards cached before collections were kept; those are fetched again.
+   */
+  collection?: { id: number; name: string } | null;
 }
+/** One film of a TMDB collection. */
+export interface CollectionPart { id: number; title: string; year: number; poster: string; }
 /** `bearer`: the key is a TMDB v4 access token and is sent as Authorization, not as api_key. */
 export interface TmdbEndpoint { base: string; key: string; images: string; bearer?: boolean; }
 export interface Episode { n: number; title: string; airDate: string; runtime: number; overview: string; }
@@ -220,6 +227,10 @@ export function seasonUrl(e: TmdbEndpoint, id: number, season: number): string {
 /** Recommendations of a title (films for a film, series for a series). */
 export function similarUrl(e: TmdbEndpoint, kind: Kind, id: number): string {
   return url(e, kind + '/' + id + '/recommendations', { page: 1 });
+}
+
+export function collectionUrl(e: TmdbEndpoint, id: number): string {
+  return url(e, 'collection/' + id, {});
 }
 
 /** Poster file paths of a title, or of one season when `season` is set. */
@@ -442,7 +453,34 @@ export function sanitizeCard(e: TmdbEndpoint, raw: unknown, kind: Kind): Catalog
     lastAirDate: kind === 'tv' ? date(o.last_air_date) : '',
     firstAirDate: kind === 'tv' ? date(o.first_air_date) : '',
     releases: kind === 'movie' ? releasesOf(o.release_dates, releaseRegions()) : undefined,
+    // null, not a missing field: a film with no collection still differs from a card cached before this existed
+    collection: kind === 'movie' ? (collectionOf(o.belongs_to_collection) || null) : undefined,
   };
+}
+
+function collectionOf(raw: unknown): { id: number; name: string } | undefined {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const o = raw as { [k: string]: unknown };
+  const id = n(o.id);
+  const name = str(o.name);
+  if (!id || !name) return undefined;
+  return { id, name };
+}
+
+/** The films of a TMDB collection, in the order TMDB sent them. */
+export function sanitizeCollection(e: TmdbEndpoint, raw: unknown): CollectionPart[] {
+  const o = raw && typeof raw === 'object' ? (raw as { [k: string]: unknown }) : null;
+  const parts = o && Array.isArray(o.parts) ? o.parts : [];
+  const out: CollectionPart[] = [];
+  parts.forEach((p) => {
+    if (!p || typeof p !== 'object') return;
+    const x = p as { [k: string]: unknown };
+    const id = n(x.id);
+    const title = str(x.title) || str(x.name);
+    if (!id || !title) return;
+    out.push({ id, title, year: year(x.release_date), poster: imageUrl(e, x.poster_path, posterImageSize()) });
+  });
+  return out;
 }
 
 /** An appearance as oneself (TMDB character «Self», «Himself - Host», «(archive footage)» ...): not a role, left out of the filmography. */

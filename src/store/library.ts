@@ -5,7 +5,7 @@ import type { LibraryTab } from '../lib/libraryView';
 import { attachPoster, fillPosters, posterConfig, type FillResult, type PosterClient } from '../lib/autoPoster';
 import type { TmdbConfig } from '../api/types';
 import { displayTitle, isPlaceholderTitle } from '../lib/torrentName';
-import { fixPlaceholderTitles, type TitleClient } from '../lib/titleFix';
+import { cleanReleaseTitles, fixPlaceholderTitles, type TitleClient } from '../lib/titleFix';
 import { fixCategories, type CategoryClient } from '../lib/categoryCheck';
 import { t } from '../i18n';
 import { rememberListed } from '../lib/knownFiles';
@@ -58,13 +58,19 @@ export function resetLibrary(): void {
  */
 export function repairTitles(c: TitleClient, list: Torrent[], onNamed?: (hash: string, title: string) => void): void {
   const my = gen;
-  void fixPlaceholderTitles(c, list).then((done) => {
+  const apply = (done: { hash: string; title: string; data?: string }[], posters = true) => {
     if (my !== gen || !done.length) return;
-    const by: { [h: string]: string } = {};
-    done.forEach((d) => { by[d.hash] = d.title; });
-    torrents.value = torrents.value.map((x) => (by[x.hash] ? { ...x, title: by[x.hash] } : x));
-    if (onNamed) done.forEach((d) => onNamed(d.hash, d.title));
-  });
+    const by: { [h: string]: { title: string; data?: string } } = {};
+    done.forEach((d) => { by[d.hash] = d; });
+    torrents.value = torrents.value.map((x) => {
+      const d = by[x.hash];
+      if (!d) return x;
+      return { ...x, title: d.title, data: d.data !== undefined ? d.data : x.data };
+    });
+    if (posters && onNamed) done.forEach((d) => onNamed(d.hash, d.title));
+  };
+  void fixPlaceholderTitles(c, list).then(apply);
+  void cleanReleaseTitles(c, list).then((done) => apply(done, false));
 }
 
 /**

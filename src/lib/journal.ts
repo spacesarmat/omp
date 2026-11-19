@@ -260,6 +260,46 @@ export function withQualityWatch(obj: { [k: string]: unknown }, watch: boolean):
   });
 }
 
+/** The release string saved before the visible title was cleaned (omp.rt). '' when none. */
+export function rawReleaseOf(data: string | undefined | null): string {
+  const p = parseData(data);
+  if (!p) return '';
+  const o = p.obj[JOURNAL_KEY];
+  if (!isPlainObject(o) || typeof o.rt !== 'string') return '';
+  return o.rt;
+}
+
+/** The person renamed this torrent (omp.nm): automatic title cleanup leaves it. */
+export function nameLocked(data: string | undefined | null): boolean {
+  return ompIs(data, 'nm', true);
+}
+
+/**
+ * A copy of `obj` that keeps the original release string (omp.rt) and, when `locked`,
+ * marks the title as typed by the person (omp.nm). Write it with serializeData.
+ */
+/**
+ * The omp bag copied onto a replacement torrent. `rt` is the new release string:
+ * the old bag's rt would keep the previous quality after an upgrade.
+ */
+export function ompForReplacement(
+  oldOmp: { [k: string]: unknown } | null,
+  newOmp: { [k: string]: unknown } | null,
+  releaseTitle: string,
+): { [k: string]: unknown } {
+  const merged: { [k: string]: unknown } = { ...(newOmp || {}), ...(oldOmp || {}), v: JOURNAL_VERSION };
+  if (releaseTitle) merged.rt = releaseTitle;
+  else delete merged.rt;
+  return merged;
+}
+
+export function withReleaseMeta(obj: { [k: string]: unknown }, raw: string, locked: boolean): { [k: string]: unknown } {
+  return withOmp(obj, (omp) => {
+    if (raw && !omp.rt) omp.rt = raw;
+    if (locked) omp.nm = true;
+  });
+}
+
 /** The category was picked by hand (omp.cm true): the automatic category check leaves it. */
 export function categoryPicked(data: string | undefined | null): boolean {
   return ompIs(data, 'cm', true);

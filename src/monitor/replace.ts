@@ -8,7 +8,7 @@ import { parseTorrentData } from '../api/torrserver';
 import { isApiError } from '../api/http';
 import { isLoginRequired } from '../sources/types';
 import { baseName, episodeLabel, fileKind, parseEpisode, type TorrentFile } from '../lib/episodes';
-import { JOURNAL_KEY, JOURNAL_MAX, JOURNAL_VERSION, parseData, serializeData, type JournalEntry, withTrackerSeeds } from '../lib/journal';
+import { JOURNAL_KEY, JOURNAL_MAX, ompForReplacement, parseData, serializeData, type JournalEntry, withTrackerSeeds } from '../lib/journal';
 import { baseOf, type JournalClient } from '../store/journal';
 import { torrents } from '../store/library';
 import { resolveLink } from '../sources/view';
@@ -301,7 +301,8 @@ export function replaceTorrent(c: ReplaceClient, oldHash: string, link: string, 
         const oldOmp = plainObject(oldParsed.obj[JOURNAL_KEY]);
         const newOmp = plainObject(base.obj[JOURNAL_KEY]);
         const obj: { [k: string]: unknown } = { ...base.obj };
-        if (oldOmp || newOmp) obj[JOURNAL_KEY] = { ...(newOmp || {}), ...(oldOmp || {}), v: JOURNAL_VERSION };
+        const releaseTitle = (listed.title || listed.name || x.info.title || '').trim();
+        if (oldOmp || newOmp || releaseTitle) obj[JOURNAL_KEY] = ompForReplacement(oldOmp, newOmp, releaseTitle);
         const skip = oldParsed.skip || base.skip;
         const title = newTitle || keptTitle(old) || listed.title || listed.name || x.info.title || '';
         const poster = old.poster || listed.poster || '';

@@ -5,6 +5,8 @@ import { seriesNameVariants } from '../monitor/newEpisodes';
 import { parseEpisodeRange } from '../monitor/episodes';
 import { guessCategory } from './categoryGuess';
 import { displayTitle, torrentFiles } from './torrentName';
+import { releaseText } from './keptQuality';
+import { cachedSeriesMatch } from './seriesMatch';
 import { parseEpisode, playableFiles } from './episodes';
 import { filterTorrents } from './librarySearch';
 import { lang, tp, CYRILLIC_LANGS } from '../i18n';
@@ -85,7 +87,7 @@ export function seriesKey(tor: Torrent): string {
 
 /** The seasons of one torrent: from its title («Сезоны 1-3», «S02»), else from its files; [] when unknown. */
 export function seasonsOf(tor: Torrent): number[] {
-  const r = parseEpisodeRange(displayTitle(tor));
+  const r = parseEpisodeRange(releaseText(tor));
   if (r.season !== undefined) {
     const out: number[] = [];
     const to = r.seasonTo !== undefined && r.seasonTo >= r.season ? r.seasonTo : r.season;
@@ -104,7 +106,7 @@ export function seasonsOf(tor: Torrent): number[] {
 
 /** The release names episodes (in its title or files) but no season. */
 function seasonlessEpisodes(tor: Torrent): boolean {
-  const r = parseEpisodeRange(displayTitle(tor));
+  const r = parseEpisodeRange(releaseText(tor));
   if (r.to !== undefined) return true;
   return playableFiles(filesOf(tor)).some((f) => !!fileEpisodes(f.path));
 }
@@ -230,6 +232,60 @@ export function groupLibrary(list: Torrent[], query = ''): LibraryItem[] {
     done[k] = true;
     out.push(makeGroup(k, members));
   });
+  return mergeByShow(out);
+}
+
+function showIdOf(key: string): number {
+  const card = cachedSeriesMatch(key);
+  return card && card.id ? card.id : 0;
+}
+
+function uniqMembers(list: Torrent[]): Torrent[] {
+  const seen: { [h: string]: boolean } = {};
+  const out: Torrent[] = [];
+  list.forEach((t) => {
+    if (seen[t.hash]) return;
+    seen[t.hash] = true;
+    out.push(t);
+  });
+  return out;
+}
+
+/** Series that resolved to the same TMDB show become one card, including a lone torrent of that show. */
+function mergeByShow(items: LibraryItem[]): LibraryItem[] {
+  const seriesOfId: { [id: number]: SeriesGroup[] } = {};
+  const loneOfId: { [id: number]: Torrent[] } = {};
+  items.forEach((it) => {
+    if (it.kind === 'series') {
+      const id = showIdOf(it.key);
+      if (id) (seriesOfId[id] = seriesOfId[id] || []).push(it);
+      return;
+    }
+    const g = singleGroup(it.tor);
+    if (!g) return;
+    const id = showIdOf(g.key);
+    if (id) (loneOfId[id] = loneOfId[id] || []).push(it.tor);
+  });
+  const used: { [id: number]: boolean } = {};
+  const out: LibraryItem[] = [];
+  items.forEach((it) => {
+    const g = it.kind === 'series' ? it : singleGroup(it.tor);
+    const id = g ? showIdOf(g.key) : 0;
+    const groups = id ? seriesOfId[id] || [] : [];
+    const lone = id ? loneOfId[id] || [] : [];
+    const join = groups.length > 1 || lone.length > 1 || (groups.length > 0 && lone.length > 0);
+    if (!id || !join) {
+      out.push(it);
+      return;
+    }
+    if (used[id]) return;
+    used[id] = true;
+    let members: Torrent[] = [];
+    groups.forEach((s) => { members = members.concat(s.members); });
+    members = uniqMembers(members.concat(lone));
+    const key = groups.length ? groups[0].key : g!.key;
+    out.push(makeGroup(key, members));
+  });
   return out;
 }
 
@@ -238,14 +294,31 @@ export function groupLibrary(list: Torrent[], query = ''): LibraryItem[] {
  * null when none is left.
  */
 export function findGroup(list: Torrent[], key: string): SeriesGroup | null {
+  const items = groupLibrary(list);
+  for (let i = 0; i < items.length; i++) {
+    const it = items[i];
+    if (it.kind !== 'series') continue;
+    if (it.key === key) return it;
+    for (let j = 0; j < it.members.length; j++) {
+      if (namesOf(it.members[j]).indexOf(key) >= 0) return it;
+    }
+  }
+  // one torrent is not a library card, but the series screen still opens on its name
   const keys = seriesKeys(list);
   let own = '';
   for (let i = 0; i < list.length && !own; i++) {
-    if (keys[i] && namesOf(list[i]).indexOf(key) >= 0) own = keys[i];
+    if (keys[i] && (keys[i] === key || namesOf(list[i]).indexOf(key) >= 0)) own = keys[i];
   }
   if (!own) return null;
   const members = list.filter((_, i) => keys[i] === own);
-  return makeGroup(own, members);
+  const id = showIdOf(own);
+  if (id) {
+    list.forEach((tor, i) => {
+      if (!keys[i] || members.some((m) => m.hash === tor.hash)) return;
+      if (showIdOf(keys[i]) === id) members.push(tor);
+    });
+  }
+  return members.length ? makeGroup(own, uniqMembers(members)) : null;
 }
 
 /** A lone series torrent as a group of one (its TMDB lookup and tile badge); null for a film. */

@@ -2,7 +2,7 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { applyLanguageSetting } from '../../src/i18n';
 import {
   viewOptions, nextView, nextPhoneView, viewLabel, libraryTabs, POSTER_COLORS, posterColor, shortTitle,
-  episodeLine, positionLabel, remainingLabel, libraryTitle,
+  episodeLine, positionLabel, remainingLabel,   libraryTitle, cleanStoredTitle,
 } from '../../src/lib/libraryView';
 
 describe('views and tabs', () => {
@@ -64,6 +64,11 @@ describe('libraryTitle', () => {
   it('a raw release name without separators', () => {
     expect(libraryTitle(tor('Signal.One.2026.x265.WEB-DL.2160p.SDR'))).toEqual({ title: 'Signal One', meta: '2026' });
     expect(libraryTitle(tor('Тихий сигнал 2160p'))).toEqual({ title: 'Тихий сигнал', meta: '' });
+  });
+  it('a tracker title stores as the clean name', () => {
+    const raw = 'Локи (2 сезон: 1-6 серии из 6) / Loki [1080p]';
+    expect(cleanStoredTitle(tor(raw))).toBe('Локи');
+    expect(cleanStoredTitle(tor('Локи'))).toBe('');
   });
   it('a name typed by the user (renamed) stays as is', () => {
     expect(libraryTitle(tor('Neon Rivers'))).toEqual({ title: 'Neon Rivers', meta: '' });

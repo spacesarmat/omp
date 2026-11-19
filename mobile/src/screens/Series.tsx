@@ -17,7 +17,9 @@ import { SubsLimitSheet } from '../ui/SubsLimitSheet';
 import { airDateText, upcomingSeasons, type Upcoming } from '../../../src/lib/seriesStatus';
 import { mainButtonLines } from '../../../src/lib/phoneContinue';
 import { pickSeasonVoice, studiosOf, voiceDiffers } from '../../../src/lib/seasonVoice';
-import { Poster, qualityBadge } from '../ui/Poster';
+import { Poster } from '../ui/Poster';
+import { Sheet } from '../ui/Sheet';
+import { torrentQuality } from '../../../src/lib/keptQuality';
 import { LaunchError } from '../ui/LaunchError';
 import { currentRoute, goBack, navigate, switchTab, type MRoute } from '../nav';
 import { filesOf, useTvLaunch } from '../watch';
@@ -33,7 +35,7 @@ import { libraryTitle } from '../../../src/lib/libraryView';
 import { baseName, episodeLabel, playableFiles, spansSeasons, stripExt } from '../../../src/lib/episodes';
 import type { Torrent } from '../../../src/api/types';
 import { findGroup, groupLabel, NO_SEASON, onlyThisSeason, otherSeasonReleases, seasonMembers, type SeriesGroup } from '../../../src/lib/seriesGroups';
-import { cachedSeriesMatch, matchSeries } from '../../../src/lib/seriesMatch';
+import { cachedSeriesMatch, chooseSeries, matchSeries, seriesMatchVersion } from '../../../src/lib/seriesMatch';
 import { releaseName } from '../lib/duplicates';
 import { isDeadRelease, useLiveSwarm } from '../../../src/lib/swarmWatch';
 import { canUpgrade } from '../../../src/ui/BetterDialog';
@@ -41,7 +43,7 @@ import { BetterSheet } from '../ui/BetterSheet';
 import { phoneCatalog } from '../catalog/phoneCatalog';
 import { artKey, artVersion, pickedArt } from '../catalog/artPick';
 import { CastStrip } from '../ui/CastStrip';
-import { torrentQuery, type CatalogCard, type Season, type SeasonDetails } from '../../../src/catalog/tmdb';
+import { torrentQuery, type CatalogCard, type CatalogTitle, type Season, type SeasonDetails } from '../../../src/catalog/tmdb';
 import { ratingText } from './catalog/CatalogSearch';
 import { useSeriesDub } from '../../../src/ui/seriesDub';
 import { errorMessage } from '../../../src/api/http';
@@ -137,6 +139,7 @@ function voiceNote(members: { data?: string | null }[], season: number): string 
 /** The TMDB card of the series: at once from memory on a revisit, else once the lookup ends; null without one. */
 function useSeriesCard(group: SeriesGroup | null): CatalogCard | null {
   const l = lang.value;
+  const version = seriesMatchVersion.value;
   const key = group ? group.key : '';
   const [card, setCard] = useState<CatalogCard | null>(() => (key ? cachedSeriesMatch(key) || null : null));
   const groupRef = useRef(group);
@@ -163,7 +166,7 @@ function useSeriesCard(group: SeriesGroup | null): CatalogCard | null {
     return () => {
       live = false;
     };
-  }, [key, l]);
+  }, [key, l, version]);
   return card;
 }
 
@@ -190,7 +193,32 @@ function HeroOverview({ text }: { text: string }) {
   );
 }
 
-function Hero({ card, group }: { card: CatalogCard; group: SeriesGroup }) {
+function WrongShowSheet({ group, onClose }: { group: SeriesGroup; onClose: () => void }) {
+  const [q, setQ] = useState(libraryTitle(group.named).title);
+  const [items, setItems] = useState<CatalogTitle[]>([]);
+  const run = (query: string) => {
+    phoneCatalog().then((c) => c.search(query, 1)).then(
+      (r) => setItems(r.items.filter((x) => x.kind === 'tv')),
+      () => undefined,
+    );
+  };
+  useEffect(() => { run(q); }, []);
+  return (
+    <Sheet label={t('titleCard.wrongShow')} testId="wrong-show" onClose={onClose}>
+      <div class="m-sheet-title">{t('titleCard.wrongShow')}</div>
+      <form onSubmit={(e) => { e.preventDefault(); run(q); }}>
+        <input class="m-input" value={q} onInput={(e) => setQ((e.currentTarget as HTMLInputElement).value)} />
+      </form>
+      {items.map((it) => (
+        <button key={it.id} type="button" class="m-opt" onClick={() => { void chooseSeries(group, it.id).then(() => onClose()); }}>
+          <span class="m-opt-name">{it.title + (it.year ? ' (' + it.year + ')' : '')}</span>
+        </button>
+      ))}
+    </Sheet>
+  );
+}
+
+function Hero({ card, group, onWrong }: { card: CatalogCard; group: SeriesGroup; onWrong: () => void }) {
   const meta = heroMeta(card);
   void artVersion.value;
   const poster = pickedArt(artKey(card.id)) || card.poster;
@@ -212,7 +240,8 @@ function Hero({ card, group }: { card: CatalogCard; group: SeriesGroup }) {
           <h1 class="m-tc-title m-series-title">{card.title || libraryTitle(group.named).title}</h1>
           {meta && <span class="m-muted m-small m-sh-meta">{meta}</span>}
           <SeriesPill card={card} />
-          <span class="m-muted m-small">{[seriesCountText(group, card), qualityBadge(group.lead.title || '')].filter(Boolean).join(' · ')}</span>
+          <span class="m-muted m-small">{[seriesCountText(group, card), torrentQuality(group.lead)].filter(Boolean).join(' · ')}</span>
+          <button type="button" class="m-btn-text" data-wrong-show onClick={() => onWrong()}>{t('titleCard.wrongShow')}</button>
         </div>
       </div>
     </>
@@ -484,6 +513,7 @@ function Body({ group, card }: { group: SeriesGroup; card: CatalogCard | null })
   const tmdb = useTmdbEpisodes(main, epSeasons, !!main && epSeasons.length > 0);
   const tmdbOnly = noFiles ? seasonEpisodeList(tmdb.eps, season) : [];
   const [releasesOpen, setReleasesOpen] = useState(false);
+  const [wrongOpen, setWrongOpen] = useState(false);
   const [episode, setEpisode] = useState<TorrentFile | null>(null);
   const mainFile = main ? watchTarget(main.hash, files) : undefined;
   const mainAt = main && mainFile ? sharedResume(main.hash, mainFile.id) : 0;
@@ -544,7 +574,7 @@ function Body({ group, card }: { group: SeriesGroup; card: CatalogCard | null })
   return (
     <>
       {card ? (
-        <Hero card={card} group={group} />
+        <Hero card={card} group={group} onWrong={() => setWrongOpen(true)} />
       ) : (
         <div class="m-series-head">
           <Poster torrent={group.lead} class="m-poster-mini" />
@@ -712,6 +742,7 @@ function Body({ group, card }: { group: SeriesGroup; card: CatalogCard | null })
         />
       )}
       {better && <BetterSheet torrent={better} files={filesOf(better)} onClose={() => setBetter(null)} />}
+      {wrongOpen && <WrongShowSheet group={group} onClose={() => setWrongOpen(false)} />}
       {launch.sheet}
     </>
   );
@@ -725,7 +756,9 @@ export function Series({ seriesKey }: { seriesKey: string }) {
   }, [seriesKey]);
   progressVersion.value; // re-render when local progress changes
   serverViewed.value;
-  const group = useMemo(() => findGroup(list, seriesKey), [list, seriesKey]);
+  // a manual choice bumps this: the open page takes the new card and any releases that now share that show
+  const matchVersion = seriesMatchVersion.value;
+  const group = useMemo(() => findGroup(list, seriesKey), [list, seriesKey, matchVersion]);
   const card = useSeriesCard(group);
   const hero = !!(group && card);
   // the last release of the series deleted here: back to the library (a series already gone on arrival says so)

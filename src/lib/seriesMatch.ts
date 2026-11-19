@@ -8,16 +8,19 @@ import { activeCatalog } from '../catalog/activeCatalog';
 import { findShow, pickShow as pick } from './tmdbShow';
 import { displayTitle, yearOf } from './torrentName';
 import type { CatalogCard, CatalogTitle } from '../catalog/tmdb';
-import type { SeriesGroup } from './seriesGroups';
+import { seriesKey, type SeriesGroup } from './seriesGroups';
 
 const matches = new Map<string, CatalogCard | null>();
+// The show the person picked, written before its card request returns. A lookup that was already running
+// must not replace it when that lookup finishes later.
+const chosenId = new Map<string, number>();
 
 // The match outlives the page: series key → TMDB id (0: no show) with the show's status, for SAVED_TTL. A cold start
 // then asks the card by id instead of searching again, and the calendar skips the shows known to be over.
 const SAVED_KEY = 'tsp.seriesTmdb';
 const SAVED_TTL = 7 * 24 * 60 * 60 * 1000;
 const SAVED_MAX = 400;
-interface Saved { id: number; s: string; at: number; }
+interface Saved { id: number; s: string; at: number; m?: boolean; }
 let saved: { [k: string]: Saved } | null = null;
 
 function savedMap(): { [k: string]: Saved } {
@@ -25,8 +28,10 @@ function savedMap(): { [k: string]: Saved } {
   const raw = loadJson<{ [k: string]: unknown }>(SAVED_KEY, {}, isObject);
   const out: { [k: string]: Saved } = {};
   Object.keys(raw).forEach((k) => {
-    const v = raw[k] as { id?: unknown; s?: unknown; at?: unknown } | null;
-    if (v && typeof v.id === 'number' && v.id >= 0 && typeof v.at === 'number') out[k] = { id: v.id, s: typeof v.s === 'string' ? v.s : '', at: v.at };
+    const v = raw[k] as { id?: unknown; s?: unknown; at?: unknown; m?: unknown } | null;
+    if (v && typeof v.id === 'number' && v.id >= 0 && typeof v.at === 'number') {
+      out[k] = { id: v.id, s: typeof v.s === 'string' ? v.s : '', at: v.at, m: v.m === true };
+    }
   });
   saved = out;
   return out;
@@ -34,16 +39,25 @@ function savedMap(): { [k: string]: Saved } {
 
 function savedOf(key: string): Saved | null {
   const v = savedMap()[key];
-  const age = v ? Date.now() - v.at : -1;
-  return v && age >= 0 && age < SAVED_TTL ? v : null;
+  if (!v) return null;
+  // a show the person picked does not expire with the card cache
+  if (v.m && v.id > 0) return v;
+  const age = Date.now() - v.at;
+  return age >= 0 && age < SAVED_TTL ? v : null;
 }
 
-function remember(key: string, card: CatalogCard | null): void {
+function remember(key: string, card: CatalogCard | null, manual?: boolean): void {
   const map = savedMap();
-  map[key] = { id: card ? card.id : 0, s: card && card.status ? card.status : '', at: Date.now() };
+  const prev = map[key];
+  map[key] = {
+    id: card ? card.id : 0,
+    s: card && card.status ? card.status : '',
+    at: Date.now(),
+    m: manual === true || !!(prev && prev.m && manual !== false),
+  };
   const keys = Object.keys(map);
   if (keys.length > SAVED_MAX) {
-    keys.sort((a, b) => map[a].at - map[b].at).slice(0, keys.length - SAVED_MAX).forEach((k) => delete map[k]);
+    keys.filter((k) => !map[k].m).sort((a, b) => map[a].at - map[b].at).slice(0, Math.max(0, keys.length - SAVED_MAX)).forEach((k) => delete map[k]);
   }
   saveJson(SAVED_KEY, map);
 }
@@ -55,6 +69,20 @@ export function knownOver(key: string): boolean {
 }
 
 const cacheKey = (key: string) => lang.peek() + '|' + key;
+
+/** The show id a person locked for this series, including one saved on a previous launch. 0 when none. */
+function lockedShow(key: string): number {
+  const picked = chosenId.get(key);
+  if (picked) return picked;
+  const v = savedOf(key);
+  return v && v.m && v.id > 0 ? v.id : 0;
+}
+
+/** The card already stored for a locked show. */
+function keptCard(key: string): CatalogCard | null {
+  const kept = matches.get(key);
+  return kept === undefined ? null : kept;
+}
 
 /** The match found before: a card, null (no show), undefined (not looked up yet). */
 export function cachedSeriesMatch(key: string): CatalogCard | null | undefined {
@@ -79,22 +107,36 @@ export function matchSeries(g: SeriesGroup, opts?: { force?: boolean }): Promise
   const key = cacheKey(g.key);
   const force = !!(opts && opts.force);
   const hit = matches.get(key);
+  const locked = lockedShow(key);
+  // a show the person picked is fetched by that id; a search that started earlier must not replace it
+  if (locked) {
+    if (hit && hit.id === locked && !(force && hit)) return Promise.resolve(hit);
+    return activeCatalog().then((c) => (force ? c.card('tv', locked, { force: true }) : c.card('tv', locked)).then((card) => {
+      if (lockedShow(key) !== locked) return keptCard(key);
+      matches.set(key, card);
+      remember(key, card, true);
+      return card;
+    }));
+  }
   // `force` (pull to refresh): the show found before, its card fetched again
   if (hit !== undefined && !(force && hit)) return Promise.resolve(hit);
   const known = savedOf(key);
   return activeCatalog().then((c) => {
+    if (lockedShow(key)) return keptCard(key);
     if (known && known.id === 0) {
       matches.set(key, null);
       return null;
     }
     const found = hit ? Promise.resolve({ id: hit.id }) : known ? Promise.resolve({ id: known.id }) : findShow(c, displayTitle(g.named), groupYear(g));
     return found.then((show) => {
+      if (lockedShow(key)) return keptCard(key);
       if (!show) {
         matches.set(key, null);
         remember(key, null);
         return null;
       }
       return (force ? c.card('tv', show.id, { force: true }) : c.card('tv', show.id)).then((card) => {
+        if (lockedShow(key)) return keptCard(key);
         matches.set(key, card);
         remember(key, card);
         return card;
@@ -154,6 +196,41 @@ export function seriesMatchFailed(key: string): boolean {
   return failed !== undefined && Date.now() - failed < RETRY_MS;
 }
 
+/** Every series name on the card: a merged card can hold seasons that did not share a name. */
+function choiceKeys(g: SeriesGroup): string[] {
+  const out: string[] = [];
+  const add = (k: string) => {
+    if (k && out.indexOf(k) < 0) out.push(k);
+  };
+  add(g.key);
+  g.members.forEach((m) => add(seriesKey(m)));
+  return out;
+}
+
+/** The person picked this show («Не тот сериал?»). Later lookups keep it, for every name on the card. */
+export function chooseSeries(g: SeriesGroup, id: number): Promise<CatalogCard | null> {
+  const keys = choiceKeys(g).map(cacheKey);
+  keys.forEach((key) => chosenId.set(key, id));
+  return activeCatalog().then((c) => c.card('tv', id).then((card) => {
+    let stale = false;
+    keys.forEach((key) => {
+      if (chosenId.get(key) !== id) stale = true;
+    });
+    if (stale) return keptCard(keys[0]);
+    keys.forEach((key) => {
+      matches.set(key, card);
+      remember(key, card, true);
+    });
+    seriesMatchVersion.value++;
+    return card;
+  }, (err) => {
+    keys.forEach((key) => {
+      if (chosenId.get(key) === id) chosenId.delete(key);
+    });
+    throw err;
+  }));
+}
+
 /** Tests: forget every match. */
 export function resetSeriesMatches(): void {
   matches.clear();
@@ -161,6 +238,7 @@ export function resetSeriesMatches(): void {
   waiting.length = 0;
   pending.clear();
   failedAt.clear();
+  chosenId.clear();
   running = 0;
   generation++;
 }

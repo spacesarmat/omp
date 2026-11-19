@@ -167,6 +167,9 @@ describe('sanitizers', () => {
     const c = sanitizeCard(E, MOVIE_CARD, 'movie')!;
     expect(c.genres).toEqual(['драма']);
     expect(c.seasons).toEqual([]);
+    expect(c.collection).toBeNull();
+    expect(sanitizeCard(E, { ...MOVIE_CARD, belongs_to_collection: { id: 7, name: 'Мир' } }, 'movie')!.collection).toEqual({ id: 7, name: 'Мир' });
+    expect(sanitizeCard(E, { ...MOVIE_CARD, belongs_to_collection: { id: 0, name: '' } }, 'movie')!.collection).toBeNull();
     expect(sanitizeCard(E, {}, 'movie')).toBeNull();
   });
 });

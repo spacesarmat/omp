@@ -163,6 +163,18 @@ export function libraryTitle(tor: { hash: string; title?: string; name?: string;
   return { title: name, meta: parts.join(' · ') };
 }
 
+/**
+ * The clean name to store instead of a tracker string, or '' when the title is already a name
+ * (typed by the user, or a placeholder still waiting for the files).
+ */
+export function cleanStoredTitle(tor: { hash: string; title?: string; name?: string; data?: string; file_stats?: TorrentFile[] }): string {
+  const shown = (tor.title || '').trim();
+  if (!shown || isPlaceholderTitle(shown, tor.hash) || !looksRaw(shown)) return '';
+  const clean = libraryTitle(tor).title;
+  if (!clean || clean === '?' || clean === shown) return '';
+  return clean;
+}
+
 export function episodeLine(path: string, isMovie: boolean): string {
   const e = parseEpisode(path);
   if (e.episode !== null) return (e.season !== null ? t('library.season', { n: e.season }) + ' · ' : '') + t('library.episode', { n: e.episode });

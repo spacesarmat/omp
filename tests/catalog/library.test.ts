@@ -22,6 +22,27 @@ describe('library matching', () => {
     const idx = libraryIndex([{ title: 'Северный ветер (2019)' }]);
     expect(inLibrary(idx, { title: 'Северный ветер', original: 'North Wind', year: 2026 })).toBe(false);
   });
+
+  it('a cleaned title keeps the year from the saved release string', () => {
+    const data = JSON.stringify({ omp: { rt: 'Дюна / Dune (2021) 1080p' } });
+    const idx = libraryIndex([{ title: 'Дюна', data }]);
+    expect(inLibrary(idx, { title: 'Дюна', original: 'Dune', year: 2021 })).toBe(true);
+    expect(inLibrary(idx, { title: 'Дюна', original: 'Dune', year: 1984 })).toBe(false);
+  });
+
+  it('a title the person typed wins over the saved release string', () => {
+    const data = JSON.stringify({ omp: { rt: 'Дюна / Dune (1984) 1080p', nm: true } });
+    const idx = libraryIndex([{ title: 'Дюна (2021)', data }]);
+    expect(inLibrary(idx, { title: 'Дюна', original: 'Dune', year: 2021 })).toBe(true);
+    expect(inLibrary(idx, { title: 'Дюна', original: 'Dune', year: 1984 })).toBe(false);
+  });
+
+  it('a rename without a year keeps the year from the saved release string', () => {
+    const data = JSON.stringify({ omp: { rt: 'Дюна / Dune (2021) 1080p', nm: true } });
+    const idx = libraryIndex([{ title: 'Дюна', data }]);
+    expect(inLibrary(idx, { title: 'Дюна', original: 'Dune', year: 2021 })).toBe(true);
+    expect(inLibrary(idx, { title: 'Дюна', original: 'Dune', year: 1984 })).toBe(false);
+  });
 });
 
 describe('season matching', () => {

@@ -1,5 +1,7 @@
 // Library matching of TMDB titles against torrent titles. Pure.
 import { titleCore } from '../lib/posterSearch';
+import { rawReleaseOf } from '../lib/journal';
+import { identityText } from '../lib/keptQuality';
 import { parseRelease } from '../sources/filters';
 
 // ye as a char code: the guard strips regex literals but not string literals.
@@ -21,11 +23,11 @@ export function yearOf(title: string): number {
   return m ? +m[1] : 0;
 }
 
-/** Keys of the torrents: the title proper (and each part of a 'a / b' title) with the year found in the title. */
-export function libraryIndex(torrents: { title: string }[]): Set<string> {
+/** Keys of the torrents: the title proper (and each part of a 'a / b' title) with the year found in the release string. */
+export function libraryIndex(torrents: { title: string; data?: string }[]): Set<string> {
   const idx = new Set<string>();
   torrents.forEach((tr) => {
-    const raw = tr.title || '';
+    const raw = identityText(tr);
     const year = yearOf(raw);
     const add = (s: string): void => {
       const core = titleCore(s);
@@ -38,7 +40,7 @@ export function libraryIndex(torrents: { title: string }[]): Set<string> {
 }
 
 /** The first torrent hash that matches the title (or its original name). '' when none. */
-export function libraryTitleHash(list: { title: string; hash?: string }[], t: { title: string; original: string; year: number }): string {
+export function libraryTitleHash(list: { title: string; hash?: string; data?: string }[], t: { title: string; original: string; year: number }): string {
   for (let i = 0; i < list.length; i++) {
     const tr = list[i];
     if (tr.hash && inLibrary(libraryIndex([tr]), t)) return tr.hash;
@@ -63,9 +65,10 @@ function nameKey(title: string): string {
 }
 
 /** Every 'name|N' key of a torrent title, with that torrent's hash (possibly empty). */
-function eachSeason(torrents: { title: string; hash?: string }[], visit: (key: string, hash: string) => void): void {
+function eachSeason(torrents: { title: string; hash?: string; data?: string }[], visit: (key: string, hash: string) => void): void {
   torrents.forEach((tr) => {
-    const raw = tr.title || '';
+    const saved = rawReleaseOf(tr.data);
+    const raw = saved || tr.title || '';
     const seasons = parseRelease(raw).seasons;
     if (!seasons.length) return;
     const hash = tr.hash || '';
@@ -85,7 +88,7 @@ function eachSeason(torrents: { title: string; hash?: string }[], visit: (key: s
  * Keys 'name|N' of the series seasons in the torrents (from the season marks of the title; none without them),
  * each with the hash of the first torrent that has it.
  */
-export function seasonIndex(torrents: { title: string; hash?: string }[]): Map<string, string> {
+export function seasonIndex(torrents: { title: string; hash?: string; data?: string }[]): Map<string, string> {
   const idx = new Map<string, string>();
   eachSeason(torrents, (k, hash) => {
     if (!idx.has(k)) idx.set(k, hash);
@@ -94,7 +97,7 @@ export function seasonIndex(torrents: { title: string; hash?: string }[]): Map<s
 }
 
 /** Same keys as seasonIndex, with every torrent hash that carries the season (a season split across releases). */
-export function seasonHashIndex(torrents: { title: string; hash?: string }[]): Map<string, string[]> {
+export function seasonHashIndex(torrents: { title: string; hash?: string; data?: string }[]): Map<string, string[]> {
   const idx = new Map<string, string[]>();
   eachSeason(torrents, (k, hash) => {
     if (!hash) return;

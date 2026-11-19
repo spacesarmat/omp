@@ -10,26 +10,19 @@ import { SUPPORT_MAX_AHEAD_MS } from '../lib/donate';
 import { t } from '../i18n';
 import { newestSeriesTracks, nextSeriesTracks, withSeriesTracks, sameDub, type SeriesTracks, type SeriesTracksPatch } from '../lib/seriesTracks';
 import { readVoice, withSeasonVoice } from '../lib/seasonVoice';
+import { enqueueTorrentWrite, torrentWriteSettled } from '../lib/dataQueue';
 
 export interface JournalClient {
   list(): Promise<Torrent[]>;
   setData(t: Pick<Torrent, 'hash' | 'title' | 'poster' | 'category'>, data: string): Promise<void>;
 }
 
-const chains: { [hash: string]: Promise<void> } = {};
-
 /** Runs `job` after the pending writes of the same torrent; never rejects. */
 function enqueue(hash: string, job: () => Promise<void>): Promise<void> {
-  const prev = chains[hash] || Promise.resolve();
-  const next = prev.then(job).then(
+  return enqueueTorrentWrite(hash, job).then(
     () => undefined,
     () => undefined,
   );
-  chains[hash] = next;
-  next.then(() => {
-    if (chains[hash] === next) delete chains[hash];
-  });
-  return next;
 }
 
 /** Keeps the library copy in step, so «История» shows the write without waiting for the next refresh. */
@@ -123,8 +116,7 @@ function applyPatch(cur: SkipPrefs, patch: SkipPatch): SkipPrefs {
  */
 export function saveSkip(c: JournalClient, torrent: Pick<Torrent, 'hash'>, patch: SkipPatch): Promise<SkipPrefs> {
   const hash = torrent.hash;
-  const prev = chains[hash] || Promise.resolve();
-  const run = prev.then(() =>
+  return enqueueTorrentWrite(hash, () =>
     c.list().then((all) => {
       const tor = torrentOf(all, hash);
       if (!tor) throw new Error(t('errors.torrentMissing'));
@@ -140,15 +132,6 @@ export function saveSkip(c: JournalClient, torrent: Pick<Torrent, 'hash'>, patch
       });
     }),
   );
-  const tail = run.then(
-    () => undefined,
-    () => undefined,
-  );
-  chains[hash] = tail;
-  tail.then(() => {
-    if (chains[hash] === tail) delete chains[hash];
-  });
-  return run;
 }
 
 /** «Следить за новыми сериями» of a torrent (omp.w); true when nothing is stored or the torrent is unknown. */
@@ -175,8 +158,7 @@ interface OmpFlag {
 /** Writes an on/off flag of the journal object; the history, the skip settings and every other key are kept. */
 function saveFlag(c: JournalClient, torrent: Pick<Torrent, 'hash'>, on: boolean, flag: OmpFlag): Promise<boolean> {
   const hash = torrent.hash;
-  const prev = chains[hash] || Promise.resolve();
-  const run = prev.then(() =>
+  return enqueueTorrentWrite(hash, () =>
     c.list().then((all) => {
       const tor = torrentOf(all, hash);
       if (!tor) throw new Error(t('errors.torrentMissing'));
@@ -191,15 +173,6 @@ function saveFlag(c: JournalClient, torrent: Pick<Torrent, 'hash'>, on: boolean,
       });
     }),
   );
-  const tail = run.then(
-    () => undefined,
-    () => undefined,
-  );
-  chains[hash] = tail;
-  tail.then(() => {
-    if (chains[hash] === tail) delete chains[hash];
-  });
-  return run;
 }
 
 /**
@@ -267,8 +240,7 @@ export function saveCategoryPicked(c: JournalClient, torrent: Pick<Torrent, 'has
  * Rejects when the torrent is gone or the server refuses.
  */
 export function saveCategoryAuto(c: JournalClient, hash: string, category: string): Promise<void> {
-  const prev = chains[hash] || Promise.resolve();
-  const run = prev.then(() =>
+  return enqueueTorrentWrite(hash, () =>
     c.list().then((all) => {
       const tor = torrentOf(all, hash);
       if (!tor) throw new Error(t('errors.torrentMissing'));
@@ -279,15 +251,6 @@ export function saveCategoryAuto(c: JournalClient, hash: string, category: strin
       });
     }),
   );
-  const tail = run.then(
-    () => undefined,
-    () => undefined,
-  );
-  chains[hash] = tail;
-  tail.then(() => {
-    if (chains[hash] === tail) delete chains[hash];
-  });
-  return run;
 }
 
 setCategoryWriter(saveCategoryAuto);
@@ -299,8 +262,7 @@ setCategoryWriter(saveCategoryAuto);
  * players swallow it).
  */
 export function saveSeriesTracks(c: JournalClient, hash: string, members: string[], patch: SeriesTracksPatch, now: number = Date.now(), season?: number): Promise<SeriesTracks> {
-  const prev = chains[hash] || Promise.resolve();
-  const run = prev.then(() =>
+  return enqueueTorrentWrite(hash, () =>
     c.list().then((all) => {
       const tor = torrentOf(all, hash);
       if (!tor) throw new Error(t('errors.torrentMissing'));
@@ -325,15 +287,6 @@ export function saveSeriesTracks(c: JournalClient, hash: string, members: string
       });
     }),
   );
-  const tail = run.then(
-    () => undefined,
-    () => undefined,
-  );
-  chains[hash] = tail;
-  tail.then(() => {
-    if (chains[hash] === tail) delete chains[hash];
-  });
-  return run;
 }
 
 /** Last watch-journal activity of a torrent (0: never played through OMP). */
@@ -426,8 +379,5 @@ export function rewriteData(
 
 /** Resolves once the pending history writes of a torrent are done (never rejects). */
 export function afterWrites(hash: string): Promise<void> {
-  return (chains[hash] || Promise.resolve()).then(
-    () => undefined,
-    () => undefined,
-  );
+  return torrentWriteSettled(hash);
 }

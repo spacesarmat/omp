@@ -1,6 +1,7 @@
 import type { Torrent } from '../../../src/api/types';
 import { posterColor, shortTitle } from '../../../src/lib/libraryView';
 import { parseReleaseInfo, releaseBadges, displayBadge } from '../../../src/lib/releaseInfo';
+import { torrentQuality } from '../../../src/lib/keptQuality';
 import { displayTitle } from '../../../src/lib/torrentName';
 
 /** Quality badge: the first release tag that is not just a year. */
@@ -25,7 +26,7 @@ export function posterStyle(t: Torrent): string {
  */
 export function Poster({ torrent, class: cls = '', morphKey, badge: own, initial }: { torrent: Torrent; class?: string; morphKey?: string; badge?: string; initial?: boolean }) {
   const hasImage = /^https?:\/\//i.test(torrent.poster || '');
-  const badge = own || qualityBadge(displayTitle(torrent));
+  const badge = own || torrentQuality(torrent);
   const name = shortTitle(displayTitle(torrent));
   return (
     <div class={'m-poster ' + cls} style={posterStyle(torrent)} data-poster={morphKey}>

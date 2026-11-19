@@ -103,6 +103,12 @@ describe('pickBetter', () => {
     expect(b.others).toEqual([uhd, bd]);
   });
 
+  it('a cleaned title still compares quality from the saved release string', () => {
+    const data = JSON.stringify({ omp: { v: 1, h: [], rt: FILM } });
+    const b = pickBetter(film('Северный ветер', { data }), [res('Северный ветер (2026) 2160p WEB-DL')]);
+    expect(b && b.candidate.Title).toBe('Северный ветер (2026) 2160p WEB-DL');
+  });
+
   it('nothing better: null', () => {
     expect(pickBetter(film(), [res('Северный ветер (2026) WEB-DL 1080p'), res('Северный ветер (2026) CAMRip')])).toBeNull();
   });
