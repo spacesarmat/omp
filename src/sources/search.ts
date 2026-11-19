@@ -51,6 +51,12 @@ export interface SearchHandle {
   cancel(): void;
   /** Titles actually sent to the trackers. Set by the multi-title search. */
   queries?: () => string[];
+  /**
+   * False while a later title (TMDB or the empty retry) may still be searched.
+   * pending() can already be empty: the trackers have answered the titles they were given.
+   * The TV poll must wait for this, not for pending().
+   */
+  complete?: () => boolean;
 }
 
 function asError(e: unknown): Error {

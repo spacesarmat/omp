@@ -96,6 +96,65 @@ describe('searchRecall', () => {
     expect((seen[0] as { code?: string }).code).toBe('cloudflare-interactive');
   });
 
+  it('stays incomplete until the title lookup finishes, while trackers are no longer pending', async () => {
+    let releaseLookup: (v: string[]) => void = () => {};
+    const lookup = new Promise<string[]>((r) => { releaseLookup = r; });
+    const seen: string[] = [];
+    const s = source((q) => {
+      seen.push(q);
+      return Promise.resolve([row({ Title: '\u041b\u043e\u043a\u0438', hash: 'dd', Seed: 3 })]);
+    });
+    const h = searchRecall('\u041b\u043e\u043a\u0438', {
+      ctx: {} as never,
+      from: [s],
+      sources: ['rutor'],
+      lookup: () => lookup,
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(h.pending()).toEqual([]);
+    expect(h.complete && h.complete()).toBe(false);
+    releaseLookup(['Game of Thrones']);
+    await h.done;
+    expect(seen).toContain('Game of Thrones');
+    expect(h.complete && h.complete()).toBe(true);
+  });
+
+  it('still finishes when one source times out and another title arrives', async () => {
+    const seen: string[] = [];
+    const slow: Source = {
+      id: 'slow',
+      name: 'Slow',
+      kind: 'builtin',
+      search: (q) => {
+        seen.push('slow:' + q);
+        return Promise.resolve([]);
+      },
+    };
+    const hung: Source = {
+      id: 'hung',
+      name: 'Hung',
+      kind: 'builtin',
+      search: () => new Promise(() => undefined),
+    };
+    let releaseLookup: (v: string[]) => void = () => {};
+    const lookup = new Promise<string[]>((r) => { releaseLookup = r; });
+    const h = searchRecall('\u041b\u043e\u043a\u0438', {
+      ctx: {} as never,
+      from: [hung, slow],
+      sources: ['hung', 'slow'],
+      timeoutMs: 30,
+      lookup: () => lookup,
+    });
+    await new Promise((r) => setTimeout(r, 50));
+    releaseLookup(['Loki']);
+    await h.done;
+    expect(seen).toContain('slow:Loki');
+    expect(seen.some((q) => q.indexOf('hung') === 0)).toBe(false);
+    expect(h.complete && h.complete()).toBe(true);
+  });
+
   it('does not start another title after the tracker times out', async () => {
     const seen: string[] = [];
     const s = source((q) => {

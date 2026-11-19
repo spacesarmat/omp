@@ -110,7 +110,10 @@ export function searchRecall(raw: string, opts: RecallSearchOptions): SearchHand
   const idleNow = (): boolean => {
     if (inflight > 0) return false;
     for (let i = 0; i < chosen.length; i++) {
-      if ((cursor[chosen[i].id] || 0) < queries.length) return false;
+      const id = chosen[i].id;
+      // A timed-out source is finished. A title added later must not leave it behind forever.
+      if (settled[id]) continue;
+      if ((cursor[id] || 0) < queries.length) return false;
     }
     return true;
   };
@@ -212,7 +215,8 @@ export function searchRecall(raw: string, opts: RecallSearchOptions): SearchHand
       answered.push(source.id);
       safe(() => opts.onDone && opts.onDone(source.id));
     }
-    if (!pending.length) end();
+    // A parked source is not pending, but TMDB may still add a title. done waits for that.
+    if (!pending.length && closed) end();
   };
 
   chosen.forEach((source) => {
@@ -337,6 +341,7 @@ export function searchRecall(raw: string, opts: RecallSearchOptions): SearchHand
     answered: () => answered.slice(),
     failed: () => failed.slice(),
     queries: () => queries.slice(),
+    complete: () => closed && inflight === 0 && idleNow(),
     done,
     cancel() {
       if (cancelled) return;
