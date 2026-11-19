@@ -8,6 +8,7 @@ import type { SyncRecord } from '../store/syncMerge';
 const BATCH = 200;
 let timer = 0;
 let syncing = false;
+let again = false;
 
 export function scheduleDeviceSync(): void {
   if (!syncEnabled() || timer) return;
@@ -61,24 +62,32 @@ function pump(access: string, since: number, pending: SyncRecord[]): Promise<str
   });
 }
 
+function finish(status: string): Promise<string> {
+  syncing = false;
+  if (!again) return Promise.resolve(status);
+  again = false;
+  return runDeviceSync();
+}
+
 export function runDeviceSync(): Promise<string> {
   if (!syncEnabled()) return Promise.resolve('off');
   const session = billingSession();
   const access = session && (session.access || session.token);
   if (!access) return Promise.resolve('local');
-  if (syncing) return Promise.resolve('busy');
+  if (syncing) {
+    again = true;
+    if (timer) {
+      clearTimeout(timer);
+      timer = 0;
+    }
+    return Promise.resolve('busy');
+  }
   syncing = true;
   const epoch = noteSyncAccount(session && session.id ? session.id : access.slice(0, 16));
   const pending = unsentRecords(epoch);
   return pump(access, syncCursor(), pending).then(
-    (status) => {
-      syncing = false;
-      return status;
-    },
-    () => {
-      syncing = false;
-      return 'error';
-    },
+    (status) => finish(status),
+    () => finish('error'),
   );
 }
 
