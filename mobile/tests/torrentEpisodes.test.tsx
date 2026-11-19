@@ -8,6 +8,7 @@ import { currentRoute, resetTo, navigate } from '../src/nav';
 import { reloadTvs } from '../src/tv/tvStore';
 import { setCatalogClientForTests } from '../src/catalog/phoneCatalog';
 import { resetEpisodeNames } from '../../src/lib/episodeNames';
+import { resetSeriesMatches } from '../../src/lib/seriesMatch';
 import { addServer, setActiveServer, servers, removeServer } from '../../src/store/servers';
 import { torrents } from '../../src/store/library';
 import { reloadProgress, serverViewed } from '../../src/store/progress';
@@ -77,6 +78,7 @@ beforeEach(() => {
   reloadTvs();
   reloadProgress();
   resetEpisodeNames();
+  resetSeriesMatches();
   for (const s of servers.value.slice()) removeServer(s.id);
   setActiveServer(addServer({ url: 'http://srv:8090' }).id);
   torrents.value = [s2];
@@ -227,10 +229,12 @@ describe('Torrent: TMDB episode names', () => {
     setCatalogClientForTests(c);
     mount();
     await flush();
+    const calls = c.search.mock.calls.length;
+    expect(calls).toBeGreaterThan(0);
     act(() => render(null, el));
     mount();
     await flush();
-    expect(c.search).toHaveBeenCalledTimes(1);
+    expect(c.search).toHaveBeenCalledTimes(calls);
   });
 });
 

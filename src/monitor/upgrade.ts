@@ -6,6 +6,7 @@
 // the new torrent's files matched by episode (replace.ts mapFiles), so «Продолжить» lands on the same episode. Pure
 // selection plus a cancellable search; Chromium 53 safe.
 import { guessCategory } from '../lib/categoryGuess';
+import { ru } from '../i18n/ru';
 import type { TorrentFile } from '../lib/episodes';
 import { displayTitle } from '../lib/torrentName';
 import { parseRelease } from '../sources/filters';
@@ -55,7 +56,7 @@ export function anotherReleaseQuery(name: string, season: number): string {
   const q = (name || '').replace(/\s+/g, ' ').trim();
   if (!q) return '';
   if (!season) return q;
-  return q + ' ' + season + ' сезон';
+  return q + ' ' + ru.filters.season.replace('{n}', String(season));
 }
 
 /**
