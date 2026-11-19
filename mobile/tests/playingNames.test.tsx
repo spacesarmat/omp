@@ -10,7 +10,7 @@ import { setCatalogClientForTests } from '../src/catalog/phoneCatalog';
 import { resetEpisodeNames } from '../../src/lib/episodeNames';
 import { matchSeries, resetSeriesMatches } from '../../src/lib/seriesMatch';
 import { singleGroup } from '../../src/lib/seriesGroups';
-import { episodeLine, launchLabel, looksLikeName, torrentName } from '../src/lib/playingNames';
+import { episodeLine, launchLabel, looksLikeName, nextCardTitle, readableFileLabel, torrentName } from '../src/lib/playingNames';
 import { torrentName as tvTorrentName } from '../../src/lib/cleanNames';
 import { miniTitle } from '../src/ui/MiniPlayer';
 import { torrents } from '../../src/store/library';
@@ -90,6 +90,10 @@ describe('playing names', () => {
     expect(looksLikeName('Тишина в эфире')).toBe(true);
     expect(looksLikeName('Dark Matter S02E01 1080p WEB-DL RGzsRutracker')).toBe(false);
     expect(looksLikeName('Dark.Matter.mkv')).toBe(false);
+    expect(nextCardTitle('Show.S01E02.mkv')).toBe('2 серия');
+    expect(nextCardTitle('S02E04 · Граница')).toBe('4 серия · Граница');
+    expect(readableFileLabel('Show - 01 [1080p]')).toBe('Show - 01');
+    expect(readableFileLabel('Show - 02 [1080p]')).toBe('Show - 02');
   });
 
   it('the mini player line: the episode name when real, else the code with the series; a film by its name', () => {

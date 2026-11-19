@@ -234,7 +234,7 @@ function Body({ card }: { card: CatalogCard }) {
         </div>
       </div>
       {!tv && <ReleaseLine card={card} />}
-      <div class={tv ? 'm-tc-actions m-tc-actions-row' : 'm-tc-actions'}>
+      <div class={tv && !hash ? 'm-tc-actions m-tc-actions-row' : 'm-tc-actions'}>
         {tv && (spot || hash) ? (
           <button type="button" class="m-btn m-btn-primary" onClick={watch}>
             {activeTv.value ? t('news.watchOnTv') : t('nav.watchOnPhone')}

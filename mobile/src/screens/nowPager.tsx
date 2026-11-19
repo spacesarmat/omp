@@ -8,7 +8,7 @@ import type { TorrentFile } from '../../../src/lib/episodes';
 import { baseName, episodeLabel, parseEpisode, playableFiles, stripExt } from '../../../src/lib/episodes';
 import { getLocalProgress } from '../../../src/store/progress';
 import { torrents } from '../../../src/store/library';
-import { episodeLine, libraryTorrent, looksLikeName } from '../lib/playingNames';
+import { episodeLine, libraryTorrent, readableFileLabel } from '../lib/playingNames';
 import { realEpisodeName } from '../../../src/lib/episodeNames';
 import { displayBadge, parseReleaseInfo } from '../../../src/lib/releaseInfo';
 import { useTmdbEpisodes } from '../../../src/lib/useTmdbEpisodes';
@@ -66,7 +66,7 @@ function EpisodeRow({ file, tmdbName, on, onPlay, withSeason }: { file: TorrentF
   playRef.current = onPlay;
   const code = episodeLabel(file.path);
   const name = stripExt(baseName(file.path));
-  const label = code ? episodeLine(code, tmdbName, withSeason) : (looksLikeName(name) ? name : '');
+  const label = code ? episodeLine(code, tmdbName, withSeason) : readableFileLabel(name);
   const quality = displayBadge(parseReleaseInfo(file.path).resolution || '');
   useEffect(() => {
     const node = ref.current;
@@ -328,7 +328,7 @@ export function NowDeck({
         file: file.id,
         at: sharedResume(hash, file.id),
         duration: getLocalProgress(hash, file.id)?.duration || undefined,
-        label: code ? episodeLine(code, '') : (looksLikeName(stripExt(baseName(file.path))) ? stripExt(baseName(file.path)) : ''),
+        label: code ? episodeLine(code, '') : readableFileLabel(stripExt(baseName(file.path))),
         files: tor ? filesOf(tor) : undefined,
         season: season !== null ? season : undefined,
         onError: setLaunchError,
