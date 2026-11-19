@@ -61,17 +61,6 @@ export function fixPlaceholderTitles(c: TitleClient, list: Torrent[], now: numbe
  * (omp.rt) so quality and season checks still see it. A title the person typed (omp.nm) is left as it is.
  * Without setData, or when the data is not a JSON object, nothing is written.
  */
-function freshOf(c: TitleClient, t: Torrent): Promise<Torrent> {
-  if (!c.list) return Promise.resolve(t);
-  return c.list().then(
-    (all) => {
-      const hit = (all || []).filter((x) => !!x && String(x.hash).toLowerCase() === t.hash.toLowerCase())[0];
-      return hit || t;
-    },
-    () => t,
-  );
-}
-
 export function cleanReleaseTitles(c: TitleClient, list: Torrent[], now: number = Date.now()): Promise<{ hash: string; title: string; data: string }[]> {
   const todo: Torrent[] = [];
   if (!c.setData) return Promise.resolve([]);
@@ -89,23 +78,21 @@ export function cleanReleaseTitles(c: TitleClient, list: Torrent[], now: number 
     .reduce(
       (p, t) =>
         p.then(() =>
-          enqueueTorrentWrite(t.hash, () =>
-            freshOf(c, t).then((cur) => {
-              if (nameLocked(cur.data)) return;
-              const title = cleanStoredTitle(cur);
-              const parsed = parseData(cur.data);
-              if (!title || !parsed || !c.setData) return;
-              const raw = displayTitle(cur);
-              rememberRawTitle(cur.hash, raw);
-              const data = serializeData(withReleaseMeta(parsed.obj, raw, false), parsed.journal);
-              return c.setData({ hash: cur.hash, title: cur.title || '', poster: cur.poster, category: cur.category }, data).then(() =>
-                c.setTitle(cur, title).then(() => {
-                  cleaned[cur.hash].ok = true;
-                  done.push({ hash: cur.hash, title, data });
-                }),
-              );
-            }),
-          ).then(
+          enqueueTorrentWrite(t.hash, () => {
+            if (nameLocked(t.data) || !c.setData) return Promise.resolve();
+            const title = cleanStoredTitle(t);
+            const parsed = parseData(t.data);
+            if (!title || !parsed) return Promise.resolve();
+            const raw = displayTitle(t);
+            rememberRawTitle(t.hash, raw);
+            const data = serializeData(withReleaseMeta(parsed.obj, raw, false), parsed.journal);
+            return c.setData({ hash: t.hash, title: t.title || '', poster: t.poster, category: t.category }, data).then(() =>
+              c.setTitle(t, title).then(() => {
+                cleaned[t.hash].ok = true;
+                done.push({ hash: t.hash, title, data });
+              }),
+            );
+          }).then(
             () => undefined,
             () => undefined,
           ),

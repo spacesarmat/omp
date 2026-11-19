@@ -17,7 +17,7 @@ const matches = new Map<string, CatalogCard | null>();
 const SAVED_KEY = 'tsp.seriesTmdb';
 const SAVED_TTL = 7 * 24 * 60 * 60 * 1000;
 const SAVED_MAX = 400;
-interface Saved { id: number; s: string; at: number; }
+interface Saved { id: number; s: string; at: number; m?: boolean; }
 let saved: { [k: string]: Saved } | null = null;
 
 function savedMap(): { [k: string]: Saved } {
@@ -25,8 +25,10 @@ function savedMap(): { [k: string]: Saved } {
   const raw = loadJson<{ [k: string]: unknown }>(SAVED_KEY, {}, isObject);
   const out: { [k: string]: Saved } = {};
   Object.keys(raw).forEach((k) => {
-    const v = raw[k] as { id?: unknown; s?: unknown; at?: unknown } | null;
-    if (v && typeof v.id === 'number' && v.id >= 0 && typeof v.at === 'number') out[k] = { id: v.id, s: typeof v.s === 'string' ? v.s : '', at: v.at };
+    const v = raw[k] as { id?: unknown; s?: unknown; at?: unknown; m?: unknown } | null;
+    if (v && typeof v.id === 'number' && v.id >= 0 && typeof v.at === 'number') {
+      out[k] = { id: v.id, s: typeof v.s === 'string' ? v.s : '', at: v.at, m: v.m === true };
+    }
   });
   saved = out;
   return out;
@@ -38,9 +40,15 @@ function savedOf(key: string): Saved | null {
   return v && age >= 0 && age < SAVED_TTL ? v : null;
 }
 
-function remember(key: string, card: CatalogCard | null): void {
+function remember(key: string, card: CatalogCard | null, manual?: boolean): void {
   const map = savedMap();
-  map[key] = { id: card ? card.id : 0, s: card && card.status ? card.status : '', at: Date.now() };
+  const prev = map[key];
+  map[key] = {
+    id: card ? card.id : 0,
+    s: card && card.status ? card.status : '',
+    at: Date.now(),
+    m: manual === true || !!(prev && prev.m && manual !== false),
+  };
   const keys = Object.keys(map);
   if (keys.length > SAVED_MAX) {
     keys.sort((a, b) => map[a].at - map[b].at).slice(0, keys.length - SAVED_MAX).forEach((k) => delete map[k]);
@@ -87,7 +95,9 @@ export function matchSeries(g: SeriesGroup, opts?: { force?: boolean }): Promise
       matches.set(key, null);
       return null;
     }
-    const found = hit ? Promise.resolve({ id: hit.id }) : known ? Promise.resolve({ id: known.id }) : findShow(c, displayTitle(g.named), groupYear(g));
+    const found = (known && known.m && known.id) || (hit && known && known.m)
+      ? Promise.resolve({ id: known && known.id ? known.id : hit ? hit.id : 0 })
+      : hit ? Promise.resolve({ id: hit.id }) : known ? Promise.resolve({ id: known.id }) : findShow(c, displayTitle(g.named), groupYear(g));
     return found.then((show) => {
       if (!show) {
         matches.set(key, null);
@@ -152,6 +162,17 @@ export function requestSeriesMatch(g: SeriesGroup): void {
 export function seriesMatchFailed(key: string): boolean {
   const failed = failedAt.get(cacheKey(key));
   return failed !== undefined && Date.now() - failed < RETRY_MS;
+}
+
+/** The person picked this show («Не тот сериал?»). Later lookups keep it. */
+export function chooseSeries(g: SeriesGroup, id: number): Promise<CatalogCard | null> {
+  const key = cacheKey(g.key);
+  return activeCatalog().then((c) => c.card('tv', id).then((card) => {
+    matches.set(key, card);
+    remember(key, card, true);
+    seriesMatchVersion.value++;
+    return card;
+  }));
 }
 
 /** Tests: forget every match. */

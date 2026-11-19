@@ -761,7 +761,7 @@ describe('TV launch flow', () => {
     await flush();
     click('[aria-label="Переименовать"]');
     const input = el.querySelector('#rename-title') as HTMLInputElement;
-    expect(input.value).toBe('Starbound Frontier S02 1080p WEB-DL');
+    expect(input.value).toBe('Starbound Frontier');
     act(() => {
       input.value = '   ';
       input.dispatchEvent(new Event('input', { bubbles: true }));

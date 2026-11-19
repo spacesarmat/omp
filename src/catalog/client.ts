@@ -9,10 +9,10 @@ import type { SourceHttp } from '../sources/types';
 import { loadJson, isObject } from '../store/storage';
 import { lang } from '../i18n';
 import {
-  releaseRegions, noveltiesUrl, discoverUrl, searchUrl, cardUrl, personUrl, personBioUrl, seasonUrl, similarUrl, postersUrl,
+  releaseRegions, noveltiesUrl, discoverUrl, searchUrl, cardUrl, personUrl, personBioUrl, seasonUrl, similarUrl, collectionUrl, postersUrl,
   homeListUrl, homeListKind, homeSectionIds,
-  sanitizeList, sanitizeCard, sanitizePerson, sanitizePersonBio, sanitizeSeason, sanitizeSimilar, sanitizePosters,
-  type Kind, type CatalogTitle, type CatalogCard, type PersonCard, type SeasonDetails, type TmdbEndpoint,
+  sanitizeList, sanitizeCard, sanitizePerson, sanitizePersonBio, sanitizeSeason, sanitizeSimilar, sanitizeCollection, sanitizePosters,
+  type Kind, type CatalogTitle, type CatalogCard, type PersonCard, type SeasonDetails, type TmdbEndpoint, type CollectionPart,
   type HomeSection, type TrendingWindow,
 } from './tmdb';
 import { digitalSoonItems, type DiscoverQuery } from './discoverQuery';
@@ -37,6 +37,8 @@ export interface CatalogClient {
   season(id: number, n: number, opts?: SeasonOpts): Promise<SeasonDetails>;
   /** Recommendations of a title. */
   similar(kind: Kind, id: number): Promise<CatalogTitle[]>;
+  /** Films of a TMDB collection, in the order TMDB sent them. Optional for older test doubles. */
+  collection?(id: number): Promise<CollectionPart[]>;
   /** Poster variants of a title, or of one season. */
   posters(kind: Kind, id: number, season?: number): Promise<string[]>;
 }
@@ -416,6 +418,11 @@ export function createCatalogClient(
       let e: TmdbEndpoint;
       try { e = need(); } catch (err) { return Promise.reject(err); }
       return fetchJson(similarUrl(e, kind, id), LIST_TTL, (raw) => sanitizeSimilar(e, raw, kind));
+    },
+    collection(id) {
+      let e: TmdbEndpoint;
+      try { e = need(); } catch (err) { return Promise.reject(err); }
+      return fetchJson(collectionUrl(e, id), CARD_TTL, (raw) => sanitizeCollection(e, raw));
     },
     posters(kind, id, season) {
       let e: TmdbEndpoint;

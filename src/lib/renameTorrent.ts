@@ -28,7 +28,9 @@ export function renameTorrent(c: RenameClient, tor: Pick<Torrent, 'hash' | 'post
   const v = checkTitle(raw);
   if (!v.ok) return Promise.reject(new Error(v.error));
   rememberRawTitle(tor.hash, tor.title || '');
-  return enqueueTorrentWrite(tor.hash, () => {
+  const old = displayTitle(tor);
+  const note = () => {
+    if (!c.setData) return Promise.resolve();
     const read = c.list ? c.list().then(
       (all) => (all || []).filter((x) => !!x && String(x.hash).toLowerCase() === tor.hash.toLowerCase())[0] || null,
       () => null,
@@ -36,10 +38,16 @@ export function renameTorrent(c: RenameClient, tor: Pick<Torrent, 'hash' | 'post
     return read.then((cur) => {
       const base = cur || tor;
       const parsed = parseData(base.data);
-      if (!parsed || !c.setData) return c.setTitle(tor, v.title);
-      const old = displayTitle(base);
+      if (!parsed || !c.setData) return;
       const data = serializeData(withReleaseMeta(parsed.obj, old !== v.title ? old : '', true), parsed.journal);
-      return c.setData({ hash: tor.hash, title: v.title, poster: base.poster, category: base.category }, data);
+      return c.setData({ hash: tor.hash, title: v.title, poster: base.poster || '', category: base.category || '' }, data).then(
+        () => undefined,
+        () => undefined,
+      );
     });
-  }).then(() => v.title);
+  };
+  return enqueueTorrentWrite(tor.hash, () => c.setTitle(tor, v.title)).then(() => {
+    void enqueueTorrentWrite(tor.hash, note);
+    return v.title;
+  });
 }

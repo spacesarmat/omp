@@ -18,7 +18,7 @@ import { loadSubs, sameQuery } from '../../../../src/monitor/subs';
 import { monitorVersion } from '../../monitor/ui';
 import { WantSheet } from './WantSheet';
 import { catalogErrorCode, type CatalogErrorCode } from '../../../../src/catalog/client';
-import { torrentQuery, type CatalogCard, type CatalogTitle, type Kind, type Season } from '../../../../src/catalog/tmdb';
+import { torrentQuery, type CatalogCard, type CatalogTitle, type CollectionPart, type Kind, type Season } from '../../../../src/catalog/tmdb';
 import { phoneCatalog } from '../../catalog/phoneCatalog';
 import { artKey, artVersion, pickedArt, saveArt } from '../../catalog/artPick';
 import { CatalogError } from './CatalogError';
@@ -129,6 +129,38 @@ function SeasonRow({ card, season }: { card: CatalogCard; season: Season }) {
         {unreleased && season.airDate && <span class="m-small m-accent">{airDateText(season.airDate)}</span>}
       </span>
     </button>
+  );
+}
+
+function CollectionBlock({ id, name }: { id: number; name: string }) {
+  const [parts, setParts] = useState<CollectionPart[]>([]);
+  const [byYear, setByYear] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    phoneCatalog().then((c) => (c.collection ? c.collection(id) : [])).then(
+      (list) => { if (alive) setParts(list); },
+      () => undefined,
+    );
+    return () => { alive = false; };
+  }, [id]);
+  if (!parts.length) return null;
+  const shown = byYear ? parts.slice().sort((a, b) => (a.year || 9999) - (b.year || 9999)) : parts.slice();
+  return (
+    <section class="m-tc-section" data-collection={id}>
+      <h2>{name}</h2>
+      <button type="button" class="m-btn-text" onClick={() => setByYear(!byYear)}>
+        {byYear ? t('titleCard.orderStory') : t('titleCard.orderRelease')}
+      </button>
+      <div class="m-tc-similar">
+        {shown.map((item) => (
+          <button key={item.id} type="button" class="m-tc-similar-item" onClick={() => navigate({ name: 'title', kind: 'movie', id: item.id })}>
+            {item.poster ? <img src={item.poster} alt="" width={92} height={138} /> : <span class="m-tc-season-ph" />}
+            <span class="m-small m-tc-similar-title">{item.title + (item.year ? ' (' + item.year + ')' : '')}</span>
+          </button>
+        ))}
+      </div>
+      <button type="button" class="m-btn" onClick={() => navigate({ name: 'add', query: name, run: true })}>{t('titleCard.watchAll')}</button>
+    </section>
   );
 }
 
@@ -258,6 +290,8 @@ function Body({ card }: { card: CatalogCard }) {
       ) : (
         <CastStrip cast={card.cast} />
       )}
+      {!tv && card.collection && <CollectionBlock id={card.collection.id} name={card.collection.name} />}
+      {!tv && <Similar kind="movie" id={card.id} />}
       {artOpen && (
         <PosterSheet
           urls={variants}

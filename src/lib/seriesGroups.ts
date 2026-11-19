@@ -6,6 +6,7 @@ import { parseEpisodeRange } from '../monitor/episodes';
 import { guessCategory } from './categoryGuess';
 import { displayTitle, torrentFiles } from './torrentName';
 import { releaseText } from './keptQuality';
+import { cachedSeriesMatch } from './seriesMatch';
 import { parseEpisode, playableFiles } from './episodes';
 import { filterTorrents } from './librarySearch';
 import { lang, tp, CYRILLIC_LANGS } from '../i18n';
@@ -231,6 +232,60 @@ export function groupLibrary(list: Torrent[], query = ''): LibraryItem[] {
     done[k] = true;
     out.push(makeGroup(k, members));
   });
+  return mergeByShow(out);
+}
+
+function showIdOf(key: string): number {
+  const card = cachedSeriesMatch(key);
+  return card && card.id ? card.id : 0;
+}
+
+function uniqMembers(list: Torrent[]): Torrent[] {
+  const seen: { [h: string]: boolean } = {};
+  const out: Torrent[] = [];
+  list.forEach((t) => {
+    if (seen[t.hash]) return;
+    seen[t.hash] = true;
+    out.push(t);
+  });
+  return out;
+}
+
+/** Series that resolved to the same TMDB show become one card, including a lone torrent of that show. */
+function mergeByShow(items: LibraryItem[]): LibraryItem[] {
+  const seriesOfId: { [id: number]: SeriesGroup[] } = {};
+  const loneOfId: { [id: number]: Torrent[] } = {};
+  items.forEach((it) => {
+    if (it.kind === 'series') {
+      const id = showIdOf(it.key);
+      if (id) (seriesOfId[id] = seriesOfId[id] || []).push(it);
+      return;
+    }
+    const g = singleGroup(it.tor);
+    if (!g) return;
+    const id = showIdOf(g.key);
+    if (id) (loneOfId[id] = loneOfId[id] || []).push(it.tor);
+  });
+  const used: { [id: number]: boolean } = {};
+  const out: LibraryItem[] = [];
+  items.forEach((it) => {
+    const g = it.kind === 'series' ? it : singleGroup(it.tor);
+    const id = g ? showIdOf(g.key) : 0;
+    const groups = id ? seriesOfId[id] || [] : [];
+    const lone = id ? loneOfId[id] || [] : [];
+    const join = groups.length > 1 || lone.length > 1 || (groups.length > 0 && lone.length > 0);
+    if (!id || !join) {
+      out.push(it);
+      return;
+    }
+    if (used[id]) return;
+    used[id] = true;
+    let members: Torrent[] = [];
+    groups.forEach((s) => { members = members.concat(s.members); });
+    members = uniqMembers(members.concat(lone));
+    const key = groups.length ? groups[0].key : g!.key;
+    out.push(makeGroup(key, members));
+  });
   return out;
 }
 
@@ -245,7 +300,15 @@ export function findGroup(list: Torrent[], key: string): SeriesGroup | null {
     if (keys[i] && namesOf(list[i]).indexOf(key) >= 0) own = keys[i];
   }
   if (!own) return null;
-  const members = list.filter((_, i) => keys[i] === own);
+  let members = list.filter((_, i) => keys[i] === own);
+  const id = showIdOf(own);
+  if (id) {
+    list.forEach((tor) => {
+      if (members.some((m) => m.hash === tor.hash)) return;
+      const g = singleGroup(tor);
+      if (g && showIdOf(g.key) === id) members.push(tor);
+    });
+  }
   return makeGroup(own, members);
 }
 

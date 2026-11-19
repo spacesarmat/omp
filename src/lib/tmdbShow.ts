@@ -31,11 +31,37 @@ export function showQueries(title: string, uiLang: string = lang.peek()): string
   return out.filter((q) => !CYRILLIC.test(q)).concat(out.filter((q) => CYRILLIC.test(q)));
 }
 
-/** A series of that year among the items, else the first series; films never match. */
-export function pickShow(items: CatalogTitle[], year: number): CatalogTitle | null {
+function fold(s: string): string {
+  return (s || '').toLowerCase().replace(/\u0451/g, '\u0435').replace(/[^a-z0-9\u0400-\u04ff]+/g, ' ').trim();
+}
+
+/**
+ * The show that fits the query. An exact title beats a longer one that only contains the word
+ * (Marvel «Loki» over an anime whose name also contains it). The asked year beats a different year.
+ * Films never match.
+ */
+export function pickShow(items: CatalogTitle[], year: number, query?: string): CatalogTitle | null {
   const shows = items.filter((x) => x.kind === 'tv');
-  const same = year ? shows.filter((x) => x.year === year)[0] : undefined;
-  return same || shows[0] || null;
+  if (!shows.length) return null;
+  const q = fold(query || '');
+  let best: CatalogTitle | null = null;
+  let bestScore = -1;
+  for (let i = 0; i < shows.length; i++) {
+    const s = shows[i];
+    let score = s.rating || 0;
+    const title = fold(s.title);
+    const original = fold(s.original);
+    if (q && (title === q || original === q)) score += 100;
+    else if (q && (title.indexOf(q) >= 0 || (original && original.indexOf(q) >= 0))) score += 40;
+    if (year && s.year === year) score += 50;
+    else if (year && s.year && Math.abs(s.year - year) === 1) score += 20;
+    else if (year && s.year && Math.abs(s.year - year) > 1) score -= 40;
+    if (score > bestScore) {
+      bestScore = score;
+      best = s;
+    }
+  }
+  return best;
 }
 
 /** The first show found by the queries in turn; null when none finds one. Rejects when TMDB cannot be reached. */
@@ -43,7 +69,7 @@ export function findShow(c: Searcher, title: string, year: number): Promise<Cata
   const queries = showQueries(title);
   const next = (i: number): Promise<CatalogTitle | null> => {
     if (i >= queries.length) return Promise.resolve(null);
-    return c.search(queries[i], 1).then((r) => pickShow(r.items, year) || next(i + 1));
+    return c.search(queries[i], 1).then((r) => pickShow(r.items, year, queries[i]) || next(i + 1));
   };
   return next(0);
 }

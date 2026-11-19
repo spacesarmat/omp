@@ -99,7 +99,7 @@ describe('Library posters', () => {
     mount();
     for (let i = 0; i < 8; i++) await flush();
     // the series and the first film: their own kind, then the multi search; the second film is found among films
-    const paths = tmdb.mock.calls.map((c) => /\/3\/search\/([a-z]+)/.exec(String(c[0]))![1]);
+    const paths = tmdb.mock.calls.map((c) => /\/3\/search\/([a-z]+)/.exec(String(c[0]))).filter((m) => !!m).map((m) => m[1]);
     expect(paths).toEqual(['tv', 'multi', 'movie', 'multi', 'movie']);
     expect(setPoster).toHaveBeenCalledTimes(1);
     expect(torrents.value.find((t) => t.hash === 'h3')!.poster).toBe('https://imagetmdb.com/t/p/' + posterImageSize() + '/n.jpg');
@@ -111,7 +111,7 @@ describe('Library posters', () => {
     act(() => render(null, el));
     mount();
     for (let i = 0; i < 8; i++) await flush();
-    expect(tmdb).toHaveBeenCalledTimes(5);
+    expect(tmdb.mock.calls.filter((c) => /\/3\/search\//.test(String(c[0]))).length).toBe(5);
   });
 
   it('tries the old list format, a week-old try and a new TMDB key again', async () => {
