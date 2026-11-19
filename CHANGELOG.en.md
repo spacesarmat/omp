@@ -6,6 +6,10 @@ The English translation covers the latest versions only; the full history (in Ru
 
 ## Unreleased
 
+- [phone] Settings rows share one height inside grouped cards, and a row that opens a screen has a chevron. The update check no longer splits the card
+- [phone] Help: "Did it help?" sits with Useful and Not useful, with a gap between them. The action under an answer is full width
+- [phone] A Discover title that is already in the library has an In library button that opens that release
+- [phone] The player next-episode card and the episode list show the episode code and the TMDB title. File names are left out. A quality badge sits on the right, and the title stays within two lines
 - [phone] Several releases of one series that resolve to the same TMDB show are one card. The series card has "Not this series?": another match can be chosen and is remembered
 - [phone] A film card shows the TMDB collection it belongs to, similar films, and "Watch all". Part order switches between the collection order and release year
 - [phone] In My, a film or series is named without the release tail: "Loki", not "Loki (season 2: episodes 1-6 of 6) / Loki". Season and episodes stay on the line under the name. Raw titles already in the library are rewritten the same way, and the original string stays on the torrent, so the quality badge, the season and the better-quality check still see it. A name the person typed is not rewritten

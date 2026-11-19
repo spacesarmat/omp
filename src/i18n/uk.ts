@@ -2704,6 +2704,7 @@ export const uk: typeof ru = {
     phoneServer: "TorrServer на телефоні",
     logs: "Діагностика",
     didIt: "Вийшло?",
+    helped: "Допомогло?",
     device: "Пристрій",
     dev: {
       lg: "Телевізор LG",

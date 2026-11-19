@@ -2828,6 +2828,7 @@ export const kk: EnDict<typeof ru> = {
     phoneServer: "Сіздің ұялы телефоныңыздағы TorrServer",
     logs: "Диагноз",
     didIt: "Жұмыс істеді ме?",
+    helped: "Көмектесті ме?",
     device: "Құрылғы",
     dev: {
       lg: "LG теледидары",

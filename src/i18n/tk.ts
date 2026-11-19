@@ -2828,6 +2828,7 @@ export const tk: EnDict<typeof ru> = {
     phoneServer: "TorrServer mobil telefonda",
     logs: "Diaqnoz",
     didIt: "Ol işledi mi?",
+    helped: "Kömek etdimi?",
     device: "Enjam",
     dev: {
       lg: "LG telewizory",

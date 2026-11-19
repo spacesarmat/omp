@@ -38,6 +38,15 @@ export function libraryIndex(torrents: { title: string }[]): Set<string> {
   return idx;
 }
 
+/** The first torrent hash that matches the title (or its original name). '' when none. */
+export function libraryTitleHash(list: { title: string; hash?: string }[], t: { title: string; original: string; year: number }): string {
+  for (let i = 0; i < list.length; i++) {
+    const tr = list[i];
+    if (tr.hash && inLibrary(libraryIndex([tr]), t)) return tr.hash;
+  }
+  return '';
+}
+
 /** True when the title or its original name (with the year, or with the year unknown) is in the index. */
 export function inLibrary(idx: Set<string>, t: { title: string; original: string; year: number }): boolean {
   const names = [t.title, t.original];

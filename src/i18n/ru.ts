@@ -2791,6 +2791,7 @@ export const ru = {
     phoneServer: 'TorrServer на телефоне',
     logs: 'Диагностика',
     didIt: 'Получилось?',
+    helped: 'Помогло?',
     device: 'Устройство',
     dev: { lg: 'Телевизор LG', atv: 'Android TV', phone: 'Телефон', server: 'TorrServer', common: 'Общее' },
     sec: { install: 'Установка', connect: 'Подключение', player: 'Плеер', trouble: 'Частые проблемы', setup: 'Поиск и настройка', about: 'О проекте', log: 'Журнал и резервная копия', news: 'Новое и подписки' },

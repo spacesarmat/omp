@@ -304,7 +304,10 @@ describe('TitleCard: series', () => {
     mount(<TitleCard kind="tv" id={21} />);
     await flush();
     expect(button('Смотреть на телефоне')).toBeTruthy();
+    expect(button('В медиатеке')).toBeTruthy();
     expect(button('Найти раздачи')).toBeUndefined();
+    act(() => button('В медиатеке')!.click());
+    expect(currentRoute.value).toEqual({ name: 'torrent', hash: 'h-s1' });
   });
 
   it('creators and actors are separate strips', async () => {

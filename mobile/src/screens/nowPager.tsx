@@ -8,8 +8,9 @@ import type { TorrentFile } from '../../../src/lib/episodes';
 import { baseName, episodeLabel, parseEpisode, playableFiles, stripExt } from '../../../src/lib/episodes';
 import { getLocalProgress } from '../../../src/store/progress';
 import { torrents } from '../../../src/store/library';
-import { episodeLine, libraryTorrent } from '../lib/playingNames';
+import { episodeLine, libraryTorrent, readableFileLabel } from '../lib/playingNames';
 import { realEpisodeName } from '../../../src/lib/episodeNames';
+import { displayBadge, parseReleaseInfo } from '../../../src/lib/releaseInfo';
 import { useTmdbEpisodes } from '../../../src/lib/useTmdbEpisodes';
 import { sharedResume } from '../lib/sharedProgress';
 import { navigate } from '../nav';
@@ -65,7 +66,8 @@ function EpisodeRow({ file, tmdbName, on, onPlay, withSeason }: { file: TorrentF
   playRef.current = onPlay;
   const code = episodeLabel(file.path);
   const name = stripExt(baseName(file.path));
-  const label = code ? episodeLine(code, tmdbName || (name && name !== code ? name : ''), withSeason) : name;
+  const label = code ? episodeLine(code, tmdbName, withSeason) : readableFileLabel(name);
+  const quality = displayBadge(parseReleaseInfo(file.path).resolution || '');
   useEffect(() => {
     const node = ref.current;
     if (!node) return;
@@ -132,6 +134,7 @@ function EpisodeRow({ file, tmdbName, on, onPlay, withSeason }: { file: TorrentF
           <Icon d={ICONS.collapse} size={14} />
         </span>
         <span class="m-now-ep-title">{label}</span>
+        {quality ? <span class="m-now-ep-q">{quality}</span> : null}
         <span class="m-now-ep-chev right" aria-hidden="true">
           <Icon d={ICONS.collapse} size={14} />
         </span>
@@ -325,7 +328,7 @@ export function NowDeck({
         file: file.id,
         at: sharedResume(hash, file.id),
         duration: getLocalProgress(hash, file.id)?.duration || undefined,
-        label: code ? episodeLine(code, stripExt(baseName(file.path))) : stripExt(baseName(file.path)),
+        label: code ? episodeLine(code, '') : readableFileLabel(stripExt(baseName(file.path))),
         files: tor ? filesOf(tor) : undefined,
         season: season !== null ? season : undefined,
         onError: setLaunchError,

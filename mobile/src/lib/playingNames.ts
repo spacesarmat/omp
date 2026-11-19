@@ -6,7 +6,7 @@ import { t } from '../../../src/i18n';
 import type { Torrent } from '../../../src/api/types';
 import type { PlayerState } from '../../../src/phone/protocol';
 import { displayTitle } from '../ui/displayTitle';
-import { episodeLabel, parseEpisode, spansSeasons } from '../../../src/lib/episodes';
+import { episodeLabel, parseEpisode, playableFiles, spansSeasons } from '../../../src/lib/episodes';
 import { libraryTitle } from '../../../src/lib/libraryView';
 import { parseTorrentData } from '../../../src/api/torrserver';
 import { seriesMatchVersion } from '../../../src/lib/seriesMatch';
@@ -43,10 +43,37 @@ export function looksLikeName(title: string): boolean {
   return !!s && !FILE_EXT.test(s) && !episodeLabel(s) && !/\b(1080p|2160p|720p|WEB-?DL|BDRip|HDTV)\b/i.test(s);
 }
 
+/** A file name with the quality tags taken out. A number in parentheses stays, so two files stay distinct. */
+export function readableFileLabel(name: string): string {
+  const cleaned = (name || '')
+    .replace(/\b(?:\d{3,4}p|4k|uhd|web-?dl|bdrip|hdtv)\b/gi, ' ')
+    .replace(/\[([^[\]]*)\]|\(([^()]*)\)/g, (all, bracket, paren) => {
+      const inner = String(bracket ?? paren ?? '').replace(/[\s._,\-+/]+/g, '');
+      return inner ? all : ' ';
+    })
+    .replace(/[._]+/g, ' ')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+  return cleaned || (name || '').trim();
+}
+
+/** The next-episode card. A rejected file name is not a title: only a real name or the episode code. */
+export function nextCardTitle(raw: string, tmdbName = ''): string {
+  const s = (raw || '').trim();
+  const code = episodeLabel(s);
+  if (code) {
+    if (tmdbName) return episodeLine(code, tmdbName);
+    const rest = s.replace(new RegExp(code.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'), '').replace(/^[\s.·-]+|[\s.·-]+$/g, '');
+    return episodeLine(code, looksLikeName(rest) ? rest : '');
+  }
+  return looksLikeName(s) ? s : readableFileLabel(s);
+}
+
 /**
  * «1 серия · Спокойная жизнь». The season is added only when the release has more than one
  * (`withSeason`), so a single-season pack stays short. A code that is not SxxEyy is kept as written.
  */
+
 export function episodeLine(code: string, name: string, withSeason = false): string {
   const human = humanEpisodeCode(code, withSeason);
   return [human || code, realEpisodeName(name)].filter(Boolean).join(' · ');
@@ -152,6 +179,41 @@ export function usePlayingPoster(s: PlayerState | null): string {
  * library torrent when it is in «Мои» (TMDB's names once known), else from what the TV sent, raw tracker titles and
  * file names cut down to the short name and the episode code.
  */
+/** The next video the player will open, skipping subtitles and other files that do not play. */
+export function nextPlayablePath(tor: Torrent | undefined, file: number | undefined): string {
+  if (!tor || file === undefined) return '';
+  const all = tor.file_stats && tor.file_stats.length ? tor.file_stats : parseTorrentData(tor.data);
+  const files = playableFiles(all);
+  const i = files.findIndex((f) => f.id === file);
+  return i >= 0 && files[i + 1] ? files[i + 1].path : '';
+}
+
+/** The next episode: TMDB name of the following file when the release is in the library, else a cleaned TV title. */
+export function useNextEpisodeTitle(s: PlayerState | null): string {
+  void torrents.value;
+  const tor = s ? libraryTorrent(s.hash) : undefined;
+  const path = nextPlayablePath(tor, s ? s.file : undefined);
+  const [tmdb, setTmdb] = useState<{ key: string; name: string }>({ key: '', name: '' });
+  const key = (tor ? tor.hash : '') + ':' + path;
+  useEffect(() => {
+    if (!tor || !path) return;
+    let alive = true;
+    episodeNameOf(tor, path).then((name) => {
+      if (alive) setTmdb({ key, name });
+    });
+    return () => {
+      alive = false;
+    };
+  }, [key]);
+  if (!s || !s.next) return '';
+  const code = path ? episodeLabel(path) : '';
+  if (code) {
+    const known = tmdb.key === key ? tmdb.name : '';
+    return episodeLine(code, known, tor ? spansSeasons(filesOfTorrent(tor)) : false);
+  }
+  return nextCardTitle(s.next.title);
+}
+
 export function usePlayingNames(s: PlayerState | null): { title: string; sub: string } {
   void torrents.value;
   void seriesMatchVersion.value;

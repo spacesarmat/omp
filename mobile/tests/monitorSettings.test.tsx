@@ -49,7 +49,7 @@ describe('«Мониторинг»', () => {
     expect(sw('Проверять в фоне').getAttribute('aria-checked')).toBe('true');
     expect(sw('Только через Wi-Fi').getAttribute('aria-checked')).toBe('true');
     expect(sw('Следить за новыми сериями').getAttribute('aria-checked')).toBe('true');
-    expect(el.textContent).toContain('раз в 3 часа ›');
+    expect(el.textContent).toContain('раз в 3 часа');
     expect(el.textContent).toContain('Проверок ещё не было');
     expect(el.textContent).toContain('Android может откладывать фоновые проверки ради батареи');
   });
@@ -119,7 +119,7 @@ describe('«Мониторинг»', () => {
     click(Array.from(el.querySelectorAll('[role=radio]')).find((b) => b.textContent === 'раз в 6 часов'));
     expect(loadMonitorSettings().hours).toBe(6);
     expect(mon.schedule).toHaveBeenLastCalledWith({ enabled: true, hours: 6, wifiOnly: true });
-    expect(el.textContent).toContain('раз в 6 часов ›');
+    expect(el.textContent).toContain('раз в 6 часов');
   });
 
   it('the last check: time, found, sources, blocked notifications; the next one', async () => {
@@ -172,7 +172,7 @@ describe('Monitoring settings in English', () => {
     expect(el.textContent).toContain('subscriptions and new episodes, even when OMP is closed');
     expect(el.textContent).toContain('for series from the catalog');
     expect(el.textContent).toContain('No checks yet');
-    expect(el.textContent).toContain('every 3 hours ›');
+    expect(el.textContent).toContain('every 3 hours');
     expect(el.textContent).toContain('Notifications for OMP are off - you will only learn about new torrents by opening the “News” tab.');
     expect(el.textContent).toContain('Android may postpone background checks to save battery.');
     expect(Array.from(el.querySelectorAll('button')).some((b) => b.textContent === 'Allow notifications')).toBe(true);

@@ -2828,6 +2828,7 @@ export const hy: EnDict<typeof ru> = {
     phoneServer: "TorrServer ձեր բջջային հեռախոսում",
     logs: "Դիագնոզ",
     didIt: "Արդյո՞ք դա աշխատեց։",
+    helped: "Օգնե՞ց։",
     device: "Սարք",
     dev: {
       lg: "LG հեռուստացույց",

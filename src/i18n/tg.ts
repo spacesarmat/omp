@@ -2828,6 +2828,7 @@ export const tg: EnDict<typeof ru> = {
     phoneServer: "TorrServer дар телефони мобилии шумо",
     logs: "Диагноз",
     didIt: "Оё он кор кард?",
+    helped: "Кӯмак кард?",
     device: "Дастгоҳ",
     dev: {
       lg: "Телевизиони LG",
