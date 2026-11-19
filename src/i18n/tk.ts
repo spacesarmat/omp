@@ -594,6 +594,8 @@ export const tk: EnDict<typeof ru> = {
     dubReset: "Öňki ýagdaý (täzeden sazlamak)",
     dubChange: "Üýtgetmek",
     dubNote: "Bu möwsüm üçin muny bellige alyň. Eger elýeterli bolsa, geljek möwsümde şol bir studýa hem telewideniýe, hem-de telefon efirleri üçin ulanylýar.",
+    dubLoading: 'Yodalary goryapin',
+    dubLater: 'Yodalar oynatmakdan son acyk bolar',
     episodesOf: {
       one: "{have}, {n} seriýasyndan",
       other: "{have} sany {n} bölüminden",

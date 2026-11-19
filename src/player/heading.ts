@@ -33,10 +33,10 @@ export function itemNames(item: PlayItem, list: Torrent[]): ItemNames {
   return { tor: tor, name: name, ep: ep };
 }
 
-/** The heading of an item without the TMDB episode name: «Name · S02E01», a film's name. */
+/** The heading of an item without a fresh TMDB lookup: «Name · S02E01 · title» when the phone already passed one. */
 export function itemHeading(item: PlayItem, list: Torrent[] = torrents.peek()): string {
   const n = itemNames(item, list);
-  return playerHeading(n.name, episodeCode(n.ep), '');
+  return playerHeading(n.name, episodeCode(n.ep), item.episodeTitle || '');
 }
 
 /** The heading of what plays, with the TMDB episode name once it arrives. */
@@ -48,6 +48,7 @@ export function usePlayerHeading(item: PlayItem | undefined): string {
   useEffect(() => {
     if (g) requestSeriesMatch(g);
   }, [g ? g.key : '']);
-  const epName = useEpisodeName(n ? n.tor : undefined, n ? n.ep : { season: null, episode: null });
-  return n ? playerHeading(n.name, episodeCode(n.ep), epName) : '';
+  const fetched = useEpisodeName(n ? n.tor : undefined, n ? n.ep : { season: null, episode: null });
+  const passed = item && item.episodeTitle ? item.episodeTitle : '';
+  return n ? playerHeading(n.name, episodeCode(n.ep), fetched || passed) : '';
 }

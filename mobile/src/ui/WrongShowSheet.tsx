@@ -4,6 +4,7 @@ import { t } from '../../../src/i18n';
 import type { CatalogTitle } from '../../../src/catalog/tmdb';
 import type { SeriesGroup } from '../../../src/lib/seriesGroups';
 import { libraryTitle } from '../../../src/lib/libraryView';
+import { forgetEpisodeNames } from '../../../src/lib/episodeNames';
 import { chooseSeries } from '../../../src/lib/seriesMatch';
 import { phoneCatalog } from '../catalog/phoneCatalog';
 import { Sheet } from './Sheet';
@@ -25,7 +26,7 @@ export function WrongShowSheet({ group, onClose }: { group: SeriesGroup; onClose
         <input class="m-input" value={q} onInput={(e) => setQ((e.currentTarget as HTMLInputElement).value)} />
       </form>
       {items.map((it) => (
-        <button key={it.id} type="button" class="m-opt" onClick={() => { void chooseSeries(group, it.id).then(() => onClose()); }}>
+        <button key={it.id} type="button" class="m-opt" onClick={() => { forgetEpisodeNames(group.members.map((m) => m.hash)); void chooseSeries(group, it.id).then(() => onClose()); }}>
           <span class="m-opt-name">{it.title + (it.year ? ' (' + it.year + ')' : '')}</span>
         </button>
       ))}

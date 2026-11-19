@@ -578,6 +578,8 @@ export const ru = {
     dubReset: 'По умолчанию (сбросить)',
     dubChange: 'Сменить',
     dubNote: 'Запоминается для этого сезона. Та же студия ставится в следующем, если она там есть, общая для ТВ и телефона',
+    dubLoading: 'Смотрю дорожки',
+    dubLater: 'Дорожки будут доступны после запуска',
     // a season chip's sub-line: what the release has (of what TMDB lists), then how much is watched
     episodesOf: { one: '{have} из {n} серии', few: '{have} из {n} серий', many: '{have} из {n} серий' },
     watchedSome: 'смотрели {n}',

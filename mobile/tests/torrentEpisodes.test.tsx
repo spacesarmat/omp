@@ -110,13 +110,12 @@ describe('Torrent: TMDB episode names', () => {
     await flush();
     expect(el.querySelector('.m-thead-meta')!.textContent).toBe('Сезон 2 · 3 из 3 серий · 18,0 ГБ · подключено: 0 сидов · 0 пиров');
     expect(c.season).toHaveBeenCalledWith(7, 2);
-    expect(mainLine(0)).toContain('1. Landfall');
-    expect(mainLine(0)).toContain('45 мин');
-    // the code and the size, never the release file name
-    const sub = rows()[0].querySelector('.m-ep-sub')!.textContent!;
-    expect(sub).toBe('1,8 ГБ');
-    expect(sub).not.toContain('S02E01');
-    expect(sub).not.toContain('Ultradox');
+    expect(mainLine(0)).toBe('1. Landfall');
+    expect(rows()[0].querySelector('.m-ep-dur')!.textContent).toBe('45\u00A0мин');
+    expect(rows()[0].querySelector('.m-ep-size')!.textContent).toBe('1,8\u00A0ГБ');
+    expect(rows()[0].querySelector('.m-ep-name')!.textContent).not.toContain('мин');
+    expect(rows()[0].textContent).not.toContain('S02E01');
+    expect(rows()[0].textContent).not.toContain('Ultradox');
     expect(rows()[0].querySelector('.m-bar-track')).toBeTruthy();
   });
 
@@ -124,7 +123,8 @@ describe('Torrent: TMDB episode names', () => {
     setCatalogClientForTests(fake([2], [ep(1, 'Landfall'), ep(2, 'Эпизод 2')]));
     mount();
     await flush();
-    expect(mainLine(1)).toBe('Серия 2 ' + '45 мин');
+    expect(mainLine(1)).toBe('Серия 2');
+    expect(rows()[1].querySelector('.m-ep-dur')!.textContent).toBe('45\u00A0мин');
   });
 
   it('after the last episode: the announced ones as muted rows, «4. Пирамида · выйдет 8 окт.», not tappable', async () => {
@@ -219,7 +219,7 @@ describe('Torrent: TMDB episode names', () => {
     mount();
     await flush();
     expect(mainLine(1)).toContain('2. Dark Orbit');
-    expect(mainLine(1)).toContain('45 min');
+    expect(rows()[1].querySelector('.m-ep-dur')!.textContent).toBe('45\u00A0min');
     expect(mainLine(2)).toBe('Episode 3');
     expect(chips().map((x) => x.textContent)).toEqual(['+ Season 1', 'Season 2']);
   });

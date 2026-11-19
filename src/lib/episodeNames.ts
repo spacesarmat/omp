@@ -4,9 +4,10 @@
 import type { Torrent } from '../api/types';
 import type { CatalogCard, Episode, SeasonDetails } from '../catalog/tmdb';
 import { activeCatalog } from '../catalog/activeCatalog';
-import { singleGroup } from './seriesGroups';
+import { groupLibrary, singleGroup, type SeriesGroup } from './seriesGroups';
 import { matchSeries, seriesMatchVersion } from './seriesMatch';
-import { t } from '../i18n';
+import { torrents } from '../store/library';
+import { lang, t } from '../i18n';
 import { airDateText } from './seriesStatus';
 import { parseEpisode, type TorrentFile } from './episodes';
 import { resetSeasonTotals } from './episodesOutOf';
@@ -27,10 +28,50 @@ export interface ShowInfo {
 }
 
 const shows = new Map<string, Promise<ShowInfo | null>>();
+const episodeNames = new Map<string, string>();
+let nameLang = '';
+
+function namesFresh(): void {
+  const next = lang.peek();
+  if (next === nameLang) return;
+  nameLang = next;
+  episodeNames.clear();
+}
+
+function episodeNameKey(hash: string, season: number, episode: number): string {
+  return hash.toLowerCase() + ':' + season + ':' + episode;
+}
+
+/** A TMDB episode title already loaded for this file, in the current language. */
+export function cachedEpisodeName(hash: string, season: number | null, episode: number | null): string {
+  namesFresh();
+  if (!hash || season === null || episode === null) return '';
+  return episodeNames.get(episodeNameKey(hash, season, episode)) || '';
+}
+
+/** Remember a real episode title so playback can send it without waiting on TMDB again. An empty name drops the old one. */
+export function rememberEpisodeName(hash: string, season: number, episode: number, name: string): void {
+  if (!hash) return;
+  namesFresh();
+  const key = episodeNameKey(hash, season, episode);
+  const real = realEpisodeName(name);
+  if (real) episodeNames.set(key, real);
+  else episodeNames.delete(key);
+}
+
+/** Drop saved titles for these torrents. A corrected show must not keep the previous show's names. */
+export function forgetEpisodeNames(hashes: string[]): void {
+  const drop = new Set(hashes.map((h) => h.toLowerCase()));
+  Array.from(episodeNames.keys()).forEach((key) => {
+    if (drop.has(key.split(':')[0])) episodeNames.delete(key);
+  });
+}
 
 /** Forget the matched shows (tests). */
 export function resetEpisodeNames(): void {
   shows.clear();
+  episodeNames.clear();
+  nameLang = '';
   resetSeasonTotals();
 }
 
@@ -59,6 +100,29 @@ async function match(tor: Torrent): Promise<ShowInfo | null> {
   if (!g) return null;
   const card = await matchSeries(g);
   return card ? infoOf(card) : null;
+}
+
+function groupOf(tor: Torrent): SeriesGroup | null {
+  const list = torrents.peek();
+  const rows = groupLibrary(list.length ? list : [tor]);
+  for (let i = 0; i < rows.length; i++) {
+    const it = rows[i];
+    if (it.kind === 'series' && it.members.some((m) => m.hash === tor.hash)) return it;
+  }
+  return singleGroup(tor);
+}
+
+/**
+ * The show of a torrent: the series card already matched for its group (a season pack title often does not
+ * match TMDB on its own), else a fresh match of this torrent.
+ */
+export function showForTorrent(tor: Torrent): Promise<ShowInfo | null> {
+  const group = groupOf(tor);
+  if (!group) return showOf(tor);
+  return matchSeries(group).then(
+    (card) => (card ? infoOf(card) : showOf(tor)),
+    () => showOf(tor),
+  );
 }
 
 /** The TMDB show of a torrent, matched once per hash; null when there is none or TMDB is out of reach. */

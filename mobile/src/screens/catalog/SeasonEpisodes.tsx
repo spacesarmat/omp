@@ -8,6 +8,7 @@ import type { TorrentFile } from '../../../../src/lib/episodes';
 import { Sheet } from '../../ui/Sheet';
 
 const CHECK = 'M5 12.5l4.5 4.5L19 7';
+const tight = (s: string) => s.replace(/ /g, '\u00A0');
 
 export function SeasonEpisodes({
   hash,
@@ -84,15 +85,18 @@ export function SeasonEpisodes({
               <span class="m-ep-num">{r.numbers.length > 1 ? r.numbers[0] + '-' + r.numbers[r.numbers.length - 1] : r.numbers[0]}</span>
               <span class="m-ep-text">
                 <span class="m-ep-name">{r.title.replace(/^\d+(?:-\d+)?\.\s*/, '')}{showSeason && r.season ? ' · ' + t('library.seasonNamed', { n: r.season }) : ''}</span>
-                {started && leftMin > 0 && <span class="m-muted m-small">{t('library.left', { time: fmtDuration(leftMin) })}</span>}
-                {started && (
+                {(r.runtimeMin > 0 || file) && (
+                  <span class="m-ep-meta">
+                    <span class="m-ep-dur">{r.runtimeMin > 0 ? tight(fmtDuration(r.runtimeMin)) : started && leftMin > 0 ? tight(t('library.left', { time: fmtDuration(leftMin) })) : ''}</span>
+                    {file && <span class="m-muted m-small m-ep-size">{tight(fmtSize(file.length))}</span>}
+                  </span>
+                )}
+                {file && (
                   <span class="m-bar-track thin">
                     <span class="m-bar-fill" style={{ width: Math.round(ratio * 100) + '%' }} />
                   </span>
                 )}
               </span>
-              {r.runtimeMin > 0 && <span class="m-ep-dur">{fmtDuration(r.runtimeMin)}</span>}
-              {file && <span class="m-muted m-small m-ep-size">{fmtSize(file.length)}</span>}
               {watched && (
                 <svg class="m-ep-check" width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
                   <path d={CHECK} fill="none" stroke="currentColor" stroke-width="2.4" />

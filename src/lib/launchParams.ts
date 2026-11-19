@@ -3,7 +3,7 @@ import { normalizeLang, type Lang } from '../i18n';
 
 export type LaunchAction =
   | { kind: 'play'; url: string; title: string }
-  | { kind: 'torrent'; hash: string; file?: number; t?: number; from?: string; files?: number[] }
+  | { kind: 'torrent'; hash: string; file?: number; t?: number; from?: string; files?: number[]; ep?: string }
   | { kind: 'magnet'; link: string };
 
 /** The phone search server's address (`PhoneLink` without `at`). */
@@ -83,6 +83,10 @@ export function parseLaunchParams(raw: unknown): LaunchPlan | null {
       if (action.file !== undefined && typeof o.from === 'string') {
         const from = o.from.replace(/[\x00-\x1f]+/g, ' ').trim().slice(0, 60);
         if (from) action.from = from;
+      }
+      if (action.file !== undefined && typeof o.ep === 'string') {
+        const ep = o.ep.replace(/[\x00-\x1f]+/g, ' ').trim().slice(0, 120);
+        if (ep) action.ep = ep;
       }
       if (has('t')) {
         const t = num(o.t);

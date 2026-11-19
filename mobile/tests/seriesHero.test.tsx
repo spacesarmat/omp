@@ -41,7 +41,16 @@ const FOUND: CatalogTitle[] = [
 ];
 
 function seasonOf(n: number): SeasonDetails {
-  return { number: n, name: n === 2 ? 'Возвращение' : 'Сезон ' + n, airDate: '', overview: 'О сезоне ' + n, episodes: [] };
+  return {
+    number: n,
+    name: n === 2 ? 'Возвращение' : 'Сезон ' + n,
+    airDate: '',
+    overview: 'О сезоне ' + n,
+    episodes: [
+      { n: 1, title: 'Пилот', airDate: '', runtime: 50, overview: '' },
+      { n: 2, title: 'Эпизод 2', airDate: '', runtime: 0, overview: '' },
+    ],
+  };
 }
 
 let search: ReturnType<typeof vi.fn<CatalogClient['search']>>;
@@ -135,6 +144,11 @@ describe('series screen with TMDB', () => {
     expect(chips()[1].classList.contains('on')).toBe(true);
     expect(el.querySelector('.m-sh-caption')!.textContent).toBe('10 серий · 2025');
     expect(el.querySelector('.m-sh-season-name')!.textContent).toBe('Возвращение');
+    expect(el.querySelector('[data-season-more]')!.textContent).toBe('Ещё · Сезон 2');
+    const names = Array.from(el.querySelectorAll('.m-ep-name')).map((n) => (n.textContent || '').trim());
+    expect(names[0]).toBe('Пилот');
+    expect(names[1]).toBe('');
+    expect(el.querySelector('[data-where="phone"], .m-to-eps')).toBeTruthy();
     act(() => (el.querySelector('.m-sh-season-about .m-btn-text') as HTMLElement).click());
     expect(el.querySelector('.m-sh-season-overview')!.textContent).toBe('О сезоне 2');
     expect(el.querySelector('[data-release-switch]')!.getAttribute('data-hash')).toBe('s2');

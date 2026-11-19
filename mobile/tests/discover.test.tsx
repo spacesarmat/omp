@@ -319,6 +319,9 @@ describe('Discover («Новинки»)', () => {
       tile.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
     });
     const share = document.querySelector('[data-share="title"]') as HTMLButtonElement;
+    expect(document.querySelector('[data-catalog-action="open"]')!.textContent).toContain('Открыть');
+    expect(document.querySelector('[data-catalog-action="search"]')!.textContent).toContain('Найти раздачи');
+    expect(document.querySelector('[data-catalog-action="want"]')!.textContent).toContain('Хочу посмотреть');
     expect(share.textContent).toContain('Поделиться');
     expect(currentRoute.value.name).not.toBe('title');
     act(() => tile.click());

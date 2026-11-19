@@ -1,14 +1,12 @@
-// A catalog poster: a tap opens the card, a long press opens «Поделиться».
+// A catalog poster: a tap opens the card, a long press opens the title actions.
 import { useState } from 'preact/hooks';
 import type { ComponentChildren } from 'preact';
-import type { Kind } from '../../../src/catalog/tmdb';
+import type { CatalogTitle } from '../../../src/catalog/tmdb';
 import { useLongPress } from '../ui/longPress';
-import { ShareMenu } from './ShareMenu';
-import { posterShare } from './text';
-import { sendShare } from './send';
+import { CatalogMenu } from './CatalogMenu';
 
 export function PosterButton(p: {
-  item: { kind: Kind; id: number; title: string; year: number };
+  item: CatalogTitle;
   className: string;
   label: string;
   anchor?: string;
@@ -22,13 +20,7 @@ export function PosterButton(p: {
       <button type="button" class={p.className} aria-label={p.label} data-anchor={p.anchor} {...press}>
         {p.children}
       </button>
-      {open && (
-        <ShareMenu
-          label={p.item.title}
-          onClose={() => setOpen(false)}
-          onShare={() => void sendShare(posterShare(p.item))}
-        />
-      )}
+      {open && <CatalogMenu item={p.item} onClose={() => setOpen(false)} />}
     </>
   );
 }

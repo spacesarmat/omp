@@ -11,7 +11,7 @@ import { libraryTitle } from '../../../src/lib/libraryView';
 import { parseTorrentData } from '../../../src/api/torrserver';
 import { seriesMatchVersion } from '../../../src/lib/seriesMatch';
 import { torrentName as cleanTorrentName } from '../../../src/lib/cleanNames';
-import { realEpisodeName, seasonEpisodes, showOf } from '../../../src/lib/episodeNames';
+import { realEpisodeName, rememberEpisodeName, seasonEpisodes, showForTorrent } from '../../../src/lib/episodeNames';
 import { torrents } from '../../../src/store/library';
 
 const httpPoster = (u: string | undefined) => (/^https?:\/\//i.test(u || '') ? String(u) : '');
@@ -95,10 +95,14 @@ export function episodeNameOf(tor: Torrent, path: string): Promise<string> {
   if (pe.episode === null || pe.season === null) return Promise.resolve('');
   const season = pe.season;
   const ep = pe.episode;
-  return showOf(tor)
+  return showForTorrent(tor)
     .then((show) => (show ? seasonEpisodes(show, season) : {}))
     .then(
-      (m: { [n: number]: { title: string } }) => (m[ep] ? realEpisodeName(m[ep].title) : ''),
+      (m: { [n: number]: { title: string } }) => {
+        const name = m[ep] ? realEpisodeName(m[ep].title) : '';
+        if (name) rememberEpisodeName(tor.hash, season, ep, name);
+        return name;
+      },
       () => '',
     );
 }
@@ -127,6 +131,16 @@ function filesOfTorrent(tor: Torrent): string[] {
   return files.map((f) => f.path);
 }
 
+/** A TMDB title the TV put after the code («… · S04E01 · Что тебя не убивает»); '' when the last part is just the code. */
+export function subtitleEpisodeName(subtitle: string): string {
+  const bits = (subtitle || '').split(' · ');
+  if (bits.length < 2) return '';
+  const last = bits[bits.length - 1].trim();
+  const prev = bits[bits.length - 2].trim();
+  if (!/^(?:S\d+)?E\d+$/i.test(prev)) return '';
+  return realEpisodeName(last);
+}
+
 /** The episode code the TV puts last in the subtitle («… · S02E03»); '' when there is none. */
 export function subtitleCode(subtitle: string): string {
   const i = subtitle.lastIndexOf(' · ');
@@ -153,7 +167,7 @@ export function usePlayingPoster(s: PlayerState | null): string {
     }
     let alive = true;
     const pe = path ? parseEpisode(path) : { season: null as number | null };
-    showOf(tor).then(
+    showForTorrent(tor).then(
       (show) => {
         if (!alive) return;
         const season =
@@ -242,7 +256,8 @@ export function usePlayingNames(s: PlayerState | null): { title: string; sub: st
   const title = tor ? torrentName(tor) : (raw && libraryTitle({ hash: hash, title: raw }).title) || displayTitle(s.title);
   if (!code) return { title: title, sub: '' };
   const known = tmdbName.key === key ? tmdbName.name : '';
+  const hinted = subtitleEpisodeName(s.subtitle);
   const withSeason = tor ? spansSeasons(filesOfTorrent(tor)) : false;
-  return { title: title, sub: episodeLine(code, known || (looksLikeName(s.title) ? s.title : ''), withSeason) };
+  return { title: title, sub: episodeLine(code, known || hinted || (looksLikeName(s.title) ? s.title : ''), withSeason) };
 }
 

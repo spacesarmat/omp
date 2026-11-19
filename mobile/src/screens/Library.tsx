@@ -553,8 +553,13 @@ export function Library() {
   const selecting = selected !== null;
   useEffect(() => {
     const node = rootRef.current;
-    const bar = node && node.querySelector('.m-lib-sticky');
-    if (node && bar) node.style.setProperty('--m-lib-sticky-h', (bar as HTMLElement).offsetHeight + 'px');
+    const bar = node && (node.querySelector('.m-lib-sticky') as HTMLElement | null);
+    if (!node || !bar) return;
+    const measure = () => node.style.setProperty('--m-lib-sticky-h', bar.offsetHeight + 'px');
+    measure();
+    const watch = typeof ResizeObserver === 'function' ? new ResizeObserver(measure) : null;
+    if (watch) watch.observe(bar);
+    return () => watch && watch.disconnect();
   }, [mode, compactBar, selecting]);
   // ads among the cards of «Мои» (not in History, a search, selection mode or a failed list); the same cell size as
   // the cards in every view, only below the screen when it appears

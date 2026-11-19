@@ -83,6 +83,7 @@ afterEach(() => {
 describe('native queue', () => {
   it('heading: torrent · episode · title without repeats', () => {
     expect(nativeHeading(queue[0])).toBe('Show · S01E01');
+    expect(nativeHeading({ ...queue[0], episodeTitle: 'Граница' })).toBe('Show · S01E01 · Граница');
     expect(nativeHeading({ url: 'x', title: 'Film' })).toBe('Film');
     expect(nativeHeading({ url: 'x', title: 'Film', torrentTitle: 'Film' })).toBe('Film');
   });

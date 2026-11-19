@@ -548,6 +548,8 @@ export const ro: typeof ru = {
     dubReset: "Implicit (resetare)",
     dubChange: "Schimbă",
     dubNote: "Se reține pentru acest sezon. Aceeași studio se folosește și în sezonul următor, dacă există, fiind comun pentru televiziune și telefon.",
+    dubLoading: 'Caut pistele',
+    dubLater: 'Pistele vor fi disponibile dupa pornire',
     episodesOf: { one: "{have} din seria {n}", few: "{have} din {n} de episoade", many: "{have} din {n} de episoade" },
     watchedSome: "am vizionat {n}",
     watchedEvery: "vizualizat",

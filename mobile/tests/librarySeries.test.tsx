@@ -18,6 +18,7 @@ import { libraryTitle } from '../../src/lib/libraryView';
 import { setCatalogClientForTests } from '../src/catalog/phoneCatalog';
 import { resetSeriesMatches } from '../../src/lib/seriesMatch';
 import { TorrServerClient } from '../../src/api/torrserver';
+import { resetTorrentWrites } from '../../src/lib/dataQueue';
 import type { Torrent } from '../../src/api/types';
 
 function files(names: string[]) {
@@ -327,6 +328,20 @@ describe('Series screen', () => {
     return (groupLibrary(ALL).find((x) => x.kind === 'series') as SeriesGroup).key;
   }
 
+  it('a chosen season does not repeat «N сезон» on every episode', () => {
+    const a: Torrent = { hash: 'd2', title: 'Дискавери / Discovery [S02] 1080p', category: 'tv', stat: 3, timestamp: 1, data: files(['Discovery.S02E01.mkv']) };
+    const b: Torrent = { hash: 'd3', title: 'Дискавери / Discovery [S03] 1080p', category: 'tv', stat: 3, timestamp: 2, data: files(['Discovery.S02E01.extra.mkv', 'Discovery.S03E01.mkv', 'Discovery.S03E02.mkv']) };
+    serverList = [a, b];
+    torrents.value = serverList;
+    const k = (groupLibrary([a, b]).find((x) => x.kind === 'series') as SeriesGroup).key;
+    navigate({ name: 'series', key: k, season: 3 });
+    mount(<Series seriesKey={k} />);
+    expect(el.querySelector('.m-chip.on')!.textContent).toBe('Сезон 3');
+    const names = Array.from(el.querySelectorAll('.m-ep-name')).map((n) => (n.textContent || '').trim());
+    expect(names.length).toBeGreaterThan(0);
+    expect(names.join(' ')).not.toContain('сезон');
+  });
+
   it('season chips; the newest season is chosen; a chip shows its release and episodes on the same screen', async () => {
     navigate({ name: 'series', key: key() });
     mount(<Series seriesKey={key()} />);
@@ -410,6 +425,7 @@ describe('Series screen', () => {
     let sets: { hash: string; data: string }[];
     beforeEach(() => {
       sets = [];
+      resetTorrentWrites();
       vi.spyOn(TorrServerClient.prototype, 'setData').mockImplementation(async (t: { hash: string }, data: string) => {
         sets.push({ hash: t.hash, data });
         serverList = serverList.map((x) => (x.hash === t.hash ? { ...x, data } : x));
@@ -429,20 +445,50 @@ describe('Series screen', () => {
       expect(choices()).toEqual(['HDRezka · 5.1 · Русский', 'LostFilm · стерео · Русский', 'По умолчанию (сбросить)']);
     });
 
-    it('«по умолчанию» when nothing is remembered; «Сменить» explains how a dub is remembered and turns into «Скрыть»', async () => {
+    it('«по умолчанию» when nothing is remembered; «Сменить» asks for tracks and leaves the hint closed', async () => {
+      const status = vi.spyOn(TorrServerClient.prototype, 'ffprobeAvailable').mockResolvedValue(false);
       navigate({ name: 'series', key: key() });
       mount(<Series seriesKey={key()} />);
       expect(value()).toBe('по умолчанию');
       act(() => btn('Сменить', el.querySelector('[data-series-dub]')!)!.click());
-      // a single «По умолчанию (сбросить)» chip would reset what is already the default (QA B17): no chips, only the note
+      await flush();
+      expect(el.querySelector('[data-dub-note]')).toBeNull();
+      expect(el.textContent).toContain('Дорожки будут доступны после запуска');
       expect(choices()).toEqual([]);
+      act(() => (el.querySelector('[data-dub-retry]') as HTMLElement).click());
+      await flush();
+      expect(status.mock.calls.length).toBeGreaterThanOrEqual(2);
       const about = el.querySelector('button[aria-label*="общая для ТВ и телефона"]') as HTMLElement;
       act(() => about.click());
-      expect(el.textContent).toContain('общая для ТВ и телефона');
+      expect(el.querySelector('[data-dub-note]')!.textContent).toContain('общая для ТВ и телефона');
       act(() => about.click());
-      expect(el.textContent).not.toContain('общая для ТВ и телефона');
+      expect(el.querySelector('[data-dub-note]')).toBeNull();
       act(() => btn('Скрыть')!.click());
       expect(btn('Сменить')).toBeTruthy();
+    });
+
+    it('«Сменить» loads studios from ffprobe and remembers the pick', async () => {
+      vi.spyOn(TorrServerClient.prototype, 'ffprobeAvailable').mockResolvedValue(true);
+      const probed = vi.spyOn(TorrServerClient.prototype, 'probe').mockResolvedValue({
+        streams: [
+          { index: 1, codec_type: 'audio', codec_name: 'ac3', channels: 6, tags: { title: 'LostFilm', language: 'rus' } },
+          { index: 2, codec_type: 'audio', codec_name: 'aac', channels: 2, tags: { title: 'HDRezka', language: 'rus' } },
+        ],
+      });
+      navigate({ name: 'series', key: key() });
+      mount(<Series seriesKey={key()} />);
+      act(() => btn('Сменить', el.querySelector('[data-series-dub]')!)!.click());
+      await flush();
+      expect(el.querySelector('[data-dub-note]')).toBeNull();
+      expect(choices()).toEqual(['LostFilm · 5.1 · Русский', 'HDRezka · стерео · Русский']);
+      expect(probed).toHaveBeenCalled();
+      await act(async () => {
+        (el.querySelector('[data-dub-choice="k0"]') as HTMLElement).click();
+        for (let i = 0; i < 40; i++) await Promise.resolve();
+      });
+      expect(sets.length).toBeGreaterThan(0);
+      expect(value()).toBe('LostFilm');
+      expect(JSON.parse(sets[0].data).omp.a).toMatchObject({ l: 'LostFilm', g: 'ru', c: '5.1' });
     });
 
     it('shows the dub picked on the TV for any season, switches to another seen one and resets', async () => {
