@@ -39,24 +39,39 @@ function latestOf(rows: SyncRecord[], kind: string): SyncRecord | null {
   return best;
 }
 
-export function applyPulled(rows: SyncRecord[]): void {
-  const progress = [];
+let parked: SyncRecord[] = [];
+let applying = false;
+
+function park(rows: SyncRecord[]): void {
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
-    if (row.kind === 'progress') progress.push(row);
-    if (row.kind === 'match' && !row.deleted && typeof row.body.id === 'number') {
-      applySyncedMatch(row.key, row.body.id, typeof row.body.q === 'string' ? row.body.q : '', row.updatedAt);
+    if (row.kind === 'progress' || row.kind === 'match') continue;
+    let found = false;
+    for (let j = 0; j < parked.length; j++) {
+      if (parked[j].id === row.id) {
+        parked[j] = row;
+        found = true;
+        break;
+      }
     }
+    if (!found) parked.push(row);
   }
-  applySyncedProgress(progress);
+}
+
+function applyLibrary(rows: SyncRecord[]): void {
   const list = torrents.value;
-  if (!list.length) return;
+  if (!list.length) {
+    park(rows);
+    return;
+  }
   let changed = false;
   const copy = list.slice();
+  const seen: { [id: string]: boolean } = {};
   for (let i = 0; i < copy.length; i++) {
     const hash = (copy[i].hash || '').toLowerCase();
     const mine = rows.filter((r) => r.key === hash && r.kind !== 'progress' && r.kind !== 'match');
     if (!mine.length) continue;
+    for (let j = 0; j < mine.length; j++) seen[mine[j].id] = true;
     const parsed = parseData(copy[i].data);
     if (!parsed) continue;
     let journal = parsed.journal.slice();
@@ -94,5 +109,33 @@ export function applyPulled(rows: SyncRecord[]): void {
       changed = true;
     }
   }
+  const left: SyncRecord[] = [];
+  for (let i = 0; i < rows.length; i++) {
+    if (rows[i].kind === 'progress' || rows[i].kind === 'match') continue;
+    if (!seen[rows[i].id]) left.push(rows[i]);
+  }
+  park(left);
   if (changed) torrents.value = copy;
 }
+
+export function applyPulled(rows: SyncRecord[]): void {
+  const progress = [];
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    if (row.kind === 'progress') progress.push(row);
+    if (row.kind === 'match' && !row.deleted && typeof row.body.id === 'number') {
+      applySyncedMatch(row.key, row.body.id, typeof row.body.q === 'string' ? row.body.q : '', row.updatedAt);
+    }
+  }
+  applySyncedProgress(progress);
+  applyLibrary(rows);
+}
+
+torrents.subscribe(() => {
+  if (applying || !parked.length || !torrents.value.length) return;
+  const rows = parked;
+  parked = [];
+  applying = true;
+  applyLibrary(rows);
+  applying = false;
+});
