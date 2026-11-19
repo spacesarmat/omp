@@ -2205,6 +2205,8 @@ export const be: typeof ru = {
     magnetLabel: "Magnet-спасылка або хэш",
     byMagnet: "Дадаць па magnet-спасылцы",
     pasteMagnet: "Уставіць magnet",
+    magnetBtn: "Magnet",
+    torrentBtn: "Торэнт",
     recent: "Нядаўнія запыты",
     clipMagnet: "У буферы magnet-спасылка",
     openTorrent: "Адкрыць .torrent файл",

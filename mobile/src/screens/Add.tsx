@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { t } from '../../../src/i18n';
-import { Icon } from '../ui/Icon';
+import { Icon, ICONS } from '../ui/Icon';
 import { Sheet } from '../ui/Sheet';
 import { addCategories, guessCategory, magnetName } from '../../../src/lib/categoryGuess';
 import { magnetInClipboard, rememberQuery, loadRecentQueries, readClipboardText } from '../lib/recentQueries';
@@ -288,7 +288,6 @@ export function Add({
   const [subSheet, setSubSheet] = useState(false);
   // collapsed to one link under the search; opened at once when the screen comes with a link
   const [magnetOpen, setMagnetOpen] = useState(!!link);
-  const [plusOpen, setPlusOpen] = useState(false);
   const [fileError, setFileError] = useState('');
   const [fileBusy, setFileBusy] = useState(false);
   const [recent, setRecent] = useState<string[]>(() => loadRecentQueries());
@@ -826,12 +825,15 @@ export function Add({
           <div class="m-muted m-small">{t('add.magnetHint')}</div>
         </div>
       ) : (
-        <div class="m-add-plus" data-open={plusOpen ? '1' : '0'}>
-          <button type="button" class="m-icon-btn" aria-label={t('common.add')} aria-expanded={plusOpen} onClick={() => setPlusOpen(!plusOpen)}>+</button>
-          <div class="m-add-plus-menu">
-            <button type="button" class="tm" data-code="P07.2" data-magnet-open aria-expanded="false" onClick={() => setMagnetOpen(true)}>{t('add.pasteMagnet')}</button>
-            <button type="button" disabled={fileBusy} onClick={() => fileRef.current && fileRef.current.click()}>{t('add.openTorrent')}</button>
-          </div>
+        <div class="m-chips m-add-actions">
+          <button type="button" class="m-chip m-add-action tm" data-code="P07.2" data-magnet-open onClick={() => setMagnetOpen(true)}>
+            <Icon d={ICONS.magnet} size={16} />
+            {t('add.magnetBtn')}
+          </button>
+          <button type="button" class="m-chip m-add-action" data-torrent-open disabled={fileBusy} onClick={() => fileRef.current && fileRef.current.click()}>
+            <Icon d={ICONS.torrent} size={16} />
+            {t('add.torrentBtn')}
+          </button>
           <input ref={fileRef} type="file" accept=".torrent,application/x-bittorrent" hidden aria-label={t('add.openTorrent')} onChange={(e) => {
             const f = (e.target as HTMLInputElement).files && (e.target as HTMLInputElement).files![0];
             if (f) void onTorrentFile(f);
