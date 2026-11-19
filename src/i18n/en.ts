@@ -28,6 +28,7 @@ export const en: EnDict<typeof ru> = {
     originalChip: 'Original',
     rusSubsChip: 'Rus subtitles',
     fullSeasonOnly: 'Full season only',
+    seasonChip: 'Season {n} · {count}',
     show: { one: 'Show {n} torrent', other: 'Show {n} torrents' },
   },
   common: {
@@ -2237,6 +2238,8 @@ export const en: EnDict<typeof ru> = {
     magnetLabel: 'Magnet link or hash',
     byMagnet: 'Add by magnet link',
     pasteMagnet: 'Paste magnet',
+    magnetBtn: 'Magnet',
+    torrentBtn: 'Torrent',
     recent: 'Recent searches',
     clipMagnet: 'A magnet link is on the clipboard',
     openTorrent: 'Open a .torrent file',

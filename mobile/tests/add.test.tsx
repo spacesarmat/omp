@@ -387,8 +387,8 @@ describe('Add category', () => {
     expect(el.querySelector(MAGNET)).toBeNull();
     expect(el.querySelector('[data-magnet-block]')).toBeNull();
     const open = el.querySelector('[data-magnet-open]')!;
-    expect(open.textContent).toBe('Вставить magnet');
-    expect(open.getAttribute('aria-expanded')).toBe('false');
+    expect(open.textContent).toContain('Magnet');
+    expect(el.querySelector('[data-torrent-open]')!.textContent).toContain('Торрент');
     expect(el.querySelector('form')!.compareDocumentPosition(open) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(open.compareDocumentPosition(el.querySelector('.m-results')!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(Array.from(el.querySelectorAll('input')).map((i) => i.getAttribute('aria-label'))).toEqual(['Поиск по источникам', 'Открыть .torrent файл']);
@@ -454,13 +454,20 @@ describe('Add category', () => {
     expect(el.querySelector('[data-recent]')!.textContent).toContain('Дюна');
   });
 
-  it('the plus menu announces whether it is open', () => {
+  it('Magnet opens the link field and Торрент opens a torrent file', () => {
     mount();
-    const plus = el.querySelector('.m-add-plus > button') as HTMLButtonElement;
-    expect(plus.getAttribute('aria-expanded')).toBe('false');
-    click(plus);
-    expect(plus.getAttribute('aria-expanded')).toBe('true');
-    expect(el.querySelector('.m-add-plus')!.getAttribute('data-open')).toBe('1');
+    const magnet = el.querySelector('[data-magnet-open]') as HTMLButtonElement;
+    const torrent = el.querySelector('[data-torrent-open]') as HTMLButtonElement;
+    expect(magnet.textContent).toContain('Magnet');
+    expect(torrent.textContent).toContain('Торрент');
+    expect(el.querySelector('.m-add-plus')).toBeNull();
+    const input = el.querySelector('input[type=file]') as HTMLInputElement;
+    const clickFile = vi.spyOn(input, 'click').mockImplementation(() => undefined);
+    click(torrent);
+    expect(clickFile).toHaveBeenCalled();
+    click(magnet);
+    expect(el.querySelector('[data-magnet-block]')).toBeTruthy();
+    expect(el.querySelector('[data-magnet-open]')).toBeNull();
   });
 
   it('a torrent file without a server shows the reason beside the closed magnet field', async () => {
@@ -1120,7 +1127,7 @@ describe('Add in English', () => {
     expect(el.textContent).not.toContain('Category');
     expect(el.querySelector('input[aria-label="Search in sources"]')).toBeTruthy();
     expect(el.querySelector('[data-scope="sources"]')!.textContent).toBe('Sources');
-    expect(el.querySelector('[data-magnet-open]')!.textContent).toBe('Paste magnet');
+    expect(el.querySelector('[data-magnet-open]')!.textContent).toContain('Magnet');
     click(el.querySelector('[data-magnet-open]')!);
     expect(byText('Add')).toBeTruthy();
     expect(el.textContent).toContain('Magnet links from the browser open in OMP on their own - via “Share”.');

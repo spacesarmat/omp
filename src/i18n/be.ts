@@ -25,6 +25,7 @@ export const be: typeof ru = {
     originalChip: "Арыгінал",
     rusSubsChip: "Рус. субтытры",
     fullSeasonOnly: "Толькі поўны сезон",
+    seasonChip: "Сезон {n} · {count}",
     show: { one: "Паказаць {n} раздачу", few: "Паказаць {n} раздачы", many: "Паказаць {n} раздач" },
   },
   common: {
@@ -2204,6 +2205,8 @@ export const be: typeof ru = {
     magnetLabel: "Magnet-спасылка або хэш",
     byMagnet: "Дадаць па magnet-спасылцы",
     pasteMagnet: "Уставіць magnet",
+    magnetBtn: "Magnet",
+    torrentBtn: "Торэнт",
     recent: "Нядаўнія запыты",
     clipMagnet: "У буферы magnet-спасылка",
     openTorrent: "Адкрыць .torrent файл",

@@ -6,6 +6,9 @@ The English translation covers the latest versions only; the full history (in Ru
 
 ## Unreleased
 
+- [phone] Source search: the plus button is now two buttons, Magnet and Torrent. Magnet opens the link field, Torrent picks a .torrent file
+- [phone] Search filters, series: seasons come from the TMDB season count. A chip is shown only for a season that has releases, with that count (Season 2 · 14). A parsed season above the TMDB count is left out of the filter. Without TMDB, a season stays only when at least two releases name it. Season 0 is shown only when TMDB has specials and a release names them. Full season only stays
+- [phone] Continue watching cards are compact: the width comes from the screen and at least four fit across. Each card shows the title, a series keeps its episode code, and the progress bar and play button stay. The Large / Tiles / Rows switch is gone from that header. A series tile shows the episode code as a yellow badge at the bottom of the poster
 - [tech] Billing: one account+device cannot stack unlimited votes across different file_index of the same torrent - new files beyond 100 per infohash are skipped (replacing an existing file is allowed). Protects the ranking and storage from inflation/spam
 - [tech] Deploy: the on-server jacred/init.yaml (a bind mount with real API keys) is set to mode 600 - a fresh checkout ships it world-readable (644). Content is never overwritten and dry-run leaves permissions alone
 - [tech] Billing: a flood of donate commands no longer grows state without bound - superseded draft/cancelled rows of the account are removed and cancelled rows older than 7 days are pruned; financial rows (pending/paid/refunded) are never touched
