@@ -26,6 +26,7 @@ export const ka: EnDict<typeof ru> = {
     originalChip: "ორიგინალი",
     rusSubsChip: "რუსული სუბტიტრები",
     fullSeasonOnly: "მხოლოდ სრული სეზონი",
+    seasonChip: "სეზონი {n} · {count}",
     show: {
       one: "აჩვენეთ ხელი {n}",
       other: "{n}-ის ხელები",

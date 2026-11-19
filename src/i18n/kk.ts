@@ -26,6 +26,7 @@ export const kk: EnDict<typeof ru> = {
     originalChip: "Түпнұсқа",
     rusSubsChip: "Орысша субтитрлер",
     fullSeasonOnly: "Тек толық маусым",
+    seasonChip: "Маусым {n} · {count}",
     show: {
       one: "Қолды көрсетіңіз {n}",
       other: "{n}-тің қолын көрсетіңіз",

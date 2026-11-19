@@ -26,6 +26,7 @@ export const tg: EnDict<typeof ru> = {
     originalChip: "Аслӣ",
     rusSubsChip: "Субтитрҳои русӣ",
     fullSeasonOnly: "Танҳо тамоми мавсим",
+    seasonChip: "Мавсими {n} · {count}",
     show: {
       one: "Дастро нишон диҳед {n}",
       other: "Намоиш додани дасти {n}",
