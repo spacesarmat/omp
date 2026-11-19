@@ -639,11 +639,14 @@ describe('Remote with a TV', () => {
     expect(el.querySelector('.m-touchpad.with-strip')).toBeNull();
   });
 
-  it('adds the mini class while the player link is live', () => {
-    nowPlaying.value = { title: 'x' } as any;
+  it('shows the playing title under the TV line and does not reserve the mini-player', () => {
+    saveTv({ ip: '192.168.1.5', name: 'LG OLED55' });
+    nowPlaying.value = { title: 'Тишина в эфире', subtitle: '', time: 10, duration: 100, paused: false, buffering: false, hash: 'h', file: 1 } as any;
     lastSeen.value = Date.now();
     mount();
-    expect(el.querySelector('.m-remote')!.classList.contains('mini')).toBe(true);
+    expect(el.querySelector('.m-remote')!.classList.contains('mini')).toBe(false);
+    expect(el.querySelector('.m-mini')).toBeNull();
+    expect(el.querySelector('.m-remote-now')!.textContent).toContain('Тишина в эфире');
     nowPlaying.value = null;
     lastSeen.value = 0;
   });

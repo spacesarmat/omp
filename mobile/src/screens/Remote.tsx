@@ -21,7 +21,9 @@ import { foundTvNoWifi, foundTvRows, foundTvScanning } from '../tv/foundTvDiscov
 import { TouchpadSheet } from '../ui/TouchpadSheet';
 import { useBackHandler } from '../ui/backStack';
 import { touchpad, cursorGain, scrollFactor } from '../tv/touchpad';
-import { linkStatus } from '../tv/playerLink';
+import { linkStatus, nowPlaying } from '../tv/playerLink';
+import { usePlayingNames } from '../lib/playingNames';
+import { miniTitle } from '../ui/MiniPlayer';
 import type { FoundOmpTv } from '../platform/native';
 import {
   tvState,
@@ -460,9 +462,18 @@ function Touchpad() {
   );
 }
 
-/** Remote screen class: fits the viewport; the mini-player (64 px) takes room. Typing overlays on top. */
+/** Remote screen class: fits the viewport. The mini-player is not shown here. Typing overlays on top. */
 function screenClass(): string {
-  return 'm-screen m-remote' + (linkStatus.value !== 'none' ? ' mini' : '');
+  return 'm-screen m-remote';
+}
+
+/** One line under the TV name: what is playing. Pause and seek stay on the remote itself. */
+function RemoteNow() {
+  const s = nowPlaying.value;
+  const names = usePlayingNames(s && linkStatus.value !== 'none' ? s : null);
+  const line = names.title ? miniTitle(names) : '';
+  if (!line) return null;
+  return <span class="m-remote-now">{line}</span>;
 }
 
 const fail = (e: unknown) => showToast(errorMessage(e));
@@ -977,6 +988,7 @@ function AtvRemote({ tv }: { tv: SavedTv }) {
             <TvSwitch tv={tv} live={atvStateText(shown)} class="m-remote-title" />
             {' · '}
             <span class={'m-remote-state' + (state === 'connected' ? ' on' : '')}>{t('remote.atvLine', { state: atvStateText(shown) })}</span>
+            <RemoteNow />
           </span>
         }
       />
@@ -1291,6 +1303,7 @@ export function Remote() {
               {state === 'connected' ? <span class="m-bill-dot" data-remote-dot /> : null}
               {shownState}
             </span>
+            <RemoteNow />
           </span>
         }
       >

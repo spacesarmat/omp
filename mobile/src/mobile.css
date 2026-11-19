@@ -909,14 +909,14 @@ textarea.m-input, textarea.m-area {
 .m-iconbtn.primary { background: var(--accent); color: var(--bg); }
 
 /* Remote */
-.m-screen[data-route='remote'] { display: flex; flex-direction: column; gap: 16px; }
+.m-screen[data-route='remote'] { display: flex; flex-direction: column; gap: 8px; }
 /* Fitted remote: one screen above the tab bar, no vertical scrolling. The d-pad scales with the height. */
 .m-remote {
   --m-used-mini: 0px;
-  --m-remote-gap: 12px;
-  /* the d-pad: at most 240px, the width left by the two 58px side keys, a share of the height */
-  --dp: min(240px, calc(100vw - 152px), 32vh);
-  gap: 14px;
+  --m-remote-gap: 8px;
+  /* the d-pad: at most 200px, the width left by the side keys, a share of the height */
+  --dp: min(200px, calc(100vw - 152px), 26vh);
+  gap: 8px;
   min-height: 0;
   /* --m-remote-gap: room between the last row and the bottom menu / the mini-player */
   height: calc(100vh - var(--m-nav-reserve) - var(--m-used-mini) - var(--m-remote-gap) - env(safe-area-inset-bottom));
@@ -926,8 +926,10 @@ textarea.m-input, textarea.m-area {
   overflow-x: hidden;
   overflow-y: auto;
 }
-/* the mini-player sits 8px above the menu and is --m-mini-h tall */
-.m-remote.mini { --m-used-mini: calc(var(--m-mini-h) + 8px); --dp: min(240px, calc(100vw - 152px), 27vh); }
+/* the mini-player is hidden on this screen, so a leftover mini class must not reserve its height */
+.m-remote.mini { --m-used-mini: 0px; }
+.m-remote .m-head-sub { white-space: normal; }
+.m-remote-now { display: block; min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* Android TV: its own head row (no screen header) */
 .m-remote > .m-lib-head:not(.m-screen-head) { margin-top: 8px; }
 .m-head-text { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
@@ -942,8 +944,8 @@ textarea.m-input, textarea.m-area {
   container-type: size;
   overflow-x: hidden;
   overflow-y: auto;
-  --dp: min(230px, calc(100vw - 64px), 32vh);
-  --dp: clamp(48px, min(calc(100cqw - 48px), 52cqh), 280px);
+  --dp: min(200px, calc(100vw - 64px), 26vh);
+  --dp: clamp(40px, min(calc(100cqw - 48px), 46cqh), 220px);
   --pill: clamp(8px, 3.2cqh, 18px);
   --rnd: clamp(24px, 11cqh, 64px);
   --rk: clamp(44px, 26cqh, 150px);
