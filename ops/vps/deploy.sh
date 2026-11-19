@@ -716,6 +716,16 @@ install_file() {
   cp -f -- "$src" "$dest"
 }
 
+# The on-host jacred init.yaml is a bind mount carrying real API keys; deploy never overwrites it,
+# but a fresh checkout ships it world-readable (644). Keep it owner-only.
+harden_secret_perms() {
+  [[ "$DRY_RUN" -eq 0 ]] || return 0
+  local f="$ROOT/jacred/init.yaml"
+  if [[ -f "$f" && ! -L "$f" ]]; then
+    chmod 600 "$f"
+  fi
+}
+
 sync_release() {
   local tree="$1"
   assert_managed_not_symlinks
@@ -732,6 +742,7 @@ sync_release() {
   install_file "$tree/ops/vps/Caddyfile.nuc" "$ROOT/Caddyfile.nuc" || return 1
   install_file "$tree/ops/vps/Dockerfile" "$ROOT/Dockerfile.billing" || return 1
   install_file "$tree/ops/vps/docker-compose.yml" "$ROOT/docker-compose.yml" || return 1
+  harden_secret_perms
 }
 
 capture_image_id() {
