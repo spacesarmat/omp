@@ -5,6 +5,9 @@ buildscript {
     repositories {
         google()
         mavenCentral()
+        // A second host for the same artifacts. Gradle remembers a miss per repository,
+        // and repo.maven.apache.org sometimes reports jars that are actually there.
+        maven { url 'https://repo1.maven.org/maven2/' }
     }
     dependencies {
         classpath 'com.android.tools.build:gradle:9.4.1'
@@ -22,6 +25,8 @@ allprojects {
     repositories {
         google()
         mavenCentral()
+        // Same reason as the buildscript block: a miss on repo.maven.apache.org must not block the build.
+        maven { url 'https://repo1.maven.org/maven2/' }
         // Yandex Mobile Ads is published here (maven central lags the latest 8.x).
         maven { url 'https://ads.maven.yandex.net/' }
     }
