@@ -79,6 +79,15 @@ function remember(key: string, card: CatalogCard | null, manual?: boolean, stamp
   }
 }
 
+/** A match pulled from another device. A newer local choice is kept. */
+export function applySyncedMatch(key: string, id: number, q: string, at: number): void {
+  const map = savedMap();
+  const prev = map[key];
+  if (prev && prev.at >= at) return;
+  map[key] = { id, s: prev && prev.s ? prev.s : '', at, m: true, q: q || (prev && prev.q) || '' };
+  saveJson(SAVED_KEY, map);
+}
+
 /** The series is known (from a match of the last 7 days) to be over (ended, canceled) or to be no TMDB show. */
 export function knownOver(key: string): boolean {
   const v = savedOf(cacheKey(key));

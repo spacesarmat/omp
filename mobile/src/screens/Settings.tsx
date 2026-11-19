@@ -402,6 +402,9 @@ function SyncRow() {
   const on = syncEnabled();
   const at = lastSyncAt();
   const when = at ? new Date(at).toLocaleString() : t('settings.syncNever');
+  useEffect(() => {
+    runDeviceSync();
+  }, []);
   return (
     <div class="m-set-row" data-row="sync">
       <div class="m-set-text">

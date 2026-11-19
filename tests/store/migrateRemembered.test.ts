@@ -1,6 +1,6 @@
 import { describe, expect, it, beforeEach } from 'vitest';
-import { migrateRemembered } from '../../src/store/migrateRemembered';
-import { deviceMigrated, deviceRecords, putDeviceRecords, resetDeviceDb } from '../../src/store/deviceDb';
+import { migrateRemembered, recordsForEdit, recordsFromTorrent } from '../../src/store/migrateRemembered';
+import { deviceMigrated, deviceRecords, noteSyncAccount, putDeviceRecords, resetDeviceDb, setSyncCursor, syncCursor } from '../../src/store/deviceDb';
 
 const DATA = JSON.stringify({
   omp: {
@@ -38,5 +38,32 @@ describe('migrateRemembered', () => {
     migrateRemembered(null, { 'abc:1': { time: 12, duration: 100, updated: 80 } }, false);
     expect(deviceMigrated()).toBe(false);
     expect(deviceRecords().filter((r) => r.id === 'progress:abc:1')[0].body.time).toBe(90);
+  });
+
+  it('a later edit of skip settings gets a newer time than the import', () => {
+    const first = recordsFromTorrent({ hash: 'abc', title: 'Show', data: DATA }, 10);
+    const second = recordsFromTorrent({ hash: 'abc', title: 'Show', data: DATA }, 20);
+    expect(first.filter((r) => r.id === 'skip:abc')[0].updatedAt).toBe(10);
+    expect(second.filter((r) => r.id === 'skip:abc')[0].updatedAt).toBe(20);
+  });
+
+  it('switching account clears the sync cursor and keeps local rows', () => {
+    putDeviceRecords([{ id: 'progress:abc:1', kind: 'progress', key: 'abc:1', body: { time: 9 }, updatedAt: 50, deviceId: 'local' }]);
+    setSyncCursor(7);
+    noteSyncAccount('account-a');
+    expect(syncCursor()).toBe(7);
+    noteSyncAccount('account-b');
+    expect(syncCursor()).toBe(0);
+    expect(deviceRecords().filter((r) => r.id === 'progress:abc:1')[0].body.time).toBe(9);
+  });
+
+  it('turning monitoring back on tombstones the old off flag', () => {
+    putDeviceRecords(recordsFromTorrent({ hash: 'abc', title: 'Show', data: DATA }, 10));
+    const plain = JSON.stringify({ omp: { v: 1, h: [{ f: 1, t: 40, d: 100, at: 50, src: 'phone' }] } });
+    const edited = recordsForEdit({ hash: 'abc', title: 'Show', data: plain }, 30);
+    const watch = edited.filter((r) => r.id === 'watch:abc')[0];
+    expect(watch.deleted).toBe(true);
+    expect(watch.updatedAt).toBe(30);
+    expect(edited.filter((r) => r.id === 'journal:abc:1:phone')[0].deleted).toBe(false);
   });
 });

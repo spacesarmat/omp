@@ -68,10 +68,10 @@ export function applySync(current, incoming) {
 
 export function createSyncStore(query) {
   return {
-    async pull(accountId, since) {
+    async pull(accountId, sinceSeq) {
       const res = await query(
-        'SELECT record_id, kind, rec_key, body, updated_at, device_id, deleted FROM device_sync WHERE account_id = $1 AND updated_at > $2 ORDER BY updated_at ASC LIMIT 500',
-        [accountId, since],
+        'SELECT record_id, kind, rec_key, body, updated_at, device_id, deleted, seq FROM device_sync WHERE account_id = $1 AND seq > $2 ORDER BY seq ASC LIMIT 500',
+        [accountId, sinceSeq],
       );
       return res.rows.map((r) => ({
         id: r.record_id,
@@ -81,6 +81,7 @@ export function createSyncStore(query) {
         updatedAt: Number(r.updated_at) || 0,
         deviceId: r.device_id || '',
         deleted: r.deleted === true,
+        seq: Number(r.seq) || 0,
       }));
     },
     async push(accountId, records) {
@@ -91,7 +92,8 @@ export function createSyncStore(query) {
             ' VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8)' +
             ' ON CONFLICT (account_id, record_id) DO UPDATE SET' +
             ' kind = EXCLUDED.kind, rec_key = EXCLUDED.rec_key, body = EXCLUDED.body,' +
-            ' updated_at = EXCLUDED.updated_at, device_id = EXCLUDED.device_id, deleted = EXCLUDED.deleted' +
+            ' updated_at = EXCLUDED.updated_at, device_id = EXCLUDED.device_id, deleted = EXCLUDED.deleted,' +
+            ' seq = nextval(pg_get_serial_sequence(\'device_sync\', \'seq\'))' +
             ' WHERE device_sync.updated_at < EXCLUDED.updated_at' +
             ' OR (device_sync.updated_at = EXCLUDED.updated_at AND device_sync.device_id <= EXCLUDED.device_id)',
           [accountId, row.id, row.kind, row.key, JSON.stringify(row.body || {}), row.updatedAt, row.deviceId, row.deleted === true],

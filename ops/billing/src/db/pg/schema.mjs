@@ -833,9 +833,10 @@ CREATE TABLE device_sync (
   updated_at bigint NOT NULL,
   device_id text NOT NULL DEFAULT '',
   deleted boolean NOT NULL DEFAULT false,
+  seq bigserial NOT NULL,
   PRIMARY KEY (account_id, record_id)
 );
-CREATE INDEX device_sync_updated ON device_sync (account_id, updated_at);
+CREATE INDEX device_sync_seq ON device_sync (account_id, seq);
 `,
   },
 ];

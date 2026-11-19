@@ -1,16 +1,25 @@
 // Push and pull remembered rows. A refused sync (no subscription) leaves the local copy as it is.
 import { BILLING_ORIGIN } from './config';
 import { billingSession, deviceId } from './session';
-import { deviceRecords, lastSyncAt, markSynced, putDeviceRecords, syncEnabled } from '../store/deviceDb';
-import { sinceRecords } from '../store/syncMerge';
+import { deviceRecords, markSynced, noteSyncAccount, onDeviceWrite, putDeviceRecords, setSyncCursor, syncCursor, syncEnabled } from '../store/deviceDb';
+import { applyPulled } from '../store/applyPulled';
+import type { SyncRecord } from '../store/syncMerge';
 
-export function runDeviceSync(): Promise<string> {
-  if (!syncEnabled()) return Promise.resolve('off');
+const BATCH = 200;
+let timer = 0;
+let syncing = false;
+
+export function scheduleDeviceSync(): void {
+  if (!syncEnabled() || timer) return;
   const session = billingSession();
-  const access = session && (session.access || session.token);
-  if (!access) return Promise.resolve('local');
-  const since = lastSyncAt();
-  const records = sinceRecords(deviceRecords(), since);
+  if (!session || !(session.access || session.token)) return;
+  timer = setTimeout(() => {
+    timer = 0;
+    runDeviceSync();
+  }, 1500) as unknown as number;
+}
+
+function post(access: string, since: number, records: SyncRecord[]): Promise<{ status: number; data: { ok?: boolean; records?: SyncRecord[]; nextSeq?: number; error?: string } }> {
   return fetch(BILLING_ORIGIN + '/v1/sync', {
     method: 'POST',
     headers: {
@@ -22,19 +31,48 @@ export function runDeviceSync(): Promise<string> {
   }).then(
     (res) => res.json().then((data) => ({ status: res.status, data: data || {} })),
     () => ({ status: 0, data: {} }),
-  ).then((ans) => {
+  );
+}
+
+function pump(access: string, since: number, pending: SyncRecord[]): Promise<string> {
+  const chunk = pending.slice(0, BATCH);
+  const rest = pending.slice(BATCH);
+  return post(access, since, chunk).then((ans) => {
     if (ans.status === 403) return 'subscribers';
-    const data = ans.data as { ok?: boolean; records?: unknown; serverTime?: number };
-    if (ans.status !== 200 || !data.ok) return 'error';
-    const incoming = data.records && Array.isArray(data.records) ? data.records : [];
-    if (incoming.length) putDeviceRecords(incoming);
-    let cursor = since;
-    for (let i = 0; i < records.length; i++) if (records[i].updatedAt > cursor) cursor = records[i].updatedAt;
-    for (let i = 0; i < incoming.length; i++) {
-      const at = incoming[i] && typeof incoming[i].updatedAt === 'number' ? incoming[i].updatedAt : 0;
-      if (at > cursor) cursor = at;
+    if (ans.status !== 200 || !ans.data.ok) return 'error';
+    const incoming = ans.data.records || [];
+    if (incoming.length) {
+      putDeviceRecords(incoming);
+      applyPulled(incoming);
     }
-    markSynced(cursor);
+    const next = typeof ans.data.nextSeq === 'number' ? ans.data.nextSeq : since;
+    setSyncCursor(next);
+    markSynced(Date.now());
+    if (rest.length) return pump(access, next, rest);
+    if (incoming.length >= 500) return pump(access, next, []);
     return 'ok';
   });
 }
+
+export function runDeviceSync(): Promise<string> {
+  if (!syncEnabled()) return Promise.resolve('off');
+  const session = billingSession();
+  const access = session && (session.access || session.token);
+  if (!access) return Promise.resolve('local');
+  if (syncing) return Promise.resolve('busy');
+  syncing = true;
+  const epoch = noteSyncAccount(session && session.id ? session.id : access.slice(0, 16));
+  const pending = deviceRecords().filter((r) => r.updatedAt >= epoch);
+  return pump(access, syncCursor(), pending).then(
+    (status) => {
+      syncing = false;
+      return status;
+    },
+    () => {
+      syncing = false;
+      return 'error';
+    },
+  );
+}
+
+onDeviceWrite(scheduleDeviceSync);

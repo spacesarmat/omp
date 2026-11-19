@@ -12,7 +12,7 @@ import { newestSeriesTracks, nextSeriesTracks, withSeriesTracks, sameDub, type S
 import { readVoice, withSeasonVoice } from '../lib/seasonVoice';
 import { enqueueTorrentWrite, torrentWriteSettled } from '../lib/dataQueue';
 import { putDeviceRecords } from './deviceDb';
-import { recordsFromTorrent } from './migrateRemembered';
+import { recordsForEdit } from './migrateRemembered';
 
 export interface JournalClient {
   list(): Promise<Torrent[]>;
@@ -36,7 +36,7 @@ function patchLibrary(hash: string, data: string): void {
       copy[i] = { ...list[i], data };
       torrents.value = copy;
       try {
-        putDeviceRecords(recordsFromTorrent({ hash, title: copy[i].title, data }));
+        putDeviceRecords(recordsForEdit({ hash, title: copy[i].title, data }, Date.now()));
       } catch (e) {
         /* the server copy is already stored */
       }
@@ -98,6 +98,24 @@ export function forgetWatch(c: JournalClient | null, hash: string, f: number): P
   const t = torrents.value.filter((x) => x.hash === hash)[0];
   const local = t ? parseData(t.data) : null;
   if (local && local.journal.some((e) => e.f === f)) patchLibrary(hash, serializeData(local.obj, removeFile(local.journal, f), local.skip));
+    const at = Date.now();
+    putDeviceRecords([{
+      id: 'journal:' + hash.toLowerCase() + ':' + f + ':phone',
+      kind: 'journal',
+      key: hash.toLowerCase(),
+      body: {},
+      updatedAt: at,
+      deviceId: 'local',
+      deleted: true,
+    }, {
+      id: 'journal:' + hash.toLowerCase() + ':' + f + ':tv',
+      kind: 'journal',
+      key: hash.toLowerCase(),
+      body: {},
+      updatedAt: at,
+      deviceId: 'local',
+      deleted: true,
+    }]);
   if (!c || !hash) return Promise.resolve();
   return update(c, hash, (j) => removeFile(j, f));
 }

@@ -4,12 +4,14 @@ import {
   markWatched, clearProgress, serverViewed, continueWatching, refreshViewed, resetViewed, carryProgress,
 } from '../../src/store/progress';
 import type { Torrent } from '../../src/api/types';
+import { deviceRecords, resetDeviceDb } from '../../src/store/deviceDb';
 
 const H = 'a'.repeat(40);
 const H2 = 'b'.repeat(40);
 
 beforeEach(() => {
   localStorage.clear();
+  resetDeviceDb();
   reloadProgress();
   serverViewed.value = [];
 });
@@ -47,6 +49,8 @@ describe('progress store', () => {
     clearProgress(H);
     expect(getLocalProgress(H, 1)).toBeNull();
     expect(getLocalProgress(H, 2)).toBeNull();
+    const gone = deviceRecords().filter((r) => r.kind === 'progress' && r.deleted);
+    expect(gone.length).toBeGreaterThan(0);
   });
   it('builds continue watching list', () => {
     const list = [{ hash: H, title: 'A', stat: 5 }, { hash: H2, title: 'B', stat: 5 }] as Torrent[];

@@ -11,11 +11,11 @@ export interface MigrateTorrent {
 }
 
 function row(id: string, kind: string, key: string, body: { [k: string]: unknown }, updatedAt: number): SyncRecord {
-  return { id, kind, key, body, updatedAt: updatedAt > 0 ? updatedAt : 1, deviceId: 'migrate', deleted: false };
+  return { id, kind, key, body, updatedAt: updatedAt > 0 ? updatedAt : 1, deviceId: 'local', deleted: false };
 }
 
-/** Records carried by one torrent's omp bag. */
-export function recordsFromTorrent(t: MigrateTorrent): SyncRecord[] {
+/** Records carried by one torrent's omp bag. Undated fields use `now`, so a later edit wins. */
+export function recordsFromTorrent(t: MigrateTorrent, now = 1): SyncRecord[] {
   const hash = (t.hash || '').toLowerCase();
   if (!hash) return [];
   const parsed = parseData(t.data);
@@ -25,15 +25,32 @@ export function recordsFromTorrent(t: MigrateTorrent): SyncRecord[] {
     const e = parsed.journal[i];
     out.push(row('journal:' + hash + ':' + e.f + ':' + e.src, 'journal', hash, { f: e.f, t: e.t, d: e.d, at: e.at, src: e.src, name: e.name || '' }, e.at));
   }
-  if (parsed.skip) out.push(row('skip:' + hash, 'skip', hash, parsed.skip as unknown as { [k: string]: unknown }, 1));
+  if (parsed.skip) out.push(row('skip:' + hash, 'skip', hash, parsed.skip as unknown as { [k: string]: unknown }, now));
   const omp = parsed.obj.omp as { [k: string]: unknown } | undefined;
-  if (omp && omp.a && typeof omp.a === 'object') out.push(row('audio:' + hash, 'audio', hash, omp.a as { [k: string]: unknown }, 1));
-  if (!watchesNewEpisodes(t.data)) out.push(row('watch:' + hash, 'watch', hash, { newEpisodes: false }, 1));
-  if (!watchesBetterQuality(t.data)) out.push(row('quality:' + hash, 'quality', hash, { better: false }, 1));
+  if (omp && omp.a && typeof omp.a === 'object') out.push(row('audio:' + hash, 'audio', hash, omp.a as { [k: string]: unknown }, now));
+  if (!watchesNewEpisodes(t.data)) out.push(row('watch:' + hash, 'watch', hash, { newEpisodes: false }, now));
+  if (!watchesBetterQuality(t.data)) out.push(row('quality:' + hash, 'quality', hash, { better: false }, now));
   if (nameLocked(t.data) || rawReleaseOf(t.data)) {
-    out.push(row('title:' + hash, 'title', hash, { title: t.title || '', raw: rawReleaseOf(t.data), locked: nameLocked(t.data) }, 1));
+    out.push(row('title:' + hash, 'title', hash, { title: t.title || '', raw: rawReleaseOf(t.data), locked: nameLocked(t.data) }, now));
   }
   return out;
+}
+
+const SETTING_KINDS = ['skip', 'audio', 'watch', 'quality', 'title', 'journal'];
+
+/** A library edit: current rows, plus tombstones for settings and journal entries this torrent no longer has. */
+export function recordsForEdit(t: MigrateTorrent, now: number): SyncRecord[] {
+  const fresh = recordsFromTorrent(t, now);
+  const hash = (t.hash || '').toLowerCase();
+  const have: { [id: string]: boolean } = {};
+  for (let i = 0; i < fresh.length; i++) have[fresh[i].id] = true;
+  const old = deviceRecords().filter((r) => r.key === hash && !r.deleted && SETTING_KINDS.indexOf(r.kind) >= 0 && !have[r.id]);
+  const tombs: SyncRecord[] = [];
+  for (let i = 0; i < old.length; i++) {
+    const at = now > old[i].updatedAt ? now : old[i].updatedAt + 1;
+    tombs.push({ id: old[i].id, kind: old[i].kind, key: hash, body: {}, updatedAt: at, deviceId: 'local', deleted: true });
+  }
+  return fresh.concat(tombs);
 }
 
 export function recordsFromProgress(map: { [k: string]: { time: number; duration: number; updated: number } }): SyncRecord[] {

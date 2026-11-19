@@ -3506,7 +3506,9 @@ export function createApp(file, fetchImpl, opts) {
         }
         await syncDb.push(accountId, stamped);
         const records = await syncDb.pull(accountId, parsed.since);
-        return json(res, 200, { ok: true, records, serverTime: Date.now() });
+        let nextSeq = parsed.since;
+        for (let i = 0; i < records.length; i++) if (records[i].seq > nextSeq) nextSeq = records[i].seq;
+        return json(res, 200, { ok: true, records, nextSeq, serverTime: Date.now() });
       }
       if (req.method === 'GET' && path === '/v1/dht-peers') {
         // Same device token as /v1/me. A paid subscription is not required: the button is on every release.

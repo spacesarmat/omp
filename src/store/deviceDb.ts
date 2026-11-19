@@ -13,10 +13,13 @@ interface Bag {
   migrated: boolean;
   syncOn: boolean;
   lastSync: number;
+  lastSeq: number;
+  accountId: string;
+  syncEpoch: number;
 }
 
 function empty(): Bag {
-  return { records: {}, migrated: false, syncOn: true, lastSync: 0 };
+  return { records: {}, migrated: false, syncOn: true, lastSync: 0, lastSeq: 0, accountId: '', syncEpoch: 0 };
 }
 
 function read(): Bag {
@@ -27,12 +30,17 @@ function read(): Bag {
     migrated: raw.migrated === true,
     syncOn: raw.syncOn !== false,
     lastSync: typeof raw.lastSync === 'number' ? raw.lastSync : 0,
+    lastSeq: typeof raw.lastSeq === 'number' ? raw.lastSeq : 0,
+    accountId: typeof raw.accountId === 'string' ? raw.accountId : '',
+    syncEpoch: typeof raw.syncEpoch === 'number' ? raw.syncEpoch : 0,
   };
 }
 
 function write(bag: Bag): void {
+  writes++;
   saveJson(KEY, bag);
   mirrorIndexed(bag);
+  afterWrite();
 }
 
 export function deviceRecords(): SyncRecord[] {
@@ -81,11 +89,47 @@ export function markSynced(at: number): void {
   write(bag);
 }
 
+export function syncCursor(): number {
+  return read().lastSeq;
+}
+
+export function setSyncCursor(seq: number): void {
+  const bag = read();
+  if (seq > bag.lastSeq) bag.lastSeq = seq;
+  write(bag);
+}
+
+/** Another billing account must not upload this device's earlier rows. Local rows stay. */
+export function noteSyncAccount(id: string): number {
+  const bag = read();
+  if (bag.accountId && id && bag.accountId !== id) {
+    bag.syncEpoch = Date.now();
+    bag.lastSeq = 0;
+  }
+  if (id) bag.accountId = id;
+  write(bag);
+  return bag.syncEpoch;
+}
+
+export function syncEpoch(): number {
+  return read().syncEpoch;
+}
+
 export function resetDeviceDb(): void {
   write(empty());
 }
 
+let afterWrite: () => void = () => undefined;
+let hydrated = false;
+let writes = 0;
+
+/** The sync client registers here so a local write can upload without a import cycle. */
+export function onDeviceWrite(fn: () => void): void {
+  afterWrite = fn;
+}
+
 function mirrorIndexed(bag: Bag): void {
+  if (!hydrated) return;
   const idb = typeof indexedDB === 'undefined' ? null : indexedDB;
   if (!idb) return;
   try {
@@ -109,6 +153,7 @@ function mirrorIndexed(bag: Bag): void {
 export function hydrateDeviceDb(done: () => void): void {
   const idb = typeof indexedDB === 'undefined' ? null : indexedDB;
   if (!idb) {
+    hydrated = true;
     done();
     return;
   }
@@ -118,23 +163,32 @@ export function hydrateDeviceDb(done: () => void): void {
       const db = open.result;
       if (!db.objectStoreNames.contains(STORE)) db.createObjectStore(STORE);
     };
-    open.onerror = () => done();
+    open.onerror = () => {
+      hydrated = true;
+      done();
+    };
     open.onsuccess = () => {
       const db = open.result;
       const tx = db.transaction(STORE, 'readonly');
       const req = tx.objectStore(STORE).get('bag');
       req.onsuccess = () => {
         const bag = req.result as Bag | undefined;
-        if (bag && bag.records && !Object.keys(read().records).length) saveJson(KEY, bag);
+        if (writes === 0 && bag && bag.records && !Object.keys(read().records).length) saveJson(KEY, bag);
+        hydrated = true;
+        if (writes > 0) mirrorIndexed(read());
         db.close();
         done();
       };
       req.onerror = () => {
+        hydrated = true;
         db.close();
         done();
       };
     };
   } catch (e) {
+    hydrated = true;
     done();
   }
 }
+
+// App startup calls hydrateDeviceDb. Tests do not, so a late IndexedDB read cannot overwrite a fixture.

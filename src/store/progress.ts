@@ -1,6 +1,7 @@
 import { signal } from '@preact/signals';
 import { loadJson, saveJson, isObject } from './storage';
-import { putDeviceRecords } from './deviceDb';
+import { putDeviceRecords, deviceRecords } from './deviceDb';
+import type { SyncRecord } from './syncMerge';
 import { recordsFromProgress } from './migrateRemembered';
 import type { Torrent, ViewedEntry } from '../api/types';
 import type { TorrServerClient } from '../api/torrserver';
@@ -50,12 +51,46 @@ function stamp(): number {
 function persist() {
   saveJson(KEY, local);
   progressVersion.value++;
-  putDeviceRecords(recordsFromProgress(local));
+  const next = recordsFromProgress(local);
+  const have: { [id: string]: boolean } = {};
+  for (let i = 0; i < next.length; i++) have[next[i].id] = true;
+  const gone = deviceRecords().filter((r) => r.kind === 'progress' && !r.deleted && !have[r.id]);
+  const tombs: SyncRecord[] = [];
+  const now = Date.now();
+  for (let i = 0; i < gone.length; i++) {
+    const at = now > gone[i].updatedAt ? now : gone[i].updatedAt + 1;
+    tombs.push({ id: gone[i].id, kind: 'progress', key: gone[i].key, body: {}, updatedAt: at, deviceId: 'local', deleted: true });
+  }
+  putDeviceRecords(next.concat(tombs));
 }
 
 /** The local progress map, for the one-time copy out of this device. */
 export function progressSnapshot(): { [k: string]: Progress } {
   return local;
+}
+
+/** A pulled progress row updates the map the screens read. Does not write the device db again. */
+export function applySyncedProgress(rows: { key: string; body: { [k: string]: unknown }; updatedAt: number; deleted?: boolean }[]): void {
+  let changed = false;
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    if (row.deleted) {
+      if (local[row.key]) {
+        delete local[row.key];
+        changed = true;
+      }
+      continue;
+    }
+    const time = typeof row.body.time === 'number' ? row.body.time : 0;
+    const duration = typeof row.body.duration === 'number' ? row.body.duration : 0;
+    const prev = local[row.key];
+    if (prev && prev.updated >= row.updatedAt) continue;
+    local[row.key] = { time, duration, updated: row.updatedAt };
+    changed = true;
+  }
+  if (!changed) return;
+  saveJson(KEY, local);
+  progressVersion.value++;
 }
 
 export function reloadProgress(): void {
