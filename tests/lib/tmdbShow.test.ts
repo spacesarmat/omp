@@ -33,7 +33,7 @@ describe('pickShow', () => {
         { id: 84958, media_type: 'tv', name: 'Локи', original_name: 'Loki', first_air_date: '2021-06-09', popularity: 10, vote_count: 100, number_of_seasons: 2, episode_run_time: [50] },
       ],
     };
-    const items = sanitizeList(endpointOf({ APIKey: 'k' })!, raw, null).items;
+    const items = sanitizeList(endpointOf({ APIKey: 'k' }, '')!, raw, null).items;
     expect(items.map((x) => [x.id, x.popularity, x.voteCount, x.seasonCount, x.runtime])).toEqual([
       [1, 10, 100, 1, 12],
       [84958, 10, 100, 2, 50],
