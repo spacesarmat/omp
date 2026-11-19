@@ -93,6 +93,7 @@ describe('playing names', () => {
     expect(nextCardTitle('Show.S01E02.mkv')).toBe('2 серия');
     expect(nextCardTitle('S02E04 · Граница')).toBe('4 серия · Граница');
     expect(readableFileLabel('Show - 01 [1080p]')).toBe('Show - 01');
+    expect(readableFileLabel('Show - 01 [1080p WEB-DL]')).toBe('Show - 01');
     expect(readableFileLabel('Show - 02 [1080p]')).toBe('Show - 02');
     expect(readableFileLabel('Show (01)')).toBe('Show (01)');
     expect(readableFileLabel('Show (02)')).toBe('Show (02)');

@@ -43,13 +43,14 @@ export function looksLikeName(title: string): boolean {
   return !!s && !FILE_EXT.test(s) && !episodeLabel(s) && !/\b(1080p|2160p|720p|WEB-?DL|BDRip|HDTV)\b/i.test(s);
 }
 
-const QUALITY_TAG = /^(?:\d{3,4}p|4k|uhd|web-?dl|bdrip|hdtv)$/i;
-
 /** A file name with the quality tags taken out. A number in parentheses stays, so two files stay distinct. */
 export function readableFileLabel(name: string): string {
   const cleaned = (name || '')
-    .replace(/\[([^\]]*)\]|\(([^)]*)\)/g, (all, bracket, paren) => (QUALITY_TAG.test(String(bracket || paren || '').trim()) ? ' ' : all))
     .replace(/\b(?:\d{3,4}p|4k|uhd|web-?dl|bdrip|hdtv)\b/gi, ' ')
+    .replace(/\[([^[\]]*)\]|\(([^()]*)\)/g, (all, bracket, paren) => {
+      const inner = String(bracket ?? paren ?? '').replace(/[\s._,\-+/]+/g, '');
+      return inner ? all : ' ';
+    })
     .replace(/[._]+/g, ' ')
     .replace(/\s{2,}/g, ' ')
     .trim();
