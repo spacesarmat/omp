@@ -28,7 +28,7 @@ describe('tell friends', () => {
   it('shows the link, the code, the counter and share', () => {
     act(() => render(<Invite enabled code="OMP-1" friends={3} />, el));
     expect(el.textContent).toContain('Пригласите друга');
-    expect(el.textContent).toContain('Вам начисляются дни');
+    expect(el.textContent).toContain('Вам начисляется бонус');
     expect(el.querySelector('.m-invite-qr')).toBeTruthy();
     expect(el.querySelector('.m-invite-stat')).toBeTruthy();
     expect(el.querySelector('[data-invite-link]')!.textContent).toBe('https://omp-player.online/r/OMP-1');

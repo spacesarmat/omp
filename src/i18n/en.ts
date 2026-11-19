@@ -2708,7 +2708,7 @@ export const en: EnDict<typeof ru> = {
   invite: {
     title: 'Tell friends',
     headline: 'Invite a friend',
-    lead: 'A friend pays for a subscription with your link. You receive days.',
+    lead: 'A friend pays for a subscription with your link. You receive a bonus.',
     off: 'The referral program is off',
     code: 'Code {code}',
     friends: 'Friends: {n}',

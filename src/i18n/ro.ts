@@ -2672,7 +2672,7 @@ export const ro: typeof ru = {
   invite: {
     title: "Spune-le prietenilor",
     headline: "Invită un prieten",
-    lead: "Un prieten plătește abonamentul cu linkul tău. Primești zile.",
+    lead: "Un prieten plătește abonamentul cu linkul tău. Primești un bonus.",
     off: "Programul de recomandări este dezactivat",
     code: "Cod promoțional {code}",
     friends: "Prieteni: {n}",

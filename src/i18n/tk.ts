@@ -2796,7 +2796,7 @@ export const tk: EnDict<typeof ru> = {
   invite: {
     title: "Dostlaryňa aýt",
     headline: "Dostuňy çagyr",
-    lead: "Dostuň abunalygy seniň baglanyşygyň bilen töleýär. Saňa günler berilýär.",
+    lead: "Dostuň abunalygy seniň baglanyşygyň bilen töleýär. Saňa bonus berilýär.",
     off: "Ugratma ulgamy öçürilipdir.",
     code: "{code} promokody",
     friends: "Dostlar: {n}",

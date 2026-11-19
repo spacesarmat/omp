@@ -2796,7 +2796,7 @@ export const az: EnDict<typeof ru> = {
   invite: {
     title: "Dostlarına de",
     headline: "Dostunu dəvət et",
-    lead: "Dostun abunəni sənin linkinlə ödəyir. Sənə günlər verilir.",
+    lead: "Dostun abunəni sənin linkinlə ödəyir. Sənə bonus verilir.",
     off: "Yönləndirmə sxemi söndürülüb",
     code: "Promo kodu {code}",
     friends: "Dostlar: {n}",
