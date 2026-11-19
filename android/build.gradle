@@ -22,6 +22,8 @@ allprojects {
     repositories {
         google()
         mavenCentral()
+        // Yandex Mobile Ads is published here (maven central lags the latest 8.x).
+        maven { url 'https://ads.maven.yandex.net/' }
     }
 }
 

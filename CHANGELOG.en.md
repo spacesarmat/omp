@@ -6,6 +6,9 @@ The English translation covers the latest versions only; the full history (in Ru
 
 ## Unreleased
 
+- [phone] My and Discover can show a native Yandex ad on Android and iOS, in the same card. If Yandex has no ad, the own banner stays, then a normal card. History and search have no ads. Nothing changes until the admin switch is on
+- [tv] A TV linked to a subscribed phone follows the subscription group: own banners at that group's frequency. The group is off by default
+- [tech] Admin: Yandex Ads card (master switch, Android and iOS units, free and subscribed groups, own-banner fallback). Released apps ignore yandexAds. The privacy page names the Yandex Mobile Ads SDK and the advertising identifier. Needs a new billing image and a site deploy, on approval
 - [phone] Remote: the Now on TV bar no longer covers the bottom keys. The playing title is one line under the TV name. The pad is smaller and shrinks to the screen height. On LG the pause button follows the player: if the video is already paused, the first tap resumes it. If the player stops answering, the TV button stays
 - [phone] An omp://billing?code= link no longer activates a subscription automatically: the code is only prefilled in the field and activation takes the Connect button. Prevents binding the device without consent via a stray link
 - [phone] Source search: the plus button is now two buttons, Magnet and Torrent. Magnet opens the link field, Torrent picks a .torrent file
