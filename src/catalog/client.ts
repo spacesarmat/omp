@@ -379,7 +379,9 @@ export function createCatalogClient(
         const c = sanitizeCard(e, raw, kind);
         if (!c) throw fail('bad');
         return c;
-      }, (c) => (kind === 'tv' ? (c as { status?: unknown }).status !== undefined : (c as { releases?: unknown }).releases !== undefined)
+      }, (c) => (kind === 'tv'
+        ? (c as { status?: unknown }).status !== undefined && typeof (c as CatalogCard).specials === 'boolean'
+        : (c as { releases?: unknown }).releases !== undefined)
         // cards cached before 0.19.0-beta.1 have people without a TMDB id
         && (c as CatalogCard).cast.every((p) => typeof p.id === 'number'), opts);
     },

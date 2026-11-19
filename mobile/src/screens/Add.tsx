@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { t } from '../../../src/i18n';
-import { Icon } from '../ui/Icon';
+import { Icon, ICONS } from '../ui/Icon';
 import { Sheet } from '../ui/Sheet';
 import { addCategories, guessCategory, magnetName } from '../../../src/lib/categoryGuess';
 import { magnetInClipboard, rememberQuery, loadRecentQueries, readClipboardText } from '../lib/recentQueries';
@@ -38,7 +38,9 @@ import {
 } from '../../../src/sources/view';
 import type { SourceResult } from '../../../src/sources/types';
 import { loadSubs } from '../../../src/monitor/subs';
-import { applyFilters, activeFilterCount, filterChips, parseRelease, sinkUnknownSeasons, subQualityOf, type SearchFilters } from '../../../src/sources/filters';
+import { applyFilters, activeFilterCount, filterChips, sinkUnknownSeasons, subQualityOf, type SearchFilters } from '../../../src/sources/filters';
+import { catalogQuery, filterSeasonChips, titlesNameSeason, tmdbSeasonFacts, uniqueSeries, type TmdbSeasonFacts } from '../../../src/sources/filterSeasons';
+import { phoneCatalog } from '../catalog/phoneCatalog';
 import { splitByRelevance } from '../../../src/sources/relevance';
 import { FiltersSheet, loadSearchFilters, saveSearchFilters } from '../ui/FiltersSheet';
 import { ResultCard } from '../ui/ResultCard';
@@ -286,11 +288,11 @@ export function Add({
   const [subSheet, setSubSheet] = useState(false);
   // collapsed to one link under the search; opened at once when the screen comes with a link
   const [magnetOpen, setMagnetOpen] = useState(!!link);
-  const [plusOpen, setPlusOpen] = useState(false);
   const [fileError, setFileError] = useState('');
   const [fileBusy, setFileBusy] = useState(false);
   const [recent, setRecent] = useState<string[]>(() => loadRecentQueries());
   const [clipHint, setClipHint] = useState<string | null>(null);
+  const [tmdbFacts, setTmdbFacts] = useState<TmdbSeasonFacts | null>(null);
   // a link or a ready tracker query is for «Источники»; else the tab asked for, else the one used last
   // the route's fields choose only the first tab of the entry
   const [scope, setScopeState] = useState<SearchScope>(
@@ -635,7 +637,7 @@ export function Add({
   const filtered = filterByKind(matching, kindF);
   const similarFiltered = filterByKind(applyFilters(parts.similar, filters), kindF);
   const similarOrdered = searching ? stableOrder(memo.similarOrder, similarFiltered, sort) : sortResults(similarFiltered, sort);
-  const similarVisible = sinkUnknownSeasons(similarOrdered, filters.season);
+  const similarVisible = sinkUnknownSeasons(similarOrdered, filters.season, filters.specials);
   memo.similarOrder = similarVisible.map(resultKey);
   // nothing of the chosen kind, though the search found something: say so, not «Ничего не найдено»
   const kindEmpty = kindF !== 'all' && matching.length > 0;
@@ -645,9 +647,32 @@ export function Add({
   const rankCtx = { device: deviceCaps(rankKind), speedBps: lastLinkSpeed(), now: Date.now() };
   const ordered = searching ? stableOrder(memo.order, filtered, sort) : orderSearch(filtered, sort, memo.searched, Date.now());
   // unknown seasons stay in the count, under the releases of the chosen season
-  const visible = sinkUnknownSeasons(ordered, filters.season);
+  const visible = sinkUnknownSeasons(ordered, filters.season, filters.specials);
   memo.order = visible.map(resultKey);
-  const seasons = Array.from(new Set((rows || []).reduce((a: number[], r) => a.concat(parseRelease(r.Title).seasons), []))).sort((a, b) => a - b).slice(0, 12);
+  const seasonTitles = parts.hits.concat(parts.similar).map((r) => r.Title);
+  const seasons = filterSeasonChips(seasonTitles, tmdbFacts);
+  const showSeries = seasons.length > 0 || titlesNameSeason(seasonTitles);
+  const searchedNow = memo.searched;
+  useEffect(() => {
+    const q = searchedNow.trim();
+    setTmdbFacts(null);
+    if (!q) return;
+    let stop = false;
+    phoneCatalog()
+      .then((c) => c.search(catalogQuery(q), 1).then((res) => ({ c, res })))
+      .then(({ c, res }) => {
+        if (stop) return null;
+        const tv = uniqueSeries(q, res.items || []);
+        return tv ? c.card('tv', tv.id) : null;
+      })
+      .then((card) => {
+        if (stop || !card) return;
+        const facts = tmdbSeasonFacts(card);
+        if (facts) setTmdbFacts(facts);
+      })
+      .catch(() => undefined);
+    return () => { stop = true; };
+  }, [searchedNow]);
   const nFilters = activeFilterCount(filters);
   const blocked = prog ? prog.failed.filter((id) => isCloudflare((getHealth(id) || { message: '' }).message)) : [];
   // a site that showed its code page: its own message («torrent.by просит ввести проверочный код»)
@@ -800,12 +825,15 @@ export function Add({
           <div class="m-muted m-small">{t('add.magnetHint')}</div>
         </div>
       ) : (
-        <div class="m-add-plus" data-open={plusOpen ? '1' : '0'}>
-          <button type="button" class="m-icon-btn" aria-label={t('common.add')} aria-expanded={plusOpen} onClick={() => setPlusOpen(!plusOpen)}>+</button>
-          <div class="m-add-plus-menu">
-            <button type="button" class="tm" data-code="P07.2" data-magnet-open aria-expanded="false" onClick={() => setMagnetOpen(true)}>{t('add.pasteMagnet')}</button>
-            <button type="button" disabled={fileBusy} onClick={() => fileRef.current && fileRef.current.click()}>{t('add.openTorrent')}</button>
-          </div>
+        <div class="m-chips m-add-actions">
+          <button type="button" class="m-chip m-add-action tm" data-code="P07.2" data-magnet-open onClick={() => setMagnetOpen(true)}>
+            <Icon d={ICONS.magnet} size={16} />
+            {t('add.magnetBtn')}
+          </button>
+          <button type="button" class="m-chip m-add-action" data-torrent-open disabled={fileBusy} onClick={() => fileRef.current && fileRef.current.click()}>
+            <Icon d={ICONS.torrent} size={16} />
+            {t('add.torrentBtn')}
+          </button>
           <input ref={fileRef} type="file" accept=".torrent,application/x-bittorrent" hidden aria-label={t('add.openTorrent')} onChange={(e) => {
             const f = (e.target as HTMLInputElement).files && (e.target as HTMLInputElement).files![0];
             if (f) void onTorrentFile(f);
@@ -931,7 +959,7 @@ export function Add({
         </Sheet>
       )}
       {sheet === 'filters' && (
-        <FiltersSheet value={filters} seasons={seasons} count={filtered.length} onChange={setFilters} onClose={() => setSheet(null)} />
+        <FiltersSheet value={filters} seasons={seasons} showSeries={showSeries} count={filtered.length} onChange={setFilters} onClose={() => setSheet(null)} />
       )}
       {sheet === 'sort' && (
         <Sheet label={t('add.sort')} testId="PD34" onClose={() => setSheet(null)}>

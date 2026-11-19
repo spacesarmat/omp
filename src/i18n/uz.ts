@@ -26,6 +26,7 @@ export const uz: EnDict<typeof ru> = {
     originalChip: "Asl nusxa",
     rusSubsChip: "Ruscha subtitrlar",
     fullSeasonOnly: "Faqat to'liq mavsum",
+    seasonChip: "{n} mavsumi · {count}",
     show: {
       one: "Qo'lni ko'rsating {n}",
       other: "{n} qo'llarini ko'rsating",
@@ -2319,6 +2320,8 @@ export const uz: EnDict<typeof ru> = {
     magnetLabel: "Magnit havolasi yoki xesh",
     byMagnet: "Magnit havolasi orqali qo'shish",
     pasteMagnet: "Magnitni joylashtiring",
+    magnetBtn: "Magnet",
+    torrentBtn: "Torrent",
     recent: "So'nggi so'rovlar",
     clipMagnet: "Klipbordda: magnet havolasi",
     openTorrent: ".torrent faylini oching",
