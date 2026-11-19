@@ -14,6 +14,9 @@ import { grossUp, payUrl, settledCovers } from './yoomoney.mjs';
 const DAY = 24 * 60 * 60 * 1000;
 const CRYPTO_INVOICE_MS = 24 * 60 * 60 * 1000;
 const DRAFT_MS = 2 * 60 * 60 * 1000;
+// Cancelled drafts carry no money and are superseded; keep them only briefly so a donate-command
+// flood cannot grow state.donations without bound. Financial rows (pending/paid/refunded) are never pruned.
+const DONATE_CANCELLED_KEEP_MS = 7 * DAY;
 export const DONATE_THANKS_DEFAULT = 'Спасибо! Вы поддержали проект OMP.';
 
 function flag(v) {
@@ -193,9 +196,14 @@ function putDonation(state, row) {
 }
 
 function addDraft(state, row) {
-  const donations = (state.donations || []).map((d) =>
-    d && d.accountId === row.accountId && d.status === 'draft' ? { ...d, status: 'cancelled', step: '' } : d,
-  );
+  const cutoff = (Number(row.createdAt) || Date.now()) - DONATE_CANCELLED_KEEP_MS;
+  const donations = (state.donations || []).filter((d) => {
+    if (!d) return false;
+    // Superseded drafts/cancelled rows of this account are useless; drop them instead of accumulating.
+    if (d.accountId === row.accountId && (d.status === 'draft' || d.status === 'cancelled')) return false;
+    if (d.status === 'cancelled' && (Number(d.createdAt) || 0) < cutoff) return false;
+    return true;
+  });
   return { ...state, donations: donations.concat([row]) };
 }
 
