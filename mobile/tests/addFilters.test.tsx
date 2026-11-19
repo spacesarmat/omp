@@ -95,7 +95,7 @@ describe('Add filters sheet', () => {
     click(sheetBtn('Показать 1 раздачу'));
     expect(el.querySelector('.m-sheet')).toBeNull();
     expect(titles()).toEqual(['Северный ветер 2026 WEB-DL 1080p | Дубляж']);
-    const chips = Array.from(el.querySelectorAll('.m-chip-static')).map((c) => c.textContent);
+    const chips = Array.from(el.querySelectorAll('[data-filter-chip]')).map((c) => c.textContent);
     expect(chips).toEqual(['1080p', 'без экранок']);
     expect(filtersChip().textContent).toBe('Фильтры · 2');
   });
@@ -120,7 +120,7 @@ describe('Add filters sheet', () => {
     expect(filtersChip().textContent).toBe('Фильтры · 2');
     click(sheetBtn('Сбросить'));
     expect(filtersChip().textContent).toBe('Фильтры');
-    expect(el.querySelectorAll('.m-chip-static').length).toBe(0);
+    expect(el.querySelectorAll('[data-filter-chip]').length).toBe(0);
     click(el.querySelector('.m-sheet-backdrop')!);
     expect(titles().length).toBe(3);
   });
@@ -154,7 +154,7 @@ describe('Add filters sheet', () => {
     await flush();
     expect(titles().length).toBe(5);
     click(filtersChip());
-    click(sheetBtn('Сезон 2'));
+    click(buttons(el.querySelector('.m-sheet')!).find((b) => (b.textContent || '').indexOf('Сезон 2') === 0)!);
     expect(sheetBtn('Показать 4 раздачи')).toBeTruthy();
     click(sheetBtn('Показать 4 раздачи'));
     expect(titles()).toEqual([
@@ -178,7 +178,7 @@ describe('Add filters sheet', () => {
       click(sheetBtn('Hide camrips'));
       click(el.querySelector('.m-sheet-backdrop')!);
       expect(filtersChip().textContent).toBe('Filters · 1');
-      expect(el.querySelector('.m-chip-static')!.textContent).toBe('no camrips');
+      expect(el.querySelector('[data-filter-chip]')!.textContent).toBe('no camrips');
     } finally {
       applyLanguageSetting('ru');
     }

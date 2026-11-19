@@ -45,6 +45,8 @@ import { partitionByYear, splitByQueries } from '../../../src/sources/relevance'
 import { parseSearchQuery, type ParsedQuery } from '../../../src/sources/queryParse';
 import { SearchSuggest } from './SearchSuggest';
 import type { CatalogTitle } from '../../../src/catalog/tmdb';
+import { catalogQuery, filterSeasonChips, titlesNameSeason, tmdbSeasonFacts, uniqueSeries, type TmdbSeasonFacts } from '../../../src/sources/filterSeasons';
+import { phoneCatalog } from '../catalog/phoneCatalog';
 import { FiltersSheet, loadSearchFilters, saveSearchFilters } from '../ui/FiltersSheet';
 import { ResultCard } from '../ui/ResultCard';
 import { releaseTitle } from '../ui/ReleaseRow';
@@ -299,6 +301,7 @@ export function Add({
   const [recent, setRecent] = useState<string[]>(() => loadRecentQueries());
   const [fieldOn, setFieldOn] = useState(false);
   const [clipHint, setClipHint] = useState<string | null>(null);
+  const [tmdbFacts, setTmdbFacts] = useState<TmdbSeasonFacts | null>(null);
   // a link or a ready tracker query is for «Источники»; else the tab asked for, else the one used last
   // the route's fields choose only the first tab of the entry
   const [scope, setScopeState] = useState<SearchScope>(
@@ -655,7 +658,7 @@ export function Add({
   const filtered = filterByKind(matching, kindF);
   const similarFiltered = filterByKind(applyFilters(yearParts.other.concat(parts.similar), filters), kindF);
   const similarOrdered = searching ? stableOrder(memo.similarOrder, similarFiltered, sort) : sortResults(similarFiltered, sort);
-  const similarVisible = sinkUnknownSeasons(similarOrdered, filters.season);
+  const similarVisible = sinkUnknownSeasons(similarOrdered, filters.season, filters.specials);
   memo.similarOrder = similarVisible.map(resultKey);
   // nothing of the chosen kind, though the search found something: say so, not «Ничего не найдено»
   const kindEmpty = kindF !== 'all' && matching.length > 0;
@@ -665,9 +668,32 @@ export function Add({
   const rankCtx = { device: deviceCaps(rankKind), speedBps: lastLinkSpeed(), now: Date.now() };
   const ordered = searching ? stableOrder(memo.order, filtered, sort) : orderSearch(filtered, sort, memo.searched, Date.now(), recallQs);
   // unknown seasons stay in the count, under the releases of the chosen season
-  const visible = sinkUnknownSeasons(ordered, filters.season);
+  const visible = sinkUnknownSeasons(ordered, filters.season, filters.specials);
   memo.order = visible.map(resultKey);
-  const seasons = Array.from(new Set((rows || []).reduce((a: number[], r) => a.concat(parseRelease(r.Title).seasons), []))).sort((a, b) => a - b).slice(0, 12);
+  const seasonTitles = parts.hits.concat(parts.similar).map((r) => r.Title);
+  const seasons = filterSeasonChips(seasonTitles, tmdbFacts);
+  const showSeries = seasons.length > 0 || titlesNameSeason(seasonTitles);
+  const searchedNow = memo.searched;
+  useEffect(() => {
+    const q = searchedNow.trim();
+    setTmdbFacts(null);
+    if (!q) return;
+    let stop = false;
+    phoneCatalog()
+      .then((c) => c.search(catalogQuery(q), 1).then((res) => ({ c, res })))
+      .then(({ c, res }) => {
+        if (stop) return null;
+        const tv = uniqueSeries(q, res.items || []);
+        return tv ? c.card('tv', tv.id) : null;
+      })
+      .then((card) => {
+        if (stop || !card) return;
+        const facts = tmdbSeasonFacts(card);
+        if (facts) setTmdbFacts(facts);
+      })
+      .catch(() => undefined);
+    return () => { stop = true; };
+  }, [searchedNow]);
   const nFilters = activeFilterCount(filters);
   const blocked = prog ? prog.failed.filter((id) => isCloudflare((getHealth(id) || { message: '' }).message)) : [];
   // a site that showed its code page: its own message («torrent.by просит ввести проверочный код»)
@@ -800,6 +826,7 @@ export function Add({
             key={c.key}
             type="button"
             class="m-chip on"
+            data-filter-chip={c.key}
             aria-label={t('search.dropChip', { name: c.label })}
             onClick={() => setFilters(clearFilterChip(filters, c.key))}
           >
@@ -990,7 +1017,7 @@ export function Add({
         </Sheet>
       )}
       {sheet === 'filters' && (
-        <FiltersSheet value={filters} seasons={seasons} count={filtered.length} onChange={setFilters} onClose={() => setSheet(null)} />
+        <FiltersSheet value={filters} seasons={seasons} showSeries={showSeries} count={filtered.length} onChange={setFilters} onClose={() => setSheet(null)} />
       )}
       {sheet === 'sort' && (
         <Sheet label={t('add.sort')} testId="PD34" onClose={() => setSheet(null)}>

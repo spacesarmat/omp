@@ -28,6 +28,7 @@ export const tk: EnDict<typeof ru> = {
     originalChip: "Asyl",
     rusSubsChip: "Rusça altyntylar",
     fullSeasonOnly: "Diňe doly möwsüm",
+    seasonChip: "{n} möwsümi · {count}",
     show: {
       one: "Eli görkez {n}",
       other: "{n}-iň ellerini görkez",

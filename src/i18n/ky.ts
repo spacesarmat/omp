@@ -28,6 +28,7 @@ export const ky: EnDict<typeof ru> = {
     originalChip: "Оригинал",
     rusSubsChip: "Орусча субтитрлер",
     fullSeasonOnly: "Толук сезон гана",
+    seasonChip: "{n} мезгили · {count}",
     show: {
       one: "Колуңду көрсөт {n}",
       other: "{n}дун колдорун көрсөтүңүз",

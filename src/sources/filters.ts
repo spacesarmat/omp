@@ -39,6 +39,8 @@ export interface SearchFilters {
   voice: Voice[];
   rusSubs: boolean;
   season: number;
+  /** Season 0 (specials). `season` stays 0, which also means «no season chosen». */
+  specials: boolean;
   fullSeason: boolean;
   /** 1900-2099 taken from the query, or 0. */
   year: number;
@@ -47,7 +49,7 @@ export interface SearchFilters {
 }
 
 export const NO_FILTERS: SearchFilters = {
-  res: [], hdr: false, source: [], hideCam: false, minGb: 0, maxGb: 0, minSeeds: 0, voice: [], rusSubs: false, season: 0, fullSeason: false,
+  res: [], hdr: false, source: [], hideCam: false, minGb: 0, maxGb: 0, minSeeds: 0, voice: [], rusSubs: false, season: 0, specials: false, fullSeason: false,
   year: 0, episode: 0,
 };
 
@@ -122,6 +124,7 @@ export function sanitizeFilters(v: unknown): SearchFilters {
     voice: listOf(o.voice, VOICES),
     rusSubs: o.rusSubs === true,
     season: Math.floor(num(o.season, 99)),
+    specials: o.specials === true,
     fullSeason: o.fullSeason === true,
     year: yearNum(o.year),
     episode: epNum(o.episode),
@@ -184,7 +187,8 @@ export function filterChips(f: SearchFilters): string[] {
   if (f.voice.length) out.push(f.voice.map(voiceLabel).join(', '));
   if (f.rusSubs) out.push(t('filters.rusSubs'));
   if (f.year) out.push(t('filters.year', { n: f.year }));
-  if (f.season) out.push(t('filters.season', { n: f.season }));
+  if (f.specials) out.push(t('library.season', { n: 0 }));
+  else if (f.season) out.push(t('filters.season', { n: f.season }));
   if (f.episode) out.push(t('filters.episode', { n: f.episode }));
   if (f.fullSeason) out.push(t('filters.fullSeason'));
   return out;
@@ -208,7 +212,8 @@ export function filterChipList(f: SearchFilters): FilterChip[] {
   if (f.voice.length) keys.push('voice');
   if (f.rusSubs) keys.push('rusSubs');
   if (f.year) keys.push('year');
-  if (f.season) keys.push('season');
+  if (f.specials) keys.push('specials');
+  else if (f.season) keys.push('season');
   if (f.episode) keys.push('episode');
   if (f.fullSeason) keys.push('fullSeason');
   const out: FilterChip[] = [];
@@ -227,6 +232,7 @@ export function clearFilterChip(f: SearchFilters, key: string): SearchFilters {
   if (key === 'voice') return { ...f, voice: [] };
   if (key === 'rusSubs') return { ...f, rusSubs: false };
   if (key === 'year') return { ...f, year: 0 };
+  if (key === 'specials') return { ...f, specials: false };
   if (key === 'season') return { ...f, season: 0 };
   if (key === 'episode') return { ...f, episode: 0 };
   if (key === 'fullSeason') return { ...f, fullSeason: false };
@@ -256,7 +262,8 @@ export function voiceFiltered(f: SearchFilters): boolean {
 export function applyParsedFilters(f: SearchFilters, parsed: ParsedQuery, prev: ParsedQuery | null): SearchFilters {
   const season = parsed.season ? parsed.season : prev && f.season === prev.season ? 0 : f.season;
   const episode = parsed.episode ? parsed.episode : prev && f.episode === prev.episode ? 0 : f.episode;
-  return { ...f, year: parsed.year, season: season, episode: episode };
+  const specials = parsed.season ? false : f.specials;
+  return { ...f, year: parsed.year, season: season, episode: episode, specials: specials };
 }
 
 /**
@@ -294,17 +301,18 @@ export function applyFilters<T extends { Title: string; Seed: number; sizeBytes?
     if (f.rusSubs && !i.rusSubs) return false;
     // a named season set must include the choice; a pack («S01-S03», «1-3 сезоны») and «Complete series» stay;
     // a title with no season stays (sorted below the matches)
-    if (f.season && !i.allSeasons && i.seasons.length && i.seasons.indexOf(f.season) < 0) return false;
+    const want = f.specials ? 0 : f.season;
+    if ((f.specials || f.season) && !i.allSeasons && i.seasons.length && i.seasons.indexOf(want) < 0) return false;
     // an asked episode keeps the file that has it and the full-season pack that includes it
-    if (f.episode && episodeRole(r.Title, f.season, f.episode) === 'other') return false;
+    if (f.episode && episodeRole(r.Title, want, f.episode) === 'other') return false;
     if (f.fullSeason && i.episodes && (i.episodes.from > 1 || i.episodes.to < i.episodes.of)) return false;
     return true;
   });
 }
 
-/** With a season chosen, titles that never name a season go under the ones that match. Order inside each part stays. */
-export function sinkUnknownSeasons<T extends { Title: string }>(list: T[], season: number): T[] {
-  if (!season) return list;
+/** With a season chosen, titles that never name a season go under the ones that match. Order inside each part stays. Specials use season 0, which is otherwise «no season». */
+export function sinkUnknownSeasons<T extends { Title: string }>(list: T[], season: number, specials = false): T[] {
+  if (!season && !specials) return list;
   const known: T[] = [];
   const unknown: T[] = [];
   for (let i = 0; i < list.length; i++) {

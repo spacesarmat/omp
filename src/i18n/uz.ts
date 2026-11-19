@@ -28,6 +28,7 @@ export const uz: EnDict<typeof ru> = {
     originalChip: "Asl nusxa",
     rusSubsChip: "Ruscha subtitrlar",
     fullSeasonOnly: "Faqat to'liq mavsum",
+    seasonChip: "{n} mavsumi · {count}",
     show: {
       one: "Qo'lni ko'rsating {n}",
       other: "{n} qo'llarini ko'rsating",

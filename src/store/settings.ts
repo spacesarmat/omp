@@ -115,7 +115,10 @@ export interface AppSettings {
   sharedHistory: boolean;
   /** Phone «Продолжить просмотр»: the row is open. */
   continueOpen: boolean;
-  /** Phone continue row: large cards, mini tiles, or one line. */
+  /**
+   * Older builds stored the continue-row layout (cards / mini / line).
+   * The row is always the compact cards now. The value stays so a saved blob still loads.
+   */
   continueLayout: 'cards' | 'mini' | 'line';
 }
 

@@ -27,6 +27,7 @@ export const ru = {
     originalChip: 'Оригинал',
     rusSubsChip: 'Рус. субтитры',
     fullSeasonOnly: 'Только полный сезон',
+    seasonChip: 'Сезон {n} · {count}',
     show: { one: 'Показать {n} раздачу', few: 'Показать {n} раздачи', many: 'Показать {n} раздач' },
   },
   common: {
