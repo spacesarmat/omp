@@ -464,7 +464,15 @@ export function publicAdsConfig(settings, now) {
     : null;
   if (!cfg.enabled || !banners.length) {
     const off = { v: 1, enabled: false, ttlSec: AD_CONFIG_TTL_SEC };
-    if (yandexAds) off.yandexAds = yandexAds;
+    // Old clients stop at enabled: false. These fields let a new client place Yandex without a house banner.
+    if (yandexAds) {
+      off.yandexAds = yandexAds;
+      off.sections = cfg.sections;
+      off.platforms = cfg.platforms;
+      off.minAppVersion = cfg.minAppVersion;
+      off.maxPerScreen = cfg.maxPerScreen;
+      off.railsEvery = cfg.railsEvery;
+    }
     return off;
   }
   return {

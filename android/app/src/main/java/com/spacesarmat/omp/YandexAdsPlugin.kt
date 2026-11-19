@@ -38,6 +38,7 @@ class YandexAdsPlugin : Plugin() {
         val slotId = call.getString("slotId")?.trim()?.take(80) ?: return call.reject("bad-slot")
         val unit = call.getString("adUnitId")?.trim() ?: return call.reject("bad-unit")
         if (!YandexAdsUnits.accept(unit)) return call.reject("bad-unit")
+        val row = call.getString("layout") == "row"
         act.runOnUiThread {
             ensureInit {
                 val loader = NativeAdLoader(context)
@@ -46,7 +47,8 @@ class YandexAdsPlugin : Plugin() {
                     object : NativeAdLoadListener {
                         override fun onAdLoaded(nativeAd: NativeAd) {
                             act.runOnUiThread {
-                            val root = act.layoutInflater.inflate(R.layout.yandex_native_card, null) as NativeAdView
+                            val layout = if (row) R.layout.yandex_native_row else R.layout.yandex_native_card
+                            val root = act.layoutInflater.inflate(layout, null) as NativeAdView
                             if (!bind(nativeAd, root)) {
                                 drop(slotId)
                                 call.reject("bind")

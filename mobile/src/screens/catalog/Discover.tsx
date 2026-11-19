@@ -114,6 +114,7 @@ export function Discover() {
     perScreen: view === 'list' ? PER_SCREEN.list : view === 'compact' ? PER_SCREEN.compact : gridColsNow || (view === 'small' ? PER_SCREEN.cols3 : PER_SCREEN.cols2),
     active: !home && !error && !!feed && feed.items.length > 0,
     listKey: filter + '|' + qkey + '|' + view,
+    layout: view === 'list' || view === 'compact' ? 'row' : 'card',
     itemEl: (i) => (gridRef.current ? gridRef.current.querySelectorAll('[data-anchor]')[i] || null : null),
   });
 

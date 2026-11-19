@@ -551,6 +551,7 @@ export function Library() {
     perScreen: gridColsNow || PER_SCREEN[view] || PER_SCREEN.list,
     active: mine && !isHistory && !unavailable && !selecting && !query.trim() && loaded,
     listKey: tab + '|' + sort,
+    layout: view === 'list' || view === 'compact' ? 'row' : 'card',
     itemEl: (i) => (bodyRef.current ? bodyRef.current.querySelectorAll('[data-anchor]')[i] || null : null),
   });
   const adCell = (pos: number, kind: AdCellKind) => {

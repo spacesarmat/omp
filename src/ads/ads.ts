@@ -128,8 +128,21 @@ function banner(v: unknown): AdBanner | null {
 
 /** The server's answer as a config; anything unexpected is «off». `yandexAds` is optional and off when missing. */
 export function sanitizeAdsConfig(v: unknown): AdsConfig {
-  const yandex = sanitizeYandexAds(isObject(v) ? v.yandexAds : undefined);
-  if (!isObject(v) || v.v !== 1 || v.enabled !== true) return yandex.enabled ? { ...ADS_OFF, yandex } : ADS_OFF;
+  if (!isObject(v) || v.v !== 1) return ADS_OFF;
+  const yandex = sanitizeYandexAds(v.yandexAds);
+  // House can be off while Yandex is on. Sections and platforms still apply; they are not the house kill switch.
+  if (v.enabled !== true) {
+    if (!yandex.enabled) return ADS_OFF;
+    return {
+      ...ADS_OFF,
+      yandex,
+      sections: flags(v.sections, SECTIONS),
+      platforms: flags(v.platforms, PLATFORMS),
+      maxPerScreen: int(v.maxPerScreen, 1, 2, 1),
+      railsEvery: int(v.railsEvery, 2, 10, 3),
+      minAppVersion: str(v.minAppVersion, 20),
+    };
+  }
   const banners: AdBanner[] = [];
   const list = Array.isArray(v.banners) ? v.banners : [];
   for (let i = 0; i < list.length && banners.length < 50; i++) {

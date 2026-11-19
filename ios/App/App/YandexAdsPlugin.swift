@@ -56,7 +56,7 @@ public class YandexAdsPlugin: CAPPlugin, CAPBridgedPlugin {
                     }
                     switch result {
                     case .success(let ad):
-                        let view = OmpNativeAdView()
+                        let view = OmpNativeAdView(row: call.getString("layout") == "row")
                         ad.delegate = nil
                         do {
                             try ad.bind(with: view)
@@ -174,8 +174,50 @@ final class OmpNativeAdView: NativeAdView {
     private let feedback = UIButton(type: .infoLight)
     private let action = UIButton(type: .system)
     private let rating = RatingView()
+    private let row: Bool
+
+    init(row: Bool) {
+        self.row = row
+        super.init(frame: .zero)
+        backgroundColor = UIColor(red: 0.086, green: 0.094, blue: 0.114, alpha: 1)
+        title.textColor = UIColor(red: 0.957, green: 0.945, blue: 0.918, alpha: 1)
+        title.font = .boldSystemFont(ofSize: 14)
+        title.numberOfLines = row ? 1 : 2
+        body.textColor = UIColor(red: 0.784, green: 0.769, blue: 0.729, alpha: 1)
+        body.font = .systemFont(ofSize: 12)
+        body.numberOfLines = row ? 1 : 2
+        domain.textColor = UIColor(red: 0.663, green: 0.643, blue: 0.604, alpha: 1)
+        domain.font = .systemFont(ofSize: 11)
+        sponsored.text = "Реклама"
+        sponsored.textColor = UIColor(red: 0.906, green: 0.694, blue: 0.353, alpha: 1)
+        sponsored.font = .boldSystemFont(ofSize: 11)
+        warning.font = .systemFont(ofSize: 10)
+        warning.textColor = domain.textColor
+        warning.numberOfLines = row ? 1 : 3
+        for label in [price, reviews, age] {
+            label.font = .systemFont(ofSize: 10)
+            label.textColor = domain.textColor
+        }
+        for item in [media, title, body, domain, sponsored, warning, price, reviews, age, icon, favicon, feedback, action, rating] {
+            addSubview(item)
+        }
+        mediaView = media
+        titleLabel = title
+        bodyLabel = body
+        domainLabel = domain
+        sponsoredLabel = sponsored
+        warningLabel = warning
+        priceLabel = price
+        reviewCountLabel = reviews
+        ageLabel = age
+        iconImageView = icon
+        feedbackButton = feedback
+        callToActionButton = action
+        ratingView = rating
+    }
 
     override init(frame: CGRect) {
+        self.row = false
         super.init(frame: frame)
         backgroundColor = UIColor(red: 0.086, green: 0.094, blue: 0.114, alpha: 1)
         title.textColor = UIColor(red: 0.957, green: 0.945, blue: 0.918, alpha: 1)
@@ -232,6 +274,26 @@ final class OmpNativeAdView: NativeAdView {
 
     override func layoutSubviews() {
         super.layoutSubviews()
+        if row {
+            let pad: CGFloat = 6
+            media.frame = CGRect(x: pad, y: pad, width: 48, height: max(24, bounds.height - pad * 2))
+            sponsored.frame = CGRect(x: pad, y: pad, width: 64, height: 14)
+            let textX = pad + 56
+            let textW = max(40, bounds.width - textX - 40)
+            title.frame = CGRect(x: textX, y: pad, width: textW, height: 18)
+            domain.frame = CGRect(x: textX, y: pad + 18, width: textW, height: 14)
+            body.frame = CGRect(x: textX, y: pad + 32, width: textW, height: 14)
+            feedback.frame = CGRect(x: bounds.width - 36, y: max(pad, (bounds.height - 32) / 2), width: 32, height: 32)
+            warning.frame = .zero
+            action.frame = .zero
+            icon.frame = .zero
+            favicon.frame = .zero
+            age.frame = .zero
+            price.frame = .zero
+            reviews.frame = .zero
+            rating.frame = .zero
+            return
+        }
         let pad: CGFloat = 8
         let textTop = bounds.height * 0.62
         sponsored.frame = CGRect(x: pad, y: pad, width: 72, height: 16)

@@ -143,11 +143,15 @@ describe('who sees ads', () => {
     const only = sanitizeAdsConfig({
       v: 1,
       enabled: false,
-      yandexAds: { enabled: true, groups: { free: { enabled: true, everyN: 10 } } },
+      sections: { mine: true, discoverGrid: true, discoverRails: true },
+      platforms: { phone: true, androidTv: false, webos: false },
+      yandexAds: { enabled: true, groups: { free: { enabled: true, everyN: 10, afterInstallDays: 0 } } },
     });
     expect(only.enabled).toBe(false);
     expect(only.yandex.enabled).toBe(true);
+    expect(only.sections.mine).toBe(true);
     expect(adsFor(only, ctx())).toEqual([]);
+    expect(phoneYandexGroup(only, ctx())).not.toBeNull();
   });
 
   it('a TV linked to a subscribed phone follows the subscription group when Yandex is on', () => {

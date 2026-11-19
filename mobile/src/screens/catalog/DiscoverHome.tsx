@@ -150,6 +150,7 @@ export function DiscoverHome({
     perScreen: 3,
     active: !error && !!sections && sections.length > 2,
     listKey: kind + '|' + window + '|' + view,
+    layout: view === 'list' || view === 'compact' ? 'row' : 'card',
     itemEl: (i) => (homeRef.current ? homeRef.current.querySelectorAll('[data-rail]')[i] || null : null),
   });
 

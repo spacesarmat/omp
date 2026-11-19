@@ -1,0 +1,137 @@
+<?xml version="1.0" encoding="utf-8"?>
+<com.yandex.mobile.ads.nativeads.NativeAdView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/yandex_native_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#16181D"
+    android:padding="6dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <FrameLayout
+            android:layout_width="48dp"
+            android:layout_height="match_parent">
+
+            <com.yandex.mobile.ads.nativeads.MediaView
+                android:id="@+id/yandex_media"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent" />
+
+            <TextView
+                android:id="@+id/yandex_sponsored"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="top|start"
+                android:background="#CC0F1115"
+                android:paddingLeft="4dp"
+                android:paddingRight="4dp"
+                android:text="Реклама"
+                android:textColor="#E7B15A"
+                android:textSize="10sp"
+                android:textStyle="bold" />
+        </FrameLayout>
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginLeft="8dp"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/yandex_title"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:textColor="#F4F1EA"
+                android:textSize="14sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/yandex_domain"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:textColor="#A9A49A"
+                android:textSize="11sp" />
+
+            <TextView
+                android:id="@+id/yandex_body"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:textColor="#C8C4BA"
+                android:textSize="11sp" />
+
+            <TextView
+                android:id="@+id/yandex_warning"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:textColor="#8E8A82"
+                android:textSize="10sp" />
+
+            <TextView
+                android:id="@+id/yandex_cta"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="#E7B15A"
+                android:textSize="12sp" />
+        </LinearLayout>
+
+        <ImageView
+            android:id="@+id/yandex_feedback"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:contentDescription="О рекламодателе"
+            android:padding="4dp" />
+    </LinearLayout>
+
+    <ImageView
+        android:id="@+id/yandex_icon"
+        android:layout_width="1dp"
+        android:layout_height="1dp"
+        android:contentDescription=""
+        android:importantForAccessibility="no" />
+
+    <ImageView
+        android:id="@+id/yandex_favicon"
+        android:layout_width="1dp"
+        android:layout_height="1dp"
+        android:contentDescription=""
+        android:importantForAccessibility="no" />
+
+    <TextView
+        android:id="@+id/yandex_age"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textColor="#8E8A82"
+        android:textSize="10sp" />
+
+    <TextView
+        android:id="@+id/yandex_price"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textColor="#C8C4BA"
+        android:textSize="10sp" />
+
+    <TextView
+        android:id="@+id/yandex_reviews"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textColor="#8E8A82"
+        android:textSize="10sp" />
+
+    <com.yandex.mobile.ads.nativeads.Rating
+        android:id="@+id/yandex_rating"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content" />
+</com.yandex.mobile.ads.nativeads.NativeAdView>

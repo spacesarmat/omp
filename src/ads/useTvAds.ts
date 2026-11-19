@@ -75,22 +75,19 @@ export function useTvAds(o: TvAdSlotOptions): TvAdSlots {
   const opts = useRef(o);
   opts.current = o;
   const held = useRef<{ [pos: number]: AdBanner }>({});
-  const cfgRef = useRef(cfg);
-  cfgRef.current = cfg;
   const [subscribed, setSubscribed] = useState(() => ompSubscribed());
   const [capTick, setCapTick] = useState(0);
 
   useEffect(() => {
     syncTvAdsFromCache();
     expirePhoneSub();
-    const hideLinked = () => cfgRef.current.tvHideIfLinkedSubscriber && phoneLinkSubscribed(phoneLink.peek());
     const syncSub = () => setSubscribed(ompSubscribed());
     const tick = () => {
       // An expiry while the screen stays open has no billing event. The timer is what notices it.
       // A linked phone that has not answered inside PHONE_SUB_TTL_MS stops hiding ads.
+      // Subscribers and linked phones still refresh: the subscription group can turn banners on.
       expirePhoneSub();
       syncSub();
-      if (ompSubscribed() || hideLinked()) return;
       void refreshTvAds();
     };
     const first = setTimeout(tick, FIRST_FETCH_MS);

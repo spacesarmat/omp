@@ -209,6 +209,8 @@ describe('yandex phone ads', () => {
     expect(pub.yandexAds.iosUnit).toBe('demo-native-app-yandex');
     expect(pub.yandexAds.groups.free).toMatchObject({ enabled: true, everyN: 8, maxPerSession: 0, maxPerDay: 5 });
     expect(pub.yandexAds.groups.sub).toMatchObject({ enabled: true, everyN: 15, afterInstallDays: 1, maxPerSession: 2 });
+    expect(pub.sections.mine).toBe(true);
+    expect(pub.platforms.phone).toBe(true);
     expect(adsSettingsDiff(adsConfig({}), saved.config!)).toContain('яндекс: включена');
     expect(adsSettingsDiff(adsConfig({}), saved.config!)).toContain('с подпиской: вкл');
   });

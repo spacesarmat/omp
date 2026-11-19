@@ -15,7 +15,7 @@ import { torrents, libraryTab, libraryQuery, librarySearchOpen } from '../../src
 import { reloadProgress, serverViewed } from '../../src/store/progress';
 import { settings, updateSettings } from '../../src/store/settings';
 import { TorrServerClient } from '../../src/api/torrserver';
-import { cachedAdsConfig, pickBanner, saveAdsConfig, type AdBanner } from '../../src/ads/ads';
+import { cachedAdsConfig, pickBanner, sanitizeAdsConfig, saveAdsConfig, type AdBanner } from '../../src/ads/ads';
 import { pendingAdEvents, resetAdEvents } from '../../src/ads/events';
 import { adsConfig, setAdsIo } from '../src/ads/phoneAds';
 import { markAdImagesLoaded } from '../src/ads/useAdSlots';
@@ -532,7 +532,7 @@ describe('ads in «Мои»', () => {
     }
   });
 
-  it('reads the server a moment after the screen opens, and never for a subscriber', async () => {
+  it('reads the server a moment after the screen opens, including for a subscriber', async () => {
     localStorage.removeItem('tsp.adsConfig');
     vi.useFakeTimers({ toFake: ['setTimeout', 'setInterval'] });
     try {
@@ -559,7 +559,7 @@ describe('ads in «Мои»', () => {
         vi.advanceTimersByTime(6 * 60 * 1000);
       });
       await flush();
-      expect(get).not.toHaveBeenCalled();
+      expect(get).toHaveBeenCalled();
     } finally {
       vi.useRealTimers();
     }
@@ -676,6 +676,57 @@ describe('yandex native ads on the phone', () => {
     await flush();
     await flush();
     expect(el.querySelectorAll('.m-ad')).toHaveLength(0);
+  });
+
+  it('asks Yandex for the later cards after the first two requests finish', async () => {
+    let n = 0;
+    saveAdsConfig({
+      ...yandexConfig,
+      yandexAds: {
+        ...yandexConfig.yandexAds,
+        groups: {
+          ...yandexConfig.yandexAds.groups,
+          free: { ...yandexConfig.yandexAds.groups.free, everyN: 6 },
+        },
+      },
+    });
+    setYandexOsForTests('android');
+    setYandexLoaderForTests(async () => {
+      n += 1;
+      return true;
+    });
+    mount(<Library />);
+    for (let i = 0; i < 8; i++) await flush();
+    expect(n).toBeGreaterThanOrEqual(4);
+  });
+
+  it('drops a Yandex answer that belongs to the previous unit', async () => {
+    let releaseOld: (ok: boolean) => void = () => {};
+    let releaseNew: (ok: boolean) => void = () => {};
+    const old = new Promise<boolean>((resolve) => {
+      releaseOld = resolve;
+    });
+    const newer = new Promise<boolean>((resolve) => {
+      releaseNew = resolve;
+    });
+    setYandexOsForTests('android');
+    setYandexLoaderForTests((_id, unit) => (unit === 'demo-native-content-yandex' ? old : newer));
+    saveAdsConfig(yandexConfig);
+    mount(<Library />);
+    await flush();
+    act(() => {
+      adsConfig.value = sanitizeAdsConfig({
+        ...yandexConfig,
+        yandexAds: { ...yandexConfig.yandexAds, androidUnit: 'R-M-100-1' },
+      });
+    });
+    await flush();
+    releaseOld(true);
+    await flush();
+    expect(el.querySelector('[data-yandex]')).toBeNull();
+    releaseNew(true);
+    await flush();
+    expect(el.querySelector('[data-yandex]')).toBeTruthy();
   });
 
   it('does not put a Yandex card in History', async () => {

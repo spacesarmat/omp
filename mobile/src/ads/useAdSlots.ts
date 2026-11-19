@@ -62,6 +62,8 @@ export interface AdSlotOptions {
   perScreen: number;
   /** False in History, search, selection mode, an empty or failed list. */
   active: boolean;
+  /** list and compact are a short row. Poster grids and rails are a card. */
+  layout?: 'card' | 'row';
   /** Changes when the list is another one (tab, filter, query): the admitted positions start over. */
   listKey: string;
   /** The element of the card (or rail) at an index, to see whether it is below the screen. */
@@ -98,7 +100,8 @@ export function useAdSlots(o: AdSlotOptions): AdSlots {
     const syncSub = () => setSubscribed(ompSubscribed());
     const tick = () => {
       syncSub();
-      if (!ompSubscribed()) void refreshAds();
+      // Subscribers still ask: their Yandex group can be turned on without a house banner.
+      void refreshAds();
     };
     const first = setTimeout(tick, FIRST_FETCH_MS);
     const id = setInterval(tick, REFRESH_MS);
@@ -138,11 +141,14 @@ export function useAdSlots(o: AdSlotOptions): AdSlots {
   const yGroup = o.active && os
     ? phoneYandexGroup(cfg, { platform: PLATFORM, section: o.section, appVersion: APP_VERSION, subscribed, firstRun: ensureFirstRun(now), now })
     : null;
-  const audience = subscribed ? 'sub' : 'free';
+  const audience: 'free' | 'sub' = subscribed ? 'sub' : 'free';
   const yRef = useRef(yGroup);
   yRef.current = yGroup;
-  const audRef = useRef(audience);
+  const audRef = useRef<'free' | 'sub'>(audience);
   audRef.current = audience;
+  const layout: 'card' | 'row' = o.layout === 'row' ? 'row' : 'card';
+  const slotIds = useRef<{ [pos: number]: string }>({});
+  const genRef = useRef(0);
   const seenPos = (pos: number) => {
     const prefix = pos + ':';
     const values = Array.from(seen.current);
@@ -189,7 +195,7 @@ export function useAdSlots(o: AdSlotOptions): AdSlots {
     hideAllYandex();
   }
   if (!banners.length) held.current = {};
-  const admitted = adm.key === o.listKey && banners.length ? adm.list : [];
+  const admitted = adm.key === o.listKey && (banners.length || yGroup) ? adm.list : [];
   // Positions whose banner was withdrawn and whose replacement is not ready to draw. They leave `admitted`
   // so the next image, once loaded, has to pass the below-the-screen check again.
   const released: number[] = [];
@@ -211,17 +217,21 @@ export function useAdSlots(o: AdSlotOptions): AdSlots {
     if (!yGroup && !banners.length && adm.list.length) setAdm({ key: o.listKey, list: [] });
   }, [banners.length, yGroup]);
 
-  const yKey = yGroup && os ? os + ':' + yGroup.everyN + ':' + yGroup.afterInstallDays + ':' + audience + ':' + cfg.yandex.androidUnit + ':' + cfg.yandex.iosUnit : '';
+  const yKey = yGroup && os ? os + ':' + layout + ':' + yGroup.everyN + ':' + yGroup.afterInstallDays + ':' + audience + ':' + cfg.yandex.androidUnit + ':' + cfg.yandex.iosUnit : '';
   const yKeyRef = useRef('');
   if (yKeyRef.current !== yKey) {
     yKeyRef.current = yKey;
+    genRef.current += 1;
     fills.current = {};
+    slotIds.current = {};
     hideAllYandex();
   }
   useEffect(() => {
     if (!yKey || !os) return;
+    const gen = genRef.current;
     const listKey = opts.current.listKey;
     const unit = yandexUnit(cfg.yandex, os);
+    const shape = opts.current.layout === 'row' ? 'row' : 'card';
     const todo: number[] = [];
     let inflight = 0;
     for (let i = 0; i < positions.length; i++) {
@@ -230,13 +240,15 @@ export function useAdSlots(o: AdSlotOptions): AdSlots {
       if (st === 'loading') inflight++;
       else if (st === undefined) todo.push(p);
     }
+    // Two at a time. fillTick is a dependency so a finished request starts the next positions.
     const room = 2 - inflight;
     for (let i = 0; i < todo.length && i < room; i++) {
       const p = todo[i];
       fills.current[p] = 'loading';
-      const slotId = listKey + ':' + p;
-      void loadYandexSlot(slotId, unit).then((ok) => {
-        if (key.current !== listKey) {
+      const slotId = listKey + ':' + p + ':' + gen;
+      slotIds.current[p] = slotId;
+      void loadYandexSlot(slotId, unit, shape).then((ok) => {
+        if (genRef.current !== gen || key.current !== listKey) {
           hideYandexSlot(slotId);
           return;
         }
@@ -244,7 +256,7 @@ export function useAdSlots(o: AdSlotOptions): AdSlots {
         setFillTick((n) => n + 1);
       });
     }
-  }, [positions.join(','), yKey, o.listKey]);
+  }, [positions.join(','), yKey, o.listKey, fillTick]);
   useEffect(() => {
     if (!released.length) return;
     const k = opts.current.listKey;
@@ -348,7 +360,7 @@ export function useAdSlots(o: AdSlotOptions): AdSlots {
   return {
     admitted: drawn,
     fill: fillOf,
-    slotId: (pos: number) => o.listKey + ':' + pos,
+    slotId: (pos: number) => slotIds.current[pos] || o.listKey + ':' + pos,
     banner(pos) {
       if (fillOf(pos) === 'yandex') return null;
       return bannerAt(pos);

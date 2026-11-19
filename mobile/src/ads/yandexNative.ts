@@ -11,7 +11,7 @@ export interface YandexRect {
 }
 
 interface YandexPlugin {
-  load(o: { slotId: string; adUnitId: string }): Promise<void>;
+  load(o: { slotId: string; adUnitId: string; layout: string }): Promise<void>;
   place(o: { slotId: string } & YandexRect): Promise<void>;
   hide(o: { slotId: string }): Promise<void>;
   hideAll(): Promise<void>;
@@ -44,10 +44,28 @@ export function yandexOs(): 'android' | 'ios' | null {
   return null;
 }
 
-export function loadYandexSlot(slotId: string, adUnitId: string): Promise<boolean> {
+export type YandexLayout = 'card' | 'row';
+
+/** The catalog strip that may show an ad: under the sticky bar, above the tab bar, and never over a sheet. */
+export function yandexClip(): { top: number; bottom: number; blocked: boolean } {
+  const sheet = document.querySelector('.m-sheet-host, .m-dialog-host, [role="dialog"]');
+  if (sheet) return { top: 0, bottom: 0, blocked: true };
+  let top = 0;
+  let bottom = window.innerHeight || document.documentElement.clientHeight || 0;
+  const sticky = document.querySelector('.m-lib-sticky');
+  if (sticky) top = Math.max(top, sticky.getBoundingClientRect().bottom);
+  const tabs = document.querySelector('.m-tabs');
+  if (tabs) {
+    const t = tabs.getBoundingClientRect().top;
+    if (t > 0) bottom = Math.min(bottom, t);
+  }
+  return { top, bottom, blocked: false };
+}
+
+export function loadYandexSlot(slotId: string, adUnitId: string, layout: YandexLayout): Promise<boolean> {
   if (loader) return loader(slotId, adUnitId);
   if (!yandexOs()) return Promise.resolve(false);
-  return plugin.load({ slotId, adUnitId }).then(
+  return plugin.load({ slotId, adUnitId, layout }).then(
     () => true,
     () => false,
   );

@@ -3,7 +3,7 @@
 import { useEffect, useRef } from 'preact/hooks';
 import { t } from '../../../src/i18n';
 import type { AdCellKind } from './AdCell';
-import { hideYandexSlot, placeYandexSlot } from './yandexNative';
+import { hideYandexSlot, placeYandexSlot, yandexClip } from './yandexNative';
 
 const SHOWN_MS = 1000;
 
@@ -18,9 +18,17 @@ export function YandexCell({ kind, slotId, onShown }: { kind: AdCellKind; slotId
     let frame = 0;
     const place = () => {
       frame = 0;
+      const clip = yandexClip();
       const r = el.getBoundingClientRect();
       const viewportWidth = document.documentElement.clientWidth || window.innerWidth || r.width;
-      placeYandexSlot(slotId, { x: r.left, y: r.top, width: r.width, height: r.height, viewportWidth });
+      const y = Math.max(r.top, clip.top);
+      const height = Math.min(r.bottom, clip.bottom) - y;
+      // A sheet, the sticky header or the tab bar must stay above the native ad.
+      if (clip.blocked || height < 8 || r.width < 8) {
+        hideYandexSlot(slotId);
+        return;
+      }
+      placeYandexSlot(slotId, { x: r.left, y, width: r.width, height, viewportWidth });
     };
     const onScroll = () => {
       if (!frame) frame = requestAnimationFrame(place);
@@ -29,13 +37,20 @@ export function YandexCell({ kind, slotId, onShown }: { kind: AdCellKind; slotId
     const how = { passive: true, capture: true };
     window.addEventListener('scroll', onScroll, how);
     window.addEventListener('resize', onScroll);
+    // Sheets are added to the page without a scroll. One observer per visible ad is enough.
+    const mo = typeof MutationObserver === 'undefined' ? null : new MutationObserver(onScroll);
+    if (mo) mo.observe(document.body, { childList: true, subtree: true });
+    const ro = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(onScroll);
+    if (ro) ro.observe(el);
     return () => {
       if (frame) cancelAnimationFrame(frame);
       window.removeEventListener('scroll', onScroll, how);
       window.removeEventListener('resize', onScroll);
+      if (mo) mo.disconnect();
+      if (ro) ro.disconnect();
       hideYandexSlot(slotId);
     };
-  }, [slotId]);
+  }, [slotId, kind]);
 
   useEffect(() => {
     const el = ref.current;
