@@ -14,6 +14,10 @@ ENV NODE_ENV=production
 ENV DHT_HTTP_PORT=8788
 ENV NODE_OPTIONS=--max-old-space-size=96
 
+# Writable mount point for the persistent routing table. A named volume inherits this ownership,
+# so the non-root node user can save the table (a root-owned bind mount would block writes).
+RUN mkdir -p /data && chown node:node /data
+
 USER node
 EXPOSE 8788
 
