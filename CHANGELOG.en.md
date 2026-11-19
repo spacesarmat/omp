@@ -7,6 +7,7 @@ The English translation covers the latest versions only; the full history (in Ru
 ## Unreleased
 
 - [tech] Deploy: the on-server jacred/init.yaml (a bind mount with real API keys) is set to mode 600 - a fresh checkout ships it world-readable (644). Content is never overwritten and dry-run leaves permissions alone
+- [tech] Billing: a flood of donate commands no longer grows state without bound - superseded draft/cancelled rows of the account are removed and cancelled rows older than 7 days are pruned; financial rows (pending/paid/refunded) are never touched
 - [tech] Admin: Playwright checks login, every section, that a promo revoke is not sent before Yes, and that saving the rate still shows the subscription number. Donation and referral forms have component tests
 - [tech] The developer mode banner test no longer waits on a requestAnimationFrame under fake timers: the render runs in the same turn as setState
 - [tech] Admin: a person's card has one timeline of the subscription, devices, payments, donations, referrals and audit. The journal can filter price and rate changes and shows the old value, the new value, the source and who changed it. Selected people can be granted days or messaged, and selected promos can be revoked, after a confirm that states the count
