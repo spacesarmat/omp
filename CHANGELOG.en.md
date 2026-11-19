@@ -6,6 +6,11 @@ The English translation covers the latest versions only; the full history (in Ru
 
 ## Unreleased
 
+- [phone] Settings rows share one height inside grouped cards, and a row that opens a screen has a chevron. The update check no longer splits the card
+- [phone] Help: "Did it help?" sits with Useful and Not useful, with a gap between them. The action under an answer is full width
+- [phone] A Discover title that is already in the library has an In library button that opens that release
+- [phone] The player next-episode card and the episode list show the episode code and the TMDB title. File names are left out. A quality badge sits on the right, and the title stays within two lines
+
 - [tech] DHT sidecar: persistent routing table on a writable volume (DHT_STATE_FILE, rootfs stays read_only) - the node starts warm after a restart/idle instead of bootstrapping from scratch through filtered UDP ports; more real DHT seeder estimates. Stores only node ip:port:id, atomic write. Compose deploy needs agreement
 - [phone] Tell friends is centred: a headline and the bonus note, a QR card, a code chip and a link row that copy, a friends card, and a full-width Share button. Copying shows a toast
 - [phone] My and Discover can show a native Yandex ad on Android and iOS, in the same card. If Yandex has no ad, the own banner stays, then a normal card. History and search have no ads. Nothing changes until the admin switch is on

@@ -2823,6 +2823,7 @@ export const az: EnDict<typeof ru> = {
     phoneServer: "Mobil telefonunuzda TorrServer",
     logs: "Diaqnoz",
     didIt: "İşlədi?",
+    helped: "Kömək etdi?",
     device: "Cihaz",
     dev: {
       lg: "LG televizoru",

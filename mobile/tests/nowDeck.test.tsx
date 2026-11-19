@@ -179,7 +179,7 @@ describe('NowPlaying swipes', () => {
     swipe(card(), [200, 500], [200, 100]);
     expect(pane()).toBe('episodes');
     const rows = Array.from(el.querySelectorAll('.m-now-ep-title')).map((n) => n.textContent);
-    expect(rows).toEqual(['1 серия · Frost.Pass.S01E01', '2 серия · Frost.Pass.S01E02']);
+    expect(rows).toEqual(['1 серия', '2 серия']);
     swipe(el.querySelectorAll('.m-now-ep')[1], [300, 200], [40, 210]);
     await act(async () => {
       for (let i = 0; i < 30; i++) await Promise.resolve();
@@ -187,7 +187,7 @@ describe('NowPlaying swipes', () => {
     expect(launch).toHaveBeenCalledWith(expect.objectContaining({ file: 2 }));
   });
 
-  it('episodes show TMDB names and keep the filename when TMDB has no real name', async () => {
+  it('episodes show TMDB names and skip a raw file name', async () => {
     const show = { kind: 'tv' as const, id: 31, title: 'Ледяной перевал', original: 'Frost Pass', year: 2026, poster: '', rating: 0 };
     const season = vi.fn().mockResolvedValue({
       number: 1,
@@ -213,7 +213,7 @@ describe('NowPlaying swipes', () => {
     }
     expect(season).toHaveBeenCalledTimes(1);
     const rows = Array.from(el.querySelectorAll('.m-now-ep-title')).map((n) => n.textContent);
-    expect(rows).toEqual(['1 серия · Ледяной прибой', '2 серия · Frost.Pass.S01E02']);
+    expect(rows).toEqual(['1 серия · Ледяной прибой', '2 серия']);
   });
 
   it('episode names do not leak when the release changes', async () => {
@@ -235,6 +235,6 @@ describe('NowPlaying swipes', () => {
     torrents.value = [first, { ...first, hash: 'h2', title: 'Другой сериал S01', file_stats: [{ id: 3, path: 'Other.Show.S01E01.mkv', length: 1000 }] }];
     nowPlaying.value = { ...nowPlaying.value!, hash: 'h2', file: 3, title: 'Другой сериал', subtitle: 'S01E01' };
     render(<NowPlaying />, el);
-    expect(el.querySelector('.m-now-ep-title')!.textContent).toBe('1 серия · Other.Show.S01E01');
+    expect(el.querySelector('.m-now-ep-title')!.textContent).toBe('1 серия');
   });
 });

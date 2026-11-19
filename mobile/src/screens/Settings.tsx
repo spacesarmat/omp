@@ -134,7 +134,8 @@ function LanguageRow() {
     <>
       <button type="button" class="m-set-row m-set-pick tm" data-code="P11.7" data-row="language" onClick={() => setOpen(true)}>
         <span>{title}</span>
-        <span class="m-muted">{languageName(cur)} ›</span>
+        <span class="m-muted">{languageName(cur)}</span>
+        <Icon d={CHEVRON} size={20} />
       </button>
       {open && (
         <Sheet label={title} testId="PD01" onClose={() => setOpen(false)}>
@@ -601,7 +602,8 @@ export function Settings() {
         </div>}
         {rows.monitor && <button type="button" class="m-set-row m-set-pick tm" data-code="P11.11" onClick={() => navigate({ name: 'monitor' })}>
           <span>{t('settings.followNew')}</span>
-          <span class="m-muted">{monitor.enabled ? hoursText(monitor.hours) : t('sources.state.off')} ›</span>
+          <span class="m-muted">{monitor.enabled ? hoursText(monitor.hours) : t('sources.state.off')}</span>
+          <Icon d={CHEVRON} size={20} />
         </button>}
       </section>
       )}
@@ -645,12 +647,13 @@ export function Settings() {
             />
           </div>
         )}
-        {rows.version && <button type="button" class="m-set-row m-set-row-btn tm" data-code="P11.12" onClick={() => openWhatsNew(phoneChangelog(), APP_VERSION)}>
+        {rows.version && <button type="button" class="m-set-row m-set-pick tm" data-code="P11.12" onClick={() => openWhatsNew(phoneChangelog(), APP_VERSION)}>
           <span>{t('settings.version')}</span>
           <span class="m-muted">
             {APP_VERSION}
-            {isBetaVersion(APP_VERSION) && <span class="m-badge-beta">{betaBadge()}</span>} · {t('whatsNew.title')} ›
+            {isBetaVersion(APP_VERSION) && <span class="m-badge-beta">{betaBadge()}</span>} · {t('whatsNew.title')}
           </span>
+          <Icon d={CHEVRON} size={20} />
         </button>}
         {rows.check && (latestUpdate.value ? (
           <button type="button" class="m-btn m-btn-primary tm" data-code="P11.13" data-row="update-available" onClick={() => (updatePrompt.value = latestUpdate.value)}>

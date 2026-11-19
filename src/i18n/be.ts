@@ -2699,6 +2699,7 @@ export const be: typeof ru = {
     phoneServer: "TorrServer на тэлефоне",
     logs: "Дыягностыка",
     didIt: "Атрымалася?",
+    helped: "Дапамагло?",
     device: "Прылада",
     dev: {
       lg: "Тэлевізар LG",

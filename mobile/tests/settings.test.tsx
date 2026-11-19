@@ -156,7 +156,7 @@ describe('Settings', () => {
 
   it('tap on «Версия» opens «Что нового» with the latest versions', async () => {
     const el = mount();
-    const row = Array.from(el.querySelectorAll('button')).find((b) => b.textContent!.indexOf('Что нового ›') >= 0)!;
+    const row = Array.from(el.querySelectorAll('button')).find((b) => b.textContent!.indexOf('Что нового') >= 0)!;
     expect(row.textContent).toContain(APP_VERSION);
     await act(async () => row.click());
     expect(whatsNew.value!.title).toBe('Что нового');
@@ -783,7 +783,7 @@ describe('Settings in English', () => {
     }
     expect(text).not.toContain('Server settings');
     expect(text).not.toContain('Check for updates on start');
-    expect(el.querySelector('[data-row="language"]')!.textContent).toBe('LanguageAs on the device ›');
+    expect(el.querySelector('[data-row="language"]')!.textContent).toBe('LanguageAs on the device');
     noCyrillic(el);
   });
 

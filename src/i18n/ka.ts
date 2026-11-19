@@ -2823,6 +2823,7 @@ export const ka: EnDict<typeof ru> = {
     phoneServer: "TorrServer თქვენს მობილურ ტელეფონზე",
     logs: "დიაგნოზი",
     didIt: "იმუშავა?",
+    helped: "დაგეხმარა?",
     device: "მოწყობილობა",
     dev: {
       lg: "LG ტელევიზორი",
