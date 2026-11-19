@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { adPositions, adsFor, pickBanner, type AdBanner, type AdSection } from './ads';
 import { adEvent } from './events';
-import { groupPlacement, impressionsLeft, noteYandexImpression, tvLinkedMode } from './yandex';
+import { capAdmitted, groupPlacement, impressionsLeft, noteYandexImpression, tvLinkedMode } from './yandex';
 import { APP_VERSION } from '../version';
 import { ACCESS_KEY, ompSubscribed } from '../billing/entitlement';
 import { onBillingChange, SESSION_KEY } from '../billing/session';
@@ -210,6 +210,18 @@ export function useTvAds(o: TvAdSlotOptions): TvAdSlots {
       return { key: k, list };
     });
   }, [released.join(',')]);
+  const capKey = subGroup ? subGroup.maxPerSession + ':' + subGroup.maxPerDay : '';
+  useEffect(() => {
+    const capped = subRef.current;
+    const left = capped ? impressionsLeft(capped, 'sub', Date.now()) : Number.POSITIVE_INFINITY;
+    const k = opts.current.listKey;
+    setAdm((prev) => {
+      if (prev.key !== k) return prev;
+      const list = capAdmitted(prev.list, seenPos, left);
+      if (list.length === prev.list.length) return prev;
+      return { key: k, list };
+    });
+  }, [capKey]);
 
   useEffect(() => {
     let alive = true;
@@ -282,8 +294,10 @@ export function useTvAds(o: TvAdSlotOptions): TvAdSlots {
     shown(pos) {
       const b = bannerAt(pos);
       if (!b) return;
+      const capped = subRef.current;
       const k = pos + ':' + b.id;
       if (seen.current.has(k)) return;
+      if (capped && impressionsLeft(capped, 'sub', Date.now()) <= 0) return;
       seen.current.add(k);
       adEvent(b.id, o.section, platform, 'i');
       if (subRef.current) {

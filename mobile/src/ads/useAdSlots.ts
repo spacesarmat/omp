@@ -4,7 +4,7 @@
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { adPositions, adsFor, phoneYandexGroup, pickBanner, railPositions, type AdBanner, type AdSection } from '../../../src/ads/ads';
 import { adEvent } from '../../../src/ads/events';
-import { groupPlacement, impressionsLeft, noteYandexImpression, slotFill, yandexShouldLoad, yandexSlotId, yandexUnit } from '../../../src/ads/yandex';
+import { capAdmitted, groupPlacement, impressionsLeft, noteYandexImpression, slotFill, yandexShouldLoad, yandexSlotId, yandexUnit } from '../../../src/ads/yandex';
 import { hideAllYandex, hideYandexSlot, loadYandexSlot, yandexOs } from './yandexNative';
 import { APP_VERSION } from '../../../src/version';
 import { ACCESS_KEY, ompSubscribed } from '../../../src/billing/entitlement';
@@ -239,6 +239,18 @@ export function useAdSlots(o: AdSlotOptions): AdSlots {
   useEffect(() => {
     setAdm({ key: opts.current.listKey, list: [] });
   }, [yKey]);
+  const capKey = yGroup ? yGroup.maxPerSession + ':' + yGroup.maxPerDay : '';
+  useEffect(() => {
+    const group = yRef.current;
+    const left = group ? impressionsLeft(group, audRef.current, Date.now()) : Number.POSITIVE_INFINITY;
+    const k = opts.current.listKey;
+    setAdm((prev) => {
+      if (prev.key !== k) return prev;
+      const list = capAdmitted(prev.list, seenPos, left);
+      if (list.length === prev.list.length) return prev;
+      return { key: k, list };
+    });
+  }, [capKey]);
   useEffect(() => {
     if (!yKey || !os) return;
     const gen = genRef.current;
@@ -449,6 +461,7 @@ export function useAdSlots(o: AdSlotOptions): AdSlots {
       if (y) {
         const k = pos + ':y:' + audRef.current;
         if (seen.current.has(k)) return;
+        if (impressionsLeft(y, audRef.current, Date.now()) <= 0) return;
         seen.current.add(k);
         noteYandexImpression(audRef.current, Date.now());
         setCapTick((n) => n + 1);

@@ -179,6 +179,23 @@ function dayCount(audience: 'free' | 'sub', now: number): number {
 }
 
 /** How many more impressions this audience may record. Infinity when both caps are off. */
+/** Shown positions stay. Unshown ones are kept only while they fit in `left`. */
+export function capAdmitted(list: number[], seen: (pos: number) => boolean, left: number): number[] {
+  let pending = 0;
+  const out: number[] = [];
+  for (let i = 0; i < list.length; i++) {
+    const p = list[i];
+    if (seen(p)) {
+      out.push(p);
+      continue;
+    }
+    if (pending >= left) continue;
+    out.push(p);
+    pending++;
+  }
+  return out;
+}
+
 export function impressionsLeft(group: YandexGroup, audience: 'free' | 'sub', now: number): number {
   let left = Number.POSITIVE_INFINITY;
   if (group.maxPerSession > 0) left = Math.min(left, Math.max(0, group.maxPerSession - session[audience]));

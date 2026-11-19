@@ -12,6 +12,7 @@ import {
   sanitizeYandexAds,
   slotFill,
   tvLinkedMode,
+  capAdmitted,
   yandexShouldLoad,
   yandexSlotId,
   yandexUnit,
@@ -126,6 +127,12 @@ describe('what fills the card', () => {
     expect(slotFill({ yandexReady: false, yandexFailed: true, house: true, fallback: false })).toBe('none');
     expect(slotFill({ yandexReady: false, yandexFailed: true, house: false, fallback: true })).toBe('none');
     expect(slotFill({ yandexReady: false, yandexFailed: false, house: true, fallback: true })).toBe('none');
+  });
+
+  it('keeps shown slots and only as many unshown ones as the new cap allows', () => {
+    const seen = (p: number) => p === 6;
+    expect(capAdmitted([6, 12, 18, 24], seen, 1)).toEqual([6, 12]);
+    expect(capAdmitted([6, 12, 18], seen, 0)).toEqual([6]);
   });
 
   it('loads a card near the screen and skips one far down the list', () => {
