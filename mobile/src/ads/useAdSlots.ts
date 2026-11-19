@@ -293,6 +293,19 @@ export function useAdSlots(o: AdSlotOptions): AdSlots {
     let frame = 0;
     const poke = () => {
       frame = 0;
+      const h = window.innerHeight || document.documentElement.clientHeight || 0;
+      const shown = adm.key === opts.current.listKey ? adm.list : [];
+      // A loaded ad that never counted an impression and has left the screen still holds the cap.
+      // Release it before deciding there is no room for the next card.
+      for (let i = 0; i < positions.length; i++) {
+        const p = positions[i];
+        if (fills.current[p] !== 'ready' || shown.indexOf(p) >= 0) continue;
+        const el = opts.current.itemEl(p);
+        const r = el ? el.getBoundingClientRect() : null;
+        if (yandexShouldLoad(r ? { top: r.top, bottom: r.bottom } : null, h)) continue;
+        setNearTick((n) => n + 1);
+        return;
+      }
       const allowance = yRef.current ? impressionsLeft(yRef.current, audRef.current, Date.now()) : 0;
       let held = 0;
       for (let i = 0; i < positions.length; i++) {
@@ -300,7 +313,6 @@ export function useAdSlots(o: AdSlotOptions): AdSlots {
         if ((st === 'loading' || st === 'ready') && !seenPos(positions[i])) held++;
       }
       if (!(allowance - held > 0)) return;
-      const h = window.innerHeight || document.documentElement.clientHeight || 0;
       for (let i = 0; i < positions.length; i++) {
         const p = positions[i];
         if (fills.current[p] !== undefined) continue;
