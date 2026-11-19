@@ -16,11 +16,18 @@ export interface RecallHint {
   alts?: string[];
 }
 
+/** Dedupe key. Latin and Russian fold through normalizeTitle. Other scripts stay, so a Japanese title is still searched. */
+export function queryKey(s: string): string {
+  const folded = normalizeTitle(s);
+  if (folded) return folded;
+  return (s || '').toLowerCase().replace(/\s+/g, ' ').trim();
+}
+
 function pushUnique(out: string[], seen: { [k: string]: boolean }, s: string, cap: number): void {
   if (out.length >= cap) return;
   const q = (s || '').replace(/\s+/g, ' ').trim();
   if (!q) return;
-  const k = normalizeTitle(q);
+  const k = queryKey(q);
   if (!k || seen[k]) return;
   seen[k] = true;
   out.push(q);
@@ -53,7 +60,7 @@ function looseYear(s: string): string {
 export function relaxedQueries(parsed: ParsedQuery, already: string[]): string[] {
   const seen: { [k: string]: boolean } = {};
   for (let i = 0; i < already.length; i++) {
-    const k = normalizeTitle(already[i]);
+    const k = queryKey(already[i]);
     if (k) seen[k] = true;
   }
   const raw = parsed.raw || '';
@@ -63,7 +70,7 @@ export function relaxedQueries(parsed: ParsedQuery, already: string[]): string[]
   for (let i = 0; i < candidates.length; i++) {
     const q = (candidates[i] || '').replace(/\s+/g, ' ').trim();
     if (!q || q === parsed.title) continue;
-    const k = normalizeTitle(q);
+    const k = queryKey(q);
     if (!k || seen[k]) continue;
     seen[k] = true;
     out.push(q);

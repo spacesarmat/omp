@@ -5,9 +5,9 @@
 import { activeCatalog } from '../catalog/activeCatalog';
 import type { CatalogTitle } from '../catalog/tmdb';
 import { t } from '../i18n';
-import { mergeResults, normalizeTitle } from './merge';
+import { mergeResults } from './merge';
 import { splitByQueries } from './relevance';
-import { relaxedQueries, trackerQueries, type RecallHint } from './recall';
+import { queryKey, relaxedQueries, trackerQueries, type RecallHint } from './recall';
 import { allSources } from './registry';
 import { CLOUDFLARE_TIMEOUT_MS, SOURCE_TIMEOUT_MS, sourcesForSearch, type SearchAllOptions, type SearchHandle } from './search';
 import { isIpBan } from './ipBan';
@@ -132,7 +132,7 @@ export function searchRecall(raw: string, opts: RecallSearchOptions): SearchHand
     let any = false;
     for (let i = 0; i < list.length; i++) {
       const q = (list[i] || '').replace(/\s+/g, ' ').trim();
-      const k = normalizeTitle(q);
+      const k = queryKey(q);
       if (!q || !k || seenQ[k]) continue;
       seenQ[k] = true;
       queries.push(q);
@@ -258,7 +258,16 @@ export function searchRecall(raw: string, opts: RecallSearchOptions): SearchHand
                 return;
               }
               // Keep the first failure. A later title can still succeed and replace it.
-              if (!ok[source.id] && !firstErr[source.id]) firstErr[source.id] = asError(e);
+              const err = asError(e);
+              if (!ok[source.id] && !firstErr[source.id]) firstErr[source.id] = err;
+              // The tracker call is still running after the timeout. Do not start the next title on top of it.
+              if (err.message === t('sources.sourceTimeout')) {
+                running = false;
+                cursor[source.id] = queries.length;
+                finishSource(source, firstErr[source.id] || err);
+                noteIdle();
+                return;
+              }
               noteIdle();
               step();
             },
@@ -266,6 +275,12 @@ export function searchRecall(raw: string, opts: RecallSearchOptions): SearchHand
           return;
         }
         running = false;
+        // The titles queued so far are done. Do not keep the source "still searching" while TMDB is out.
+        if (!closed && !cancelled) {
+          const at = pending.indexOf(source.id);
+          if (at >= 0) pending.splice(at, 1);
+          if (ok[source.id]) safe(() => opts.onDone && opts.onDone(source.id));
+        }
         noteIdle();
         if (running) return;
         if (!closed) {

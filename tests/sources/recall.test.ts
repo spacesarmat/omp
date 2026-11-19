@@ -22,6 +22,11 @@ describe('trackerQueries', () => {
     expect(qs.length).toBeLessThanOrEqual(4);
   });
 
+  it('keeps a title that is not Latin or Russian', () => {
+    const title = '\u5343\u3068\u5343\u5c0b\u306e\u795e\u96a0\u3057';
+    expect(trackerQueries(parseSearchQuery(title), [])).toEqual([title]);
+  });
+
   it('keeps the first search to the cleaned title and transliterates only on the empty retry', () => {
     expect(trackerQueries(parseSearchQuery('Локи'), [])).toEqual(['Локи']);
     expect(relaxedQueries(parseSearchQuery('Локи'), ['Локи'])).toContain('loki');

@@ -96,6 +96,25 @@ describe('searchRecall', () => {
     expect((seen[0] as { code?: string }).code).toBe('cloudflare-interactive');
   });
 
+  it('does not start another title after the tracker times out', async () => {
+    const seen: string[] = [];
+    const s = source((q) => {
+      seen.push(q);
+      return new Promise(() => undefined);
+    });
+    const h = searchRecall('\u041b\u043e\u043a\u0438', {
+      ctx: {} as never,
+      from: [s],
+      sources: ['rutor'],
+      timeoutMs: 30,
+      lookup: () => Promise.resolve(['Loki']),
+    });
+    await new Promise((r) => setTimeout(r, 80));
+    h.cancel();
+    await h.done;
+    expect(seen).toEqual(['\u041b\u043e\u043a\u0438']);
+  });
+
   it('does not report a search that was cancelled', async () => {
     let calls = 0;
     let rejectLate: (e: Error) => void = () => {};
