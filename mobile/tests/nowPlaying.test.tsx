@@ -527,7 +527,7 @@ describe('MiniPlayer', () => {
 });
 
 describe('mini-player in the shell', () => {
-  it('shows only on «Каталог» and «Пульт» tabs', () => {
+  it('shows on «Каталог» and stays off «Пульт», where the title sits in the header', () => {
     setState(state());
     resetTo({ name: 'add' });
     mount(<App />);
@@ -536,7 +536,8 @@ describe('mini-player in the shell', () => {
     act(() => switchTab({ name: 'settings' }));
     expect(el.querySelector('.m-mini')).toBeNull();
     act(() => switchTab({ name: 'remote' }));
-    expect(el.querySelector('.m-mini')).not.toBeNull();
+    expect(el.querySelector('.m-mini')).toBeNull();
+    expect(el.querySelector('.m-mini-pad')).toBeNull();
     act(() => switchTab({ name: 'library' }));
     expect(el.querySelector('.m-mini')).not.toBeNull();
   });
