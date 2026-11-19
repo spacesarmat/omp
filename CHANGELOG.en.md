@@ -4,11 +4,9 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
-## 0.30.1-beta.17
+## 0.30.1
 
 - [tech] Watch history, progress, chosen audio, skip settings, a manual TMDB match, renames and monitoring flags stay on the device and work without TorrServer. The first launch copies them from the server once. Subscribers sync them through billing. An admin switch chooses subscribers only or everyone, and subscribers only is the default. Without a subscription the data stays on the device and sync stops
-
-## 0.30.1-beta.16
 
 - [phone] A library series is more likely to match the right TMDB show: an exact title beats a title that only contains the word, for any short name, not one show. Season, episode length, popularity and 4K count. A rename searches again. "Not this series?" is on the torrent page too. "+ Season" searches the English and the local title
 - [phone] Grouped source results show the TMDB poster, or the title's first letter when there is none
@@ -23,8 +21,6 @@ The English translation covers the latest versions only; the full history (in Ru
 - [phone] On a series page, Change next to the dub opens the studios. When the tracks are not known yet, the app asks the server. If there are none, it says the tracks will be available after playback starts, with Retry. The info hint stays its own button
 - [phone] Both episode lists match: the title on top, one or two lines, then a line with the duration on the left and the size on the right, then the progress bar. "59 min" does not split. A chosen season does not repeat the season name. Skip and Monitoring use the usual gap
 - [phone] Now on TV, the mini player, the next-episode card, the episode sheet and the TV player show the TMDB episode title ("episode 1 · title"). With no title, only the number stays. The phone sends that title when it starts playback on the TV
-
-## 0.30.1-beta.15
 
 - [phone] Settings rows share one height inside grouped cards, and a row that opens a screen has a chevron. The update check no longer splits the card
 - [phone] Help: "Did it help?" sits with Useful and Not useful, with a gap between them. The action under an answer is full width
@@ -55,8 +51,6 @@ The English translation covers the latest versions only; the full history (in Ru
 - [tech] Admin: sections open through TanStack Router at /admin/<section>. Old ?tab= links move to the new address. The server serves the same page for every section
 - [tech] Admin and billing: the only price is rubles in Settings. Stars, crypto and the YooMoney fee are computed from it by one rate book. A stale rate hides the method for donations and subscriptions. A rate can be pinned for a limited time with a reason, and the audit stores the old and new numbers. The refresh interval is set in Settings. Stored starsPrice and crypto* fields remain but new invoices ignore them. /v1/pay/crypto and bot invoices keep their shape, so no new app release is required
 
-## 0.30.1-beta.14
-
 - [tech] Admin: the section stays in the address, one search covers Finance, Donations, Bot replies, donations, promos and referrals. Destructive actions share one confirm dialog. Referral statuses and audit labels are Russian. Narrow screens use a drawer. Empty NUC and Crashes screens explain themselves
 - [tech] Monitoring: tracker site checks no longer probe non-public addresses - an indexer URL must be a public http(s) host; loopback, LAN, link-local, CGN and internal names are rejected. Prevents SSRF via a configured indexer
 - [tech] Billing: sending codes over SMTP no longer allows an unencrypted fallback - ports other than 465 require STARTTLS (requireTLS), 465 uses implicit TLS. Prevents downgrade and sending the password/code in plaintext
@@ -67,34 +61,22 @@ The English translation covers the latest versions only; the full history (in Ru
 - [tech] LG Content Store build: the __STORE_BUILD__ flag (npm run build:store / package:store) disables public search and discovery - a player for the user's own TorrServer (catalog, M3U/HLS, playback) remains; regular builds are unchanged
 - [tech] The developer mode expiry banner test is no longer flaky: after fake timers it deterministically waits for Preact's deferred rAF render, which had failed the full release test run
 
-## 0.30.1-beta.13
-
 - [lg] "Extend mode" button in the TV settings and a catalog banner 3 days before the 1000-hour Developer Mode ends: they open Developer Mode, where Extend completes the renewal; the banner rechecks the deadline while the catalog is open so OMP stays on the TV
 - [phone] "Update OMP on the TV": when the TV runs an older version, the install assistant offers "Update from the phone" - the same installer (LG - Developer Mode passphrase, Android TV - adb); "Update on the TV" stays next to it. Updating does not reset the developer mode reminder
 - [tech] TV boot regression test: the phone launch must open the player even on the old WebView (SVG without dataset) and when the design runtime fails. The test reproduces the beta.11 incident and fails on pre-#431 code
 - [tech] omp-player.online: a permanent privacy policy at /privacy (Russian) and /privacy/en (English), linked from the footer. Contact: ompplayerandroid@gmail.com and the Telegram links already in the footer. Deploy of site/ and both Caddyfiles is separate and needs approval
 
-## 0.30.1-beta.12
-
 - [lg] "Watch on TV" from the phone works again on old webOS (WebView 53): the design runtime DOM walk threw on SVG icons without dataset and aborted app start before launch params applied, so the TV opened the catalog instead of the player. Launch params now apply before the design runtime, and a design runtime failure no longer aborts start
 - [tech] TV: the old WebView no longer logs a reader.closed error on every periodic request (Chrome 53 rejects closed on releaseLock); the layout walk skips elements without dataset while path indices still count every child, so node ids match modern browsers
 
-## 0.30.1-beta.11
-
 - [tech] TV: the journal records which launch params arrived from the phone (presence of server/action/open, no secrets) - diagnostics for "Watch on TV" when the TV opens the catalog instead of the player
-
-## 0.30.1-beta.10
 
 - [phone] When the TV refuses a launch and OMP is absent from the TV's app list (webOS purges dev apps when the developer mode expires), the phone shows "No OMP on the TV" and offers the install assistant instead of a generic error
 - [tech] Admin panel: prices and rates tidied. The "Prices and rates (ruble base)" group shows the effective subscription and extra-device prices in stars and crypto derived from the ruble base; "Stars" and "Crypto" are labelled as manual fallback tariffs. The auto rate on the "Donations" tab is now shared by subscriptions, devices and donations and shows a subscription preview. The server returns the preview in settings.rates.sub
 - [tech] The auto rate applies to every payment, not only donations: the ruble tariffs (subscription and extra device) are the base. Stars and crypto (USDT/TON/BTC) are derived from rubles through the same rate book (CryptoPay/CBR/CoinGecko) with the same markup, max age and starUsd; manual tariffs and rates stay the fallback while auto is off or the rate is stale. Explicit asset prices no longer override a fresh auto rate. The book refreshes on the periodic tick and on donate taps; an unsupported or stale rate hides the method as before. donatePricing/ensureDonateRates renamed to paymentPricing/ensureRates
 - [tech] Bot: CIS languages - uk, be, kk, ky, uz, tg, tk, hy, az, ka, ro (11 codes, prefix normalizeLang with regional variants). The template catalog and the UI strings are translated into all 13 languages with variable parity kept; the strict pickVariant default and the RU/EN identity are unchanged. Migration 017 widens the bot_copy.lang CHECK to 13 values. Admin panel: the reply constructor language list carries 13 languages, preview and variable samples follow the variant language. A new billing image is needed; deployment by agreement
 
-## 0.30.1-beta.9
-
 - [tech] Seed monitoring, phase 3: crowd-sourced swarm counts from device signals. While playing or preloading, the app sees the real swarm through TorrServer (connected_seeders/active_peers) and reports the counts in the additive swarm field of the existing POST /v1/watch-signals (no new endpoint; device token, the "help improve picks" switch, the per-device signal rate limit). The database - migration 016 seed_crowd - stores only infohash, counts, timestamp and an irreversible device key (sha256 of the registry device row, the token's stable dev claim; never the token itself, never a telegram id); tracker addresses and personal data are neither stored nor logged. Anti-abuse: sanity caps on counts, batches of 20, device+hash dedup inside 10 minutes (server upsert and client; the client window starts only after the server accepted the batch, a failed delivery retries on the next flush without a storm, samples older than 10 minutes are dropped and never retried - the server stamps the receive time, stale counts cannot become a fresh estimate), the per-device rate limit. Aggregation is the median of the reports inside 24 hours, computed in SQL over the full set of each hash's reports (a popular hash cannot evict another one, sampling cannot change the threshold or the timestamp), an estimate needs >=2 distinct devices, and the aggregate carries the oldest contributing timestamp (a stale report cannot hide behind a fresh one); a single report is not an estimate. Merge in /v1/seed-check: tracker-verified (live) always wins; a fresh crowd (<=6 h, >=2 devices) beats bitmagnet, a stale crowd keeps the bitmagnet answer; source=crowd, estimate, ageMs; live/verified are never set from crowd, estimates never enter seed_probes or the background refresh selection. The aggregate read is fast (60 s cache, shared batch) and bounded by what is left of the 8 s budget. Client: "~N seeds · M leechers · from devices" (new crowdVia key ru/en), a valid zero keeps the crowd label too, ranked as an estimate below live; phone and TV share the path, the RPC forwards source/ageMs unchanged. Phases 1-2 are untouched: force-preserve, backoff, tracker whitelist, gate/SSRF, budget, pending-map, log policy. A new billing image and a new app build are needed; deployment by agreement
-
-## 0.30.1-beta.8
 
 - [tech] Billing and dht-peers image builds: npm ci in the Dockerfiles runs with NODE_OPTIONS=--tls-max-v1.2 and retries (fetch-retries=5, fetch-retry-maxtimeout=120000) - the NUC egress stalls TLS 1.3 to the npm registry (read ETIMEDOUT mid-build; verified: npm ping silent by default, PONG with TLS 1.2). The workaround is scoped to the dependency step; runtime TLS is unchanged
 - [tech] Seed monitoring: the bitmagnet source is wired into /v1/seed-check and into the client estimate path. Tracker-less hashes (Torznab magnets without tr=, about 39% of rows) and scrape misses get counts from the local bitmagnet as an estimate after DHT: source=bitmagnet, estimate, ageMs; live/verified are never set and tracker-verified rows are never overwritten. The client consumes the estimate seeders/leechers and shows them as "~N seeds · M leechers · via DHT" (existing i18n keys), keeps source/ageMs on the row; an estimate ranks below a checked release and above an unchecked one. The source comes from the admin bitmagnetUrl setting and the bitmagnet switch (same as the Torznab search); answers are cached for 60 s, concurrent requests from different devices share one GraphQL batch; the source wait is bounded by what is left of the 8 s request budget (the app timeout) - a slow bitmagnet neither delays the answer nor drops tracker results. Errors, timeouts or stale data keep the previous answer. Estimates live in the answer only: they are not written to seed_probes, the background refresh and its selection are unchanged, no migration. The seed-check log gains a bitmagnet counter (counts only). A new billing image and a new app build are needed; deployment and DHT_BOOTSTRAP_NODES for the sidecar are by agreement
@@ -103,8 +85,6 @@ The English translation covers the latest versions only; the full history (in Ru
 - [tech] Seed monitoring, phase 1: the check reads the snatched count (completed, BEP 48/15) and a checked release shows "downloaded N". Popular hashes refresh in the background once a minute through the same tracker gate; only standard credential-free announce addresses are cached (a passkey or token in the path drops the URL, a mixed list stores nothing), never logged; a failed background scrape keeps the working measurement and backs off for 10 minutes, so the queue is not blocked and the next tick takes another hash. The seed check now covers the visible "New" feed rows on the phone, not only the search top. Migration 015 is additive. A new billing image is needed
 - [tech] Seed monitoring: bitmagnet source module - batch seed/leech lookup by infohash over GraphQL (up to 30 hashes per request), freshness policy and merge with current counts, errors never throw into the caller. Complements the Torznab search without duplicating it. Wiring into server.mjs ships in a separate PR after phase 1
 - [tech] Seed monitoring, phase 2: scrape and DHT transport. HTTP scrape uses an explicit plain agent to bypass NODE_USE_ENV_PROXY/HTTP_PROXY (the WARP egress blocked trackers) and follows 301/302/307/308 redirects only to https, up to 3 hops, re-running the SSRF gate and the tracker gate on every hop (the per-host gap is waited out inside the deadline, the shared request-window is spent per hop); the per-job timeout rises from 1200 to 4500 ms. The DHT budget rises from 1500 to 6000 ms to match sidecar latency; DHT covers every tracker-less hash in the batch (not just one), in parallel with a cap of 4 inside one shared budget. The dht-peers sidecar receives DHT_BOOTSTRAP_NODES through compose with an empty default and adds those bootstrap nodes on top of the public routers (the LAN bitmagnet port on the NUC), and a ready node with an empty routing table returns not_ready instead of a false zero. A new billing image and a new sidecar image are needed, deployed by agreement; the bitmagnet wiring follows in a separate PR
-
-## 0.30.1-beta.7
 
 - [phone] Invite: a balance credit shows the amount
 - [tech] Referral variants: balance percent, tiers, friend discount and retention. Off by default. Cancelling a journal row takes back days and balance. Migration 014
@@ -119,13 +99,9 @@ The English translation covers the latest versions only; the full history (in Ru
 - [tech] Donate: the wait window for Crypto Pay and CBR rates after CoinGecko is raised from 250 to 800 ms - the primary source more often prices the quote, with less CoinGecko fallback until the next refresh
 - [tech] Admin: NUC logs, a source check, the DHT probe, a crash report and monitor details open in a window over the page. A log has a filter, refresh and copy
 
-## 0.30.1-beta.6
-
 - [phone] The embedded 2160 Player is updated to 0.2.26. The seek bar is full width with equal side gutters, elapsed time on the left and remaining on the right (both show --:-- until duration is known), and buffering shows a spinner in the centre button
 - [atv] On Android TV the embedded 2160 Player is updated to 0.2.26. The TV screen still uses OMP's own controls
 - [tech] The android/vendor/2160player submodule is updated to v0.2.26 (54ad1a1), player-core coordinate 0.2.26. OMP's host does not call safeDrawingPadding, so the inset is not applied twice
-
-## 0.30.1-beta.5
 
 - [phone] Watch from: a server row stays dark, with the name and address on one line, the status under them, and the menu on the right. The light box is gone
 - [phone] Settings: a section caption sits above its card, with the same inset as the rows. Search uses that inset. Advanced toggles share one card, and the screen does not scroll into empty space
@@ -141,8 +117,6 @@ The English translation covers the latest versions only; the full history (in Ru
 - [phone] Catalog: the header and chips stay pinned and do not jump while scrolling. On a poster the badge sits above the season line
 - [phone] Account: a Supporter mark on a linked account that donated, and a thanks list. The list shows only people who opened their name
 - [tech] Bot and admin donations: a separate payment, migration 012, flag and methods off. It does not change a subscription or referral bonuses. A donation Crypto Pay invoice uses the active mode token and host. Billing was not deployed
-
-## 0.30.1-beta.4
 
 - [phone] Help lists common problems first, device chips on one row, and "For your TV". Buttons open Developer Mode, wake-on-LAN, updates, the player and a promo code. An answer can be marked useful or not
 - [phone] Settings search hides other rows. The subscription row has a green dot, and the TV is one line "name · webOS". Deleting a TV asks first. Watch-from hides the network block unless "by network" is on. The phone server address can be copied and shown as a QR. Advanced shows a 1 GB cache bar
@@ -171,21 +145,15 @@ The English translation covers the latest versions only; the full history (in Ru
 - [phone] Tell friends shows the link, code, QR and Share while the program is on. The link opens a page with the code. While the program is off, the screen says so
 - [tech] Referral admin: six switches, bonus days at most 14, a 7 day delay, a yearly cap of 12 months, a journal and manual cancel. App and bot notice text. Billing was not deployed
 
-## 0.30.1-beta.3
-
 - [phone] Catalog header hides with 24px hysteresis and the chips stay. Continue layout sits on the title row. History link is gone. List swipe uses dark, red and green actions and only one open row
 - [phone] The phone stays in portrait, including after the player. TV orientation is unchanged
 - [tech] Referral accrual rules and migration 011, off by default. Billing was not deployed
-
-## 0.30.1-beta.2
 
 - [phone] Catalog chips show that the row scrolls: the right edge fades, the next chip is cut, and the row nudges once on the first open
 - [phone] Continue watching collapses with a chevron. The row can be large cards, mini tiles, or one line. The choice is remembered
 - [phone] In the poster list the quality mark is a ribbon on the right edge of the poster. Swipe left removes the item or marks it watched. Grid items that are already in Continue are marked "watching"
 - [phone] When a TV is paired, the series button and an episode tap play on the TV. "on the phone" stays a separate link. With no TV, playback stays on the phone. Skip and monitoring sit at the bottom of the series page
 - [tech] On a pull request, desktop CI installs apt packages, Python and cargo test only when desktop/src-tauri, Cargo files, this workflow or the Rust test inputs change. Push, tags and manual runs still always run them. Apt packages are cached and installed with --no-install-recommends, the man-db trigger is disabled, mirror retries are capped, and the apt step times out after 10 minutes. The CI apt install (shellcheck, rsync) does the same
-
-## 0.30.1-beta.1
 
 - [phone] Catalog header: Mine is filled, icon buttons are 40 by 40. Scrolling hides the Mine / Discover row and keeps the chips on a solid dark bar. Continue shows the device and time, only items at 2-90%, a finished episode moves to the next one, and anything untouched for 30 days leaves the row. Long press: remove, mark watched, start over. Settings: Shared history across devices
 - [phone] A series opens at the top. The main button is two lines, and the release line has one Change action. Season chips stay when there is one season, and voice-over is stored per season. The episode list is shorter: number on the left, a check for watched, missing episodes stay visible, and a watched counter
@@ -888,7 +856,6 @@ The English translation covers the latest versions only; the full history (in Ru
 - same as beta.6 (release did not build: backup allowlist test)
 
 ## 0.20.0-beta.4
-
 
 - [phone] OMP Jackett: enter a subscription code and search through the server with no address or key on the phone; a link to the @OMPBILLINGBOT bot for payment and the code
 - [ops] @OMPBILLINGBOT: Status, Subscribe, Renew, Promo, Code, Help buttons; 1-day promos; admin panel with promos and summary
