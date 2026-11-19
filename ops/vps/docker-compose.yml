@@ -301,8 +301,9 @@ services:
       # Reachable bootstrap nodes (host:port list), e.g. the LAN bitmagnet DHT port on the NUC.
       # Empty default: the sidecar falls back to the public routers. Set in the deployment .env.
       DHT_BOOTSTRAP_NODES: ${DHT_BOOTSTRAP_NODES:-}
-      # Persistent routing table on a writable volume (rootfs stays read_only). Empty: in-memory only.
-      DHT_STATE_FILE: ${DHT_STATE_FILE:-/data/routing.json}
+      # Persistent routing table on a writable named volume (rootfs stays read_only).
+      # Unset: default path; explicit empty: in-memory only (opt-out).
+      DHT_STATE_FILE: ${DHT_STATE_FILE-/data/routing.json}
       NODE_OPTIONS: "--max-old-space-size=96"
       HOME: /tmp
     mem_limit: 150m
@@ -316,7 +317,8 @@ services:
     tmpfs:
       - /tmp
     volumes:
-      - ./data/dht-peers:/data
+      # Named volume inherits /data ownership (node) from the image, so the non-root user can write.
+      - dht_data:/data
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8788/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 30s
@@ -337,3 +339,4 @@ networks:
 volumes:
   caddy_data:
   caddy_config:
+  dht_data:
