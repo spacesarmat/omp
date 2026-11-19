@@ -10,6 +10,7 @@
 import DHT from 'bittorrent-dht';
 import { estimateBloom, mergeBloom, parseScrapeFilters } from './bloom.mjs';
 import { peerTotal, rememberPeer, waitForReady } from './peers.mjs';
+import { exportNodes } from './table.mjs';
 
 // The library's own public bootstrap routers. Env nodes are added to these, not replacing them.
 const DEFAULT_BOOTSTRAP = ['router.bittorrent.com:6881', 'router.utorrent.com:6881', 'dht.transmissionbt.com:6881'];
@@ -181,9 +182,25 @@ export function createDhtLookup(opts) {
   // Extra reachable bootstrap nodes (DHT_BOOTSTRAP_NODES), added to the public routers. Empty by
   // default so the node options stay exactly as before when no extra node is configured.
   const bootstrap = Array.isArray(o.bootstrap) ? o.bootstrap.filter((n) => typeof n === 'string' && n) : [];
+  // Optional persistent routing table ({load(), save(nodes)}): a restarted/idle node starts warm.
+  const table = o.table || null;
+  const saveEveryMs = o.saveEveryMs || 60 * 1000;
+  let lastSave = 0;
   let node = null;
   let busy = 0;
   let idleTimer = null;
+
+  function persist(dht, force) {
+    if (!table || !dht || dht.destroyed) return;
+    const t = now();
+    if (!force && t - lastSave < saveEveryMs) return;
+    lastSave = t;
+    try {
+      table.save(exportNodes(dht));
+    } catch (e) {
+      /* a read-only or full disk must not break lookups */
+    }
+  }
 
   function armIdle() {
     if (idleTimer) clearTimer(idleTimer);
@@ -192,7 +209,10 @@ export function createDhtLookup(opts) {
       if (busy > 0) return armIdle();
       const current = node;
       node = null;
-      if (current && !current.destroyed) current.destroy();
+      if (current && !current.destroyed) {
+        persist(current, true);
+        current.destroy();
+      }
     }, idleMs);
     if (idleTimer && idleTimer.unref) idleTimer.unref();
   }
@@ -211,6 +231,16 @@ export function createDhtLookup(opts) {
     const created = createNode(nodeOpts);
     created.on('error', () => {});
     created.on('warning', () => {});
+    // Warm start: re-add the persisted routing table so get_peers works without a fresh bootstrap.
+    if (table && created.nodes && typeof created.nodes.add === 'function') {
+      for (const n of table.load() || []) {
+        try {
+          created.nodes.add({ id: Buffer.from(n.id, 'hex'), host: n.host, port: n.port });
+        } catch (e) {
+          /* a bad saved row must not prevent the node from starting */
+        }
+      }
+    }
     created.listen();
     node = created;
     return created;
@@ -247,6 +277,7 @@ export function createDhtLookup(opts) {
         return await collectPeers(dht, hash, left, maxPeers, schedule, clearTimer);
       } finally {
         busy--;
+        persist(dht, false);
         armIdle();
       }
     },

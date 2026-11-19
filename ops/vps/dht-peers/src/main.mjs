@@ -2,6 +2,7 @@
 import { createServer } from 'node:http';
 import { createDhtApp } from './http.mjs';
 import { createDhtLookup, parseBootstrapNodes } from './lookup.mjs';
+import { loadTable, saveTable } from './table.mjs';
 
 function envInt(name, fallback) {
   const raw = String(process.env[name] || '').trim();
@@ -11,11 +12,14 @@ function envInt(name, fallback) {
 }
 
 const port = envInt('DHT_HTTP_PORT', 8788);
+// Optional writable volume (read_only rootfs): persist the routing table so restarts start warm.
+const stateFile = String(process.env.DHT_STATE_FILE || '').trim();
 const lookup = createDhtLookup({
   lookupMs: envInt('DHT_LOOKUP_MS', 8000),
   idleMs: envInt('DHT_IDLE_MS', 10 * 60 * 1000),
   // Reachable bootstrap nodes (e.g. the LAN bitmagnet DHT port on the NUC). Empty: public routers only.
   bootstrap: parseBootstrapNodes(process.env.DHT_BOOTSTRAP_NODES),
+  table: stateFile ? { load: () => loadTable(stateFile), save: (nodes) => saveTable(stateFile, nodes) } : null,
 });
 const app = createDhtApp({
   token: String(process.env.DHT_TOKEN || ''),
