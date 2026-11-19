@@ -36,8 +36,11 @@ function savedMap(): { [k: string]: Saved } {
 
 function savedOf(key: string): Saved | null {
   const v = savedMap()[key];
-  const age = v ? Date.now() - v.at : -1;
-  return v && age >= 0 && age < SAVED_TTL ? v : null;
+  if (!v) return null;
+  // a show the person picked does not expire with the card cache
+  if (v.m && v.id > 0) return v;
+  const age = Date.now() - v.at;
+  return age >= 0 && age < SAVED_TTL ? v : null;
 }
 
 function remember(key: string, card: CatalogCard | null, manual?: boolean): void {
@@ -51,7 +54,7 @@ function remember(key: string, card: CatalogCard | null, manual?: boolean): void
   };
   const keys = Object.keys(map);
   if (keys.length > SAVED_MAX) {
-    keys.sort((a, b) => map[a].at - map[b].at).slice(0, keys.length - SAVED_MAX).forEach((k) => delete map[k]);
+    keys.filter((k) => !map[k].m).sort((a, b) => map[a].at - map[b].at).slice(0, Math.max(0, keys.length - SAVED_MAX)).forEach((k) => delete map[k]);
   }
   saveJson(SAVED_KEY, map);
 }

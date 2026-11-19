@@ -35,7 +35,7 @@ import { libraryTitle } from '../../../src/lib/libraryView';
 import { baseName, episodeLabel, playableFiles, spansSeasons, stripExt } from '../../../src/lib/episodes';
 import type { Torrent } from '../../../src/api/types';
 import { findGroup, groupLabel, NO_SEASON, onlyThisSeason, otherSeasonReleases, seasonMembers, type SeriesGroup } from '../../../src/lib/seriesGroups';
-import { cachedSeriesMatch, chooseSeries, matchSeries } from '../../../src/lib/seriesMatch';
+import { cachedSeriesMatch, chooseSeries, matchSeries, seriesMatchVersion } from '../../../src/lib/seriesMatch';
 import { releaseName } from '../lib/duplicates';
 import { isDeadRelease, useLiveSwarm } from '../../../src/lib/swarmWatch';
 import { canUpgrade } from '../../../src/ui/BetterDialog';
@@ -139,6 +139,7 @@ function voiceNote(members: { data?: string | null }[], season: number): string 
 /** The TMDB card of the series: at once from memory on a revisit, else once the lookup ends; null without one. */
 function useSeriesCard(group: SeriesGroup | null): CatalogCard | null {
   const l = lang.value;
+  const version = seriesMatchVersion.value;
   const key = group ? group.key : '';
   const [card, setCard] = useState<CatalogCard | null>(() => (key ? cachedSeriesMatch(key) || null : null));
   const groupRef = useRef(group);
@@ -165,7 +166,7 @@ function useSeriesCard(group: SeriesGroup | null): CatalogCard | null {
     return () => {
       live = false;
     };
-  }, [key, l]);
+  }, [key, l, version]);
   return card;
 }
 

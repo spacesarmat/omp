@@ -43,9 +43,11 @@ function fold(s: string): string {
 export function pickShow(items: CatalogTitle[], year: number, query?: string): CatalogTitle | null {
   const shows = items.filter((x) => x.kind === 'tv');
   if (!shows.length) return null;
+  const near = !year || shows.some((s) => s.year && Math.abs(s.year - year) <= 1);
+  if (year && !near) return shows[0];
   const q = fold(query || '');
-  let best: CatalogTitle | null = null;
-  let bestScore = -1;
+  let best: CatalogTitle = shows[0];
+  let bestScore = -1e9;
   for (let i = 0; i < shows.length; i++) {
     const s = shows[i];
     let score = s.rating || 0;

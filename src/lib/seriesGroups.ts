@@ -294,22 +294,16 @@ function mergeByShow(items: LibraryItem[]): LibraryItem[] {
  * null when none is left.
  */
 export function findGroup(list: Torrent[], key: string): SeriesGroup | null {
-  const keys = seriesKeys(list);
-  let own = '';
-  for (let i = 0; i < list.length && !own; i++) {
-    if (keys[i] && namesOf(list[i]).indexOf(key) >= 0) own = keys[i];
+  const items = groupLibrary(list);
+  for (let i = 0; i < items.length; i++) {
+    const it = items[i];
+    if (it.kind !== 'series') continue;
+    if (it.key === key) return it;
+    for (let j = 0; j < it.members.length; j++) {
+      if (namesOf(it.members[j]).indexOf(key) >= 0) return it;
+    }
   }
-  if (!own) return null;
-  let members = list.filter((_, i) => keys[i] === own);
-  const id = showIdOf(own);
-  if (id) {
-    list.forEach((tor) => {
-      if (members.some((m) => m.hash === tor.hash)) return;
-      const g = singleGroup(tor);
-      if (g && showIdOf(g.key) === id) members.push(tor);
-    });
-  }
-  return makeGroup(own, members);
+  return null;
 }
 
 /** A lone series torrent as a group of one (its TMDB lookup and tile badge); null for a film. */
