@@ -6,6 +6,7 @@ The English translation covers the latest versions only; the full history (in Ru
 
 ## Unreleased
 
+- [tech] Billing: when the pending link (80) or admin login (40) cap is full, a new start is refused (429) instead of evicting an older live token - a flood can no longer push out a legitimate pending link/login. Expired rows do not count toward the cap
 - [tech] Deploy: the on-server jacred/init.yaml (a bind mount with real API keys) is set to mode 600 - a fresh checkout ships it world-readable (644). Content is never overwritten and dry-run leaves permissions alone
 - [tech] Billing: a flood of donate commands no longer grows state without bound - superseded draft/cancelled rows of the account are removed and cancelled rows older than 7 days are pruned; financial rows (pending/paid/refunded) are never touched
 - [tech] Admin: Playwright checks login, every section, that a promo revoke is not sent before Yes, and that saving the rate still shows the subscription number. Donation and referral forms have component tests
