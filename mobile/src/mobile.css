@@ -2534,7 +2534,19 @@ html.m-hint-hold .m-hint { display: none; }
 .m-sh-backdrop::after { background: linear-gradient(180deg, rgba(15, 17, 21, 0.2) 0%, rgba(15, 17, 21, 0.72) 46%, var(--bg, #0F1115) 100%); }
 .m-icon-btn.m-glass, .m-tc-back, .m-season-back { width: 40px; height: 40px; border-radius: 12px; background: rgba(15, 17, 21, 0.72); color: #fff; }
 .m-series .m-tc-cast, .m-series .m-tc-section { margin-top: 24px; }
-.m-eps-short .m-ep-row { min-height: 0; padding-top: 6px; padding-bottom: 6px; }
+.m-eps-short .m-ep-row { min-height: 56px; padding-top: 8px; padding-bottom: 8px; align-items: flex-start; }
+.m-ep-name {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  line-height: 18px;
+  max-height: 36px;
+}
+.m-ep-meta { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.m-ep-meta .m-ep-dur,
+.m-ep-meta .m-ep-size { white-space: nowrap; }
+.m-ep-meta .m-ep-size { margin-left: auto; text-align: right; }
 .m-ep-row { display: flex; align-items: center; }
 .m-ep-num { width: 36px; flex-shrink: 0; font-size: 18px; font-weight: 700; }
 .m-ep-dur, .m-ep-size { flex-shrink: 0; white-space: nowrap; }
@@ -2577,7 +2589,7 @@ html.m-hint-hold .m-hint { display: none; }
 .m-card { height: 100%; }
 .m-card-title { min-height: 38px; }
 .m-poster-stack .m-watch-code { max-width: 100%; }
-.m-series-tail { margin-top: 8px; }
+.m-series-tail { display: flex; flex-direction: column; gap: 12px; margin-top: 0; }
 
 /* Test-mode codes. Hidden unless the beta switch is on (body.test-labels).
    The badge is out of flow and ignores touches, so rows and remote focus stay put.

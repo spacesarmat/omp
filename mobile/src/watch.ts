@@ -34,7 +34,7 @@ import { torrents } from '../../src/store/library';
 import { knownFiles } from '../../src/lib/knownFiles';
 import { sharedResume } from './lib/sharedProgress';
 import { t as tr } from '../../src/i18n';
-import { launchLabel } from './lib/playingNames';
+import { episodeNameOf, filePath, launchLabel, libraryTorrent } from './lib/playingNames';
 
 export interface WatchOnTvParams {
   server: string;
@@ -46,16 +46,20 @@ export interface WatchOnTvParams {
   from?: string;
   /** Episode file ids of this season, from the chosen one. Absent: the TV keeps its own full queue. */
   files?: number[];
+  /** TMDB episode title, so the TV shows it with the code. */
+  ep?: string;
 }
 
 /** `t` is kept (0 included) whenever a file is set; values below 1 become 0; `from` only with a file. */
-export function watchOnTvParams(serverUrl: string, hash: string, file?: number, t?: number, report?: string, from?: string, files?: number[]): WatchOnTvParams {
+export function watchOnTvParams(serverUrl: string, hash: string, file?: number, t?: number, report?: string, from?: string, files?: number[], ep?: string): WatchOnTvParams {
   const p: WatchOnTvParams = { server: serverUrl, torrent: hash };
   if (file !== undefined) p.file = file;
   if (file !== undefined && t !== undefined) p.t = t >= 1 ? Math.floor(t) : 0;
   if (report) p.report = report;
   if (file !== undefined && from) p.from = from;
   if (file !== undefined && files && files.length && files.indexOf(file) >= 0) p.files = files;
+  const name = (ep || '').replace(/[\x00-\x1f]+/g, ' ').trim().slice(0, 120);
+  if (file !== undefined && name) p.ep = name;
   return p;
 }
 
@@ -501,7 +505,13 @@ export function useTvLaunch(): { start: (opts: TvLaunchOpts) => Promise<boolean>
           }
         }
       }
-      await actions.launchOnTv(watchOnTvParams(serverUrl, o.hash, o.file, t, report || undefined, from, seasonFiles));
+      let epName = '';
+      if (o.file !== undefined) {
+        const tor = libraryTorrent(o.hash);
+        const path = filePath(tor, o.file);
+        if (tor && path) epName = await episodeNameOf(tor, path).catch(() => '');
+      }
+      await actions.launchOnTv(watchOnTvParams(serverUrl, o.hash, o.file, t, report || undefined, from, seasonFiles, epName));
       if (report && landing === 'nowPlaying') markLaunched();
       if (o.file !== undefined) void recordPhoneWatch(c, o.hash, o.file, t || 0, o.duration || 0, from);
       if (!alive.v) return false;

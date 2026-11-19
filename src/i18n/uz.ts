@@ -594,6 +594,8 @@ export const uz: EnDict<typeof ru> = {
     dubReset: "Standart bo'yicha (qayta tiklash)",
     dubChange: "O'zgartirish",
     dubNote: "Bu mavsum uchun buni yodda tuting. Agar u mavjud bo'lsa, keyingi mavsumda ham shu studiya televideniye va telefon efirlari uchun ishlatiladi.",
+    dubLoading: "Yo'lkalarni qidiryapman",
+    dubLater: "Yo'lkalar ijro boshlangach chiqadi",
     episodesOf: {
       one: "{have}, {n} seriyasidan",
       other: "{have} {n} seriyasidan",

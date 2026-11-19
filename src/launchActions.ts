@@ -86,6 +86,7 @@ export function runLaunchParams(raw: unknown): void {
               }
             }
             const index = queue.findIndex((q) => q.fileIndex === file);
+            if (index >= 0 && a.ep) queue[index] = { ...queue[index], episodeTitle: a.ep };
             if (index < 0) {
               resumeOnboarding();
               toast(t('errors.badLaunchParams'), 'error');

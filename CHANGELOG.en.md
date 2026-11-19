@@ -11,6 +11,9 @@ The English translation covers the latest versions only; the full history (in Ru
 - [phone] Novelties: the header and the chips have a solid background. The search button does not cover the chips and looks the same while scrolling
 - [phone] A series page lists the episode number and the TMDB title. With no title, only the number stays. Watch on phone and To episodes are normal buttons. The selected season stays fully in view, and the first chip is not cut off at the edge. More under a season overview names that season
 - [phone] Mine: the space between the chips and Continue watching matches the space between sections. An empty title row takes no space
+- [phone] On a series page, Change next to the dub opens the studios. When the tracks are not known yet, the app asks the server. If there are none, it says the tracks will be available after playback starts, with Retry. The info hint stays its own button
+- [phone] Both episode lists match: the title on top, one or two lines, then a line with the duration on the left and the size on the right, then the progress bar. "59 min" does not split. A chosen season does not repeat the season name. Skip and Monitoring use the usual gap
+- [phone] Now on TV, the mini player, the next-episode card, the episode sheet and the TV player show the TMDB episode title ("episode 1 · title"). With no title, only the number stays. The phone sends that title when it starts playback on the TV
 
 ## 0.30.1-beta.15
 

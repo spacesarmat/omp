@@ -11,5 +11,7 @@ export interface PlayItem {
   fileIndex?: number;
   poster?: string;
   torrentTitle?: string;
+  /** TMDB episode title the phone already resolved, so the TV shows it without matching the pack again. */
+  episodeTitle?: string;
   subtitles?: ExternalSub[];
 }

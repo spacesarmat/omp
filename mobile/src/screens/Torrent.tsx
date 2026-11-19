@@ -379,6 +379,7 @@ export function EpisodeRows({
   /** The release has more than one season, even when `files` is only the season on screen. */
   withSeason?: boolean;
 }) {
+  void withSeason;
   const tmdb = { eps };
   const setSheet = onPick;
   const ratios = files.map((f) => sharedRatio(hash, f.id));
@@ -424,20 +425,20 @@ export function EpisodeRows({
             </button>
           );
         }
-        // an episode: «1. Name  45 min» from TMDB (else «Episode 1»); the label and the size below (not the file name)
+        // an episode: the title on its own, then duration on the left and size on the right, then the bar
         const ep = pe.season !== null && tmdb.eps[pe.season] ? tmdb.eps[pe.season][pe.episode] : undefined;
         const real = ep ? realEpisodeName(ep.title) : '';
         const name = real ? pe.episode + '. ' + real : t('library.episode', { n: pe.episode });
-        const seasonBit = pe.season !== null && (withSeason || spansSeasons(files.map((x) => x.path))) ? t('library.seasonNamed', { n: pe.season }) : '';
-        const sub = [seasonBit, fmtSize(f.length)].filter(Boolean).join(' · ');
+        const dur = ep && ep.runtime > 0 ? fmtDuration(ep.runtime).replace(/ /g, '\u00A0') : '';
+        const size = fmtSize(f.length).replace(/ /g, '\u00A0');
         return (
           <button type="button" class="m-ep m-ep-named" key={f.id} data-current={i === current ? '1' : undefined} onClick={() => setSheet(f)}>
             <span class="m-ep-text">
-              <span class="m-ep-name">
-                {name}
-                {ep && ep.runtime > 0 && <span class="m-muted m-small m-ep-min"> {fmtDuration(ep.runtime)}</span>}
+              <span class="m-ep-name">{name}</span>
+              <span class="m-ep-meta">
+                <span class="m-muted m-small m-ep-dur">{dur}</span>
+                <span class="m-muted m-small m-ep-size">{size}</span>
               </span>
-              <span class="m-muted m-small m-ep-sub">{sub}</span>
               <span class="m-bar-track thin">
                 <span class="m-bar-fill" style={{ width: pct + '%' }} />
               </span>

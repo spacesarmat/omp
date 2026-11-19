@@ -38,7 +38,7 @@ export function buildSnapshot(i: SnapshotInput): PlayerState | null {
     hash: item.hash,
     file: item.fileIndex,
     title: item.title,
-    subtitle: [item.torrentTitle, episodeLabel(item.title)].filter(Boolean).join(' · '),
+    subtitle: [item.torrentTitle, [episodeLabel(item.title), (item.episodeTitle || '').trim()].filter(Boolean).join(' · ')].filter(Boolean).join(' · '),
     time: i.time,
     duration: i.duration,
     paused: i.paused,

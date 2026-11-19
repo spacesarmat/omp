@@ -594,6 +594,8 @@ export const az: EnDict<typeof ru> = {
     dubReset: "Standart olaraq (sıfırlama)",
     dubChange: "Dəyişiklik",
     dubNote: "Bu mövsüm üçün bunu qeyd edin. Eyni studiya, əgər mövcud olsa, növbəti mövsüm həm televiziya, həm də telefon yayımları üçün istifadə olunacaq.",
+    dubLoading: 'Yollara baxiram',
+    dubLater: 'Yollar ishe dusenden sonra elcatan olacaq',
     episodesOf: {
       one: "{have}, {n} seriyasından",
       other: "{have} {n} epizodundan",

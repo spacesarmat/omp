@@ -548,6 +548,8 @@ export const be: typeof ru = {
     dubReset: "Па змаўчанні (скінуць)",
     dubChange: "Змяніць",
     dubNote: "Запамінаецца для гэтага сезона. Тая ж студыя ставіцца ў наступным, калі яна там ёсць, агульная для ТВ і тэлефона",
+    dubLoading: 'Гляджу дарожкі',
+    dubLater: 'Дарожкі будуць даступныя пасля запуску',
     episodesOf: { one: "{have} з {n} серыі", few: "{have} з {n} серый", many: "{have} з {n} серый" },
     watchedSome: "глядзелі {n}",
     watchedEvery: "прагледжана",

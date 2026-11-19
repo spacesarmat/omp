@@ -45,7 +45,10 @@ import { artKey, artVersion, pickedArt } from '../catalog/artPick';
 import { CastStrip } from '../ui/CastStrip';
 import { torrentQuery, type CatalogCard, type CatalogTitle, type Season, type SeasonDetails } from '../../../src/catalog/tmdb';
 import { ratingText } from './catalog/CatalogSearch';
-import { useSeriesDub } from '../../../src/ui/seriesDub';
+import { dubChoices, DUB_RESET, useSeriesDub } from '../../../src/ui/seriesDub';
+import { saveSeriesTracks } from '../../../src/store/journal';
+import { externalDubSeen, probeDubSeen, probeFileId } from '../../../src/lib/dubLoad';
+import type { SeriesSub } from '../../../src/lib/seriesTracks';
 import { errorMessage } from '../../../src/api/http';
 import { parseEpisode, type TorrentFile } from '../../../src/lib/episodes';
 import { useTmdbEpisodes } from '../../../src/lib/useTmdbEpisodes';
@@ -327,8 +330,10 @@ function FutureSeason({ card, season }: { card: CatalogCard; season: Upcoming })
 /**
  * «Озвучка: LostFilm» of the whole series (every season, shared with the TV through TorrServer): remembered when a
  * track is picked in a player; «Сменить» lists the dubs seen in the series' files and «По умолчанию (сбросить)».
+ * With nothing seen yet it asks TorrServer (ffprobe of one video, or the external audio files) and, if that finds
+ * nothing, says the tracks will be known after playback. The (i) note stays its own button.
  */
-function DubRow({ group, season }: { group: SeriesGroup; season: number }) {
+function DubRow({ group, season, hash, files }: { group: SeriesGroup; season: number; hash: string; files: TorrentFile[] }) {
   const members = seasonMembers(group, season);
   const pool = members.length ? members : group.members;
   const dub = useSeriesDub(group.members, client.value, season > 0 ? season : undefined);
@@ -345,16 +350,77 @@ function DubRow({ group, season }: { group: SeriesGroup; season: number }) {
     .map((n) => pickSeasonVoice({ season: n, available: studiosOf(seasonMembers(group, n).length ? seasonMembers(group, n) : group.members), data: group.members.map((m) => m.data) }).studio);
   const [open, setOpen] = useState(false);
   const [about, setAbout] = useState(false);
+  const [loaded, setLoaded] = useState<SeriesSub[] | null>(null);
+  const [phase, setPhase] = useState<'idle' | 'loading' | 'empty'>('idle');
+  const [tryN, setTryN] = useState(0);
+  const known = dub.choices.some((o) => o.value !== DUB_RESET);
+  const fileKey = files.map((f) => f.id + ':' + f.path).join('|');
+  const filesRef = useRef(files);
+  filesRef.current = files;
   const pick = (value: string) => {
     setOpen(false);
     dub.pick(value).catch((e) => showToast(errorMessage(e)));
   };
-  // nothing remembered and no dubs seen yet: the only choice would be «По умолчанию (сбросить)», which is
-  // already the state, so the open row shows just how a dub gets remembered
-  const onlyReset = !dub.rec && dub.choices.length <= 1;
+  const pickLoaded = (value: string) => {
+    const s = loaded && value.charAt(0) === 'k' ? loaded[+value.slice(1)] : undefined;
+    const c = client.value;
+    setOpen(false);
+    if (!s || !c || !hash) return;
+    const patch = s.c ? { l: s.l, g: s.g, c: s.c, k: loaded || [] } : { l: s.l, g: s.g, k: loaded || [] };
+    saveSeriesTracks(c, hash, pool.map((m) => m.hash), patch, Date.now(), season > 0 ? season : undefined).catch((e) => showToast(errorMessage(e)));
+  };
+  useEffect(() => {
+    setLoaded(null);
+    setPhase('idle');
+  }, [hash, season]);
+  useEffect(() => {
+    if (!open || known) return;
+    const list = filesRef.current;
+    const ext = externalDubSeen(list);
+    if (ext.length) {
+      setLoaded(ext);
+      setPhase('idle');
+      return;
+    }
+    const fileId = probeFileId(list);
+    const c = client.value;
+    if (!c || !hash || fileId === null) {
+      setPhase('empty');
+      return;
+    }
+    let live = true;
+    setPhase('loading');
+    c.ffprobeAvailable().then(
+      (ok) => {
+        if (!live) return;
+        if (!ok) {
+          setPhase('empty');
+          return;
+        }
+        c.probe(hash, fileId).then(
+          (p) => {
+            if (!live) return;
+            const seen = probeDubSeen(p);
+            setLoaded(seen.length ? seen : null);
+            setPhase(seen.length ? 'idle' : 'empty');
+          },
+          () => {
+            if (live) setPhase('empty');
+          },
+        );
+      },
+      () => {
+        if (live) setPhase('empty');
+      },
+    );
+    return () => {
+      live = false;
+    };
+  }, [open, known, hash, fileKey, tryN]);
   useEffect(() => {
     if (pickInfo.toast) showToast(pickInfo.toast);
   }, [season, pickInfo.toast]);
+  const fresh = !known && loaded && loaded.length ? dubChoices({ at: 1, k: loaded }).filter((o) => o.value !== DUB_RESET) : [];
   return (
     <div class="m-series-dub tm" data-series-dub data-code="P26.2" data-dub-differs={voiceDiffers(pickInfo.studio, others) ? '1' : undefined}>
       <div class="m-series-dub-line">
@@ -369,26 +435,38 @@ function DubRow({ group, season }: { group: SeriesGroup; season: number }) {
           {open ? t('common.hide') : t('series.dubChange')}
         </button>
       </div>
-      {about && <span class="m-small m-muted">{t('series.dubNote')}</span>}
-      {open && (
-        <>
-          {!onlyReset && (
-            <div class="m-chips m-series-dub-chips">
-              {dub.choices.map((o) => (
-                <button
-                  key={o.value}
-                  type="button"
-                  class={'m-chip' + (o.value === dub.value ? ' on' : '')}
-                  aria-pressed={o.value === dub.value}
-                  data-dub-choice={o.value}
-                  onClick={() => pick(o.value)}
-                >
-                  {o.label}
-                </button>
-              ))}
-            </div>
-          )}
-        </>
+      {about && <span class="m-small m-muted" data-dub-note>{t('series.dubNote')}</span>}
+      {open && known && (
+        <div class="m-chips m-series-dub-chips">
+          {dub.choices.map((o) => (
+            <button
+              key={o.value}
+              type="button"
+              class={'m-chip' + (o.value === dub.value ? ' on' : '')}
+              aria-pressed={o.value === dub.value}
+              data-dub-choice={o.value}
+              onClick={() => pick(o.value)}
+            >
+              {o.label}
+            </button>
+          ))}
+        </div>
+      )}
+      {open && !known && phase === 'loading' && <span class="m-small m-muted" data-dub-status="loading">{t('series.dubLoading')}</span>}
+      {open && !known && fresh.length > 0 && (
+        <div class="m-chips m-series-dub-chips" data-dub-loaded>
+          {fresh.map((o) => (
+            <button key={o.value} type="button" class="m-chip" data-dub-choice={o.value} onClick={() => pickLoaded(o.value)}>
+              {o.label}
+            </button>
+          ))}
+        </div>
+      )}
+      {open && !known && phase === 'empty' && !fresh.length && (
+        <div data-dub-status="empty">
+          <span class="m-small m-muted">{t('series.dubLater')}</span>
+          <button type="button" class="m-btn-text" data-dub-retry onClick={() => setTryN((n) => n + 1)}>{t('common.retry')}</button>
+        </div>
       )}
     </div>
   );
@@ -704,7 +782,7 @@ function Body({ group, card }: { group: SeriesGroup; card: CatalogCard | null })
           })}
         </div>
       )}
-      <DubRow group={group} season={season} />
+      <DubRow group={group} season={season} hash={main ? main.hash : ''} files={main ? filesOf(main) : []} />
       {caption && <span class="m-small m-muted m-sh-caption">{caption}</span>}
       {coming && card ? (
         <FutureSeason card={card} season={coming} />
@@ -732,7 +810,7 @@ function Body({ group, card }: { group: SeriesGroup; card: CatalogCard | null })
               season={season === NO_SEASON ? 0 : season}
               titles={episodeTitles}
               nextAir={nextAirLine(card)}
-              showSeason={spansSeasons(allFiles.map((f) => f.path))}
+              showSeason={(season === NO_SEASON || !inSeason.length) && spansSeasons(files.map((f) => f.path))}
               onPick={playFile}
               listRef={episodesRef}
             />

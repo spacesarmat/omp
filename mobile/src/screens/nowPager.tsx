@@ -148,7 +148,7 @@ function Episodes({ hash, fileId, onPlay }: { hash: string; fileId: number; onPl
   const tor = libraryTorrent(hash);
   const files = tor ? ordered(playableFiles(filesOf(tor))) : [];
   const seasons = files.map((f) => parseEpisode(f.path).season).filter((n, i, a): n is number => n !== null && a.indexOf(n) === i);
-  const tmdb = useTmdbEpisodes(tor, seasons, !!tor && seasons.length > 0);
+  const tmdb = useTmdbEpisodes(tor, seasons, !!tor && seasons.length > 0, true);
   return (
     <div class="m-now-eps">
       <h2>{t('torrent.screen.episodesHead')}</h2>

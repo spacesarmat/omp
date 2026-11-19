@@ -7,7 +7,7 @@ import { baseName, parseEpisode, playableFiles, stripExt, type EpisodeInfo, type
 import { libraryTitle } from './libraryView';
 import { groupLibrary, singleGroup, type SeriesGroup } from './seriesGroups';
 import { cachedSeriesMatch } from './seriesMatch';
-import { realEpisodeName, seasonEpisodes, showOf } from './episodeNames';
+import { realEpisodeName, seasonEpisodes, showForTorrent } from './episodeNames';
 import { torrentFiles } from './torrentName';
 import { parseEpisodeRange } from '../monitor/episodes';
 
@@ -137,7 +137,7 @@ export function episodeNameOf(tor: Torrent, e: EpisodeInfo): Promise<string> {
   if (e.episode === null || e.season === null) return Promise.resolve('');
   const season = e.season;
   const ep = e.episode;
-  return limited(() => showOf(tor).then((show) => (show ? seasonEpisodes(show, season) : {}))).then(
+  return limited(() => showForTorrent(tor).then((show) => (show ? seasonEpisodes(show, season) : {}))).then(
     (m: { [n: number]: { title: string } }) => (m[ep] ? realEpisodeName(m[ep].title) : ''),
     () => '',
   );

@@ -28,6 +28,7 @@ describe('buildSnapshot', () => {
   it('builds subtitle from torrent title and episode code', () => {
     const q = (it2: PlayItem) => buildSnapshot({ ...base, queue: [it2] })!.subtitle;
     expect(q({ ...item, torrentTitle: 'Show' })).toBe('Show · S01E02');
+    expect(q({ ...item, torrentTitle: 'Show', episodeTitle: 'Граница' })).toBe('Show · S01E02 · Граница');
     expect(q({ ...item, title: 'Movie', torrentTitle: 'Show' })).toBe('Show');
     expect(q({ ...item, title: 'Movie' })).toBe('');
   });

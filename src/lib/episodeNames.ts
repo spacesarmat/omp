@@ -3,6 +3,9 @@
 // then shows what it showed before.
 import type { Torrent } from '../api/types';
 import type { CatalogCard, Episode, SeasonDetails } from '../catalog/tmdb';
+import { groupLibrary, singleGroup, type SeriesGroup } from './seriesGroups';
+import { matchSeries } from './seriesMatch';
+import { torrents } from '../store/library';
 import { yearOf } from '../monitor/newEpisodes';
 import { findShow } from './tmdbShow';
 import { displayTitle } from './torrentName';
@@ -64,6 +67,49 @@ async function match(tor: Torrent): Promise<ShowInfo | null> {
     seasonPosters: seasonPosters,
     episodeCounts: episodeCounts,
   };
+}
+
+/** A series card as the show the episode lists already use. */
+export function showInfoOfCard(card: CatalogCard): ShowInfo {
+  const seasonPosters: { [n: number]: string } = {};
+  const episodeCounts: { [n: number]: number } = {};
+  card.seasons.forEach((s) => {
+    if (s.poster) seasonPosters[s.number] = s.poster;
+    if (s.episodes > 0) episodeCounts[s.number] = s.episodes;
+  });
+  return {
+    id: card.id,
+    title: card.title,
+    original: card.original,
+    year: card.year,
+    seasons: card.seasons.map((s) => s.number).filter((n) => n > 0).sort((a, b) => a - b),
+    poster: card.poster || '',
+    seasonPosters: seasonPosters,
+    episodeCounts: episodeCounts,
+  };
+}
+
+function groupOf(tor: Torrent): SeriesGroup | null {
+  const list = torrents.peek();
+  const rows = groupLibrary(list.length ? list : [tor]);
+  for (let i = 0; i < rows.length; i++) {
+    const it = rows[i];
+    if (it.kind === 'series' && it.members.some((m) => m.hash === tor.hash)) return it;
+  }
+  return singleGroup(tor);
+}
+
+/**
+ * The show of a torrent: the series card already matched for its group (a season pack title often does not
+ * match TMDB on its own), else a fresh match of this torrent.
+ */
+export function showForTorrent(tor: Torrent): Promise<ShowInfo | null> {
+  const group = groupOf(tor);
+  if (!group) return showOf(tor);
+  return matchSeries(group).then(
+    (card) => (card ? showInfoOfCard(card) : showOf(tor)),
+    () => showOf(tor),
+  );
 }
 
 /** The TMDB show of a torrent, matched once per hash; null when there is none or TMDB is out of reach. */

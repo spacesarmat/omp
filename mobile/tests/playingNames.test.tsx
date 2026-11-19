@@ -10,7 +10,7 @@ import { setCatalogClientForTests } from '../src/catalog/phoneCatalog';
 import { resetEpisodeNames } from '../../src/lib/episodeNames';
 import { matchSeries, resetSeriesMatches } from '../../src/lib/seriesMatch';
 import { singleGroup } from '../../src/lib/seriesGroups';
-import { episodeLine, launchLabel, looksLikeName, nextCardTitle, nextPlayablePath, readableFileLabel, torrentName } from '../src/lib/playingNames';
+import { episodeLine, launchLabel, looksLikeName, nextCardTitle, nextPlayablePath, readableFileLabel, subtitleEpisodeName, torrentName } from '../src/lib/playingNames';
 import { torrentName as tvTorrentName } from '../../src/lib/cleanNames';
 import { miniTitle } from '../src/ui/MiniPlayer';
 import { torrents } from '../../src/store/library';
@@ -85,6 +85,9 @@ describe('playing names', () => {
 
   it('the episode line: the code and a real name only', () => {
     expect(episodeLine('S02E01', 'Спокойная жизнь')).toBe('1 серия · Спокойная жизнь');
+    expect(subtitleEpisodeName('Ведьмак · S04E01 · Что тебя не убивает')).toBe('Что тебя не убивает');
+    expect(subtitleEpisodeName('Ведьмак · S04E01')).toBe('');
+    expect(subtitleEpisodeName('Ведьмак · S04E02 · Эпизод 2')).toBe('');
     expect(episodeLine('S02E02', 'Эпизод 2')).toBe('2 серия');
     expect(episodeLine('S02E01', 'Спокойная жизнь', true)).toBe('2 сезон · 1 серия · Спокойная жизнь');
     expect(looksLikeName('Тишина в эфире')).toBe(true);
