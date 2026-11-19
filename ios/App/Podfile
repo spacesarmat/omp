@@ -1,0 +1,9 @@
+platform :ios, '15.0'
+use_frameworks!
+
+# The OMP repo ships the Android Capacitor app. This Podfile is the iOS half of the same phone UI:
+# after `npx cap add ios` on a Mac, keep this pod and add App/YandexAdsPlugin.swift to the App target,
+# then register it from capacitorDidLoad with bridge?.registerPluginInstance(YandexAdsPlugin()).
+target 'App' do
+  pod 'YandexMobileAds', '8.7.0'
+end

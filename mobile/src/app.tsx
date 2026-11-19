@@ -557,7 +557,7 @@ export function App() {
       <WifiPrompt />
       <Toast />
       {showMini && route.name !== 'remote' && <div class="m-mini-pad" />}
-      {showMini && <MiniPlayer />}
+      {showMini && route.name !== 'remote' && <MiniPlayer />}
       {showNav && !desktop && <NavBar active={navActive} />}
     </Fragment>
   );

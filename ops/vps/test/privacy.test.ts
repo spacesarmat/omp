@@ -61,20 +61,22 @@ describe('privacy policy pages', () => {
       '2. Диагностика выключена, пока её не включат',
       '3. Метаданные (TMDB)',
       '4. Аккаунт не требуется',
-      '5. Что мы не собираем',
-      '6. Дети',
-      '7. Изменения',
-      '8. Поддержка',
+      '5. Реклама в приложении для телефона',
+      '6. Что мы не собираем',
+      '7. Дети',
+      '8. Изменения',
+      '9. Поддержка',
     ]);
     expect([...en.querySelectorAll('h2')].map((h) => h.textContent)).toEqual([
       '1. Your media and history stay on your network',
       '2. Optional diagnostics (off until you turn it on)',
       '3. Metadata (TMDB)',
       '4. No account required',
-      '5. Data we do not collect',
-      '6. Children',
-      '7. Changes',
-      '8. Support',
+      '5. Advertising in the phone app',
+      '6. Data we do not collect',
+      '7. Children',
+      '8. Changes',
+      '9. Support',
     ]);
     for (const page of [ru, en]) {
       const support = [...page.querySelectorAll('#support a')].map((a) => a.getAttribute('href'));

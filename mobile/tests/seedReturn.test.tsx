@@ -54,7 +54,7 @@ function unmount() {
 
 async function flush() {
   await act(async () => {
-    for (let i = 0; i < 8; i++) await Promise.resolve();
+    for (let i = 0; i < 40; i++) await Promise.resolve();
   });
 }
 

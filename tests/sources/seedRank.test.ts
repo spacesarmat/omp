@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { lang } from '../../src/i18n';
-import { freshnessScore, orderSearch, rankSearchResults, seasonScore, seedStatusLine, visibleSeedLine } from '../../src/sources/seedRank';
+import { episodeScore, freshnessScore, orderSearch, rankSearchResults, seasonScore, seedStatusLine, visibleSeedLine, yearScore } from '../../src/sources/seedRank';
 import type { SourceResult } from '../../src/sources/types';
 
 const NOW = 1_700_000_000_000;
@@ -66,6 +66,33 @@ describe('seed ranking', () => {
     expect(titles.indexOf('Show S02 720p')).toBeLessThan(titles.indexOf('Show S01 2160p'));
     expect(titles.indexOf('Show S02')).toBeLessThan(titles.indexOf('Show S02 WEB-DL'));
     expect(titles[titles.length - 1]).toBe('Show S02 WEB-DL');
+  });
+
+  it('puts the matching year and episode above another year and another episode', () => {
+    expect(yearScore('Локи (2021) 1080p', 2021)).toBe(1);
+    expect(yearScore('Локи (2012) 1080p', 2021)).toBe(-1);
+    expect(yearScore('Локи 1080p', 2021)).toBe(0);
+    expect(episodeScore('Локи S02E03', 2, 3)).toBe(2);
+    expect(episodeScore('Локи S02', 2, 3)).toBe(1);
+    expect(episodeScore('Локи S02E01', 2, 3)).toBe(-1);
+    const list = [
+      row({ Title: 'Локи (2012) 2160p', Seed: 20, seedCheck: 'live', seedCheckAt: NOW }),
+      row({ Title: 'Локи (2021) S02E01 1080p', Seed: 20, seedCheck: 'live', seedCheckAt: NOW }),
+      row({ Title: 'Локи (2021) S02 1080p', Seed: 20, seedCheck: 'live', seedCheckAt: NOW }),
+      row({ Title: 'Локи (2021) S02E03 720p', Seed: 20, seedCheck: 'live', seedCheckAt: NOW }),
+    ];
+    const titles = rankSearchResults(list, 'Локи 2021 2 сезон 3 серия', NOW).map((r) => r.Title);
+    expect(titles[0]).toBe('Локи (2021) S02E03 720p');
+    expect(titles.indexOf('Локи (2021) S02 1080p')).toBeLessThan(titles.indexOf('Локи (2021) S02E01 1080p'));
+    expect(titles[titles.length - 1]).toBe('Локи (2012) 2160p');
+  });
+
+  it('counts a match on the original title as well as the Russian one', () => {
+    const list = [
+      row({ Title: 'Something else', Seed: 5, seedCheck: 'unverified' }),
+      row({ Title: 'Loki S01 1080p', Seed: 5, seedCheck: 'unverified' }),
+    ];
+    expect(rankSearchResults(list, 'Локи', NOW, ['Loki'])[0].Title).toBe('Loki S01 1080p');
   });
 
   it('leaves a date sort alone', () => {

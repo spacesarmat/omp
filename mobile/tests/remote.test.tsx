@@ -639,11 +639,22 @@ describe('Remote with a TV', () => {
     expect(el.querySelector('.m-touchpad.with-strip')).toBeNull();
   });
 
-  it('adds the mini class while the player link is live', () => {
-    nowPlaying.value = { title: 'x' } as any;
+  it('shows the playing title under the TV line and does not reserve the mini-player', () => {
+    saveTv({ ip: '192.168.1.5', name: 'LG OLED55' });
+    nowPlaying.value = { title: 'Тишина в эфире', subtitle: '', time: 10, duration: 100, paused: false, buffering: false, hash: 'h', file: 1 } as any;
     lastSeen.value = Date.now();
     mount();
-    expect(el.querySelector('.m-remote')!.classList.contains('mini')).toBe(true);
+    expect(el.querySelector('.m-remote')!.classList.contains('mini')).toBe(false);
+    expect(el.querySelector('.m-mini')).toBeNull();
+    expect(el.querySelector('.m-remote-now')!.textContent).toContain('Тишина в эфире');
+    click(el.querySelector('.m-remote-now')!);
+    expect(currentRoute.value).toEqual({ name: 'nowPlaying' });
+    resetTo({ name: 'remote' });
+    const back = vi.fn();
+    act(() => render(<Remote onShowPlayer={back} />, el));
+    click(el.querySelector('.m-remote-now')!);
+    expect(back).toHaveBeenCalledTimes(1);
+    expect(currentRoute.value.name).toBe('remote');
     nowPlaying.value = null;
     lastSeen.value = 0;
   });
@@ -735,6 +746,48 @@ describe('Remote with a TV', () => {
     expect(a.click).toHaveBeenCalledTimes(1);
   });
 
+  it('a paused OMP video resumes on the first tap and follows the TV', () => {
+    saveTv({ ip: '192.168.1.5', name: 'LG OLED' });
+    const paused = { title: 'Тишина', subtitle: '', time: 10, duration: 100, paused: true, buffering: false, hash: 'h', file: 1 };
+    nowPlaying.value = paused as any;
+    lastSeen.value = Date.now();
+    mount();
+    expect(lbl('Воспроизвести')).toBeTruthy();
+    expect(lbl('Пауза')).toBeNull();
+    click(lbl('Воспроизвести'));
+    expect(a.pressButton).not.toHaveBeenCalled();
+    expect(nowPlaying.value && nowPlaying.value.paused).toBe(false);
+    expect(lbl('Пауза')).toBeTruthy();
+    act(() => {
+      nowPlaying.value = { ...paused, paused: true } as any;
+    });
+    expect(lbl('Воспроизвести')).toBeTruthy();
+    click(text('Тачпад'));
+    click(lbl('Воспроизвести'));
+    expect(a.pressButton).not.toHaveBeenCalled();
+    expect(nowPlaying.value && nowPlaying.value.paused).toBe(false);
+    nowPlaying.value = null;
+    lastSeen.value = 0;
+  });
+
+  it('a stale player link keeps the LG play button', async () => {
+    saveTv({ ip: '192.168.1.5', name: 'LG OLED' });
+    nowPlaying.value = { title: 'Тишина', subtitle: '', time: 10, duration: 100, paused: true, buffering: false, hash: 'h', file: 1 } as any;
+    lastSeen.value = Date.now() - 6000;
+    mount();
+    const btn = lbl('Пауза') as HTMLButtonElement;
+    expect(btn.disabled).toBe(false);
+    click(btn);
+    expect(a.pressButton).toHaveBeenLastCalledWith('PAUSE');
+    await flush();
+    const next = lbl('Воспроизвести') as HTMLButtonElement;
+    expect(next.disabled).toBe(false);
+    click(text('Тачпад'));
+    expect((lbl('Воспроизвести') as HTMLButtonElement).disabled).toBe(false);
+    nowPlaying.value = null;
+    lastSeen.value = 0;
+  });
+
   it('play/pause label stays when the press fails', async () => {
     mount();
     a.pressButton.mockRejectedValueOnce(new Error('нет связи'));
@@ -749,6 +802,22 @@ describe('Remote for Android TV', () => {
   beforeEach(() => saveTv({ ip: '192.168.1.40', name: 'Гостиная', kind: 'atv', token: '0123456789abcdef0123456789abcdef' }));
   afterEach(() => {
     tvState.value = 'idle';
+  });
+
+  it('pause and rewind control the player in both modes when the box is off', () => {
+    nowPlaying.value = { hash: 'h', file: 1, title: 'Тишина', subtitle: '', time: 30, duration: 100, paused: false, buffering: false } as any;
+    lastSeen.value = Date.now();
+    mount();
+    click(lbl('Пауза'));
+    expect(nowPlaying.value && nowPlaying.value.paused).toBe(true);
+    expect(a.pressAtvKey).not.toHaveBeenCalled();
+    click(lbl('Назад на 10 секунд'));
+    expect(nowPlaying.value && nowPlaying.value.time).toBe(20);
+    click(text('Свайпы'));
+    expect(el.querySelector('[data-atv-remote] [data-player-cmds]')).toBeTruthy();
+    expect(lbl('Играть')).toBeTruthy();
+    nowPlaying.value = null;
+    lastSeen.value = 0;
   });
 
   it('the LG «Кнопки» layout: the «Пульт» header with the name and state, colour keys, Назад · Домой · Меню; no power or channel keys', () => {
@@ -963,6 +1032,11 @@ describe('buttons mode fits the phone height (mobile.css)', () => {
     expect(rule('.m-rocker')).toContain('var(--rk)');
     expect(rule('.m-rb-playbtn')).toContain('var(--play)');
     expect(rule('.m-ckey')).toContain('var(--pill)');
+  });
+
+  it('swipes mode keeps a 44px tap height on the player buttons', () => {
+    expect(rule('.m-rt')).toContain('--seek-h: 44px');
+    expect(rule('.m-rt .m-rb-seekbtn')).toContain('min-height: 44px');
   });
 
   it('no row is pinned to its full size, captions go on short phones', () => {

@@ -23,7 +23,7 @@ import { toast } from '../ui/toast';
 import { t } from '../i18n';
 import { platformKind } from '../platform/env';
 import { tvSourceContext } from '../sources/tvContext';
-import { searchAll } from '../sources/search';
+import { searchRecall } from '../sources/recallSearch';
 import { onSearchFailure, type CheckedHosts } from '../sources/cloudflareCheck';
 import { getHealth } from '../sources/store';
 import { ipBanTvHint } from '../sources/ipBan';
@@ -38,14 +38,16 @@ import { noteAlternatePool } from '../viewer/alternates';
 import { connectionMetered, protectWarm, protectWarmLink, shouldPrebuffer, startWarm } from '../viewer/prebuffer';
 import { asWarm } from '../viewer/warmClient';
 import { settings } from '../store/settings';
-import { applySeedRound, watchSeedVerify, type SeedMeasure } from '../sources/seedVerify';
+import { applySeedRound, searchPending, watchSeedVerify, type SeedMeasure } from '../sources/seedVerify';
 import { sortTvResults, stableTvOrder, type TvSortKey } from '../sources/tvSort';
 import { posterKey, requestPoster } from '../catalog/resultPosters';
 import { phoneLink } from '../phone/phoneStore';
 import { PhoneRpcError, phoneRpc } from '../phone/rpc';
 import { rememberSourceNames } from '../sources/sourceNames';
 import { resultSizeText } from '../sources/resultSize';
-import { relevantRows } from '../sources/relevance';
+import { rowsForQuery } from '../sources/relevance';
+import { episodeRole } from '../sources/filters';
+import { parseSearchQuery } from '../sources/queryParse';
 import { resolveTvResult, startTvSearch, type TvResult } from '../phone/phoneSearch';
 import type { RpcFailure } from '../phone/rpcTypes';
 import { tvGlyphs } from '../ui/tvText';
@@ -95,6 +97,8 @@ interface Handle {
   failures?(): RpcFailure[];
   done: Promise<void>;
   cancel(): void;
+  /** Titles sent to the trackers, including the original and translated names. */
+  queries?: () => string[];
 }
 
 type By = 'phone' | 'torrserver' | 'sources';
@@ -325,7 +329,7 @@ export function AddScreen() {
   // asked: the sites whose visible Cloudflare check this search (and its retries) has already opened
   const searchUnified = (q: string, asked: CheckedHosts = {}) => {
     stop();
-    const raw = searchAll(q, {
+    const raw = searchRecall(q, {
       ctx: tvSourceContext(),
       onResult: () => sync(h),
       onDone: (id, err) => {
@@ -341,18 +345,19 @@ export function AddScreen() {
     // a site that ignores the query (its latest list) brings nothing on the screen
     const h: Handle = {
       sourceIds: raw.sourceIds,
-      results: () => relevantRows(raw.results(), q),
+      results: () => rowsForQuery(raw.results(), q, raw.queries ? raw.queries() : [q]),
       pending: () => raw.pending(),
       answered: () => raw.answered(),
       failed: () => raw.failed(),
       done: raw.done,
       cancel: () => raw.cancel(),
+      queries: () => (raw.queries ? raw.queries() : [q]),
     };
     seedWatch.current = watchSeedVerify({
       query: q,
       ctx: tvSourceContext(),
       getRows: () => h.results(),
-      getPending: () => h.pending().length,
+      getPending: () => searchPending(raw),
       onApply: (list) => {
         seedMeasures.current = list;
         if (alive.current && handle.current === h) sync(h);
@@ -401,7 +406,7 @@ export function AddScreen() {
           query: q,
           ctx: tvSourceContext(),
           getRows: () => h.results(),
-          getPending: () => h.pending().length,
+          getPending: () => searchPending(h),
           onApply: (list) => {
             seedMeasures.current = list;
             if (alive.current && handle.current === h) sync(h);
@@ -459,9 +464,10 @@ export function AddScreen() {
     ? streaming
       ? stableTvOrder(order.current, pool, sortKey)
       : sortKey === 'seeds'
-        ? orderSearch(pool, 'seeds', searchedQ.current, Date.now())
+        ? orderSearch(pool, 'seeds', searchedQ.current, Date.now(), handle.current && handle.current.queries ? handle.current.queries() : [])
         : sortTvResults(pool, sortKey)
     : [];
+  const asked = parseSearchQuery(searchedQ.current);
   const pick = sorted.length ? pickDefaultSource(sorted, searchedQ.current, rankCtx) : null;
   const pickKey = pick ? resultKey(pick.row) : '';
   useEffect(() => {
@@ -632,6 +638,9 @@ export function AddScreen() {
                     <span class="title">{tvGlyphs(s.title)}</span>
                     {s.meta && <span class="search-meta">{' · ' + tvGlyphs(s.meta)}</span>}
                     {kind && <span class="search-chip search-kind">{tvGlyphs(kind)}</span>}
+                    {asked.episode && episodeRole(r.Title, asked.season, asked.episode) === 'pack' && (
+                      <span class="search-chip" data-pack="">{t('search.seasonPack')}</span>
+                    )}
                     {communityLabel(r) && <span class="search-chip">{tvGlyphs(communityLabel(r))}</span>}
                     {key === pickKey && pick && <span class="search-chip pick-badge">{pick.badge}</span>}
                     {chips.map((ch) => (
