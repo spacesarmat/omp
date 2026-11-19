@@ -2320,6 +2320,8 @@ export const tg: EnDict<typeof ru> = {
     magnetLabel: "Линк ё хэши магнитӣ",
     byMagnet: "Тавассути пайванди магнитӣ илова кунед",
     pasteMagnet: "Магнит ворид кунед",
+    magnetBtn: "Magnet",
+    torrentBtn: "Торрент",
     recent: "Пурсишҳои охирин",
     clipMagnet: "Дар буфери клипборд: пайванди магнитӣ",
     openTorrent: "Файли .torrent-ро кушоед",

@@ -2205,6 +2205,8 @@ export const ro: typeof ru = {
     magnetLabel: "Link magnetic sau hash",
     byMagnet: "Adăugare prin link magnet",
     pasteMagnet: "Inserați magnetul",
+    magnetBtn: "Magnet",
+    torrentBtn: "Torrent",
     recent: "Căutări recente",
     clipMagnet: "În buffer: link magnet",
     openTorrent: "Deschideți fișierul .torrent",

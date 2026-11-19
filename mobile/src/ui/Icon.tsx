@@ -23,6 +23,8 @@ export const ICONS = {
   trash: 'M4 7h16M9 7V5h6v2M7 7l1 12h8l1-12',
   /** a season still to come (the series screen) */
   clock: 'M3 12a9 9 0 1 0 18 0a9 9 0 1 0-18 0M12 7v5l3 2',
+  magnet: 'M7 4v8a5 5 0 0 0 10 0V4M7 4h3v7M14 4h3v7',
+  torrent: 'M6 3h8l4 4v14H6zM14 3v5h5',
 };
 
 export function Icon({ d, size = 22, spin }: { d: string; size?: number; spin?: boolean }) {

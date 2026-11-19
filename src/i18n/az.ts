@@ -2320,6 +2320,8 @@ export const az: EnDict<typeof ru> = {
     magnetLabel: "Maqnit linki və ya haş",
     byMagnet: "Maqnit linki vasitəsilə əlavə et",
     pasteMagnet: "Maqnit qoyun",
+    magnetBtn: "Magnet",
+    torrentBtn: "Torrent",
     recent: "Son sorğular",
     clipMagnet: "Kəsim lövhəsində: maqnit linki",
     openTorrent: ".torrent faylını açın",

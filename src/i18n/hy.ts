@@ -2320,6 +2320,8 @@ export const hy: EnDict<typeof ru> = {
     magnetLabel: "Մագնիսային հղում կամ հեշ",
     byMagnet: "Ավելացնել մագնիսական հղման միջոցով",
     pasteMagnet: "Մագնիս տեղադրել",
+    magnetBtn: "Magnet",
+    torrentBtn: "Տորենտ",
     recent: "Վերջին հարցումներ",
     clipMagnet: "Կլիպբորդում՝ մագնիսային հղում",
     openTorrent: "Բացեք .torrent ֆայլը",
