@@ -40,6 +40,13 @@ describe('dub list before a season was played', () => {
     expect(seasonDubFiles(files, 0)).toBe(files);
   });
 
+  it('a subtitle that names the season does not hide videos that do not', () => {
+    const files = [f(1, 'Show/Show.E01.mkv'), f(2, 'Show/Show.S02E01.srt')];
+    const season = seasonDubFiles(files, 2);
+    expect(season.map((file) => file.id)).toEqual([1, 2]);
+    expect(probeFileId(season)).toBe(1);
+  });
+
   it('an empty probe and a release with no video offer nothing', () => {
     expect(probeDubSeen(null)).toEqual([]);
     expect(externalDubSeen([f(1, 'book.mp3')])).toEqual([]);

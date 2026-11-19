@@ -33,10 +33,9 @@ export function seasonDubFiles(files: TorrentFile[], season: number): TorrentFil
   if (!(season > 0) || !files.length) return files;
   const tracks = releaseTracks(files);
   const videos = tracks.videos.filter((file) => parseEpisode(file.path).season === season);
-  if (!videos.length) {
-    const named = files.filter((file) => parseEpisode(file.path).season === season);
-    return named.length ? named : files;
-  }
+  // no video names this season: keep the list, including seasonless videos. A subtitle that names the season
+  // must not become the only file, or there is nothing to probe.
+  if (!videos.length) return files;
   const keep = new Set<number>();
   videos.forEach((video) => {
     keep.add(video.id);
