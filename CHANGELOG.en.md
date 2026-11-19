@@ -4,6 +4,14 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## Unreleased
+
+- [phone] Settings, Application: one card, the same width as the other sections. The version is shown in full. Tell friends has a chevron, like the rows next to it
+- [phone] A long press on a Novelties poster opens the title, In library, Want to watch, Find torrents and Share
+- [phone] Novelties: the header and the chips have a solid background. The search button does not cover the chips and looks the same while scrolling
+- [phone] A series page lists the episode number and the TMDB title. With no title, only the number stays. Watch on phone and To episodes are normal buttons. The selected season stays fully in view, and the first chip is not cut off at the edge. More under a season overview names that season
+- [phone] Mine: the space between the chips and Continue watching matches the space between sections. An empty title row takes no space
+
 ## 0.30.1-beta.15
 
 - [phone] Settings rows share one height inside grouped cards, and a row that opens a screen has a chevron. The update check no longer splits the card

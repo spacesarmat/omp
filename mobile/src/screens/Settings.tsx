@@ -648,20 +648,22 @@ export function Settings() {
           </div>
         )}
         {rows.version && <button type="button" class="m-set-row m-set-pick tm" data-code="P11.12" onClick={() => openWhatsNew(phoneChangelog(), APP_VERSION)}>
-          <span>{t('settings.version')}</span>
-          <span class="m-muted">
+          <span class="m-set-name">{t('settings.version')}</span>
+          <span class="m-muted m-set-version">
             {APP_VERSION}
             {isBetaVersion(APP_VERSION) && <span class="m-badge-beta">{betaBadge()}</span>} · {t('whatsNew.title')}
           </span>
           <Icon d={CHEVRON} size={20} />
         </button>}
         {rows.check && (latestUpdate.value ? (
-          <button type="button" class="m-btn m-btn-primary tm" data-code="P11.13" data-row="update-available" onClick={() => (updatePrompt.value = latestUpdate.value)}>
-            {updateTitle(latestUpdate.value.version, APP_VERSION)}
+          <button type="button" class="m-set-row m-set-pick tm" data-code="P11.13" data-row="update-available" onClick={() => (updatePrompt.value = latestUpdate.value)}>
+            <span>{updateTitle(latestUpdate.value.version, APP_VERSION)}</span>
+            <Icon d={CHEVRON} size={20} />
           </button>
         ) : (
-          <button type="button" class="m-btn m-btn-secondary tm" data-code="P11.13" onClick={() => void check()}>
-            {t('updateScreen.check')}
+          <button type="button" class="m-set-row m-set-pick tm" data-code="P11.13" data-row="check-update" onClick={() => void check()}>
+            <span>{t('updateScreen.check')}</span>
+            <Icon d={CHEVRON} size={20} />
           </button>
         ))}
         {rows.report && <ReportRow />}
@@ -669,8 +671,9 @@ export function Settings() {
           <span>{t('settings.help')}</span>
           <Icon d={CHEVRON} size={20} />
         </button>}
-        {rows.friends && <button type="button" class="m-set-row m-set-row-btn tm" data-code="P11.22" data-row="tell-friends" onClick={() => void sendShare(friendsShare())}>
+        {rows.friends && <button type="button" class="m-set-row m-set-pick tm" data-code="P11.22" data-row="tell-friends" onClick={() => void sendShare(friendsShare())}>
           <span>{t('settings.tellFriends')}</span>
+          <Icon d={CHEVRON} size={20} />
         </button>}
         {rows.onboarding && <button type="button" class="m-set-row m-set-pick tm" data-code="P11.15" data-row="onboarding" onClick={() => openOnboarding()}>
           <span>{t('settings.showOnboarding')}</span>

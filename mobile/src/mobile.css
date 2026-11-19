@@ -1463,14 +1463,18 @@ button.m-now-chtext { border: none; background: none; color: inherit; display: f
 .m-set-pick { width: 100%; border: none; color: var(--text); text-align: left; font: inherit; }
 .m-set-pick > span:first-child, .m-ss-row > span:first-child { flex: 1 1 0; min-width: 0; overflow-wrap: anywhere; }
 .m-set-pick > .m-muted { flex: 0 1 auto; max-width: 46%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.m-set-pick > span.m-set-name { flex: 0 0 auto; min-width: max-content; white-space: nowrap; overflow-wrap: normal; }
+.m-set-pick > .m-muted.m-set-version { flex: 1 1 auto; max-width: none; min-width: 0; overflow: visible; text-overflow: clip; white-space: normal; text-align: right; }
 .m-set-ico { flex: 0 0 auto; display: flex; margin-right: 10px; color: var(--muted); }
 .m-screen[data-route='settings'] .m-set-group,
 .m-screen[data-route='advanced'] .m-set-group { margin: 0 0 20px; padding: 0; gap: 0; background: none; border-radius: 0; }
 .m-screen[data-route='settings'] .m-set-group .m-set-row,
 .m-screen[data-route='advanced'] .m-set-group .m-set-row { background: var(--panel); border-radius: 0; min-height: 56px; padding: 12px 14px; }
-.m-screen[data-route='settings'] .m-set-group > .m-btn { margin: 10px 14px; align-self: stretch; }
-.m-screen[data-route='settings'] .m-set-group .m-set-row:first-of-type,
-.m-screen[data-route='advanced'] .m-set-group .m-set-row:first-of-type { border-radius: 16px 16px 0 0; }
+.m-screen[data-route='settings'] .m-set-group > .m-btn { margin: 0; align-self: stretch; width: 100%; border-radius: 0; }
+.m-screen[data-route='settings'] .m-set-group > .m-set-label + .m-set-row,
+.m-screen[data-route='advanced'] .m-set-group > .m-set-label + .m-set-row,
+.m-screen[data-route='settings'] .m-set-group > .m-set-row:first-child,
+.m-screen[data-route='advanced'] .m-set-group > .m-set-row:first-child { border-radius: 16px 16px 0 0; }
 .m-screen[data-route='settings'] .m-set-group .m-set-row:last-child,
 .m-screen[data-route='advanced'] .m-set-group .m-set-row:last-child { border-radius: 0 0 16px 16px; }
 .m-screen[data-route='settings'] .m-set-group .m-set-row:first-of-type:last-child,
@@ -2001,7 +2005,14 @@ html.m-kb-open .m-toast-host { bottom: calc(16px + env(safe-area-inset-bottom));
 .m-series-head { display: flex; gap: 14px; align-items: center; }
 .m-series-info { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
 .m-series-title { overflow-wrap: anywhere; }
-.m-series .m-tc-chips { margin-bottom: 0; }
+.m-series .m-tc-chips { margin-bottom: 0; margin-left: 0; margin-right: 0; scroll-padding-left: 16px; scroll-padding-right: 16px; }
+.m-series .m-to-eps,
+.m-series .m-tc-season-actions > .m-btn-secondary {
+  align-self: flex-start;
+  width: auto;
+  min-height: 40px;
+  padding: 0 14px;
+}
 .m-series-rows { display: flex; flex-direction: column; gap: 8px; }
 /* the series screen with its TMDB show: a backdrop hero, the poster over its bottom edge */
 .m-series.m-series-hero { padding-top: 0; }
@@ -2366,7 +2377,7 @@ html.m-hint-hold .m-hint { display: none; }
 /* phone navigation: search scopes, continue row, release line */
 .m-search-scopes { margin: 4px 0 8px; }
 .m-search-none { display: flex; flex-direction: column; gap: 8px; padding: 8px 0; }
-.m-resume { display: flex; flex-direction: column; gap: 8px; margin: 4px 0 12px; }
+.m-resume { display: flex; flex-direction: column; gap: 8px; margin: 0; }
 .m-resume-head { display: flex; align-items: center; justify-content: space-between; }
 .m-resume-title { font-size: 16px; font-weight: 700; font-family: 'Manrope', sans-serif; }
 .m-resume-row { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
@@ -2418,13 +2429,25 @@ html.m-hint-hold .m-hint { display: none; }
   z-index: 5;
   display: flex;
   flex-direction: column;
+  gap: 8px;
   background: var(--bg);
   margin-left: -16px;
   margin-right: -16px;
   padding: 0 16px 8px;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 .m-discover-bar .m-disc-head,
-.m-discover-bar .m-disc-chips { position: static; background: transparent; }
+.m-discover-bar .m-disc-chips { flex: 0 0 auto; }
+.m-discover-bar .m-disc-tools .m-btn {
+  width: 40px;
+  height: 40px;
+  min-width: 40px;
+  min-height: 40px;
+  padding: 0;
+}
+.m-discover-bar .m-disc-head,
+.m-discover-bar .m-disc-chips { position: static; background: var(--bg); }
+.m-discover-bar .m-btn-secondary { background: var(--panel-2); }
 .m-tv-steps { white-space: pre-line; }
 .m-ep-watched { flex-shrink: 0; color: #8FE39A; font-size: 12px; font-weight: 700; }
 .m-ep-fold { align-self: flex-start; }
@@ -2494,7 +2517,6 @@ html.m-hint-hold .m-hint { display: none; }
 .m-library .m-lib-head .m-tvchip.on { width: 40px; height: 40px; border-radius: 12px; background: rgba(143, 227, 154, 0.18); color: #8FE39A; }
 .m-library .m-lib-head .m-seg-btn.on::before { box-shadow: none; background: #252A35; }
 .m-library .m-tabs { margin-top: 12px; background: var(--bg); }
-.m-resume { margin-top: 18px; }
 .m-resume-card { flex: 0 0 var(--m-resume-card, calc((100% - 24px) / 4)); width: var(--m-resume-card, calc((100% - 24px) / 4)); max-width: none; }
 .m-resume-poster-wrap { position: relative; }
 .m-resume-poster { position: relative; display: block; width: 100%; padding: 0; border: none; background: none; color: inherit; }
@@ -2539,7 +2561,7 @@ html.m-hint-hold .m-hint { display: none; }
 .m-library .m-tabs.nudge { animation: m-chips-nudge .8s ease; }
 @keyframes m-chips-nudge { 0% { transform: none; } 45% { transform: translateX(-22px); } 100% { transform: none; } }
 .m-resume-head { flex-wrap: nowrap; align-items: center; }
-.m-resume-toggle { display: flex; align-items: center; padding: 0; border: none; background: none; color: inherit; margin-right: 10px; }
+.m-resume-toggle { display: flex; align-items: center; padding: 0; border: none; background: none; color: inherit; margin-right: 10px; min-width: 0; min-height: 0; height: auto; }
 .m-resume-toggle .m-resume-title { margin-right: 6px; }
 .m-resume-toggle svg { flex-shrink: 0; display: block; }
 .m-resume-toggle[aria-expanded='true'] svg { transform: rotate(180deg); }

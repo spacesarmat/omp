@@ -157,6 +157,7 @@ describe('Settings', () => {
   it('tap on «Версия» opens «Что нового» with the latest versions', async () => {
     const el = mount();
     const row = Array.from(el.querySelectorAll('button')).find((b) => b.textContent!.indexOf('Что нового') >= 0)!;
+    expect(row.querySelector('.m-set-version')).toBeTruthy();
     expect(row.textContent).toContain(APP_VERSION);
     await act(async () => row.click());
     expect(whatsNew.value!.title).toBe('Что нового');

@@ -51,7 +51,7 @@ import { parseEpisode, type TorrentFile } from '../../../src/lib/episodes';
 import { useTmdbEpisodes } from '../../../src/lib/useTmdbEpisodes';
 import { TmdbEpisodeRows, WatchSheet } from './Torrent';
 import { SeasonEpisodes } from './catalog/SeasonEpisodes';
-import { seasonEpisodeList } from '../../../src/lib/episodeNames';
+import { realEpisodeName, seasonEpisodeList } from '../../../src/lib/episodeNames';
 import { ReleaseSwitch, ReleasesSheet } from '../ui/ReleasesSheet';
 import { playOnPhone } from '../watchHere';
 import { playWhere } from '../../../src/lib/playWhere';
@@ -276,8 +276,8 @@ function SeasonAbout({ id, number }: { id: number; number: number }) {
       {name && <span class="m-small m-sh-season-name">{name}</span>}
       {data.overview && open && <span class="m-small m-muted m-sh-season-overview">{data.overview}</span>}
       {data.overview && (
-        <button type="button" class="m-btn-text" onClick={() => setOpen(!open)}>
-          {open ? t('now.collapse') : t('titleCard.more')}
+        <button type="button" class="m-btn-text" data-season-more onClick={() => setOpen(!open)}>
+          {open ? t('now.collapse') : t('titleCard.more') + ' · ' + t('library.season', { n: number })}
         </button>
       )}
     </div>
@@ -407,11 +407,6 @@ function Body({ group, card }: { group: SeriesGroup; card: CatalogCard | null })
   const launch = useTvLaunch();
   const chipsRef = useRef<HTMLDivElement>(null);
   const episodesRef = useRef<HTMLDivElement>(null);
-  useLayoutEffect(() => {
-    const row = chipsRef.current;
-    const on = row ? (row.querySelector('.m-chip.on') as HTMLElement | null) : null;
-    if (row && on) row.scrollLeft = Math.max(0, on.offsetLeft - (row.clientWidth - on.offsetWidth) / 2);
-  }, [!!card]);
   // TMDB's seasons (specials are not listed) and the ones of «Мои»; those TMDB has and «Мои» lacks are missing
   // seasons still to come (dated later, or the next episode's season not started yet) that «Мои» lacks
   const tmdbSeasons = card ? card.seasons : [];
@@ -423,6 +418,27 @@ function Body({ group, card }: { group: SeriesGroup; card: CatalogCard | null })
   const chips = ownedChips.concat(missing.slice().sort((a, b) => a - b), future.map((u) => u.number).sort((a, b) => a - b));
   // a season whose torrents were deleted (or a TMDB season not offered any more): the newest one left
   const season = chips.indexOf(chosen) >= 0 ? chosen : firstSeason(group);
+  useLayoutEffect(() => {
+    const row = chipsRef.current;
+    const on = row ? (row.querySelector('.m-chip.on') as HTMLElement | null) : null;
+    if (!row || !on) return;
+    const pad = 16;
+    const place = (el: HTMLElement) => row.scrollLeft + (el.getBoundingClientRect().left - row.getBoundingClientRect().left);
+    const selStart = place(on);
+    let left = Math.max(0, selStart - pad);
+    const nodes = row.querySelectorAll('.m-chip');
+    for (let i = 0; i < nodes.length; i++) {
+      const chip = nodes[i] as HTMLElement;
+      if (chip === on) break;
+      const start = place(chip);
+      const end = start + chip.offsetWidth;
+      if (start < left && end > left) left = end <= selStart ? end : Math.max(0, start - pad);
+    }
+    const max = Math.max(0, row.scrollWidth - row.clientWidth);
+    const selEnd = selStart + on.offsetWidth + pad;
+    if (selEnd > left + row.clientWidth) left = selEnd - row.clientWidth;
+    row.scrollLeft = Math.min(max, Math.max(0, left));
+  }, [season, chips.length, !!card]);
   const isMissing = !!card && missing.indexOf(season) >= 0;
   const coming = card ? futureOf(season) : undefined;
   const pick = (n: number) => {
@@ -511,6 +527,31 @@ function Body({ group, card }: { group: SeriesGroup; card: CatalogCard | null })
   const noFiles = !!main && !files.length && season !== NO_SEASON;
   const epSeasons = fileSeasons.length ? fileSeasons : noFiles ? [season] : [];
   const tmdb = useTmdbEpisodes(main, epSeasons, !!main && epSeasons.length > 0);
+  const [cardTitles, setCardTitles] = useState<{ episode: number; title: string; runtime: number }[]>([]);
+  useEffect(() => {
+    if (!card || season <= 0) {
+      setCardTitles([]);
+      return;
+    }
+    let live = true;
+    setCardTitles([]);
+    phoneCatalog()
+      .then((c) => c.season(card.id, season))
+      .then(
+        (d) => {
+          if (!live || !d) return;
+          setCardTitles(
+            (d.episodes || []).map((e) => ({ episode: e.n, title: realEpisodeName(e.title), runtime: e.runtime || 0 })),
+          );
+        },
+        () => undefined,
+      );
+    return () => {
+      live = false;
+    };
+  }, [card && card.id, season, lang.value]);
+  const torrentTitles = seasonTitles(tmdb.eps, season);
+  const episodeTitles = cardTitles.some((e) => e.title) ? cardTitles : torrentTitles;
   const tmdbOnly = noFiles ? seasonEpisodeList(tmdb.eps, season) : [];
   const [releasesOpen, setReleasesOpen] = useState(false);
   const [wrongOpen, setWrongOpen] = useState(false);
@@ -605,7 +646,7 @@ function Body({ group, card }: { group: SeriesGroup; card: CatalogCard | null })
             <span class="m-btn-sub">{freshTv ? (code || lines.sub) : lines.sub}</span>
           </button>
           {tvMain ? (
-            <button type="button" class="m-btn-text tm" data-where="phone" onClick={watchHere}>
+            <button type="button" class="m-btn m-btn-secondary m-btn-sm tm" data-where="phone" onClick={watchHere}>
               {t('nav.watchSubPhone')}
             </button>
           ) : (
@@ -624,7 +665,7 @@ function Body({ group, card }: { group: SeriesGroup; card: CatalogCard | null })
         />
       )}
       {main && files.length > 0 && (
-        <button type="button" class="m-btn-text m-to-eps" onClick={() => episodesRef.current && episodesRef.current.scrollIntoView({ block: 'start' })}>
+        <button type="button" class="m-btn m-btn-secondary m-btn-sm m-to-eps" onClick={() => episodesRef.current && episodesRef.current.scrollIntoView({ block: 'start' })}>
           {t('series.toEpisodes')}
         </button>
       )}
@@ -689,7 +730,7 @@ function Body({ group, card }: { group: SeriesGroup; card: CatalogCard | null })
               hash={main.hash}
               files={files}
               season={season === NO_SEASON ? 0 : season}
-              titles={seasonTitles(tmdb.eps, season)}
+              titles={episodeTitles}
               nextAir={nextAirLine(card)}
               showSeason={spansSeasons(allFiles.map((f) => f.path))}
               onPick={playFile}
