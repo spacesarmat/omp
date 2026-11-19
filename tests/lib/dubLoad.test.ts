@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { externalDubSeen, probeDubSeen, probeFileId } from '../../src/lib/dubLoad';
+import { externalDubSeen, probeDubSeen, probeFileId, seasonDubFiles } from '../../src/lib/dubLoad';
 import type { TorrentFile } from '../../src/lib/episodes';
 
 const f = (id: number, path: string): TorrentFile => ({ id, path, length: 1000 });
@@ -24,6 +24,20 @@ describe('dub list before a season was played', () => {
       ],
     });
     expect(seen).toEqual([{ l: 'LostFilm', g: 'ru', c: '5.1' }]);
+  });
+
+  it('a later season keeps its own video and the external audio matched to it', () => {
+    const files = [
+      f(1, 'Show/Show.S01E01.mkv'),
+      f(2, 'Show/Rus Sound/LostFilm/Show.S01E01.mka'),
+      f(3, 'Show/Show.S02E01.mkv'),
+      f(4, 'Show/Rus Sound/AlexFilm/Show.S02E01.mka'),
+    ];
+    const season = seasonDubFiles(files, 2);
+    expect(season.map((file) => file.id)).toEqual([3, 4]);
+    expect(probeFileId(season)).toBe(3);
+    expect(externalDubSeen(season).map((row) => row.l)).toEqual(['AlexFilm']);
+    expect(seasonDubFiles(files, 0)).toBe(files);
   });
 
   it('an empty probe and a release with no video offer nothing', () => {

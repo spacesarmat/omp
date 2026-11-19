@@ -47,7 +47,7 @@ import { torrentQuery, type CatalogCard, type Season, type SeasonDetails } from 
 import { ratingText } from './catalog/CatalogSearch';
 import { dubChoices, DUB_RESET, useSeriesDub } from '../../../src/ui/seriesDub';
 import { saveSeriesTracks } from '../../../src/store/journal';
-import { externalDubSeen, probeDubSeen, probeFileId } from '../../../src/lib/dubLoad';
+import { externalDubSeen, probeDubSeen, probeFileId, seasonDubFiles } from '../../../src/lib/dubLoad';
 import type { SeriesSub } from '../../../src/lib/seriesTracks';
 import { errorMessage } from '../../../src/api/http';
 import { parseEpisode, type TorrentFile } from '../../../src/lib/episodes';
@@ -762,7 +762,7 @@ function Body({ group, card }: { group: SeriesGroup; card: CatalogCard | null })
           })}
         </div>
       )}
-      <DubRow group={group} season={season} hash={main ? main.hash : ''} files={main ? filesOf(main) : []} />
+      <DubRow group={group} season={season} hash={main ? main.hash : ''} files={main ? seasonDubFiles(filesOf(main), season) : []} />
       {caption && <span class="m-small m-muted m-sh-caption">{caption}</span>}
       {coming && card ? (
         <FutureSeason card={card} season={coming} />

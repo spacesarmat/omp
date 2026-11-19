@@ -3,12 +3,14 @@ import { useState } from 'preact/hooks';
 import { t } from '../../../src/i18n';
 import type { CatalogTitle } from '../../../src/catalog/tmdb';
 import { torrentQuery } from '../../../src/catalog/tmdb';
-import { libraryTitleHash } from '../../../src/catalog/library';
+import { libraryTargetOf, type LibraryTarget } from '../../../src/catalog/libraryTarget';
 import { loadSubs } from '../../../src/monitor/subs';
 import { playableFiles } from '../../../src/lib/episodes';
+import { findGroup, seasonMembers } from '../../../src/lib/seriesGroups';
 import { markWatched } from '../../../src/store/progress';
 import { torrents } from '../../../src/store/library';
-import { navigate } from '../nav';
+import type { Torrent } from '../../../src/api/types';
+import { navigate, type MRoute } from '../nav';
 import { routeForHash } from '../audiobooks/route';
 import { filesOf } from '../watch';
 import { watchTarget } from '../lib/torrentActions';
@@ -20,12 +22,26 @@ import { sendShare } from './send';
 
 const OPEN = 'M9 6l6 6-6 6';
 
+function libraryRoute(target: LibraryTarget): MRoute {
+  return target.kind === 'series' ? { name: 'series', key: target.key, season: target.season } : routeForHash(target.hash);
+}
+
+/** The torrent «Просмотрено» can mark: the film, or one release of the series season the library holds. */
+function ownedTorrent(list: Torrent[], target: LibraryTarget): Torrent | undefined {
+  if (target.kind === 'torrent') return list.find((x) => x.hash === target.hash);
+  const group = findGroup(list, target.key);
+  if (!group) return undefined;
+  const members = target.season ? seasonMembers(group, target.season) : [];
+  return members[0] || group.lead;
+}
+
 export function CatalogMenu(p: { item: CatalogTitle; onClose: () => void }) {
   const [want, setWant] = useState(false);
   const item = p.item;
-  const hash = libraryTitleHash(torrents.value, item);
-  const tor = hash ? torrents.value.find((x) => x.hash === hash) : undefined;
-  const file = tor ? watchTarget(hash, playableFiles(filesOf(tor))) : undefined;
+  const list = torrents.value;
+  const target = libraryTargetOf(list, item);
+  const tor = target ? ownedTorrent(list, target) : undefined;
+  const file = tor ? watchTarget(tor.hash, playableFiles(filesOf(tor))) : undefined;
   const following = loadSubs().some((s) => s.catalog && s.catalog.kind === item.kind && s.catalog.id === item.id);
   const go = (run: () => void) => {
     p.onClose();
@@ -50,18 +66,18 @@ export function CatalogMenu(p: { item: CatalogTitle; onClose: () => void }) {
         <Icon d={OPEN} size={22} />
         <span class="m-opt-name">{t('common.open')}</span>
       </button>
-      {hash ? (
-        <button type="button" class="m-opt" data-catalog-action="library" onClick={() => go(() => navigate(routeForHash(hash)))}>
+      {target ? (
+        <button type="button" class="m-opt" data-catalog-action="library" onClick={() => go(() => navigate(libraryRoute(target)))}>
           <Icon d={ICONS.play} size={22} />
           <span class="m-opt-name">{t('discover.inLibrary')}</span>
         </button>
       ) : null}
-      {file ? (
+      {tor && file ? (
         <button
           type="button"
           class="m-opt"
           data-catalog-action="watched"
-          onClick={() => go(() => markWatched(hash, file.id))}
+          onClick={() => go(() => markWatched(tor.hash, file.id))}
         >
           <Icon d="M5 12.5l4.5 4.5L19 7" size={22} />
           <span class="m-opt-name">{t('history.markWatched')}</span>
