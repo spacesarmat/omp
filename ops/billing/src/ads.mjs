@@ -59,8 +59,8 @@ export function adsDefaults() {
     tvHideIfLinkedSubscriber: true,
     /** Older apps show nothing (empty: every version that knows ads). */
     minAppVersion: '',
-    /** Yandex ad unit ids (R-M-...), not secrets. Unused until the Yandex phase. */
-    yandex: { nativeUnitPhone: '', nativeUnitTv: '', bannerUnit: '' },
+    /** Yandex on the phone. House banners stay on `provider: house` so released apps do not change. */
+    yandex: yandexStoredDefaults(),
     banners: [],
   };
 }
@@ -97,7 +97,35 @@ function names(v, known) {
 }
 
 const VERSION_RE = /^\d{1,4}(\.\d{1,4}){0,2}$/;
-const YANDEX_UNIT_RE = /^(R-M-[0-9A-Za-z-]{1,40})?$/;
+/** Real units are R-M-...; the two official demo placements are allowed so an admin can paste them. Empty is allowed. */
+const YANDEX_UNIT_RE = /^(R-M-[0-9A-Za-z-]{1,40}|demo-native-content-yandex|demo-native-app-yandex)?$/;
+const YANDEX_CAP_SESSION = [0, 100];
+const YANDEX_CAP_DAY = [0, 500];
+
+function yandexGroupDefaults(enabled) {
+  return { enabled, everyN: 10, afterInstallDays: 3, maxPerSession: 0, maxPerDay: 0 };
+}
+
+function yandexStoredDefaults() {
+  return {
+    nativeUnitPhone: '',
+    nativeUnitTv: '',
+    bannerUnit: '',
+    /** Master switch. Off: released apps and new apps keep today's house banners only. */
+    enabled: false,
+    /** No Yandex fill: the card may show one of our banners. */
+    fallbackHouse: true,
+    androidUnit: '',
+    iosUnit: '',
+    /** free: no OMP subscription. sub: a subscription, including a TV linked to that phone. */
+    groups: { free: yandexGroupDefaults(true), sub: yandexGroupDefaults(false) },
+  };
+}
+
+function storedYandexUnit(v) {
+  const s = typeof v === 'string' ? v.trim() : '';
+  return YANDEX_UNIT_RE.test(s) ? s : '';
+}
 /** erid tokens from the ORD: letters and digits (Base58-like), sometimes with _ or -. */
 const ERID_RE = /^[0-9A-Za-z_-]{4,64}$/;
 const ID_RE = /^[0-9a-z]{6,32}$/;
@@ -112,6 +140,22 @@ export function adsConfig(settings) {
     return n === null ? d[k] : n;
   };
   const y = isObj(raw.yandex) ? raw.yandex : {};
+  const dY = d.yandex;
+  const yGroup = (key, def) => {
+    const groups = isObj(y.groups) ? y.groups : {};
+    const src = isObj(groups[key]) ? groups[key] : {};
+    const lim = (field, range) => {
+      const n = intIn(src[field], range);
+      return n === null ? def[field] : n;
+    };
+    return {
+      enabled: bool(src.enabled, def.enabled),
+      everyN: lim('everyN', AD_LIMITS.everyN),
+      afterInstallDays: lim('afterInstallDays', AD_LIMITS.afterInstallDays),
+      maxPerSession: lim('maxPerSession', YANDEX_CAP_SESSION),
+      maxPerDay: lim('maxPerDay', YANDEX_CAP_DAY),
+    };
+  };
   const banners = Array.isArray(raw.banners) ? raw.banners.filter((b) => isObj(b) && ID_RE.test(String(b.id || ''))) : [];
   return {
     enabled: bool(raw.enabled, d.enabled),
@@ -127,9 +171,14 @@ export function adsConfig(settings) {
     tvHideIfLinkedSubscriber: bool(raw.tvHideIfLinkedSubscriber, d.tvHideIfLinkedSubscriber),
     minAppVersion: typeof raw.minAppVersion === 'string' && VERSION_RE.test(raw.minAppVersion) ? raw.minAppVersion : '',
     yandex: {
-      nativeUnitPhone: typeof y.nativeUnitPhone === 'string' && YANDEX_UNIT_RE.test(y.nativeUnitPhone) ? y.nativeUnitPhone : '',
-      nativeUnitTv: typeof y.nativeUnitTv === 'string' && YANDEX_UNIT_RE.test(y.nativeUnitTv) ? y.nativeUnitTv : '',
-      bannerUnit: typeof y.bannerUnit === 'string' && YANDEX_UNIT_RE.test(y.bannerUnit) ? y.bannerUnit : '',
+      nativeUnitPhone: storedYandexUnit(y.nativeUnitPhone),
+      nativeUnitTv: storedYandexUnit(y.nativeUnitTv),
+      bannerUnit: storedYandexUnit(y.bannerUnit),
+      enabled: bool(y.enabled, dY.enabled),
+      fallbackHouse: bool(y.fallbackHouse, dY.fallbackHouse),
+      androidUnit: storedYandexUnit(y.androidUnit),
+      iosUnit: storedYandexUnit(y.iosUnit),
+      groups: { free: yGroup('free', dY.groups.free), sub: yGroup('sub', dY.groups.sub) },
     },
     banners,
   };
@@ -142,7 +191,12 @@ export function adsConfig(settings) {
 export function applyAdsSettings(settings, body) {
   const cur = adsConfig(settings);
   const b = isObj(body) ? body : {};
-  const next = { ...cur, sections: { ...cur.sections }, platforms: { ...cur.platforms }, yandex: { ...cur.yandex } };
+  const next = {
+    ...cur,
+    sections: { ...cur.sections },
+    platforms: { ...cur.platforms },
+    yandex: { ...cur.yandex, groups: { free: { ...cur.yandex.groups.free }, sub: { ...cur.yandex.groups.sub } } },
+  };
   const errors = [];
   if (b.enabled !== undefined) next.enabled = bool(b.enabled, cur.enabled);
   if (b.provider !== undefined) {
@@ -172,11 +226,43 @@ export function applyAdsSettings(settings, body) {
     else next.minAppVersion = v;
   }
   if (isObj(b.yandex)) {
-    for (const k of ['nativeUnitPhone', 'nativeUnitTv', 'bannerUnit']) {
-      if (b.yandex[k] === undefined) continue;
-      const v = String(b.yandex[k] || '').trim();
-      if (!YANDEX_UNIT_RE.test(v)) errors.push('блок Яндекса: формат R-M-...');
+    const src = b.yandex;
+    if (src.enabled !== undefined) next.yandex.enabled = bool(src.enabled, cur.yandex.enabled);
+    if (src.fallbackHouse !== undefined) next.yandex.fallbackHouse = bool(src.fallbackHouse, cur.yandex.fallbackHouse);
+    for (const k of ['nativeUnitPhone', 'nativeUnitTv', 'bannerUnit', 'androidUnit', 'iosUnit']) {
+      if (src[k] === undefined) continue;
+      const v = String(src[k] || '').trim();
+      if (!YANDEX_UNIT_RE.test(v)) errors.push('блок Яндекса: формат R-M-... или demo-native-content-yandex');
       else next.yandex[k] = v;
+    }
+    if (isObj(src.groups)) {
+      const labels = { free: 'без подписки', sub: 'с подпиской' };
+      const fields = [
+        ['everyN', 'каждая N-я карточка', AD_LIMITS.everyN],
+        ['afterInstallDays', 'дней после установки', AD_LIMITS.afterInstallDays],
+        ['maxPerSession', 'показов за сеанс', YANDEX_CAP_SESSION],
+        ['maxPerDay', 'показов за день', YANDEX_CAP_DAY],
+      ];
+      for (const name of ['free', 'sub']) {
+        if (!isObj(src.groups[name])) continue;
+        const g = src.groups[name];
+        const dst = { ...next.yandex.groups[name] };
+        if (g.enabled !== undefined) dst.enabled = bool(g.enabled, dst.enabled);
+        for (let i = 0; i < fields.length; i++) {
+          const field = fields[i][0];
+          const label = fields[i][1];
+          const range = fields[i][2];
+          if (g[field] === undefined) continue;
+          if ((field === 'maxPerSession' || field === 'maxPerDay') && String(g[field]).trim() === '') {
+            dst[field] = 0;
+            continue;
+          }
+          const n = intIn(g[field], range);
+          if (n === null) errors.push(labels[name] + ', ' + label + ': целое число ' + range[0] + '-' + range[1]);
+          else dst[field] = n;
+        }
+        next.yandex.groups[name] = dst;
+      }
     }
   }
   if (errors.length) return { error: 'Реклама не сохранена: ' + errors.join('; ') };
@@ -199,7 +285,20 @@ export function adsSettingsDiff(before, after) {
   if (before.tvHideIfLinkedSubscriber !== after.tvHideIfLinkedSubscriber) {
     out.push('ТВ с подпиской на телефоне: ' + (after.tvHideIfLinkedSubscriber ? 'скрыта' : 'показана'));
   }
-  for (const k of Object.keys(after.yandex)) if (before.yandex[k] !== after.yandex[k]) out.push('yandex.' + k);
+  for (const k of ['nativeUnitPhone', 'nativeUnitTv', 'bannerUnit', 'androidUnit', 'iosUnit']) {
+    if (before.yandex[k] !== after.yandex[k]) out.push('yandex.' + k);
+  }
+  if (before.yandex.enabled !== after.yandex.enabled) out.push(after.yandex.enabled ? 'яндекс: включена' : 'яндекс: выключена');
+  if (before.yandex.fallbackHouse !== after.yandex.fallbackHouse) out.push('запасной баннер: ' + (after.yandex.fallbackHouse ? 'да' : 'нет'));
+  for (const name of ['free', 'sub']) {
+    const label = name === 'free' ? 'без подписки' : 'с подпиской';
+    const a = before.yandex.groups[name];
+    const b = after.yandex.groups[name];
+    if (a.enabled !== b.enabled) out.push(label + ': ' + (b.enabled ? 'вкл' : 'выкл'));
+    for (const k of ['everyN', 'afterInstallDays', 'maxPerSession', 'maxPerDay']) {
+      if (a[k] !== b[k]) out.push(label + ' ' + k + ': ' + a[k] + ' -> ' + b[k]);
+    }
+  }
   return out.length ? out.join(', ') : 'без изменений';
 }
 
@@ -351,7 +450,23 @@ export function publicAdsConfig(settings, now) {
       sections: b.sections,
       tvMode: b.tvMode,
     }));
-  if (!cfg.enabled || !banners.length) return { v: 1, enabled: false, ttlSec: AD_CONFIG_TTL_SEC };
+  const yandexAds = cfg.yandex.enabled
+    ? {
+        enabled: true,
+        fallbackHouse: cfg.yandex.fallbackHouse !== false,
+        androidUnit: cfg.yandex.androidUnit || cfg.yandex.nativeUnitPhone,
+        iosUnit: cfg.yandex.iosUnit,
+        groups: {
+          free: { ...cfg.yandex.groups.free },
+          sub: { ...cfg.yandex.groups.sub },
+        },
+      }
+    : null;
+  if (!cfg.enabled || !banners.length) {
+    const off = { v: 1, enabled: false, ttlSec: AD_CONFIG_TTL_SEC };
+    if (yandexAds) off.yandexAds = yandexAds;
+    return off;
+  }
   return {
     v: 1,
     enabled: true,
@@ -368,6 +483,7 @@ export function publicAdsConfig(settings, now) {
     minAppVersion: cfg.minAppVersion,
     banners,
     ttlSec: AD_CONFIG_TTL_SEC,
+    ...(yandexAds ? { yandexAds } : {}),
   };
 }
 

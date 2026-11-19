@@ -4,6 +4,7 @@
 // Shared by the phone and (later) the TV bundles: Chromium 53 rules (no Error subclasses, no AbortController).
 import { BILLING_ORIGIN } from '../billing/config';
 import { isObject, loadJson, saveJson } from '../store/storage';
+import { tvLinkedMode, type YandexAds, type YandexGroup, YANDEX_OFF, sanitizeYandexAds } from './yandex';
 
 export type AdSection = 'mine' | 'discoverGrid' | 'discoverRails';
 export type AdPlatform = 'phone' | 'androidTv' | 'webos';
@@ -41,6 +42,8 @@ export interface AdsConfig {
   minAppVersion: string;
   banners: AdBanner[];
   ttlSec: number;
+  /** Phone Yandex ads. Off unless the server sent `yandexAds`. TV uses the subscription group only. */
+  yandex: YandexAds;
 }
 
 export const ADS_KEY = 'tsp.adsConfig';
@@ -69,6 +72,7 @@ export const ADS_OFF: AdsConfig = {
   minAppVersion: '',
   banners: [],
   ttlSec: 300,
+  yandex: YANDEX_OFF,
 };
 
 let imageOrigin = BILLING_ORIGIN;
@@ -122,9 +126,10 @@ function banner(v: unknown): AdBanner | null {
   };
 }
 
-/** The server's answer as a config; anything unexpected is «off». */
+/** The server's answer as a config; anything unexpected is «off». `yandexAds` is optional and off when missing. */
 export function sanitizeAdsConfig(v: unknown): AdsConfig {
-  if (!isObject(v) || v.v !== 1 || v.enabled !== true) return ADS_OFF;
+  const yandex = sanitizeYandexAds(isObject(v) ? v.yandexAds : undefined);
+  if (!isObject(v) || v.v !== 1 || v.enabled !== true) return yandex.enabled ? { ...ADS_OFF, yandex } : ADS_OFF;
   const banners: AdBanner[] = [];
   const list = Array.isArray(v.banners) ? v.banners : [];
   for (let i = 0; i < list.length && banners.length < 50; i++) {
@@ -146,6 +151,7 @@ export function sanitizeAdsConfig(v: unknown): AdsConfig {
     minAppVersion: str(v.minAppVersion, 20),
     banners,
     ttlSec: int(v.ttlSec, 30, 3600, 300),
+    yandex,
   };
 }
 
@@ -218,9 +224,30 @@ export function adsFor(cfg: AdsConfig, ctx: AdContext): AdBanner[] {
   if (!cfg.sections[ctx.section] || !cfg.platforms[ctx.platform]) return [];
   if (!versionAtLeast(ctx.appVersion, cfg.minAppVersion)) return [];
   if (cfg.hideForSubscribers && ctx.subscribed) return [];
-  if (ctx.platform !== 'phone' && cfg.tvHideIfLinkedSubscriber && ctx.linkedSubscriber) return [];
-  if (ctx.now - ctx.firstRun < cfg.afterInstallDays * DAY_MS) return [];
+  const linked = ctx.platform === 'phone' ? 'legacy' : tvLinkedMode(cfg.yandex, !!ctx.linkedSubscriber);
+  if (linked === 'hide') return [];
+  if (linked === 'show') {
+    if (ctx.now - ctx.firstRun < cfg.yandex.groups.sub.afterInstallDays * DAY_MS) return [];
+  } else {
+    if (ctx.platform !== 'phone' && cfg.tvHideIfLinkedSubscriber && ctx.linkedSubscriber) return [];
+    if (ctx.now - ctx.firstRun < cfg.afterInstallDays * DAY_MS) return [];
+  }
   return cfg.banners.filter((b) => bannerLive(b, ctx));
+}
+
+/**
+ * The phone audience that should try a Yandex native ad in the card. Null on TV, desktop and when the group is off.
+ * The caller still has to be a native Android or iOS shell: this function does not know the WebView.
+ */
+export function phoneYandexGroup(cfg: AdsConfig, ctx: AdContext): YandexGroup | null {
+  if (ctx.platform !== 'phone') return null;
+  if (!cfg.yandex.enabled) return null;
+  if (!cfg.sections[ctx.section] || !cfg.platforms.phone) return null;
+  if (!versionAtLeast(ctx.appVersion, cfg.minAppVersion)) return null;
+  const g = ctx.subscribed ? cfg.yandex.groups.sub : cfg.yandex.groups.free;
+  if (!g.enabled) return null;
+  if (ctx.now - ctx.firstRun < g.afterInstallDays * DAY_MS) return null;
+  return g;
 }
 
 /**

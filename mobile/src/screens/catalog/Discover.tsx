@@ -32,6 +32,7 @@ import { cancelTileCards } from '../../catalog/tileCards';
 import type { TrendingWindow } from '../../../../src/catalog/tmdb';
 import { withAds } from '../../../../src/ads/ads';
 import { AdCell } from '../../ads/AdCell';
+import { YandexCell } from '../../ads/YandexCell';
 import { PER_SCREEN, useAdSlots } from '../../ads/useAdSlots';
 import { discoverHeadSlot, useCompactCatalogBar } from './compactBar';
 
@@ -299,9 +300,12 @@ export function Discover() {
           <div class={gridClass} style={gridStyle} data-view={view} data-cols={gridColsNow || undefined} ref={gridRef}>
             {withAds(feed.items, ads.admitted).map((e) => {
               if (e.item === undefined) {
-                const b = ads.banner(e.ad);
                 const pos = e.ad;
                 const kind = view === 'compact' ? 'compact' : view === 'list' ? 'list' : 'disc';
+                if (ads.fill(pos) === 'yandex') {
+                  return <YandexCell key={'ad:grid:' + pos} kind={kind} slotId={ads.slotId(pos)} onShown={() => ads.shown(pos)} />;
+                }
+                const b = ads.banner(pos);
                 return b ? <AdCell key={'ad:grid:' + pos} kind={kind} banner={b} onShown={() => ads.shown(pos)} onClick={() => ads.click(pos)} /> : null;
               }
               const x = e.item;

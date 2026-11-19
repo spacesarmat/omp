@@ -22,6 +22,7 @@ import {
   type AdStats,
   type AdStatRow,
 } from '@/lib/ads';
+import { YandexAdsCard } from '@/panels/YandexAdsCard';
 
 const selectClass = 'h-10 rounded-md border border-input bg-secondary px-3 text-sm text-foreground';
 const SECTIONS: AdSection[] = ['mine', 'discoverGrid', 'discoverRails'];
@@ -243,6 +244,16 @@ export function AdsPanel({ csrf }: { csrf: string }) {
           </Button>
         </CardContent>
       </Card>
+
+      <YandexAdsCard
+        value={form.yandex}
+        busy={busy}
+        onChange={(yandex) => setForm({ ...form, yandex })}
+        onSave={(yandex) => {
+          setForm({ ...form, yandex });
+          void send('/admin/ads/config', { yandex }).then(() => load());
+        }}
+      />
 
       <Card>
         <CardHeader>

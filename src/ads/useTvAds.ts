@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { adPositions, adsFor, pickBanner, type AdBanner, type AdSection } from './ads';
 import { adEvent } from './events';
+import { groupPlacement, impressionsLeft, noteYandexImpression, tvLinkedMode } from './yandex';
 import { APP_VERSION } from '../version';
 import { ACCESS_KEY, ompSubscribed } from '../billing/entitlement';
 import { onBillingChange, SESSION_KEY } from '../billing/session';
@@ -77,6 +78,7 @@ export function useTvAds(o: TvAdSlotOptions): TvAdSlots {
   const cfgRef = useRef(cfg);
   cfgRef.current = cfg;
   const [subscribed, setSubscribed] = useState(() => ompSubscribed());
+  const [capTick, setCapTick] = useState(0);
 
   useEffect(() => {
     syncTvAdsFromCache();
@@ -153,10 +155,21 @@ export function useTvAds(o: TvAdSlotOptions): TvAdSlots {
         : [],
     [cfg, o.active, o.section, day, subscribed, linked, platform],
   );
+  const linkedMode = tvLinkedMode(cfg.yandex, linked);
+  const subGroup = linkedMode === 'show' ? cfg.yandex.groups.sub : null;
+  const subRef = useRef(subGroup);
+  subRef.current = subGroup;
+  const seenPos = (pos: number) => {
+    const prefix = pos + ':';
+    const values = Array.from(seen.current);
+    for (let i = 0; i < values.length; i++) if (values[i].indexOf(prefix) === 0) return true;
+    return false;
+  };
   const positions = useMemo(() => {
     if (!banners.length) return [];
+    if (subGroup) return adPositions(o.count, { ...groupPlacement(subGroup), maxPerScreen: cfg.maxPerScreen }, o.perScreen);
     return adPositions(o.count, cfg, o.perScreen);
-  }, [banners, o.count, o.perScreen, cfg]);
+  }, [banners, o.count, o.perScreen, cfg, subGroup]);
   const pickAt = (pos: number) => pickBanner(banners, o.section + ':' + platform + ':' + pos, now);
   const bannerAt = (pos: number): AdBanner | null => {
     const next = pickAt(pos);
@@ -227,14 +240,22 @@ export function useTvAds(o: TvAdSlotOptions): TvAdSlots {
       const cur = opts.current;
       const bottom = window.innerHeight || document.documentElement.clientHeight || 0;
       const add: number[] = [];
+      const capped = subRef.current;
+      const left = capped ? impressionsLeft(capped, 'sub', Date.now()) : Number.POSITIVE_INFINITY;
+      let pending = 0;
+      for (let i = 0; i < admitted.length; i++) if (!seenPos(admitted[i])) pending++;
       for (let i = 0; i < positions.length; i++) {
         const p = positions[i];
         if (admitted.indexOf(p) >= 0) continue;
+        if (pending >= left) break;
         const b = pickAt(p);
         if (!b || !loaded.has(b.image)) continue;
         const el = cur.itemEl(p);
         if (!el) continue;
-        if (el.getBoundingClientRect().top >= bottom) add.push(p);
+        if (el.getBoundingClientRect().top >= bottom) {
+          add.push(p);
+          pending++;
+        }
       }
       if (!add.length) return;
       const k = cur.listKey;
@@ -255,7 +276,7 @@ export function useTvAds(o: TvAdSlotOptions): TvAdSlots {
       window.removeEventListener('scroll', onScroll, how);
       window.removeEventListener('resize', onScroll);
     };
-  }, [positions.join(','), admitted.join(','), imgTick, banners]);
+  }, [positions.join(','), admitted.join(','), imgTick, banners, capTick]);
 
   const drawn = admitted.filter((p) => positions.indexOf(p) >= 0 && released.indexOf(p) < 0);
   return {
@@ -268,6 +289,10 @@ export function useTvAds(o: TvAdSlotOptions): TvAdSlots {
       if (seen.current.has(k)) return;
       seen.current.add(k);
       adEvent(b.id, o.section, platform, 'i');
+      if (subRef.current) {
+        noteYandexImpression('sub', Date.now());
+        setCapTick((n) => n + 1);
+      }
     },
     click(pos) {
       const b = bannerAt(pos);

@@ -19,6 +19,8 @@ import { cachedAdsConfig, pickBanner, saveAdsConfig, type AdBanner } from '../..
 import { pendingAdEvents, resetAdEvents } from '../../src/ads/events';
 import { adsConfig, setAdsIo } from '../src/ads/phoneAds';
 import { markAdImagesLoaded } from '../src/ads/useAdSlots';
+import { setYandexLoaderForTests, setYandexOsForTests } from '../src/ads/yandexNative';
+import { resetYandexCaps } from '../../src/ads/yandex';
 import { ACCESS_KEY, ompSubscribed, saveBillingAccess } from '../../src/billing/entitlement';
 import { emitBillingChange, saveBillingSession } from '../../src/billing/session';
 import type { Torrent } from '../../src/api/types';
@@ -148,6 +150,9 @@ afterEach(() => {
   setAdsIo(null);
   setCatalogClientForTests(null);
   setCatalogMode('mine');
+  setYandexOsForTests(undefined);
+  setYandexLoaderForTests(null);
+  resetYandexCaps();
 });
 
 const adIndex = (list: Element) => Array.from(list.children).findIndex((c) => c.classList.contains('m-ad') || c.classList.contains('m-ad-wrap'));
@@ -609,5 +614,89 @@ describe('ads in «Обзор»', () => {
     expect(kids.map((k) => (k.classList.contains('m-ad-rail') ? 'ad' : 'rail'))).toEqual(['rail', 'rail', 'ad', 'rail', 'rail', 'rail', 'ad', 'rail']);
     expect(home.querySelector('.m-ad-rail .m-disc-rail-title')!.textContent).toBe('Реклама');
     expect(home.querySelector('.m-ad-rail')!.textContent).toContain('erid: 2SDnjcVm1aB');
+  });
+});
+
+describe('yandex native ads on the phone', () => {
+  const yandexConfig = {
+    ...CONFIG,
+    yandexAds: {
+      enabled: true,
+      fallbackHouse: true,
+      androidUnit: '',
+      iosUnit: '',
+      groups: {
+        free: { enabled: true, everyN: 10, afterInstallDays: 3, maxPerSession: 0, maxPerDay: 0 },
+        sub: { enabled: false, everyN: 10, afterInstallDays: 3, maxPerSession: 0, maxPerDay: 0 },
+      },
+    },
+  };
+
+  function arm(load: (slotId: string, unit: string) => Promise<boolean>) {
+    saveAdsConfig(yandexConfig);
+    setYandexOsForTests('android');
+    setYandexLoaderForTests(load);
+  }
+
+  it('draws the native card in the same slot when Yandex fills, with the label and the demo unit', async () => {
+    const units: string[] = [];
+    arm(async (_id, unit) => {
+      units.push(unit);
+      return true;
+    });
+    mount(<Library />);
+    await flush();
+    await flush();
+    await flush();
+    const cell = el.querySelector('[data-yandex]');
+    expect(cell).toBeTruthy();
+    expect(cell!.classList.contains('m-card')).toBe(true);
+    expect(cell!.querySelector('.m-ad-badge')!.textContent).toBe('Реклама');
+    expect(cell!.textContent).not.toContain('erid:');
+    expect(units[0]).toBe('demo-native-content-yandex');
+    expect(el.querySelectorAll('.m-ad-erid')).toHaveLength(0);
+  });
+
+  it('falls back to the own banner when Yandex has no fill', async () => {
+    arm(async () => false);
+    mount(<Library />);
+    await flush();
+    await flush();
+    await flush();
+    expect(el.querySelector('[data-yandex]')).toBeNull();
+    expect(el.querySelector('.m-ad-erid')!.textContent).toBe('erid: 2SDnjcVm1aB');
+  });
+
+  it('leaves the list as content when Yandex fails and the own banner is not a fallback', async () => {
+    saveAdsConfig({ ...yandexConfig, yandexAds: { ...yandexConfig.yandexAds, fallbackHouse: false } });
+    setYandexOsForTests('android');
+    setYandexLoaderForTests(async () => false);
+    mount(<Library />);
+    await flush();
+    await flush();
+    await flush();
+    expect(el.querySelectorAll('.m-ad')).toHaveLength(0);
+  });
+
+  it('does not put a Yandex card in History', async () => {
+    arm(async () => true);
+    libraryTab.value = 'history';
+    mount(<Library />);
+    await flush();
+    await flush();
+    await flush();
+    expect(el.querySelectorAll('.m-ad, [data-yandex]')).toHaveLength(0);
+  });
+
+  it('a subscriber sees nothing while the subscription group is off', async () => {
+    arm(async () => true);
+    saveBillingSession({ token: 'tok', deviceId: 'd'.repeat(32), paidUntil: Date.now() + 10 * DAY } as never);
+    saveBillingAccess({ active: true, accessUntil: Date.now() + 10 * DAY });
+    mount(<Library />);
+    await flush();
+    await flush();
+    await flush();
+    expect(el.querySelectorAll('.m-ad')).toHaveLength(0);
+    saveBillingSession(null as never);
   });
 });

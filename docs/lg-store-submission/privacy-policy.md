@@ -1,6 +1,6 @@
 # OMP - Privacy Policy
 
-Публичная страница: https://omp-player.online/privacy (русский) и https://omp-player.online/privacy/en (English). Текст ниже совпадает со страницей. Дата публикации: 18 ноября 2026. В листинг Seller Lounge вписать https://omp-player.online/privacy. Контакт поддержки: ompplayerandroid@gmail.com. Страница на домене обновится после деплоя site/ (деплой отдельно, по согласованию). Описывает store-сборку: диагностика и отчёты о сбоях выключены, пока их не включат в Настройках.
+Публичная страница: https://omp-player.online/privacy (русский) и https://omp-player.online/privacy/en (English). Текст ниже совпадает со страницей. Дата публикации: 19 ноября 2026. В листинг Seller Lounge вписать https://omp-player.online/privacy. Контакт поддержки: ompplayerandroid@gmail.com. Страница на домене обновится после деплоя site/ (деплой отдельно, по согласованию). Описывает store-сборку: диагностика и отчёты о сбоях выключены, пока их не включат в Настройках.
 
 ## English
 
@@ -22,16 +22,19 @@ To show posters and descriptions for the items in your library, the app may quer
 ### 4. No account required
 No account or sign-in is required to play your own media. The core playback functions work without providing any personal information.
 
-### 5. Data we do not collect
-We do not collect your name, email, precise location or contacts, and we do not sell personal data. We do not build a viewing profile. As noted in section 2, the LG Content Store build sends usage events and crash reports only after you turn diagnostics on, and it does not send playback statistics. If diagnostics are on, log lines may incidentally include media titles and are used only to fix problems.
+### 5. Advertising in the phone app
+The Android and iOS phone apps may show ads in My and Discover: OMP's own banners and native ads through the Yandex Mobile Ads SDK (Yandex Advertising Network). The SDK may process the device advertising identifier (the Android Advertising ID, and the iOS IDFA when access to it is allowed), the IP address and technical device details in order to choose an ad, display it and count the impression. Yandex processes that data under its own policy: https://yandex.ru/legal/confidential/. OMP does not sell this data and does not send viewing history to the ad network. The TV apps, the Windows app and the website use only OMP's own banners, without this SDK. An administrator turns ads for subscribers on or off.
 
-### 6. Children
+### 6. Data we do not collect
+We do not collect your name, email, precise location or contacts, and we do not sell personal data. We do not build a viewing profile. The phone advertising identifier is described in section 5. As noted in section 2, the LG Content Store build sends usage events and crash reports only after you turn diagnostics on, and it does not send playback statistics. If diagnostics are on, log lines may incidentally include media titles and are used only to fix problems.
+
+### 7. Children
 The app is a general-purpose media player and is not directed at children. It does not knowingly collect personal information from children.
 
-### 7. Changes
-Published on 18 November 2026. We may update this policy. The current version is this page: https://omp-player.online/privacy/en. The Russian version is https://omp-player.online/privacy.
+### 8. Changes
+Published on 19 November 2026. We may update this policy. The current version is this page: https://omp-player.online/privacy/en. The Russian version is https://omp-player.online/privacy.
 
-### 8. Support
+### 9. Support
 Support email: ompplayerandroid@gmail.com.
 Questions about this policy or the app: the Telegram group https://t.me/ompgplayerroup.
 News: the Telegram channel https://t.me/ompplyaer.
@@ -58,16 +61,19 @@ OMP («приложение») - медиаплеер, который воспр
 ### 4. Аккаунт не требуется
 Для воспроизведения ваших медиа аккаунт и вход не нужны. Базовые функции работают без предоставления личной информации.
 
-### 5. Что мы не собираем
-Мы не собираем имя, email, точное местоположение и контакты и не продаём персональные данные. Мы не строим профиль просмотра. Как указано в разделе 2, сборка для LG Content Store отправляет события и отчёты о сбоях только после включения диагностики и не отправляет статистику просмотра. Если диагностика включена, журналы могут случайно содержать названия медиа и используются только для исправления проблем.
+### 5. Реклама в приложении для телефона
+В приложениях для Android и iOS в разделах «Мои» и «Обзор» может показываться реклама: собственные баннеры OMP и нативная реклама через Yandex Mobile Ads SDK (Рекламная сеть Яндекса). SDK может обрабатывать рекламный идентификатор устройства (Advertising ID на Android и IDFA на iOS, если доступ к нему разрешён), IP-адрес и технические сведения об устройстве, чтобы выбрать объявление, показать его и учесть показ. Эти данные обрабатывает Яндекс по своей политике: https://yandex.ru/legal/confidential/. OMP не продаёт эти данные и не передаёт в рекламную сеть историю просмотра. На телевизоре, в приложении для Windows и на сайте используются только собственные баннеры, без этого SDK. Показ подписчикам включает или выключает администратор.
 
-### 6. Дети
+### 6. Что мы не собираем
+Мы не собираем имя, email, точное местоположение и контакты и не продаём персональные данные. Мы не строим профиль просмотра. Рекламный идентификатор телефона описан в разделе 5. Как указано в разделе 2, сборка для LG Content Store отправляет события и отчёты о сбоях только после включения диагностики и не отправляет статистику просмотра. Если диагностика включена, журналы могут случайно содержать названия медиа и используются только для исправления проблем.
+
+### 7. Дети
 Приложение - медиаплеер общего назначения, не ориентировано на детей и сознательно не собирает их персональные данные.
 
-### 7. Изменения
-Опубликовано: 18 ноября 2026. Политика может обновляться. Актуальная версия - эта страница: https://omp-player.online/privacy. English version: https://omp-player.online/privacy/en.
+### 8. Изменения
+Опубликовано: 19 ноября 2026. Политика может обновляться. Актуальная версия - эта страница: https://omp-player.online/privacy. English version: https://omp-player.online/privacy/en.
 
-### 8. Поддержка
+### 9. Поддержка
 Почта поддержки: ompplayerandroid@gmail.com.
 Вопросы о приложении и об этой политике: группа в Telegram https://t.me/ompgplayerroup.
 Новости: канал в Telegram https://t.me/ompplyaer.

@@ -6,6 +6,7 @@ import {
   adsConfigStale,
   adsFor,
   cachedAdsConfig,
+  phoneYandexGroup,
   pickBanner,
   railPositions,
   sanitizeAdsConfig,
@@ -136,6 +137,59 @@ describe('who sees ads', () => {
     expect(adsFor(sanitizeAdsConfig(server({ minAppVersion: '0.21.0' })), ctx())).toEqual([]);
     expect(adsFor(sanitizeAdsConfig(server({ provider: 'yandex' })), ctx())).toEqual([]);
   });
+  it('an answer without yandexAds stays the house program, and Yandex can be on while house banners are off', () => {
+    expect(sanitizeAdsConfig(server()).yandex.enabled).toBe(false);
+    expect(sanitizeAdsConfig(server({ enabled: false }))).toBe(ADS_OFF);
+    const only = sanitizeAdsConfig({
+      v: 1,
+      enabled: false,
+      yandexAds: { enabled: true, groups: { free: { enabled: true, everyN: 10 } } },
+    });
+    expect(only.enabled).toBe(false);
+    expect(only.yandex.enabled).toBe(true);
+    expect(adsFor(only, ctx())).toEqual([]);
+  });
+
+  it('a TV linked to a subscribed phone follows the subscription group when Yandex is on', () => {
+    const banners = [{ ...BANNER, platforms: ['androidTv'] }];
+    const platforms = { phone: true, androidTv: true, webos: false };
+    const show = sanitizeAdsConfig(server({
+      platforms,
+      tvHideIfLinkedSubscriber: true,
+      banners,
+      yandexAds: { enabled: true, groups: { sub: { enabled: true, everyN: 10, afterInstallDays: 0 } } },
+    }));
+    const onTv = ctx({ platform: 'androidTv', linkedSubscriber: true, firstRun: NOW });
+    expect(adsFor(show, onTv)).toHaveLength(1);
+    const off = sanitizeAdsConfig(server({
+      platforms,
+      tvHideIfLinkedSubscriber: false,
+      banners,
+      yandexAds: { enabled: true, groups: { sub: { enabled: false } } },
+    }));
+    expect(adsFor(off, onTv)).toEqual([]);
+    const waiting = sanitizeAdsConfig(server({
+      platforms,
+      banners,
+      yandexAds: { enabled: true, groups: { sub: { enabled: true, afterInstallDays: 3 } } },
+    }));
+    expect(adsFor(waiting, onTv)).toEqual([]);
+    expect(adsFor(show, ctx({ platform: 'androidTv', linkedSubscriber: false }))).toHaveLength(1);
+  });
+
+  it('the phone Yandex group is the free audience, and a subscriber stays out while that group is off', () => {
+    const cfg = sanitizeAdsConfig(server({
+      yandexAds: {
+        enabled: true,
+        groups: { free: { enabled: true, everyN: 10, afterInstallDays: 3 }, sub: { enabled: false } },
+      },
+    }));
+    expect(phoneYandexGroup(cfg, ctx())?.everyN).toBe(10);
+    expect(phoneYandexGroup(cfg, ctx({ subscribed: true }))).toBeNull();
+    expect(phoneYandexGroup(cfg, ctx({ firstRun: NOW }))).toBeNull();
+    expect(phoneYandexGroup(cfg, ctx({ platform: 'androidTv' }))).toBeNull();
+  });
+
   it('a banner only on its platforms, sections and dates', () => {
     const b = { ...BANNER, sections: ['discoverGrid'], from: NOW + DAY };
     const c2 = sanitizeAdsConfig(server({ banners: [b] }));

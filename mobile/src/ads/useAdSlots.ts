@@ -2,8 +2,10 @@
 // image is loaded and the card it goes before is below the screen: an ad never pushes visible content (no layout
 // shift). Admitted positions stay until the list changes (tab, filter, query) or ads are switched off for it.
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
-import { adPositions, adsFor, pickBanner, railPositions, type AdBanner, type AdSection } from '../../../src/ads/ads';
+import { adPositions, adsFor, phoneYandexGroup, pickBanner, railPositions, type AdBanner, type AdSection } from '../../../src/ads/ads';
 import { adEvent } from '../../../src/ads/events';
+import { groupPlacement, impressionsLeft, noteYandexImpression, slotFill, yandexUnit } from '../../../src/ads/yandex';
+import { hideAllYandex, hideYandexSlot, loadYandexSlot, yandexOs } from './yandexNative';
 import { APP_VERSION } from '../../../src/version';
 import { ACCESS_KEY, ompSubscribed } from '../../../src/billing/entitlement';
 import { onBillingChange, SESSION_KEY } from '../../../src/billing/session';
@@ -44,6 +46,9 @@ export function markAdImagesLoaded(urls: string[]): void {
 export interface AdSlots {
   /** Positions with an ad drawn now (before the card / rail at that index). */
   admitted: number[];
+  /** yandex: the native card. house: our banner. null: nothing at this position. */
+  fill(pos: number): 'yandex' | 'house' | null;
+  slotId(pos: number): string;
   banner(pos: number): AdBanner | null;
   shown(pos: number): void;
   click(pos: number): void;
@@ -80,6 +85,9 @@ export function useAdSlots(o: AdSlotOptions): AdSlots {
   // localStorage, not a signal: a renewal (this page, or the background check) has to bump it or the open catalog
   // keeps the ads it already drew
   const [subscribed, setSubscribed] = useState(() => ompSubscribed());
+  const fills = useRef<{ [pos: number]: 'loading' | 'ready' | 'fail' }>({});
+  const [fillTick, setFillTick] = useState(0);
+  const [capTick, setCapTick] = useState(0);
 
   // the config is read while a catalog screen is open: the cached one now, the server's a moment later (not
   // competing with the catalog's own first requests) and then every 5 minutes. A subscriber never asks.
@@ -125,10 +133,32 @@ export function useAdSlots(o: AdSlotOptions): AdSlots {
         : [],
     [cfg, o.active, o.section, day, subscribed],
   );
+  const os = yandexOs();
+  // History, search and selection pass active: false. Yandex must stay out of those lists too.
+  const yGroup = o.active && os
+    ? phoneYandexGroup(cfg, { platform: PLATFORM, section: o.section, appVersion: APP_VERSION, subscribed, firstRun: ensureFirstRun(now), now })
+    : null;
+  const audience = subscribed ? 'sub' : 'free';
+  const yRef = useRef(yGroup);
+  yRef.current = yGroup;
+  const audRef = useRef(audience);
+  audRef.current = audience;
+  const seenPos = (pos: number) => {
+    const prefix = pos + ':';
+    const values = Array.from(seen.current);
+    for (let i = 0; i < values.length; i++) if (values[i].indexOf(prefix) === 0) return true;
+    return false;
+  };
   const positions = useMemo(() => {
+    if (yGroup) {
+      const place = groupPlacement(yGroup);
+      return o.section === 'discoverRails'
+        ? railPositions(o.count, cfg.railsEvery)
+        : adPositions(o.count, { ...place, maxPerScreen: cfg.maxPerScreen }, o.perScreen);
+    }
     if (!banners.length) return [];
     return o.section === 'discoverRails' ? railPositions(o.count, cfg.railsEvery) : adPositions(o.count, cfg, o.perScreen);
-  }, [banners, o.count, o.perScreen, o.section, cfg]);
+  }, [banners, o.count, o.perScreen, o.section, cfg, yGroup]);
   const pickAt = (pos: number) => pickBanner(banners, o.section + ':' + pos, now);
   // What the cell draws. The pick is used for preloading and for admitting a new slot. A slot that is already
   // on screen stays on its current banner until the replacement image is loaded, and only while that banner is
@@ -155,6 +185,8 @@ export function useAdSlots(o: AdSlotOptions): AdSlots {
     key.current = o.listKey;
     seen.current = new Set();
     held.current = {};
+    fills.current = {};
+    hideAllYandex();
   }
   if (!banners.length) held.current = {};
   const admitted = adm.key === o.listKey && banners.length ? adm.list : [];
@@ -164,11 +196,55 @@ export function useAdSlots(o: AdSlotOptions): AdSlots {
   for (let i = 0; i < admitted.length; i++) {
     const p = admitted[i];
     if (positions.indexOf(p) < 0) continue;
-    if (!bannerAt(p)) released.push(p);
+    if (yGroup) {
+      const b = pickAt(p);
+      const next = slotFill({
+        yandexReady: fills.current[p] === 'ready',
+        yandexFailed: fills.current[p] === 'fail',
+        house: !!(b && loaded.has(b.image)),
+        fallback: cfg.yandex.fallbackHouse,
+      });
+      if (next === 'none') released.push(p);
+    } else if (!bannerAt(p)) released.push(p);
   }
   useEffect(() => {
-    if (!banners.length && adm.list.length) setAdm({ key: o.listKey, list: [] });
-  }, [banners.length]);
+    if (!yGroup && !banners.length && adm.list.length) setAdm({ key: o.listKey, list: [] });
+  }, [banners.length, yGroup]);
+
+  const yKey = yGroup && os ? os + ':' + yGroup.everyN + ':' + yGroup.afterInstallDays + ':' + audience + ':' + cfg.yandex.androidUnit + ':' + cfg.yandex.iosUnit : '';
+  const yKeyRef = useRef('');
+  if (yKeyRef.current !== yKey) {
+    yKeyRef.current = yKey;
+    fills.current = {};
+    hideAllYandex();
+  }
+  useEffect(() => {
+    if (!yKey || !os) return;
+    const listKey = opts.current.listKey;
+    const unit = yandexUnit(cfg.yandex, os);
+    const todo: number[] = [];
+    let inflight = 0;
+    for (let i = 0; i < positions.length; i++) {
+      const p = positions[i];
+      const st = fills.current[p];
+      if (st === 'loading') inflight++;
+      else if (st === undefined) todo.push(p);
+    }
+    const room = 2 - inflight;
+    for (let i = 0; i < todo.length && i < room; i++) {
+      const p = todo[i];
+      fills.current[p] = 'loading';
+      const slotId = listKey + ':' + p;
+      void loadYandexSlot(slotId, unit).then((ok) => {
+        if (key.current !== listKey) {
+          hideYandexSlot(slotId);
+          return;
+        }
+        fills.current[p] = ok ? 'ready' : 'fail';
+        setFillTick((n) => n + 1);
+      });
+    }
+  }, [positions.join(','), yKey, o.listKey]);
   useEffect(() => {
     if (!released.length) return;
     const k = opts.current.listKey;
@@ -208,14 +284,31 @@ export function useAdSlots(o: AdSlotOptions): AdSlots {
       const cur = opts.current;
       const bottom = window.innerHeight || document.documentElement.clientHeight || 0;
       const add: number[] = [];
+      const group = yRef.current;
+      const left = group ? impressionsLeft(group, audRef.current, Date.now()) : Number.POSITIVE_INFINITY;
+      let pending = 0;
+      for (let i = 0; i < admitted.length; i++) if (!seenPos(admitted[i])) pending++;
       for (let i = 0; i < positions.length; i++) {
         const p = positions[i];
         if (admitted.indexOf(p) >= 0) continue;
+        if (pending >= left) break;
         const b = pickAt(p);
-        if (!b || !loaded.has(b.image)) continue;
+        const house = !!(b && loaded.has(b.image));
+        if (group) {
+          const next = slotFill({
+            yandexReady: fills.current[p] === 'ready',
+            yandexFailed: fills.current[p] === 'fail',
+            house,
+            fallback: cfg.yandex.fallbackHouse,
+          });
+          if (next === 'none') continue;
+        } else if (!house) continue;
         const el = cur.itemEl(p);
         if (!el) continue;
-        if (el.getBoundingClientRect().top >= bottom) add.push(p);
+        if (el.getBoundingClientRect().top >= bottom) {
+          add.push(p);
+          pending++;
+        }
       }
       if (!add.length) return;
       const k = cur.listKey;
@@ -237,13 +330,43 @@ export function useAdSlots(o: AdSlotOptions): AdSlots {
       window.removeEventListener('scroll', onScroll, how);
       window.removeEventListener('resize', onScroll);
     };
-  }, [positions.join(','), admitted.join(','), imgTick, banners]);
+  }, [positions.join(','), admitted.join(','), imgTick, banners, fillTick, capTick]);
 
   const drawn = admitted.filter((p) => positions.indexOf(p) >= 0 && released.indexOf(p) < 0);
+  const fillOf = (pos: number): 'yandex' | 'house' | null => {
+    if (drawn.indexOf(pos) < 0) return null;
+    if (!yRef.current) return bannerAt(pos) ? 'house' : null;
+    const b = pickAt(pos);
+    const next = slotFill({
+      yandexReady: fills.current[pos] === 'ready',
+      yandexFailed: fills.current[pos] === 'fail',
+      house: !!(b && loaded.has(b.image)),
+      fallback: cfg.yandex.fallbackHouse,
+    });
+    return next === 'none' ? null : next;
+  };
   return {
     admitted: drawn,
-    banner: bannerAt,
+    fill: fillOf,
+    slotId: (pos: number) => o.listKey + ':' + pos,
+    banner(pos) {
+      if (fillOf(pos) === 'yandex') return null;
+      return bannerAt(pos);
+    },
     shown(pos) {
+      const y = yRef.current;
+      if (y) {
+        const k = pos + ':y';
+        if (seen.current.has(k)) return;
+        seen.current.add(k);
+        noteYandexImpression(audRef.current, Date.now());
+        setCapTick((n) => n + 1);
+        if (fills.current[pos] !== 'ready') {
+          const b = bannerAt(pos);
+          if (b) adEvent(b.id, o.section, PLATFORM, 'i');
+        }
+        return;
+      }
       const b = bannerAt(pos);
       if (!b) return;
       const k = pos + ':' + b.id;

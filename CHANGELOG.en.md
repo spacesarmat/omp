@@ -6,6 +6,9 @@ The English translation covers the latest versions only; the full history (in Ru
 
 ## Unreleased
 
+- [phone] My and Discover can show a native Yandex ad on Android and iOS, in the same card. If Yandex has no ad, the own banner stays, then a normal card. History and search have no ads. Nothing changes until the admin switch is on
+- [tv] A TV linked to a subscribed phone follows the subscription group: own banners at that group's frequency. The group is off by default
+- [tech] Admin: Yandex Ads card (master switch, Android and iOS units, free and subscribed groups, own-banner fallback). Released apps ignore yandexAds. The privacy page names the Yandex Mobile Ads SDK and the advertising identifier. Needs a new billing image and a site deploy, on approval
 - [tech] Admin: Playwright checks login, every section, that a promo revoke is not sent before Yes, and that saving the rate still shows the subscription number. Donation and referral forms have component tests
 - [tech] The developer mode banner test no longer waits on a requestAnimationFrame under fake timers: the render runs in the same turn as setState
 - [tech] Admin: a person's card has one timeline of the subscription, devices, payments, donations, referrals and audit. The journal can filter price and rate changes and shows the old value, the new value, the source and who changed it. Selected people can be granted days or messaged, and selected promos can be revoked, after a confirm that states the count
