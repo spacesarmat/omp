@@ -49,6 +49,8 @@ export interface SearchHandle {
   done: Promise<void>;
   /** Stops callbacks; running requests are left to finish and ignored. */
   cancel(): void;
+  /** Titles actually sent to the trackers. Set by the multi-title search. */
+  queries?: () => string[];
 }
 
 function asError(e: unknown): Error {

@@ -4,14 +4,14 @@
 import { t } from '../../../src/i18n';
 import { isStashedFile, takeStashedFile } from '../../../src/api/torrentFiles';
 import { handoffTorrent } from '../../../src/lib/announce';
-import { searchAll } from '../../../src/sources/search';
+import { type SearchAllOptions, type SearchHandle } from '../../../src/sources/search';
+import { searchRecall } from '../../../src/sources/recallSearch';
 import { getHealth, isSourceOn, reloadSourcePrefs, setSourceOn } from '../../../src/sources/store';
 import { isCloudflare, resolveLink, resultDate, resultKey, sortResults } from '../../../src/sources/view';
 import { rankSearchResults } from '../../../src/sources/seedRank';
 import { applySeedRound, watchSeedVerify, type SeedMeasure } from '../../../src/sources/seedVerify';
 import type { Subscription } from '../../../src/monitor/types';
 import { monitorMethods } from './monitorMethods';
-import type { SearchHandle } from '../../../src/sources/search';
 import type { Source, SourceContext, SourceResult } from '../../../src/sources/types';
 import type { RpcFailure, RpcPoll, RpcResult, RpcSource, RpcSourceState } from '../../../src/phone/rpcTypes';
 import { ompSubscribed as phoneIsSubscribed } from '../../../src/billing/entitlement';
@@ -20,7 +20,7 @@ export interface RpcDeps {
   sources(): Source[];
   ctx(): SourceContext;
   now(): number;
-  search?: typeof searchAll;
+  search?: (query: string, opts: SearchAllOptions) => SearchHandle;
   resolve?: typeof resolveLink;
   /** Checks one subscription now over `from` (`subCheck`); absent: `subCheck` fails. */
   checkSubscription?: (sub: Subscription, from: Source[]) => Promise<unknown>;
@@ -200,7 +200,7 @@ function sourceState(s: Source, on: boolean, logged: boolean | undefined): { sta
 }
 
 export function createRpcHandler(deps: RpcDeps): { dispatch(method: string, params: unknown): Promise<unknown>; dispose(): void } {
-  const search = deps.search || searchAll;
+  const search = deps.search || searchRecall;
   const resolve = deps.resolve || resolveLink;
   const handles = new Map<string, Live>();
   let sweeper: ReturnType<typeof setInterval> | null = null;
@@ -413,8 +413,10 @@ export function createRpcHandler(deps: RpcDeps): { dispatch(method: string, para
       if (p.rev !== h.rev) {
         const raw = s.results();
         const shown = h.measures ? applySeedRound(raw, h.measures, true) : raw;
-        const ranked = h.measures ? rankSearchResults(shown, h.query, deps.now()) : sortResults(shown, 'seeds');
+        const extras = s.queries ? s.queries() : [];
+        const ranked = h.measures ? rankSearchResults(shown, h.query, deps.now(), extras) : sortResults(shown, 'seeds');
         out.results = ranked.slice(0, MAX_RESULTS).map((r) => toRpcResult(r, opaqueKey(h, r)));
+        if (extras.length) out.queries = extras;
       }
       return out;
     },

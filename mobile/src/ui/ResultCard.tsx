@@ -72,6 +72,8 @@ export function ResultCard(p: {
   busy?: RowBusy;
   /** A label before the source, e.g. «Новая». */
   flag?: string;
+  /** A short mark before the source, e.g. «сезон целиком». */
+  mark?: string;
   highlight?: boolean;
   /** A category picked in «Подробнее». */
   onCategory: (id: string) => void;
@@ -153,6 +155,7 @@ export function ResultCard(p: {
           {!p.nested && <ReleaseName raw={r.Title} />}
           <ReleaseChips raw={r.Title} kind={kind} />
           <div class="m-rc-meta m-small m-muted">
+            {p.mark && <span class="m-flag" data-pack="">{p.mark}</span>}
             {p.flag && <span class="m-flag">{p.flag}</span>}
             <span class="m-src-badge">{sourceBadge(r)}</span>
             <span class={'m-rc-meta-text m-rc-prominent' + ((device.seeders || 0) <= 1 ? ' m-seeds-low' : '')}>
@@ -274,7 +277,8 @@ export function ResultCard(p: {
               {r.Title}
             </div>
             <div class="m-result-meta m-small">
-              {p.flag && <span class="m-flag">{p.flag}</span>}
+              {p.mark && <span class="m-flag" data-pack="">{p.mark}</span>}
+            {p.flag && <span class="m-flag">{p.flag}</span>}
               <span class="m-src-badge">{sourceBadge(r)}</span>
               <span class={'m-muted' + (seeds.mode === 'approx' ? ' seed-approx' : '')} data-seeds={seeds.mode}>
                 {[sizeText(r), seedText, date].filter(Boolean).join(' · ')}

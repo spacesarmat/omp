@@ -9,6 +9,8 @@ export const ru = {
     rusSubs: 'рус. субтитры',
     season: '{n} сезон',
     fullSeason: 'полный сезон',
+    year: 'год {n}',
+    episode: '{n} серия',
     from: 'от',
     to: 'до',
     title: 'Фильтры',
@@ -2197,7 +2199,12 @@ export const ru = {
     phoneSlow: 'Телефон не ответил - попробуйте ещё раз',
     expired: 'Результаты устарели - найдите ещё раз',
     details: 'Подробнее о раздаче',
-    similar: 'Похожие результаты ({n})',
+    similar: 'Показать ещё ({n})',
+    seasonPack: 'сезон целиком',
+    dropYear: 'Убрать год',
+    dropQuality: 'Убрать качество',
+    dropVoice: 'Убрать озвучку',
+    dropChip: 'Убрать: {name}',
     /** A phone site that failed for a reason fixed on the phone: shown instead of «не ответили». */
     reason: {
       login: '{name}: нужен вход на телефоне',

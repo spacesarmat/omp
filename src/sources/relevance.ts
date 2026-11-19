@@ -6,6 +6,7 @@
 // letters), so an inflected Russian title still hits. A title is matched as a whole, so «Русское / English Title»
 // hits whichever side the query used. Chromium 53 safe.
 import { normalizeTitle } from './merge';
+import { yearInTitle } from './queryParse';
 
 const YEAR = /^(19|20)\d\d$/;
 const RESOLUTION = /^(\d{3,4}[pi]|[48]k|uhd|fhd|hdr)$/;
@@ -85,5 +86,53 @@ export interface RelevanceSplit<T> { hits: T[]; similar: T[]; }
 
 /** Hits first, weak matches second. Rows that share nothing are dropped. */
 export function splitByRelevance<T extends { Title: string }>(list: T[], query: string): RelevanceSplit<T> {
-  return { hits: relevantRows(list, query), similar: similarRows(list, query) };
+  return splitByQueries(list, [query]);
+}
+
+/**
+ * A row is a hit when it matches any of the queries (the typed title or a TMDB name).
+ * One shared word of a longer query is similar. Rows that share nothing are dropped.
+ */
+export function splitByQueries<T extends { Title: string }>(list: T[], queries: string[]): RelevanceSplit<T> {
+  const sets: string[][] = [];
+  for (let i = 0; i < queries.length; i++) {
+    const words = queryWords(queries[i]);
+    if (words.length) sets.push(words);
+  }
+  if (!sets.length) return { hits: list.slice(), similar: [] };
+  const hits: T[] = [];
+  const similar: T[] = [];
+  for (let i = 0; i < list.length; i++) {
+    const row = list[i];
+    let hit = false;
+    let sim = false;
+    for (let j = 0; j < sets.length; j++) {
+      if (isRelevant(row.Title, sets[j])) hit = true;
+      else if (isSimilar(row.Title, sets[j])) sim = true;
+    }
+    if (hit) hits.push(row);
+    else if (sim) similar.push(row);
+  }
+  return { hits: hits, similar: similar };
+}
+
+/** Rows that match any query. */
+export function relevantRowsAny<T extends { Title: string }>(list: T[], queries: string[]): T[] {
+  return splitByQueries(list, queries).hits;
+}
+
+/**
+ * With a year chip on, a release that names a different year leaves the main list
+ * (it is shown under "Показать ещё"). A title with no year stays.
+ */
+export function partitionByYear<T extends { Title: string }>(list: T[], year: number): { match: T[]; other: T[] } {
+  if (!year) return { match: list.slice(), other: [] };
+  const match: T[] = [];
+  const other: T[] = [];
+  for (let i = 0; i < list.length; i++) {
+    const y = yearInTitle(list[i].Title);
+    if (y && y !== year) other.push(list[i]);
+    else match.push(list[i]);
+  }
+  return { match: match, other: other };
 }

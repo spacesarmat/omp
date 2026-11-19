@@ -4,6 +4,7 @@
 // Chromium 53 rules.
 import { t } from '../i18n';
 import { parseEpisodeRange } from '../monitor/episodes';
+import type { ParsedQuery } from './queryParse';
 
 export type Res = 720 | 1080 | 2160 | 0;
 export type Source = 'web' | 'bdrip' | 'remux';
@@ -24,6 +25,9 @@ export interface ReleaseInfo {
   episodes: { from: number; to: number; of: number } | null;
 }
 
+/** How a release relates to the asked episode. `pack` is a full season that includes it. */
+export type EpisodeRole = 'episode' | 'pack' | 'other' | 'unknown';
+
 export interface SearchFilters {
   res: Res[];
   hdr: boolean;
@@ -36,10 +40,15 @@ export interface SearchFilters {
   rusSubs: boolean;
   season: number;
   fullSeason: boolean;
+  /** 1900-2099 taken from the query, or 0. */
+  year: number;
+  /** One episode taken from the query, or 0. */
+  episode: number;
 }
 
 export const NO_FILTERS: SearchFilters = {
   res: [], hdr: false, source: [], hideCam: false, minGb: 0, maxGb: 0, minSeeds: 0, voice: [], rusSubs: false, season: 0, fullSeason: false,
+  year: 0, episode: 0,
 };
 
 function resOf(s: string): Res {
@@ -114,7 +123,40 @@ export function sanitizeFilters(v: unknown): SearchFilters {
     rusSubs: o.rusSubs === true,
     season: Math.floor(num(o.season, 99)),
     fullSeason: o.fullSeason === true,
+    year: yearNum(o.year),
+    episode: epNum(o.episode),
   };
+}
+
+function yearNum(v: unknown): number {
+  const n = typeof v === 'number' && isFinite(v) ? Math.floor(v) : 0;
+  return n >= 1900 && n <= 2099 ? n : 0;
+}
+
+function epNum(v: unknown): number {
+  const n = typeof v === 'number' && isFinite(v) ? Math.floor(v) : 0;
+  return n >= 1 && n <= 999 ? n : 0;
+}
+
+/**
+ * A release against an asked episode.
+ * `episode` - this file (or a partial pack) contains it.
+ * `pack` - a full season that includes it, with no single-episode cut.
+ * `other` - a different episode or a different season.
+ * `unknown` - the title names neither.
+ */
+export function episodeRole(title: string, season: number, episode: number): EpisodeRole {
+  if (!episode) return 'unknown';
+  const info = parseRelease(title);
+  const range = parseEpisodeRange(title);
+  if (season && info.seasons.length && info.seasons.indexOf(season) < 0 && !info.allSeasons) return 'other';
+  if (range.from !== undefined && range.to !== undefined) {
+    if (episode < range.from || episode > range.to) return 'other';
+    const full = range.from === 1 && range.total !== undefined && range.to >= range.total;
+    return full ? 'pack' : 'episode';
+  }
+  if (info.allSeasons || info.seasons.length) return 'pack';
+  return 'unknown';
 }
 
 /** Groups with a choice (each counts once): the "Filters · N" chip. */
@@ -141,9 +183,80 @@ export function filterChips(f: SearchFilters): string[] {
   if (f.minSeeds) out.push(t('filters.seeds', { n: f.minSeeds }));
   if (f.voice.length) out.push(f.voice.map(voiceLabel).join(', '));
   if (f.rusSubs) out.push(t('filters.rusSubs'));
+  if (f.year) out.push(t('filters.year', { n: f.year }));
   if (f.season) out.push(t('filters.season', { n: f.season }));
+  if (f.episode) out.push(t('filters.episode', { n: f.episode }));
   if (f.fullSeason) out.push(t('filters.fullSeason'));
   return out;
+}
+
+export interface FilterChip {
+  key: string;
+  label: string;
+}
+
+/** Active filters as chips the person can remove. Same order as filterChips. */
+export function filterChipList(f: SearchFilters): FilterChip[] {
+  const labels = filterChips(f);
+  const keys: string[] = [];
+  if (f.res.length) keys.push('res');
+  if (f.hdr) keys.push('hdr');
+  if (f.source.length) keys.push('source');
+  if (f.hideCam) keys.push('hideCam');
+  if (f.minGb || f.maxGb) keys.push('size');
+  if (f.minSeeds) keys.push('seeds');
+  if (f.voice.length) keys.push('voice');
+  if (f.rusSubs) keys.push('rusSubs');
+  if (f.year) keys.push('year');
+  if (f.season) keys.push('season');
+  if (f.episode) keys.push('episode');
+  if (f.fullSeason) keys.push('fullSeason');
+  const out: FilterChip[] = [];
+  for (let i = 0; i < keys.length; i++) out.push({ key: keys[i], label: labels[i] || keys[i] });
+  return out;
+}
+
+/** The filters with one chip turned off. */
+export function clearFilterChip(f: SearchFilters, key: string): SearchFilters {
+  if (key === 'res') return { ...f, res: [] };
+  if (key === 'hdr') return { ...f, hdr: false };
+  if (key === 'source') return { ...f, source: [] };
+  if (key === 'hideCam') return { ...f, hideCam: false };
+  if (key === 'size') return { ...f, minGb: 0, maxGb: 0 };
+  if (key === 'seeds') return { ...f, minSeeds: 0 };
+  if (key === 'voice') return { ...f, voice: [] };
+  if (key === 'rusSubs') return { ...f, rusSubs: false };
+  if (key === 'year') return { ...f, year: 0 };
+  if (key === 'season') return { ...f, season: 0 };
+  if (key === 'episode') return { ...f, episode: 0 };
+  if (key === 'fullSeason') return { ...f, fullSeason: false };
+  return f;
+}
+
+/** Quality means resolution and HDR. Voice-over includes Russian subtitles. */
+export function relaxFilters(f: SearchFilters, what: 'year' | 'quality' | 'voice'): SearchFilters {
+  if (what === 'year') return { ...f, year: 0 };
+  if (what === 'quality') return { ...f, res: [], hdr: false };
+  return { ...f, voice: [], rusSubs: false };
+}
+
+export function qualityFiltered(f: SearchFilters): boolean {
+  return f.res.length > 0 || f.hdr;
+}
+
+export function voiceFiltered(f: SearchFilters): boolean {
+  return f.voice.length > 0 || f.rusSubs;
+}
+
+/**
+ * Parsed year, season and episode become chips.
+ * A new search replaces the year. A season or episode stays only when the person set it
+ * and the previous query did not.
+ */
+export function applyParsedFilters(f: SearchFilters, parsed: ParsedQuery, prev: ParsedQuery | null): SearchFilters {
+  const season = parsed.season ? parsed.season : prev && f.season === prev.season ? 0 : f.season;
+  const episode = parsed.episode ? parsed.episode : prev && f.episode === prev.episode ? 0 : f.episode;
+  return { ...f, year: parsed.year, season: season, episode: episode };
 }
 
 function sizeGb(r: { sizeBytes?: number }): number {
@@ -169,6 +282,8 @@ export function applyFilters<T extends { Title: string; Seed: number; sizeBytes?
     // a named season set must include the choice; a pack («S01-S03», «1-3 сезоны») and «Complete series» stay;
     // a title with no season stays (sorted below the matches)
     if (f.season && !i.allSeasons && i.seasons.length && i.seasons.indexOf(f.season) < 0) return false;
+    // an asked episode keeps the file that has it and the full-season pack that includes it
+    if (f.episode && episodeRole(r.Title, f.season, f.episode) === 'other') return false;
     if (f.fullSeason && i.episodes && (i.episodes.from > 1 || i.episodes.to < i.episodes.of)) return false;
     return true;
   });

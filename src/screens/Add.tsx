@@ -23,7 +23,7 @@ import { toast } from '../ui/toast';
 import { t } from '../i18n';
 import { platformKind } from '../platform/env';
 import { tvSourceContext } from '../sources/tvContext';
-import { searchAll } from '../sources/search';
+import { searchRecall } from '../sources/recallSearch';
 import { onSearchFailure, type CheckedHosts } from '../sources/cloudflareCheck';
 import { getHealth } from '../sources/store';
 import { ipBanTvHint } from '../sources/ipBan';
@@ -45,7 +45,9 @@ import { phoneLink } from '../phone/phoneStore';
 import { PhoneRpcError, phoneRpc } from '../phone/rpc';
 import { rememberSourceNames } from '../sources/sourceNames';
 import { resultSizeText } from '../sources/resultSize';
-import { relevantRows } from '../sources/relevance';
+import { relevantRowsAny } from '../sources/relevance';
+import { episodeRole } from '../sources/filters';
+import { parseSearchQuery } from '../sources/queryParse';
 import { resolveTvResult, startTvSearch, type TvResult } from '../phone/phoneSearch';
 import type { RpcFailure } from '../phone/rpcTypes';
 import { tvGlyphs } from '../ui/tvText';
@@ -325,7 +327,7 @@ export function AddScreen() {
   // asked: the sites whose visible Cloudflare check this search (and its retries) has already opened
   const searchUnified = (q: string, asked: CheckedHosts = {}) => {
     stop();
-    const raw = searchAll(q, {
+    const raw = searchRecall(q, {
       ctx: tvSourceContext(),
       onResult: () => sync(h),
       onDone: (id, err) => {
@@ -341,7 +343,7 @@ export function AddScreen() {
     // a site that ignores the query (its latest list) brings nothing on the screen
     const h: Handle = {
       sourceIds: raw.sourceIds,
-      results: () => relevantRows(raw.results(), q),
+      results: () => relevantRowsAny(raw.results(), raw.queries ? raw.queries() : [q]),
       pending: () => raw.pending(),
       answered: () => raw.answered(),
       failed: () => raw.failed(),
@@ -462,6 +464,7 @@ export function AddScreen() {
         ? orderSearch(pool, 'seeds', searchedQ.current, Date.now())
         : sortTvResults(pool, sortKey)
     : [];
+  const asked = parseSearchQuery(searchedQ.current);
   const pick = sorted.length ? pickDefaultSource(sorted, searchedQ.current, rankCtx) : null;
   const pickKey = pick ? resultKey(pick.row) : '';
   useEffect(() => {
@@ -632,6 +635,9 @@ export function AddScreen() {
                     <span class="title">{tvGlyphs(s.title)}</span>
                     {s.meta && <span class="search-meta">{' · ' + tvGlyphs(s.meta)}</span>}
                     {kind && <span class="search-chip search-kind">{tvGlyphs(kind)}</span>}
+                    {asked.episode && episodeRole(r.Title, asked.season, asked.episode) === 'pack' && (
+                      <span class="search-chip" data-pack="">{t('search.seasonPack')}</span>
+                    )}
                     {communityLabel(r) && <span class="search-chip">{tvGlyphs(communityLabel(r))}</span>}
                     {key === pickKey && pick && <span class="search-chip pick-badge">{pick.badge}</span>}
                     {chips.map((ch) => (

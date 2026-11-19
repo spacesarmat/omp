@@ -1,7 +1,7 @@
 // The TV's site search: through the phone's sources when a phone is linked (its OMP app answers over RPC), else, or
 // when the phone stops answering, the TorrServer sources. Both are a TvSearchHandle the screen reads the same way.
 // Chromium 53: no ?. / ??, plain setTimeout loops.
-import { searchAll } from '../sources/search';
+import { searchRecall } from '../sources/recallSearch';
 import { torrServerSources } from '../sources/registry';
 import { tvSourceContext } from '../sources/tvContext';
 import { resolveLink } from '../sources/view';
@@ -13,7 +13,7 @@ import type { SourceResult } from '../sources/types';
 import { phoneLink } from './phoneStore';
 import { PhoneRpcError, phoneRpc } from './rpc';
 import type { RpcFailure, RpcPoll, RpcResult } from './rpcTypes';
-import { relevantRows } from '../sources/relevance';
+import { relevantRowsAny } from '../sources/relevance';
 
 /** A row; `via` is set on the rows found by the phone (resolveTvResult asks the phone for their link). */
 export type TvResult = SourceResult & { via?: { handle: string; key: string } };
@@ -132,7 +132,7 @@ function failuresOf(ids: string[]): RpcFailure[] {
 /** The TorrServer sources (rutor, Torznab) of the TV's own server. */
 export function torrServerSearch(query: string): TvSearchHandle {
   const subs = listeners();
-  const s = searchAll(query, {
+  const s = searchRecall(query, {
     ctx: tvSourceContext(),
     from: torrServerSources(),
     onResult: () => subs.fire(),
@@ -142,7 +142,7 @@ export function torrServerSearch(query: string): TvSearchHandle {
     by: 'torrserver',
     sourceIds: s.sourceIds,
     // a site that ignores the query (its latest list) brings nothing on the screen
-    results: () => relevantRows(s.results(), query),
+    results: () => relevantRowsAny(s.results(), s.queries ? s.queries() : [query]),
     pending: () => s.pending(),
     answered: () => s.answered(),
     failed: () => s.failed(),
@@ -175,6 +175,7 @@ function phoneHandle(query: string, started: SearchStarted): TvSearchHandle {
   const subs = listeners();
   const sourceIds = started.sourceIds.slice();
   let rows: TvResult[] = [];
+  let recall: string[] = [];
   let pending = sourceIds.slice();
   let answered: string[] = [];
   let failed: string[] = [];
@@ -229,6 +230,12 @@ function phoneHandle(query: string, started: SearchStarted): TvSearchHandle {
         }
         const changed = p.rev !== rev || Array.isArray(p.results);
         if (typeof p.rev === 'number') rev = p.rev;
+        if (Array.isArray(p.queries)) {
+          recall = [];
+          p.queries.forEach((q) => {
+            if (typeof q === 'string' && q) recall.push(q);
+          });
+        }
         if (Array.isArray(p.results)) {
           const next: TvResult[] = [];
           p.results.forEach((r) => {
@@ -274,14 +281,15 @@ function phoneHandle(query: string, started: SearchStarted): TvSearchHandle {
     sourceIds: sourceIds,
     results: () => {
       // the phone's rows without the ones that share no word with the query (TorrServer's are filtered by its handle)
-      if (!ts) return relevantRows(rows, query);
+      const qs = recall.length ? recall : [query];
+      if (!ts) return relevantRowsAny(rows, qs);
       // a release found by both: keep the TorrServer row (it has a magnet and resolves on the TV)
       const theirs = ts.results();
       const seen: { [hash: string]: boolean } = {};
       theirs.forEach((r) => {
         if (r.hash) seen[r.hash] = true;
       });
-      return relevantRows(rows, query).filter((r) => !r.hash || !seen[r.hash]).concat(theirs);
+      return relevantRowsAny(rows, qs).filter((r) => !r.hash || !seen[r.hash]).concat(theirs);
     },
     pending: () => (ts ? pending.concat(ts.pending()) : pending.slice()),
     answered: () => (ts ? answered.concat(ts.answered()) : answered.slice()),

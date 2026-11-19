@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { parseRelease, applyFilters, sinkUnknownSeasons, sanitizeFilters, NO_FILTERS, activeFilterCount, filterChips, subQualityOf } from '../../src/sources/filters';
+import { parseRelease, applyFilters, sinkUnknownSeasons, sanitizeFilters, NO_FILTERS, activeFilterCount, filterChips, subQualityOf, episodeRole, clearFilterChip, applyParsedFilters } from '../../src/sources/filters';
+import { parseSearchQuery } from '../../src/sources/queryParse';
 import { applyLanguageSetting } from '../../src/i18n';
 
 const GB = 1024 * 1024 * 1024;
@@ -110,6 +111,39 @@ describe('applyFilters', () => {
     const shown = sinkUnknownSeasons(out, 2);
     expect(shown.map((x) => x.Seed)).toEqual([80, 70, 60, 55, 54, 11, 400]);
     expect(shown[shown.length - 1].Title).toBe('Гангстерленд (2026) WEB-DL 1080p');
+  });
+});
+
+describe('episode filter', () => {
+  it('keeps the episode and the full season that includes it, and marks the pack', () => {
+    const list = [
+      r('Локи / Loki S02E03 1080p'),
+      r('Локи / Loki S02E01 1080p'),
+      r('Локи / Loki S02 1080p'),
+      r('Локи / Loki Сезон: 2 / Серии: 1-6 из 6'),
+      r('Локи / Loki S01E03 1080p'),
+    ];
+    expect(episodeRole(list[0].Title, 2, 3)).toBe('episode');
+    expect(episodeRole(list[2].Title, 2, 3)).toBe('pack');
+    expect(episodeRole(list[3].Title, 2, 3)).toBe('pack');
+    expect(episodeRole(list[1].Title, 2, 3)).toBe('other');
+    const out = applyFilters(list, { ...NO_FILTERS, season: 2, episode: 3 }).map((x) => x.Title);
+    expect(out).toEqual([
+      'Локи / Loki S02E03 1080p',
+      'Локи / Loki S02 1080p',
+      'Локи / Loki Сезон: 2 / Серии: 1-6 из 6',
+    ]);
+  });
+
+  it('turns a parsed query into chips and removes one chip', () => {
+    const parsed = parseSearchQuery('Локи 2021 2 сезон 3 серия');
+    const f = applyParsedFilters(NO_FILTERS, parsed, null);
+    expect(f.year).toBe(2021);
+    expect(f.season).toBe(2);
+    expect(f.episode).toBe(3);
+    expect(filterChips(f)).toEqual(['год 2021', '2 сезон', '3 серия']);
+    expect(clearFilterChip(f, 'year').year).toBe(0);
+    expect(clearFilterChip(f, 'episode').episode).toBe(0);
   });
 });
 
