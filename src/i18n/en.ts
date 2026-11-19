@@ -2735,6 +2735,7 @@ export const en: EnDict<typeof ru> = {
     phoneServer: 'TorrServer on the phone',
     logs: 'Diagnostics',
     didIt: 'Did it work?',
+    helped: 'Did it help?',
     device: 'Device',
     dev: { lg: 'LG TV', atv: 'Android TV', phone: 'Phone', server: 'TorrServer', common: 'General' },
     sec: { install: 'Installation', connect: 'Connecting', player: 'Player', trouble: 'Common problems', setup: 'Search and setup', about: 'About the project', log: 'Log and backup', news: 'New and subscriptions' },

@@ -47,6 +47,17 @@ export function looksLikeName(title: string): boolean {
  * «1 серия · Спокойная жизнь». The season is added only when the release has more than one
  * (`withSeason`), so a single-season pack stays short. A code that is not SxxEyy is kept as written.
  */
+/** The next-episode card: a TMDB-like name, or the episode code. A raw file name is left out. */
+export function nextCardTitle(raw: string): string {
+  const s = (raw || '').trim();
+  if (!s) return '';
+  const code = episodeLabel(s);
+  if (!code) return looksLikeName(s) ? s : '';
+  const rest = s.replace(new RegExp(code.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i'), '').replace(/^[\s.·-]+|[\s.·-]+$/g, '');
+  const name = looksLikeName(rest) ? rest : realEpisodeName(rest);
+  return episodeLine(code, name);
+}
+
 export function episodeLine(code: string, name: string, withSeason = false): string {
   const human = humanEpisodeCode(code, withSeason);
   return [human || code, realEpisodeName(name)].filter(Boolean).join(' · ');

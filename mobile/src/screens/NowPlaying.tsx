@@ -10,7 +10,7 @@ import { volume as tvVolume } from '../tv/tvClient';
 import { formatDuration } from '../../../src/lib/format';
 import { chapterIndexAt, chapterStepIndex, namedChapterTitle, titleMarkKind, type Chapter } from '../../../src/player/chapters';
 import { NowPoster } from '../ui/NowPoster';
-import { usePlayingNames, usePlayingPoster } from '../lib/playingNames';
+import { nextCardTitle, usePlayingNames, usePlayingPoster } from '../lib/playingNames';
 import { usePortraitLock } from '../lib/usePortraitLock';
 import { Remote } from './Remote';
 import { NowDeck } from './nowPager';
@@ -328,7 +328,7 @@ export function NowPlaying({ volume = tvVolume }: { volume?: (dir: 'up' | 'down'
                   {poster ? <img src={poster} alt="" width={54} height={80} /> : <span class="m-now-next-frame" />}
                   <span class="m-now-next-text">
                     <span class="m-small m-muted">{t('now.nextCard')}</span>
-                    <span>{s.next.title}</span>
+                    <span>{nextCardTitle(s.next.title)}</span>
                   </span>
                   <button type="button" class="m-btn m-btn-primary" data-now-watch disabled={off} onClick={() => sendCmd({ type: 'next' })}>
                     {t('now.watchNext')}

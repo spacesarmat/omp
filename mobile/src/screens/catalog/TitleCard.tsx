@@ -29,6 +29,7 @@ import { activeTv } from '../../tv/tvStore';
 import { baseName, episodeLabel, stripExt } from '../../../../src/lib/episodes';
 import { useTvLaunch } from '../../watch';
 import { LaunchError } from '../../ui/LaunchError';
+import { libraryTitleHash } from '../../../../src/catalog/library';
 import { seriesLibraryHash, seriesWatchSpot } from './seriesWatch';
 import { cardShare } from '../../share/text';
 import { sendShare } from '../../share/send';
@@ -177,7 +178,7 @@ function Body({ card }: { card: CatalogCard }) {
   const tv = card.kind === 'tv';
   const art = tv ? pickedArt(artKey(card.id)) : '';
   const poster = art || card.poster;
-  const hash = tv ? seriesLibraryHash(torrents.value, card, null) : '';
+  const hash = tv ? seriesLibraryHash(torrents.value, card, null) : libraryTitleHash(torrents.value, card);
   const spot = tv ? seriesWatchSpot(torrents.value, card, null) : null;
   const facts = tv ? [seriesDates(card), seriesStatusWord(card), card.rating > 0 ? ratingText(card.rating) : ''].filter(Boolean).join(' · ') : '';
 
@@ -243,6 +244,11 @@ function Body({ card }: { card: CatalogCard }) {
             {t('titleCard.findTorrents')}
           </button>
         )}
+        {hash ? (
+          <button type="button" class="m-btn m-btn-secondary" data-open-library onClick={() => navigate(routeForHash(hash))}>
+            {t('discover.inLibrary')}
+          </button>
+        ) : null}
         <WantButton card={card} following={following} onWant={() => setWanting(true)} />
       </div>
       {launchError && <LaunchError message={launchError} class="m-hint-warn" />}

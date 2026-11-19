@@ -2699,6 +2699,7 @@ export const ro: typeof ru = {
     phoneServer: "TorrServer pe telefon",
     logs: "Diagnostic",
     didIt: "A ieșit?",
+    helped: "A ajutat?",
     device: "Dispozitivul",
     dev: {
       lg: "Televizor LG",

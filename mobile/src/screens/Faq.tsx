@@ -185,6 +185,7 @@ export function Faq(p: { q?: string } = {}) {
               <Lines lines={v.short} query={badge ? query : undefined} />
             </div>
             <div class="m-faq-vote">
+              <span class="m-faq-helped">{t('faq.helped')}</span>
               <button type="button" class={'m-btn m-btn-secondary' + (votes[it.id] === 'up' ? ' on' : '')} data-faq-vote="up" aria-pressed={votes[it.id] === 'up'} onClick={() => vote(it.id, 'up')}>
                 {t('faq.useful')}
               </button>
