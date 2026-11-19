@@ -60,6 +60,12 @@ describe('filmKeys: only the names before the year, never tags', () => {
     const cams = [mk('c4', 'Cam (2018) BDRip 1080p'), mk('c5', 'Cam (2018) WEB-DL 2160p')];
     expect(filmReleases(cams, cams[0]).map((x) => x.hash)).toEqual(['c4', 'c5']);
   });
+
+  it('a cleaned title still groups by the year in the saved release string', () => {
+    const tor = mk('d1', 'Дюна');
+    tor.data = JSON.stringify({ omp: { rt: 'Дюна / Dune (2021) 1080p WEB-DL' } });
+    expect(filmKeys(tor)).toEqual(['дюна|2021', 'dune|2021']);
+  });
 });
 
 describe('«Мои» film cards with the real library', () => {

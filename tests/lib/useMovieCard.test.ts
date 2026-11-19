@@ -46,6 +46,14 @@ describe('useMovieCard', () => {
     expect(search).not.toHaveBeenCalled();
     expect(seen).toBeNull();
   });
+  it('reads the year from the saved release string when the visible title is clean', async () => {
+    setCatalogProvider(() => Promise.resolve(stub));
+    search.mockResolvedValue({ items: [item('movie', 11, 2021)], pages: 1 });
+    card.mockResolvedValue({ kind: 'movie', id: 11, cast: [] });
+    await mount({ hash: 'mc6', title: 'Дюна', category: 'movie', data: JSON.stringify({ omp: { rt: 'Дюна / Dune (2021) 1080p' } }) } as Torrent);
+    expect(search).toHaveBeenCalledWith('Дюна', 1);
+    expect(seen && seen.id).toBe(11);
+  });
   it('is null for a torrent without a year, or none at all', async () => {
     setCatalogProvider(() => Promise.resolve(stub));
     await mount({ hash: 'mc3', title: 'Some Film', category: 'movie' } as Torrent);

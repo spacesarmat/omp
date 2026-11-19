@@ -22,11 +22,12 @@ export function yearOf(title: string): number {
   return m ? +m[1] : 0;
 }
 
-/** Keys of the torrents: the title proper (and each part of a 'a / b' title) with the year found in the title. */
-export function libraryIndex(torrents: { title: string }[]): Set<string> {
+/** Keys of the torrents: the title proper (and each part of a 'a / b' title) with the year found in the release string. */
+export function libraryIndex(torrents: { title: string; data?: string }[]): Set<string> {
   const idx = new Set<string>();
   torrents.forEach((tr) => {
-    const raw = tr.title || '';
+    // a cleaned visible title drops the year; the saved release string still has it
+    const raw = rawReleaseOf(tr.data) || tr.title || '';
     const year = yearOf(raw);
     const add = (s: string): void => {
       const core = titleCore(s);
@@ -39,7 +40,7 @@ export function libraryIndex(torrents: { title: string }[]): Set<string> {
 }
 
 /** The first torrent hash that matches the title (or its original name). '' when none. */
-export function libraryTitleHash(list: { title: string; hash?: string }[], t: { title: string; original: string; year: number }): string {
+export function libraryTitleHash(list: { title: string; hash?: string; data?: string }[], t: { title: string; original: string; year: number }): string {
   for (let i = 0; i < list.length; i++) {
     const tr = list[i];
     if (tr.hash && inLibrary(libraryIndex([tr]), t)) return tr.hash;

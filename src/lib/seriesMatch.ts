@@ -8,7 +8,7 @@ import { activeCatalog } from '../catalog/activeCatalog';
 import { findShow, pickShow as pick } from './tmdbShow';
 import { displayTitle, yearOf } from './torrentName';
 import type { CatalogCard, CatalogTitle } from '../catalog/tmdb';
-import type { SeriesGroup } from './seriesGroups';
+import { seriesKey, type SeriesGroup } from './seriesGroups';
 
 const matches = new Map<string, CatalogCard | null>();
 // The show the person picked, written before its card request returns. A lookup that was already running
@@ -196,18 +196,37 @@ export function seriesMatchFailed(key: string): boolean {
   return failed !== undefined && Date.now() - failed < RETRY_MS;
 }
 
-/** The person picked this show («Не тот сериал?»). Later lookups keep it. */
+/** Every series name on the card: a merged card can hold seasons that did not share a name. */
+function choiceKeys(g: SeriesGroup): string[] {
+  const out: string[] = [];
+  const add = (k: string) => {
+    if (k && out.indexOf(k) < 0) out.push(k);
+  };
+  add(g.key);
+  g.members.forEach((m) => add(seriesKey(m)));
+  return out;
+}
+
+/** The person picked this show («Не тот сериал?»). Later lookups keep it, for every name on the card. */
 export function chooseSeries(g: SeriesGroup, id: number): Promise<CatalogCard | null> {
-  const key = cacheKey(g.key);
-  chosenId.set(key, id);
+  const keys = choiceKeys(g).map(cacheKey);
+  keys.forEach((key) => chosenId.set(key, id));
   return activeCatalog().then((c) => c.card('tv', id).then((card) => {
-    if (chosenId.get(key) !== id) return keptCard(key);
-    matches.set(key, card);
-    remember(key, card, true);
+    let stale = false;
+    keys.forEach((key) => {
+      if (chosenId.get(key) !== id) stale = true;
+    });
+    if (stale) return keptCard(keys[0]);
+    keys.forEach((key) => {
+      matches.set(key, card);
+      remember(key, card, true);
+    });
     seriesMatchVersion.value++;
     return card;
   }, (err) => {
-    if (chosenId.get(key) === id) chosenId.delete(key);
+    keys.forEach((key) => {
+      if (chosenId.get(key) === id) chosenId.delete(key);
+    });
     throw err;
   }));
 }

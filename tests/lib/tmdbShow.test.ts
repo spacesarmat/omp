@@ -33,6 +33,14 @@ describe('pickShow', () => {
     expect(picked && picked.title).toBe('Локи');
     expect(picked && picked.year).toBe(2021);
   });
+
+  it('keeps an exact title in another script ahead of a higher-rated different show', () => {
+    const picked = pickShow([
+      show('Your Name', 2016, 9),
+      show('君の名は', 2016, 5),
+    ], 0, '君の名は');
+    expect(picked && picked.title).toBe('君の名は');
+  });
 });
 
 describe('groupLibrary TMDB id', () => {
@@ -74,5 +82,28 @@ describe('groupLibrary TMDB id', () => {
     release();
     expect((await pending)!.id).toBe(99);
     expect((await matchSeries(g!))!.id).toBe(99);
+  });
+
+  it('a correction on a merged card covers every name in it', async () => {
+    localStorage.clear();
+    resetSeriesMatches();
+    setCatalogProvider(() => Promise.resolve({
+      search: () => Promise.resolve({ items: [show('Не тот', 2010, 9)], pages: 1 }),
+      card: (_k: string, id: number) => Promise.resolve(card(id)),
+    } as never));
+    const a = tor('Тьма S01 1080p', 'd'.repeat(40));
+    const b = tor('Dark S02 1080p', 'e'.repeat(40));
+    const ga = singleGroup(a);
+    const gb = singleGroup(b);
+    expect(ga && gb && ga.key !== gb.key).toBeTruthy();
+    await matchSeries(ga!);
+    await matchSeries(gb!);
+    const groups = groupLibrary([a, b]).filter((x) => x.kind === 'series');
+    expect(groups).toHaveLength(1);
+    if (groups[0].kind !== 'series') return;
+    await chooseSeries(groups[0], 99);
+    expect((await matchSeries(ga!))!.id).toBe(99);
+    expect((await matchSeries(gb!))!.id).toBe(99);
+    expect(groupLibrary([a, b]).filter((x) => x.kind === 'series')).toHaveLength(1);
   });
 });

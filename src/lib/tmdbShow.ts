@@ -5,7 +5,7 @@
 // show of that name (Dark Matter 2015 for «Тёмная материя» instead of Dark Matter 2024).
 // Shared by the series screen and the episode names of the torrent screen.
 import { lang } from '../i18n';
-import { posterQuery, titleCore } from './posterSearch';
+import { normTitle, posterQuery, titleCore } from './posterSearch';
 import { seriesQuery } from '../monitor/newEpisodes';
 import type { CatalogTitle } from '../catalog/tmdb';
 
@@ -32,7 +32,8 @@ export function showQueries(title: string, uiLang: string = lang.peek()): string
 }
 
 function fold(s: string): string {
-  return (s || '').toLowerCase().replace(/\u0451/g, '\u0435').replace(/[^a-z0-9\u0400-\u04ff]+/g, ' ').trim();
+  // letters of every script stay, so an Armenian or Japanese title can still match exactly
+  return normTitle(s);
 }
 
 /**
