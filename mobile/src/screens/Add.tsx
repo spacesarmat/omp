@@ -17,7 +17,9 @@ import { useTvLaunch, watchAddedOnPhone } from '../watch';
 import { client } from '../../../src/store/servers';
 import { rememberAdded } from '../../../src/store/library';
 import { errorMessage } from '../../../src/api/http';
-import { searchAll, sourcesForSearch, type SearchHandle } from '../../../src/sources/search';
+import { sourcesForSearch, type SearchHandle } from '../../../src/sources/search';
+import { searchRecall } from '../../../src/sources/recallSearch';
+import type { RecallHint } from '../../../src/sources/recall';
 import { onSearchFailure, type CheckedHosts } from '../../../src/sources/cloudflareCheck';
 import { allSources, onSourcesChange } from '../../../src/sources/registry';
 import { enabledSources, onSourcePrefsChange } from '../../../src/sources/store';
@@ -38,10 +40,13 @@ import {
 } from '../../../src/sources/view';
 import type { SourceResult } from '../../../src/sources/types';
 import { loadSubs } from '../../../src/monitor/subs';
-import { applyFilters, activeFilterCount, filterChips, sinkUnknownSeasons, subQualityOf, type SearchFilters } from '../../../src/sources/filters';
+import { applyFilters, activeFilterCount, applyParsedFilters, clearFilterChip, episodeRole, filterChipList, filtersForStorage, parseRelease, qualityFiltered, relaxFilters, sinkUnknownSeasons, subQualityOf, voiceFiltered, type SearchFilters } from '../../../src/sources/filters';
+import { partitionByYear, splitByQueries } from '../../../src/sources/relevance';
+import { parseSearchQuery, type ParsedQuery } from '../../../src/sources/queryParse';
+import { SearchSuggest } from './SearchSuggest';
+import type { CatalogTitle } from '../../../src/catalog/tmdb';
 import { catalogQuery, filterSeasonChips, titlesNameSeason, tmdbSeasonFacts, uniqueSeries, type TmdbSeasonFacts } from '../../../src/sources/filterSeasons';
 import { phoneCatalog } from '../catalog/phoneCatalog';
-import { splitByRelevance } from '../../../src/sources/relevance';
 import { FiltersSheet, loadSearchFilters, saveSearchFilters } from '../ui/FiltersSheet';
 import { ResultCard } from '../ui/ResultCard';
 import { releaseTitle } from '../ui/ReleaseRow';
@@ -50,6 +55,7 @@ import { addSearchResult, afterAdd, noteAlreadyHave, type RowBusy } from '../add
 import { monitorVersion } from '../monitor/ui';
 import { phoneSourceContext } from '../searchContext';
 import { orderSearch } from '../../../src/sources/seedRank';
+import { searchPending } from '../../../src/sources/seedVerify';
 import { deviceCaps, pickDefaultSource } from '../../../src/viewer/sourcePick';
 import { lastLinkSpeed } from '../../../src/viewer/linkSpeed';
 import { noteAlternatePool } from '../../../src/viewer/alternates';
@@ -203,10 +209,12 @@ interface SearchMemo {
   seedMeasures: SeedMeasure[] | null;
   /** The check in flight. Left running when the screen unmounts, cancelled with the search. */
   seedWatch: ReturnType<typeof watchSeedVerify> | null;
+  /** Year, season and episode the previous query turned into chips. */
+  parsedPrev: ParsedQuery | null;
 }
 
 function freshMemo(): SearchMemo {
-  return { query: '', searched: '', searchedQuality: '', searchedSources: null, chosen: null, filters: loadSearchFilters(), sort: 'seeds', handle: null, order: [], similarOrder: [], rowCat: {}, server: null, busy: new Map(), seedMeasures: null, seedWatch: null };
+  return { query: '', searched: '', searchedQuality: '', searchedSources: null, chosen: null, filters: loadSearchFilters(), sort: 'seeds', handle: null, order: [], similarOrder: [], rowCat: {}, server: null, busy: new Map(), seedMeasures: null, seedWatch: null, parsedPrev: null };
 }
 
 function rowsOf(m: SearchMemo): SourceResult[] | null {
@@ -291,6 +299,7 @@ export function Add({
   const [fileError, setFileError] = useState('');
   const [fileBusy, setFileBusy] = useState(false);
   const [recent, setRecent] = useState<string[]>(() => loadRecentQueries());
+  const [fieldOn, setFieldOn] = useState(false);
   const [clipHint, setClipHint] = useState<string | null>(null);
   const [tmdbFacts, setTmdbFacts] = useState<TmdbSeasonFacts | null>(null);
   // a link or a ready tracker query is for «Источники»; else the tab asked for, else the one used last
@@ -372,7 +381,8 @@ export function Add({
     memo.filters = v;
     memo.order = [];
     memo.similarOrder = [];
-    saveSearchFilters(v);
+    const parsed = memo.parsedPrev || { raw: '', title: '', year: 0, season: 0, episode: 0 };
+    saveSearchFilters(filtersForStorage(v, parsed));
     setFiltersState(v);
   };
   const setSort = (v: SortKey) => {
@@ -504,7 +514,7 @@ export function Add({
   };
 
   // asked: the sites whose visible Cloudflare check this search (and its retries) has already opened
-  const runSearch = (q: string, asked: CheckedHosts, kind: KindFilter = getKindFilter()) => {
+  const runSearch = (q: string, asked: CheckedHosts, kind: KindFilter = getKindFilter(), hint?: RecallHint | null) => {
     if (memo.handle) memo.handle.cancel();
     if (memo.seedWatch) memo.seedWatch.cancel();
     memo.seedWatch = null;
@@ -520,7 +530,17 @@ export function Add({
     // live list, not the ids from the render that opened the screen
     const ids = sourcesForSearch(allSources(), memo.chosen, { fallback: true }).map((s) => s.id);
     setRecent(rememberQuery(q));
-    const h: SearchHandle = searchAll(q, {
+    const parsed = parseSearchQuery(q);
+    const nextFilters = applyParsedFilters(memo.filters, parsed, memo.parsedPrev);
+    memo.parsedPrev = parsed;
+    memo.filters = nextFilters;
+    memo.order = [];
+    memo.similarOrder = [];
+    setFiltersState(nextFilters);
+    // The chips from this query stay for this search only. The sheet's own choices are what gets saved.
+    saveSearchFilters(filtersForStorage(nextFilters, parsed));
+    const h: SearchHandle = searchRecall(q, {
+      hint: hint || null,
       ctx,
       sources: ids,
       onResult: notify,
@@ -534,7 +554,7 @@ export function Add({
     });
     memo.handle = h;
     memo.searched = q;
-    memo.searchedQuality = subQualityOf(filters);
+    memo.searchedQuality = subQualityOf(nextFilters);
     memo.searchedSources = allChosen ? null : selected;
     memo.server = server;
     memo.order = [];
@@ -543,7 +563,7 @@ export function Add({
       query: q,
       ctx,
       getRows: () => h.results(),
-      getPending: () => h.pending().length,
+      getPending: () => searchPending(h),
       onApply: (list) => {
         memo.seedMeasures = list;
         if (memo.handle === h && listener) listener(h);
@@ -632,10 +652,12 @@ export function Add({
   // while sources still answer, rows on screen keep their places (no row moves under the finger);
   // the full sort comes when the search ends
   // a release of unknown kind shows only under «Все»
-  const parts = rows ? splitByRelevance(rows, memo.searched) : { hits: [] as SourceResult[], similar: [] as SourceResult[] };
-  const matching = applyFilters(parts.hits, filters);
+  const recallQs = memo.handle && memo.handle.queries ? memo.handle.queries() : [memo.searched];
+  const parts = rows ? splitByQueries(rows, recallQs.length ? recallQs : [memo.searched]) : { hits: [] as SourceResult[], similar: [] as SourceResult[] };
+  const yearParts = partitionByYear(parts.hits, filters.year);
+  const matching = applyFilters(yearParts.match, filters);
   const filtered = filterByKind(matching, kindF);
-  const similarFiltered = filterByKind(applyFilters(parts.similar, filters), kindF);
+  const similarFiltered = filterByKind(applyFilters(yearParts.other.concat(parts.similar), filters), kindF);
   const similarOrdered = searching ? stableOrder(memo.similarOrder, similarFiltered, sort) : sortResults(similarFiltered, sort);
   const similarVisible = sinkUnknownSeasons(similarOrdered, filters.season, filters.specials);
   memo.similarOrder = similarVisible.map(resultKey);
@@ -645,7 +667,7 @@ export function Add({
   const noSourceAnswered = !searching && !!prog && prog.total > 0 && prog.answered === 0 && prog.pending.length === 0;
   const rankKind = typeof __DESKTOP__ !== 'undefined' && __DESKTOP__ ? 'tv' : 'phone';
   const rankCtx = { device: deviceCaps(rankKind), speedBps: lastLinkSpeed(), now: Date.now() };
-  const ordered = searching ? stableOrder(memo.order, filtered, sort) : orderSearch(filtered, sort, memo.searched, Date.now());
+  const ordered = searching ? stableOrder(memo.order, filtered, sort) : orderSearch(filtered, sort, memo.searched, Date.now(), recallQs);
   // unknown seasons stay in the count, under the releases of the chosen season
   const visible = sinkUnknownSeasons(ordered, filters.season, filters.specials);
   memo.order = visible.map(resultKey);
@@ -715,6 +737,7 @@ export function Add({
             category={categoryOfRow(r)}
             busy={pending[k]}
             flag={k === pickKey && pick ? pick.badge : undefined}
+            mark={filters.episode && episodeRole(r.Title, filters.season, filters.episode) === 'pack' ? t('search.seasonPack') : undefined}
             highlight={k === pickKey}
             onCategory={(id) => setRowCat({ ...memo.rowCat, [k]: id })}
             onAdd={() => void addResult(r, false)}
@@ -755,6 +778,13 @@ export function Add({
           </button>
         ))}
       </div>
+      <div
+        onBlur={(e) => {
+          const next = e.relatedTarget as Node | null;
+          if (next && (e.currentTarget as HTMLElement).contains(next)) return;
+          setFieldOn(false);
+        }}
+      >
       <form class="m-add-row" onSubmit={onSearch}>
         <TextField
           class="m-input m-lib-search"
@@ -763,6 +793,7 @@ export function Add({
           placeholder={t('nav.searchPlaceholder')}
           enterkeyhint="search"
           value={query}
+          onFocus={() => setFieldOn(true)}
           onInput={(e) => setQuery((e.target as HTMLInputElement).value)}
         />
         <button type="submit" class="m-btn m-btn-secondary m-btn-sm tm" data-code="P07.1" aria-label={t('add.go')}>
@@ -771,6 +802,17 @@ export function Add({
       </form>
       {scope === 'mine' && <SearchMine query={query} onCatalog={() => setScope('catalog')} onSources={() => toSources(query)} />}
       {scope === 'catalog' && <CatalogResults text={query} onTrackers={toSources} />}
+      {scope === 'sources' && fieldOn && query.trim().length >= 2 && (
+        <SearchSuggest query={query} onPick={(item: CatalogTitle) => {
+          const title = (item.title || '').trim();
+          const next = item.year ? title + ' ' + item.year : title;
+          const hint: RecallHint = { title: item.title, original: item.original || '', year: item.year || 0 };
+          setFieldOn(false);
+          setQuery(next);
+          runSearch(next, {}, getKindFilter(), hint);
+        }} />
+      )}
+      </div>
       {scope === 'sources' && (
       <>
       <div class="m-chips m-add-chips">
@@ -780,10 +822,17 @@ export function Add({
         <button type="button" class={'m-chip' + (nFilters ? ' on' : '')} aria-haspopup="dialog" onClick={() => setSheet('filters')}>
           {nFilters ? t('filters.title') + ' · ' + nFilters : t('filters.title')}
         </button>
-        {filterChips(filters).map((c) => (
-          <span key={c} class="m-chip m-chip-static">
-            {c}
-          </span>
+        {filterChipList(filters).map((c) => (
+          <button
+            key={c.key}
+            type="button"
+            class="m-chip on"
+            data-filter-chip={c.key}
+            aria-label={t('search.dropChip', { name: c.label })}
+            onClick={() => setFilters(clearFilterChip(filters, c.key))}
+          >
+            {c.label}
+          </button>
         ))}
         <button type="button" class="m-chip" aria-haspopup="dialog" onClick={() => setSheet('sort')}>
           {sortLabel + ' ▾'}
@@ -919,6 +968,19 @@ export function Add({
             : kindEmpty
               ? t('search.kind.none')
               : t('catalog.nothingFound')}
+          {!noSourceAnswered && !kindEmpty && (filters.year > 0 || qualityFiltered(filters) || voiceFiltered(filters)) && (
+            <div class="m-chips" data-relax="">
+              {filters.year > 0 && (
+                <button type="button" class="m-chip" data-relax="year" onClick={() => setFilters(relaxFilters(filters, 'year'))}>{t('search.dropYear')}</button>
+              )}
+              {qualityFiltered(filters) && (
+                <button type="button" class="m-chip" data-relax="quality" onClick={() => setFilters(relaxFilters(filters, 'quality'))}>{t('search.dropQuality')}</button>
+              )}
+              {voiceFiltered(filters) && (
+                <button type="button" class="m-chip" data-relax="voice" onClick={() => setFilters(relaxFilters(filters, 'voice'))}>{t('search.dropVoice')}</button>
+              )}
+            </div>
+          )}
         </div>
       )}
       <div class="m-results">

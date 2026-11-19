@@ -11,7 +11,7 @@ import type { Source, SourceResult } from '../../src/sources/types';
 
 async function flush() {
   await act(async () => {
-    for (let i = 0; i < 12; i++) await Promise.resolve();
+    for (let i = 0; i < 40; i++) await Promise.resolve();
   });
 }
 
@@ -85,7 +85,7 @@ describe('search relevance on the phone', () => {
     expect(main).toEqual(['Американская история ужасов / American Horror Story S11 1080p']);
     const similar = el.querySelector('[data-similar]') as HTMLDetailsElement;
     expect(similar.open).toBe(false);
-    expect(similar.querySelector('summary')!.textContent).toContain('Похожие результаты');
+    expect(similar.querySelector('summary')!.textContent).toContain('Показать ещё');
     const weak = Array.from(similar.querySelectorAll('[data-title]')).map((n) => n.getAttribute('data-title'));
     expect(weak.some((t) => t!.indexOf('Ресторан Ужасов') >= 0)).toBe(true);
     expect(weak.some((t) => t!.indexOf('Бесконечный мир') >= 0)).toBe(false);

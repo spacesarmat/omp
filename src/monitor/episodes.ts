@@ -65,6 +65,12 @@ function n(v: string | undefined): number | undefined {
   return v === undefined || v === '' ? undefined : parseInt(v, 10);
 }
 
+/** "24 серии из 24" is every episode, not episode 24. A singular "5 серия из 10" stays episode 5. */
+function wholeSeasonCount(match: string, count: number | undefined, total: number | undefined): boolean {
+  if (count === undefined || total === undefined || count !== total || count < 2) return false;
+  return /сери[ий]|episodes/i.test(match);
+}
+
 function setRange(out: EpisodeRange, from: number | undefined, to: number | undefined, total: number | undefined): boolean {
   if (from === undefined) return false;
   const last = to === undefined ? from : to;
@@ -89,6 +95,7 @@ export function parseEpisodeRange(title: string): EpisodeRange {
     m = RANGES[i][0].exec(t);
     if (!m) continue;
     if (RANGES[i][1]) setRange(out, n(m[1]), n(m[2]), n(m[3]));
+    else if (wholeSeasonCount(m[0], n(m[1]), n(m[2]))) setRange(out, 1, n(m[1]), n(m[2]));
     else setRange(out, n(m[1]), undefined, n(m[2]));
   }
   if (out.season === undefined) {

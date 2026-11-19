@@ -12,6 +12,8 @@ export const en: EnDict<typeof ru> = {
     rusSubs: 'Rus subs',
     season: 'season {n}',
     fullSeason: 'full season',
+    year: 'year {n}',
+    episode: 'episode {n}',
     from: 'from',
     to: 'to',
     title: 'Filters',
@@ -2152,7 +2154,12 @@ export const en: EnDict<typeof ru> = {
     phoneSlow: 'The phone did not answer - try again',
     expired: 'The results are out of date - search again',
     details: 'Release details',
-    similar: 'Similar results ({n})',
+    similar: 'Show more ({n})',
+    seasonPack: 'full season',
+    dropYear: 'Remove year',
+    dropQuality: 'Remove quality',
+    dropVoice: 'Remove voice-over',
+    dropChip: 'Remove: {name}',
     /** A phone site that failed for a reason fixed on the phone: shown instead of «did not answer». */
     reason: {
       login: '{name}: sign in on the phone',

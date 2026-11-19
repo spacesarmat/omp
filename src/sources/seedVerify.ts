@@ -189,6 +189,13 @@ export function requestSeedCheck(rows: SourceResult[], query: string, ctx: Sourc
   );
 }
 
+/** Sources still working, plus one while a later title (TMDB or the empty retry) may still arrive. */
+export function searchPending(h: { pending(): { length: number }; complete?: () => boolean }): number {
+  const n = h.pending().length;
+  if (h.complete && !h.complete()) return n + 1;
+  return n;
+}
+
 export interface SeedWatch {
   notify(): void;
   cancel(): void;
