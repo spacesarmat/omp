@@ -21,10 +21,15 @@ function asYear(raw: string): number {
 /**
  * The release year, or 0. A year in parentheses wins (`2049 (2017)` is 2017):
  * the bare number can be part of the title. Otherwise the last standalone year.
+ * A year range (`2022-2026`) is not one year: see yearFits.
  * A resolution (1080, 2160) is not a year.
  */
 export function yearInTitle(text: string): number {
   const s = text || '';
+  if (yearRanges(s).length) {
+    const paren = /\(((?:19|20)\d\d)\)/.exec(s);
+    return paren ? asYear(paren[1]) : 0;
+  }
   const paren = /\(((?:19|20)\d\d)\)/.exec(s);
   if (paren) return asYear(paren[1]);
   let last = 0;
@@ -35,6 +40,38 @@ export function yearInTitle(text: string): number {
     if (y) last = y;
   }
   return last;
+}
+
+function yearRanges(text: string): { from: number; to: number }[] {
+  const out: { from: number; to: number }[] = [];
+  const re = /((?:19|20)\d\d)\s*[\u2013\u2014-]\s*((?:19|20)\d\d)/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(text))) {
+    const a = asYear(m[1]);
+    const b = asYear(m[2]);
+    if (!a || !b) continue;
+    out.push({ from: a < b ? a : b, to: a < b ? b : a });
+  }
+  return out;
+}
+
+/**
+ * How a release's years relate to the asked year.
+ * `yes` - the same year, or a range that contains it (`2022-2026` contains 2022).
+ * `no` - a different single year, or a range that does not contain it.
+ * `none` - the title names no year.
+ */
+export function yearFits(title: string, year: number): 'yes' | 'no' | 'none' {
+  if (!year) return 'none';
+  const s = title || '';
+  const ranges = yearRanges(s);
+  for (let i = 0; i < ranges.length; i++) {
+    if (year >= ranges[i].from && year <= ranges[i].to) return 'yes';
+  }
+  const single = yearInTitle(s);
+  if (single) return single === year ? 'yes' : 'no';
+  if (ranges.length) return 'no';
+  return 'none';
 }
 
 // Prefix is group 1 and is kept. Everything else in the match is a mark we drop.

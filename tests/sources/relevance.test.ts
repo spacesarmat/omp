@@ -76,6 +76,9 @@ describe('search relevance', () => {
     ];
     expect(partitionByYear(rows, 2017).match.map((r) => r.Title)).toEqual(['Blade Runner 2049 (2017) 1080p']);
     expect(partitionByYear(rows, 2017).other.map((r) => r.Title)).toEqual(['Blade Runner (1982) 1080p']);
+    const pack = [{ Title: 'Star Trek: Strange New Worlds (2022-2026) WEB-DL' }];
+    expect(partitionByYear(pack, 2022).match).toEqual(pack);
+    expect(partitionByYear(pack, 2010).other).toEqual(pack);
   });
 
   it('keeps every row for a query without meaningful words; drops all junk', () => {

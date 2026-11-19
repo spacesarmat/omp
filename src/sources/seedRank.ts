@@ -6,7 +6,7 @@ import { seedCheckLine } from './dhtPeers';
 import { episodeRole, parseRelease } from './filters';
 import { infohashOf, phoneSeedBits, trackerTargets, type SeedDisplay } from './liveSeeds';
 import { matchCount, queryWords } from './relevance';
-import { parseSearchQuery, yearInTitle } from './queryParse';
+import { parseSearchQuery, yearFits } from './queryParse';
 import { communityBoost } from '../viewer/communityRank';
 import { sortResults, type SortKey } from './view';
 import type { SourceResult } from './types';
@@ -66,10 +66,10 @@ function bestHit(title: string, query: string, extras?: string[]): number {
 
 /** 1 when the title's year is the asked one, -1 when it names another year, 0 when it names none. */
 export function yearScore(title: string, year: number): number {
-  if (!year) return 0;
-  const y = yearInTitle(title);
-  if (!y) return 0;
-  return y === year ? 1 : -1;
+  const fit = yearFits(title, year);
+  if (fit === 'yes') return 1;
+  if (fit === 'no') return -1;
+  return 0;
 }
 
 /** 2 for the episode itself, 1 for a full-season pack that includes it, -1 for a different episode. */

@@ -7,7 +7,7 @@
 // hits whichever side the query used. Chromium 53 safe.
 import { episodeRole, parseRelease } from './filters';
 import { normalizeTitle } from './merge';
-import { parseSearchQuery, yearInTitle } from './queryParse';
+import { parseSearchQuery, yearFits } from './queryParse';
 
 const YEAR = /^(19|20)\d\d$/;
 const RESOLUTION = /^(\d{3,4}[pi]|[48]k|uhd|fhd|hdr)$/;
@@ -150,8 +150,7 @@ export function partitionByYear<T extends { Title: string }>(list: T[], year: nu
   const match: T[] = [];
   const other: T[] = [];
   for (let i = 0; i < list.length; i++) {
-    const y = yearInTitle(list[i].Title);
-    if (y && y !== year) other.push(list[i]);
+    if (yearFits(list[i].Title, year) === 'no') other.push(list[i]);
     else match.push(list[i]);
   }
   return { match: match, other: other };
