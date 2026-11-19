@@ -4,7 +4,7 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
-## Unreleased
+## 0.30.1-beta.16
 
 - [phone] A library series is more likely to match the right TMDB show: an exact title beats a title that only contains the word, for any short name, not one show. Season, episode length, popularity and 4K count. A rename searches again. "Not this series?" is on the torrent page too. "+ Season" searches the English and the local title
 - [phone] Grouped source results show the TMDB poster, or the title's first letter when there is none
