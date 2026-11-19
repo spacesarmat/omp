@@ -244,12 +244,20 @@ export function useAdSlots(o: AdSlotOptions): AdSlots {
     const group = yRef.current;
     const left = group ? impressionsLeft(group, audRef.current, Date.now()) : Number.POSITIVE_INFINITY;
     const k = opts.current.listKey;
-    setAdm((prev) => {
-      if (prev.key !== k) return prev;
-      const list = capAdmitted(prev.list, seenPos, left);
-      if (list.length === prev.list.length) return prev;
-      return { key: k, list };
-    });
+    if (adm.key !== k) return;
+    const list = capAdmitted(adm.list, seenPos, left);
+    if (list.length === adm.list.length) return;
+    // The cell unmount hides the native view. Drop the ready mark so a later higher cap loads it again.
+    for (let i = 0; i < adm.list.length; i++) {
+      const p = adm.list[i];
+      if (list.indexOf(p) >= 0) continue;
+      const id = slotIds.current[p];
+      if (id) hideYandexSlot(id);
+      delete fills.current[p];
+      delete slotIds.current[p];
+    }
+    setAdm({ key: k, list });
+    setFillTick((n) => n + 1);
   }, [capKey]);
   useEffect(() => {
     if (!yKey || !os) return;
