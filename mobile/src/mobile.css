@@ -2668,3 +2668,47 @@ body.test-labels [data-code]::after {
 .m-ad-rail-text > *:last-child { margin-bottom: 0; }
 .m-ad-rail-text .m-card-title { min-height: 0; margin-top: 0; }
 .m-ad-more { align-self: flex-start; margin-top: 4px; }
+
+/* «Рассказать друзьям»: one centred column. The tab bar keeps its own reserve. */
+.m-invite { display: flex; flex-direction: column; align-items: center; text-align: center; }
+.m-invite > .m-bar { align-self: stretch; width: 100%; }
+.m-invite-off { margin: 48px 0 0; }
+.m-invite-body { width: 100%; max-width: 420px; display: flex; flex-direction: column; align-items: center; }
+.m-invite-title { margin: 12px 0 0; font-size: 22px; line-height: 28px; }
+.m-invite-lead { margin: 6px 0 0; color: var(--muted); font-size: 15px; line-height: 22px; }
+.m-invite-notice { margin: 8px 0 0; color: var(--accent); font-size: 14px; line-height: 20px; }
+.m-invite-qr { margin-top: 12px; padding: 12px; border-radius: 20px; background: var(--panel); }
+.m-invite-qr img, .m-invite-qr-ph { display: block; width: 148px; height: 148px; border-radius: 8px; background: #fff; }
+.m-invite-chip {
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 44px;
+  padding: 0 16px;
+  border: none;
+  border-radius: 22px;
+  background: var(--panel-2);
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 700;
+}
+.m-invite-chip svg, .m-invite-row svg { margin-left: 8px; flex: none; color: var(--muted); }
+.m-invite-row {
+  margin-top: 8px;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  min-height: 48px;
+  padding: 8px 14px;
+  border: none;
+  border-radius: 14px;
+  background: var(--panel);
+  color: var(--text);
+  text-align: left;
+}
+.m-invite-row span { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
+.m-invite-stat { margin-top: 12px; width: 100%; padding: 12px; border-radius: 16px; background: var(--panel); }
+.m-invite-stat span { display: block; color: var(--muted); font-size: 14px; line-height: 18px; }
+.m-invite-stat b { display: block; margin-top: 2px; font-family: 'Unbounded', 'Manrope', sans-serif; font-size: 24px; line-height: 28px; font-weight: 600; }
+.m-invite-share { margin-top: 12px; width: 100%; }
