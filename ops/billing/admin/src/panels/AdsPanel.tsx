@@ -237,7 +237,9 @@ export function AdsPanel({ csrf }: { csrf: string }) {
             onClick={() => {
               const { banners: _b, ...rest } = form;
               void _b;
-              void send('/admin/ads/config', rest).then(() => load());
+              void send('/admin/ads/config', rest).then((res) => {
+                if (!res.flash?.error) void load();
+              });
             }}
           >
             Сохранить настройки рекламы
@@ -251,7 +253,14 @@ export function AdsPanel({ csrf }: { csrf: string }) {
         onChange={(yandex) => setForm({ ...form, yandex })}
         onSave={(yandex) => {
           setForm({ ...form, yandex });
-          void send('/admin/ads/config', { yandex }).then(() => load());
+          void send('/admin/ads/config', { yandex }).then(async (res) => {
+            if (res.flash?.error) return;
+            const r = await api<{ config?: AdsConfig; stats?: AdStats }>('/admin/api/ads?days=' + days);
+            if (!r.config) return;
+            setCfg(r.config);
+            setStats(r.stats || null);
+            setForm((cur) => (cur ? { ...cur, yandex: r.config!.yandex } : r.config!));
+          });
         }}
       />
 

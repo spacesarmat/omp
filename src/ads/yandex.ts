@@ -110,6 +110,16 @@ export function groupPlacement(group: YandexGroup): { everyN: number; firstAfter
   return { everyN: group.everyN, firstAfter: group.everyN };
 }
 
+/**
+ * Native slot id. Short on purpose: Android keeps 80 characters and a discover filter key is longer than that.
+ * The same id is used for load, place and hide.
+ */
+export function yandexSlotId(pos: number, gen: number): string {
+  const p = pos < 0 ? 0 : Math.floor(pos);
+  const g = gen < 0 ? 0 : Math.floor(gen);
+  return 'y' + g.toString(36) + 'p' + p.toString(36);
+}
+
 /** Configured unit, or the official demo placement when the admin has not pasted one. */
 export function yandexUnit(cfg: YandexAds, os: 'android' | 'ios'): string {
   const raw = os === 'ios' ? cfg.iosUnit : cfg.androidUnit;

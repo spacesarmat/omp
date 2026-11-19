@@ -186,7 +186,10 @@ export function cachedAdsConfig(now: number = Date.now()): AdsConfig {
 export function adsConfigStale(now: number = Date.now()): boolean {
   const c = loadJson<Cached | null>(ADS_KEY, null, (v) => v === null || isCached(v));
   if (!c || c.at > now + 60000) return true;
-  return now - c.at >= (sanitizeAdsConfig(c.config).enabled ? ADS_TTL_MS : ADS_OFF_TTL_MS);
+  const cfg = sanitizeAdsConfig(c.config);
+  // Yandex-only answers keep enabled false. They still have to refresh in 5 minutes, not 30.
+  const live = cfg.enabled || cfg.yandex.enabled;
+  return now - c.at >= (live ? ADS_TTL_MS : ADS_OFF_TTL_MS);
 }
 
 export function saveAdsConfig(config: unknown, now: number = Date.now()): void {

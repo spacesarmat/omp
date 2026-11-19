@@ -4,7 +4,7 @@
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { adPositions, adsFor, phoneYandexGroup, pickBanner, railPositions, type AdBanner, type AdSection } from '../../../src/ads/ads';
 import { adEvent } from '../../../src/ads/events';
-import { groupPlacement, impressionsLeft, noteYandexImpression, slotFill, yandexUnit } from '../../../src/ads/yandex';
+import { groupPlacement, impressionsLeft, noteYandexImpression, slotFill, yandexSlotId, yandexUnit } from '../../../src/ads/yandex';
 import { hideAllYandex, hideYandexSlot, loadYandexSlot, yandexOs } from './yandexNative';
 import { APP_VERSION } from '../../../src/version';
 import { ACCESS_KEY, ompSubscribed } from '../../../src/billing/entitlement';
@@ -224,8 +224,16 @@ export function useAdSlots(o: AdSlotOptions): AdSlots {
     genRef.current += 1;
     fills.current = {};
     slotIds.current = {};
+    const kept = new Set<string>();
+    seen.current.forEach((k) => {
+      if (k.indexOf(':y:') < 0) kept.add(k);
+    });
+    seen.current = kept;
     hideAllYandex();
   }
+  useEffect(() => {
+    setAdm({ key: opts.current.listKey, list: [] });
+  }, [yKey]);
   useEffect(() => {
     if (!yKey || !os) return;
     const gen = genRef.current;
@@ -245,7 +253,7 @@ export function useAdSlots(o: AdSlotOptions): AdSlots {
     for (let i = 0; i < todo.length && i < room; i++) {
       const p = todo[i];
       fills.current[p] = 'loading';
-      const slotId = listKey + ':' + p + ':' + gen;
+      const slotId = yandexSlotId(p, gen);
       slotIds.current[p] = slotId;
       void loadYandexSlot(slotId, unit, shape).then((ok) => {
         if (genRef.current !== gen || key.current !== listKey) {
@@ -368,7 +376,7 @@ export function useAdSlots(o: AdSlotOptions): AdSlots {
     shown(pos) {
       const y = yRef.current;
       if (y) {
-        const k = pos + ':y';
+        const k = pos + ':y:' + audRef.current;
         if (seen.current.has(k)) return;
         seen.current.add(k);
         noteYandexImpression(audRef.current, Date.now());

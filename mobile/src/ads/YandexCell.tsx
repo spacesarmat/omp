@@ -56,25 +56,38 @@ export function YandexCell({ kind, slotId, onShown }: { kind: AdCellKind; slotId
     const el = ref.current;
     if (!el || typeof IntersectionObserver === 'undefined') return;
     let timer: ReturnType<typeof setTimeout> | undefined;
+    let intersecting = false;
+    const stop = () => {
+      if (timer === undefined) return;
+      clearTimeout(timer);
+      timer = undefined;
+    };
+    const arm = () => {
+      if (!intersecting || timer !== undefined || yandexClip().blocked) return;
+      timer = setTimeout(() => {
+        timer = undefined;
+        if (!intersecting || yandexClip().blocked) return;
+        cb.current();
+      }, SHOWN_MS);
+    };
     const io = new IntersectionObserver(
       (entries) => {
-        const visible = entries.some((e) => e.isIntersecting && e.intersectionRatio >= 0.5);
-        if (visible && timer === undefined) {
-          timer = setTimeout(() => {
-            timer = undefined;
-            cb.current();
-          }, SHOWN_MS);
-        } else if (!visible && timer !== undefined) {
-          clearTimeout(timer);
-          timer = undefined;
-        }
+        intersecting = entries.some((e) => e.isIntersecting && e.intersectionRatio >= 0.5);
+        if (intersecting) arm();
+        else stop();
       },
       { threshold: [0, 0.5, 1] },
     );
     io.observe(el);
+    const mo = typeof MutationObserver === 'undefined' ? null : new MutationObserver(() => {
+      if (yandexClip().blocked) stop();
+      else arm();
+    });
+    if (mo) mo.observe(document.body, { childList: true, subtree: true });
     return () => {
       io.disconnect();
-      if (timer !== undefined) clearTimeout(timer);
+      if (mo) mo.disconnect();
+      stop();
     };
   }, [slotId]);
 

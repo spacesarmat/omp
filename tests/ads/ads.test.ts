@@ -3,6 +3,7 @@ import {
   ADS_KEY,
   ADS_OFF,
   adPositions,
+  ADS_TTL_MS,
   adsConfigStale,
   adsFor,
   cachedAdsConfig,
@@ -97,6 +98,9 @@ describe('ads config from the server', () => {
     saveAdsConfig({ v: 1, enabled: false, ttlSec: 300 }, NOW);
     expect(adsConfigStale(NOW + 10 * 60 * 1000)).toBe(false);
     expect(adsConfigStale(NOW + 30 * 60 * 1000)).toBe(true);
+    saveAdsConfig({ v: 1, enabled: false, yandexAds: { enabled: true, sections: { mine: true }, platforms: { phone: true } } }, NOW);
+    expect(adsConfigStale(NOW + 4 * 60 * 1000)).toBe(false);
+    expect(adsConfigStale(NOW + ADS_TTL_MS)).toBe(true);
     localStorage.setItem(ADS_KEY, '{broken');
     expect(cachedAdsConfig(NOW).enabled).toBe(false);
   });
