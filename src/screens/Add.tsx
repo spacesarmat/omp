@@ -97,6 +97,8 @@ interface Handle {
   failures?(): RpcFailure[];
   done: Promise<void>;
   cancel(): void;
+  /** Titles sent to the trackers, including the original and translated names. */
+  queries?: () => string[];
 }
 
 type By = 'phone' | 'torrserver' | 'sources';
@@ -349,6 +351,7 @@ export function AddScreen() {
       failed: () => raw.failed(),
       done: raw.done,
       cancel: () => raw.cancel(),
+      queries: () => (raw.queries ? raw.queries() : [q]),
     };
     seedWatch.current = watchSeedVerify({
       query: q,
@@ -461,7 +464,7 @@ export function AddScreen() {
     ? streaming
       ? stableTvOrder(order.current, pool, sortKey)
       : sortKey === 'seeds'
-        ? orderSearch(pool, 'seeds', searchedQ.current, Date.now())
+        ? orderSearch(pool, 'seeds', searchedQ.current, Date.now(), handle.current && handle.current.queries ? handle.current.queries() : [])
         : sortTvResults(pool, sortKey)
     : [];
   const asked = parseSearchQuery(searchedQ.current);

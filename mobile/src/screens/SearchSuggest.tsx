@@ -41,10 +41,8 @@ export function SearchSuggest({ query, onPick }: { query: string; onPick: (item:
           key={x.kind + ':' + x.id}
           type="button"
           class="m-srch-row"
-          onMouseDown={(e) => {
-            e.preventDefault();
-            onPick(x);
-          }}
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => onPick(x)}
         >
           {x.poster ? <img class="m-srch-poster" src={x.poster} alt="" width={64} height={92} /> : <span class="m-srch-poster" />}
           <span class="m-srch-info">

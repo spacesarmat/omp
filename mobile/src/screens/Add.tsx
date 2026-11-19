@@ -40,7 +40,7 @@ import {
 } from '../../../src/sources/view';
 import type { SourceResult } from '../../../src/sources/types';
 import { loadSubs } from '../../../src/monitor/subs';
-import { applyFilters, activeFilterCount, applyParsedFilters, clearFilterChip, episodeRole, filterChipList, parseRelease, qualityFiltered, relaxFilters, sinkUnknownSeasons, subQualityOf, voiceFiltered, type SearchFilters } from '../../../src/sources/filters';
+import { applyFilters, activeFilterCount, applyParsedFilters, clearFilterChip, episodeRole, filterChipList, filtersForStorage, parseRelease, qualityFiltered, relaxFilters, sinkUnknownSeasons, subQualityOf, voiceFiltered, type SearchFilters } from '../../../src/sources/filters';
 import { partitionByYear, splitByQueries } from '../../../src/sources/relevance';
 import { parseSearchQuery, type ParsedQuery } from '../../../src/sources/queryParse';
 import { SearchSuggest } from './SearchSuggest';
@@ -529,10 +529,12 @@ export function Add({
     const parsed = parseSearchQuery(q);
     const nextFilters = applyParsedFilters(memo.filters, parsed, memo.parsedPrev);
     memo.parsedPrev = parsed;
-    if (nextFilters.year !== filters.year || nextFilters.season !== filters.season || nextFilters.episode !== filters.episode
-      || nextFilters.year !== memo.filters.year || nextFilters.season !== memo.filters.season || nextFilters.episode !== memo.filters.episode) {
-      setFilters(nextFilters);
-    }
+    memo.filters = nextFilters;
+    memo.order = [];
+    memo.similarOrder = [];
+    setFiltersState(nextFilters);
+    // The chips from this query stay for this search only. The sheet's own choices are what gets saved.
+    saveSearchFilters(filtersForStorage(nextFilters, parsed));
     const h: SearchHandle = searchRecall(q, {
       hint: hint || null,
       ctx,
@@ -749,6 +751,13 @@ export function Add({
           </button>
         ))}
       </div>
+      <div
+        onBlur={(e) => {
+          const next = e.relatedTarget as Node | null;
+          if (next && (e.currentTarget as HTMLElement).contains(next)) return;
+          setFieldOn(false);
+        }}
+      >
       <form class="m-add-row" onSubmit={onSearch}>
         <TextField
           class="m-input m-lib-search"
@@ -758,7 +767,6 @@ export function Add({
           enterkeyhint="search"
           value={query}
           onFocus={() => setFieldOn(true)}
-          onBlur={() => setFieldOn(false)}
           onInput={(e) => setQuery((e.target as HTMLInputElement).value)}
         />
         <button type="submit" class="m-btn m-btn-secondary m-btn-sm tm" data-code="P07.1" aria-label={t('add.go')}>
@@ -777,6 +785,7 @@ export function Add({
           runSearch(next, {}, getKindFilter(), hint);
         }} />
       )}
+      </div>
       {scope === 'sources' && (
       <>
       <div class="m-chips m-add-chips">

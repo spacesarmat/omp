@@ -259,6 +259,19 @@ export function applyParsedFilters(f: SearchFilters, parsed: ParsedQuery, prev: 
   return { ...f, year: parsed.year, season: season, episode: episode };
 }
 
+/**
+ * What is stored between app launches. Year, season and episode taken from the query are not stored:
+ * after a restart they would look like a choice made in the sheet and hide other releases.
+ */
+export function filtersForStorage(f: SearchFilters, parsed: ParsedQuery): SearchFilters {
+  return {
+    ...f,
+    year: parsed.year ? 0 : f.year,
+    season: parsed.season ? 0 : f.season,
+    episode: parsed.episode ? 0 : f.episode,
+  };
+}
+
 function sizeGb(r: { sizeBytes?: number }): number {
   return r.sizeBytes ? r.sizeBytes / (1024 * 1024 * 1024) : 0;
 }

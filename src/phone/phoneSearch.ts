@@ -33,6 +33,8 @@ export interface TvSearchHandle {
    * TTL or its limit of live searches), so the rows stay resolvable. Safe to call on unmount.
    */
   cancel(): void;
+  /** Titles sent to the trackers. The TV sort uses them so an original title still scores. */
+  queries?: () => string[];
   /** Called after every change; returns unsubscribe. */
   subscribe(cb: () => void): () => void;
 }
@@ -149,6 +151,7 @@ export function torrServerSearch(query: string): TvSearchHandle {
     failures: () => failuresOf(s.failed()),
     done: s.done,
     cancel: () => s.cancel(),
+    queries: () => (s.queries ? s.queries() : [query]),
     subscribe: (cb) => subs.add(cb),
   };
 }
@@ -296,6 +299,13 @@ function phoneHandle(query: string, started: SearchStarted): TvSearchHandle {
     failed: () => (ts ? failed.concat(ts.failed()) : failed.slice()),
     failures: () => (ts ? failures.concat(ts.failures()) : failures.slice()),
     done: done,
+    queries: () => {
+      const mine = recall.length ? recall.slice() : [query];
+      if (!ts || !ts.queries) return mine;
+      const extra = ts.queries();
+      for (let i = 0; i < extra.length; i++) if (mine.indexOf(extra[i]) < 0) mine.push(extra[i]);
+      return mine;
+    },
     cancel() {
       if (cancelled) return;
       cancelled = true;

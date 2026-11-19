@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseRelease, applyFilters, sinkUnknownSeasons, sanitizeFilters, NO_FILTERS, activeFilterCount, filterChips, subQualityOf, episodeRole, clearFilterChip, applyParsedFilters } from '../../src/sources/filters';
+import { parseRelease, applyFilters, sinkUnknownSeasons, sanitizeFilters, NO_FILTERS, activeFilterCount, filterChips, subQualityOf, episodeRole, clearFilterChip, applyParsedFilters, filtersForStorage } from '../../src/sources/filters';
 import { parseSearchQuery } from '../../src/sources/queryParse';
 import { applyLanguageSetting } from '../../src/i18n';
 
@@ -144,6 +144,13 @@ describe('episode filter', () => {
     expect(filterChips(f)).toEqual(['год 2021', '2 сезон', '3 серия']);
     expect(clearFilterChip(f, 'year').year).toBe(0);
     expect(clearFilterChip(f, 'episode').episode).toBe(0);
+    const stored = filtersForStorage(f, parsed);
+    expect(stored.year).toBe(0);
+    expect(stored.season).toBe(0);
+    expect(stored.episode).toBe(0);
+    const manual = applyParsedFilters({ ...NO_FILTERS, season: 5 }, parseSearchQuery('Варкрафт'), null);
+    expect(manual.season).toBe(5);
+    expect(filtersForStorage(manual, parseSearchQuery('Варкрафт')).season).toBe(5);
   });
 });
 

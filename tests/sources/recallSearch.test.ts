@@ -79,6 +79,42 @@ describe('searchRecall', () => {
     expect(h.results().map((r) => r.Title)).toEqual(['Локи']);
   });
 
+  it('keeps a Cloudflare error instead of replacing it with a timeout', async () => {
+    const seen: Error[] = [];
+    const cf = new Error('check') as Error & { code?: string };
+    cf.code = 'cloudflare-interactive';
+    const s = source(() => Promise.reject(cf));
+    const h = searchRecall('Локи', {
+      ctx: {} as never,
+      from: [s],
+      sources: ['rutor'],
+      lookup: () => Promise.resolve([]),
+      onDone: (_id, err) => { if (err) seen.push(err); },
+    });
+    await h.done;
+    expect(seen.length).toBeGreaterThan(0);
+    expect((seen[0] as { code?: string }).code).toBe('cloudflare-interactive');
+  });
+
+  it('does not report a search that was cancelled', async () => {
+    let calls = 0;
+    let rejectLate: (e: Error) => void = () => {};
+    const s = source(() => new Promise((_ok, rej) => { rejectLate = rej; }));
+    const h = searchRecall('Локи', {
+      ctx: {} as never,
+      from: [s],
+      sources: ['rutor'],
+      lookup: () => Promise.resolve([]),
+      onDone: () => { calls++; },
+      onResult: () => { calls++; },
+    });
+    h.cancel();
+    rejectLate(new Error('late'));
+    await h.done;
+    await Promise.resolve();
+    expect(calls).toBe(0);
+  });
+
   it('does not retry when the first query already matched', async () => {
     const seen: string[] = [];
     const s = source((q) => {

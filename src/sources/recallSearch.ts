@@ -10,9 +10,11 @@ import { splitByQueries } from './relevance';
 import { relaxedQueries, trackerQueries, type RecallHint } from './recall';
 import { allSources } from './registry';
 import { CLOUDFLARE_TIMEOUT_MS, SOURCE_TIMEOUT_MS, sourcesForSearch, type SearchAllOptions, type SearchHandle } from './search';
+import { isIpBan } from './ipBan';
 import { isCloudflareBypassOn, setHealth as recordHealth } from './store';
+import { isTlsError } from './tls';
 import { parseSearchQuery, type ParsedQuery } from './queryParse';
-import type { Source, SourceResult } from './types';
+import { isLoginRequired, type Source, type SourceResult } from './types';
 
 export interface RecallSearchOptions extends SearchAllOptions {
   /** The TMDB row the person picked. Its titles are searched and the catalog is not asked again. */
@@ -80,6 +82,7 @@ export function searchRecall(raw: string, opts: RecallSearchOptions): SearchHand
   const cursor: { [id: string]: number } = {};
   const ok: { [id: string]: boolean } = {};
   const settled: { [id: string]: boolean } = {};
+  const firstErr: { [id: string]: Error } = {};
   const waiters: (() => void)[] = [];
   const idleWait: (() => void)[] = [];
   const timers: ReturnType<typeof setTimeout>[] = [];
@@ -176,18 +179,35 @@ export function searchRecall(raw: string, opts: RecallSearchOptions): SearchHand
     );
   });
 
-  const finishSource = (source: Source, err?: Error) => {
+  const dropQuiet = (source: Source) => {
     if (settled[source.id]) return;
     settled[source.id] = true;
     const i = pending.indexOf(source.id);
     if (i >= 0) pending.splice(i, 1);
-    if (err && !ok[source.id]) {
-      failed.push(source.id);
-      recordHealth(source.id, { state: 'error', at: Date.now(), message: err.message });
-      safe(() => opts.onDone && opts.onDone(source.id, err));
-    } else if (ok[source.id]) {
-      safe(() => opts.onDone && opts.onDone(source.id));
-    } else {
+  };
+
+  const noteFailure = (source: Source, err: Error) => {
+    if (cancelled || ok[source.id]) return;
+    if (failed.indexOf(source.id) < 0) failed.push(source.id);
+    if (isLoginRequired(err)) recordHealth(source.id, { state: 'login', at: Date.now() });
+    else if (isIpBan(err)) recordHealth(source.id, { state: 'error', at: Date.now(), message: err.message, code: 'ipban' });
+    else if (isTlsError(err)) recordHealth(source.id, { state: 'error', at: Date.now(), message: err.message, code: 'tls' });
+    else recordHealth(source.id, { state: 'error', at: Date.now(), message: err.message });
+    safe(() => opts.onDone && opts.onDone(source.id, err));
+  };
+
+  const finishSource = (source: Source, err?: Error) => {
+    if (cancelled) {
+      dropQuiet(source);
+      return;
+    }
+    if (settled[source.id]) return;
+    settled[source.id] = true;
+    const i = pending.indexOf(source.id);
+    if (i >= 0) pending.splice(i, 1);
+    if (err && !ok[source.id]) noteFailure(source, err);
+    else if (ok[source.id]) safe(() => opts.onDone && opts.onDone(source.id));
+    else {
       // Asked nothing (the line had no title). Not a failure.
       answered.push(source.id);
       safe(() => opts.onDone && opts.onDone(source.id));
@@ -204,7 +224,7 @@ export function searchRecall(raw: string, opts: RecallSearchOptions): SearchHand
       const step = () => {
         if (cancelled) {
           running = false;
-          finishSource(source);
+          dropQuiet(source);
           return;
         }
         if (cursor[source.id] < queries.length) {
@@ -214,26 +234,31 @@ export function searchRecall(raw: string, opts: RecallSearchOptions): SearchHand
           runQuery(source, q).then(
             (list) => {
               inflight--;
-              if (!cancelled) {
-                const rows = list.map((r) => (r.source ? r : { ...r, source: source.id }));
-                for (let i = 0; i < rows.length; i++) collected.push(rows[i]);
-                if (!ok[source.id]) {
-                  ok[source.id] = true;
-                  answered.push(source.id);
-                  recordHealth(source.id, { state: 'ok', at: Date.now() });
-                }
-                safe(() => opts.onResult && opts.onResult(source.id, rows));
+              if (cancelled) {
+                dropQuiet(source);
+                noteIdle();
+                return;
               }
+              const rows = list.map((r) => (r.source ? r : { ...r, source: source.id }));
+              for (let i = 0; i < rows.length; i++) collected.push(rows[i]);
+              if (!ok[source.id]) {
+                ok[source.id] = true;
+                answered.push(source.id);
+                recordHealth(source.id, { state: 'ok', at: Date.now() });
+              }
+              safe(() => opts.onResult && opts.onResult(source.id, rows));
               noteIdle();
               step();
             },
             (e) => {
               inflight--;
-              if (!ok[source.id]) {
-                // Remember the first error; a later query can still succeed.
-                const err = asError(e);
-                if (!settled[source.id]) recordHealth(source.id, { state: 'error', at: Date.now(), message: err.message });
+              if (cancelled) {
+                dropQuiet(source);
+                noteIdle();
+                return;
               }
+              // Keep the first failure. A later title can still succeed and replace it.
+              if (!ok[source.id] && !firstErr[source.id]) firstErr[source.id] = asError(e);
               noteIdle();
               step();
             },
@@ -248,7 +273,8 @@ export function searchRecall(raw: string, opts: RecallSearchOptions): SearchHand
           return;
         }
         const failedAll = !ok[source.id] && queries.length > 0;
-        finishSource(source, failedAll ? new Error(t('sources.sourceTimeout')) : undefined);
+        const err = failedAll ? firstErr[source.id] || new Error(t('sources.sourceTimeout')) : undefined;
+        finishSource(source, err);
       };
       step();
     };
