@@ -2207,6 +2207,9 @@ export function createApp(file, fetchImpl, opts) {
         const started = adminAuth
           ? adminAuth.startPanel(Date.now())
           : await store.update((cur) => startAdminPanelLogin(cur, { now: Date.now() }));
+        if (started.error === 'too_many_pending') {
+          return json(res, 429, { ok: false, error: 'Слишком много ожидающих входов. Подождите несколько минут.' });
+        }
         const ip = clientIp(req);
         const ua = String(req.headers['user-agent'] || '').slice(0, 180);
         if (!adminAuth && !readOnly) {
@@ -3232,6 +3235,10 @@ export function createApp(file, fetchImpl, opts) {
           return json(res, 429, { error: 'rate' });
         }
         const result = await store.update((state) => startDeviceLink(state, { deviceId, now: Date.now() }));
+        if (result.error === 'too_many_pending') {
+          res.setHeader('retry-after', '60');
+          return json(res, 429, { error: 'rate' });
+        }
         if (result.error) return json(res, 400, result);
         const state = (await store.read());
         const deepLink = botDeepLink(state.settings, 'link_' + result.token);
