@@ -26,6 +26,7 @@ export const tk: EnDict<typeof ru> = {
     originalChip: "Asyl",
     rusSubsChip: "Rusça altyntylar",
     fullSeasonOnly: "Diňe doly möwsüm",
+    seasonChip: "{n} möwsümi · {count}",
     show: {
       one: "Eli görkez {n}",
       other: "{n}-iň ellerini görkez",
@@ -2319,6 +2320,8 @@ export const tk: EnDict<typeof ru> = {
     magnetLabel: "Magnit baglanyşygy ýa-da haş",
     byMagnet: "Magnit baglanyşygy arkaly goşmak",
     pasteMagnet: "Magniti giriziň",
+    magnetBtn: "Magnet",
+    torrentBtn: "Torrent",
     recent: "Soňky soraglar",
     clipMagnet: "Klipbordda: magnet baglanyşygy",
     openTorrent: ".torrent faýlyny açyň",

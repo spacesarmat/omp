@@ -26,6 +26,7 @@ export const kk: EnDict<typeof ru> = {
     originalChip: "Түпнұсқа",
     rusSubsChip: "Орысша субтитрлер",
     fullSeasonOnly: "Тек толық маусым",
+    seasonChip: "Маусым {n} · {count}",
     show: {
       one: "Қолды көрсетіңіз {n}",
       other: "{n}-тің қолын көрсетіңіз",
@@ -2319,6 +2320,8 @@ export const kk: EnDict<typeof ru> = {
     magnetLabel: "Магнит сілтемесі немесе хеш",
     byMagnet: "Магниттік сілтеме арқылы қосу",
     pasteMagnet: "Магнитті енгізіңіз",
+    magnetBtn: "Magnet",
+    torrentBtn: "Торрент",
     recent: "Соңғы сұраулар",
     clipMagnet: "Клипбордта: магнитті сілтеме",
     openTorrent: ".torrent файлын ашыңыз",

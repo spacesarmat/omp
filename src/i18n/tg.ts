@@ -26,6 +26,7 @@ export const tg: EnDict<typeof ru> = {
     originalChip: "Аслӣ",
     rusSubsChip: "Субтитрҳои русӣ",
     fullSeasonOnly: "Танҳо тамоми мавсим",
+    seasonChip: "Мавсими {n} · {count}",
     show: {
       one: "Дастро нишон диҳед {n}",
       other: "Намоиш додани дасти {n}",
@@ -2319,6 +2320,8 @@ export const tg: EnDict<typeof ru> = {
     magnetLabel: "Линк ё хэши магнитӣ",
     byMagnet: "Тавассути пайванди магнитӣ илова кунед",
     pasteMagnet: "Магнит ворид кунед",
+    magnetBtn: "Magnet",
+    torrentBtn: "Торрент",
     recent: "Пурсишҳои охирин",
     clipMagnet: "Дар буфери клипборд: пайванди магнитӣ",
     openTorrent: "Файли .torrent-ро кушоед",
