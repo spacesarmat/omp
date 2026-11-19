@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { catalogQuery, filterSeasonChips, titleInQuery, tmdbSeasonFacts, type TmdbSeasonFacts } from '../../src/sources/filterSeasons';
-import { applyFilters, NO_FILTERS } from '../../src/sources/filters';
+import { catalogQuery, filterSeasonChips, titlesNameSeason, tmdbSeasonFacts, uniqueSeries, type TmdbSeasonFacts } from '../../src/sources/filterSeasons';
+import { applyFilters, NO_FILTERS, sinkUnknownSeasons } from '../../src/sources/filters';
 
 const TMDB: TmdbSeasonFacts = { count: 2, specials: false };
 const many = (n: number, title: string) => Array.from({ length: n }, () => title);
@@ -49,14 +49,31 @@ describe('filterSeasonChips', () => {
 describe('tmdbSeasonFacts', () => {
   it('reads the highest regular season and the specials flag', () => {
     expect(tmdbSeasonFacts({ kind: 'tv', seasons: [{ number: 2 }, { number: 1 }], specials: true })).toEqual({ count: 2, specials: true });
+    expect(tmdbSeasonFacts({ kind: 'tv', seasons: [{ number: 2 }], specials: false })).toEqual({ count: 2, specials: false });
+    expect(tmdbSeasonFacts({ kind: 'tv', seasons: [{ number: 2 }] })).toBeNull();
     expect(tmdbSeasonFacts({ kind: 'tv', seasons: [] })).toBeNull();
-    expect(tmdbSeasonFacts({ kind: 'movie', seasons: [{ number: 1 }] })).toBeNull();
+    expect(tmdbSeasonFacts({ kind: 'movie', seasons: [{ number: 1 }], specials: false })).toBeNull();
     expect(tmdbSeasonFacts(null)).toBeNull();
   });
 
-  it('matches the searched title and drops the season words from the catalog query', () => {
+  it('uses TMDB only for one exact title, and keeps a single named season visible for the full-season control', () => {
     expect(catalogQuery('Локи 2 сезон')).toBe('Локи');
-    expect(titleInQuery('Локи 2 сезон', 'Локи', 'Loki')).toBe(true);
-    expect(titleInQuery('Локи', 'Другой', 'Other')).toBe(false);
+    const loki = { id: 1, kind: 'tv', title: 'Локи', original: 'Loki', year: 2021 };
+    const other = { id: 2, kind: 'tv', title: 'Локи', original: 'Loki', year: 2012 };
+    expect(uniqueSeries('Локи 2 сезон', [loki, { id: 3, kind: 'movie', title: 'Локи', original: 'Loki', year: 2021 }])?.id).toBe(1);
+    expect(uniqueSeries('Локи', [loki, other])).toBeNull();
+    expect(uniqueSeries('Локи 2021', [loki, other])?.id).toBe(1);
+    expect(uniqueSeries('Ло', [loki])).toBeNull();
+    expect(titlesNameSeason(['Локи S02E01-06 из 10'])).toBe(true);
+    expect(titlesNameSeason(['Локи 1080p'])).toBe(false);
+  });
+
+  it('puts a specials match above a release that names no season', () => {
+    const rows = [
+      { Title: 'Локи 2160p', Seed: 40 },
+      { Title: 'Локи S00 1080p', Seed: 2 },
+    ];
+    expect(sinkUnknownSeasons(rows, 0, true).map((r) => r.Title)).toEqual(['Локи S00 1080p', 'Локи 2160p']);
+    expect(sinkUnknownSeasons(rows, 0).map((r) => r.Title)).toEqual(['Локи 2160p', 'Локи S00 1080p']);
   });
 });

@@ -39,7 +39,7 @@ import {
 import type { SourceResult } from '../../../src/sources/types';
 import { loadSubs } from '../../../src/monitor/subs';
 import { applyFilters, activeFilterCount, filterChips, sinkUnknownSeasons, subQualityOf, type SearchFilters } from '../../../src/sources/filters';
-import { catalogQuery, filterSeasonChips, titleInQuery, tmdbSeasonFacts, type TmdbSeasonFacts } from '../../../src/sources/filterSeasons';
+import { catalogQuery, filterSeasonChips, titlesNameSeason, tmdbSeasonFacts, uniqueSeries, type TmdbSeasonFacts } from '../../../src/sources/filterSeasons';
 import { phoneCatalog } from '../catalog/phoneCatalog';
 import { splitByRelevance } from '../../../src/sources/relevance';
 import { FiltersSheet, loadSearchFilters, saveSearchFilters } from '../ui/FiltersSheet';
@@ -638,7 +638,7 @@ export function Add({
   const filtered = filterByKind(matching, kindF);
   const similarFiltered = filterByKind(applyFilters(parts.similar, filters), kindF);
   const similarOrdered = searching ? stableOrder(memo.similarOrder, similarFiltered, sort) : sortResults(similarFiltered, sort);
-  const similarVisible = sinkUnknownSeasons(similarOrdered, filters.season);
+  const similarVisible = sinkUnknownSeasons(similarOrdered, filters.season, filters.specials);
   memo.similarOrder = similarVisible.map(resultKey);
   // nothing of the chosen kind, though the search found something: say so, not «Ничего не найдено»
   const kindEmpty = kindF !== 'all' && matching.length > 0;
@@ -648,9 +648,11 @@ export function Add({
   const rankCtx = { device: deviceCaps(rankKind), speedBps: lastLinkSpeed(), now: Date.now() };
   const ordered = searching ? stableOrder(memo.order, filtered, sort) : orderSearch(filtered, sort, memo.searched, Date.now());
   // unknown seasons stay in the count, under the releases of the chosen season
-  const visible = sinkUnknownSeasons(ordered, filters.season);
+  const visible = sinkUnknownSeasons(ordered, filters.season, filters.specials);
   memo.order = visible.map(resultKey);
-  const seasons = filterSeasonChips((rows || []).map((r) => r.Title), tmdbFacts);
+  const seasonTitles = parts.hits.concat(parts.similar).map((r) => r.Title);
+  const seasons = filterSeasonChips(seasonTitles, tmdbFacts);
+  const showSeries = seasons.length > 0 || titlesNameSeason(seasonTitles);
   const searchedNow = memo.searched;
   useEffect(() => {
     const q = searchedNow.trim();
@@ -661,7 +663,7 @@ export function Add({
       .then((c) => c.search(catalogQuery(q), 1).then((res) => ({ c, res })))
       .then(({ c, res }) => {
         if (stop) return null;
-        const tv = (res.items || []).filter((i) => i.kind === 'tv' && titleInQuery(q, i.title, i.original))[0];
+        const tv = uniqueSeries(q, res.items || []);
         return tv ? c.card('tv', tv.id) : null;
       })
       .then((card) => {
@@ -955,7 +957,7 @@ export function Add({
         </Sheet>
       )}
       {sheet === 'filters' && (
-        <FiltersSheet value={filters} seasons={seasons} count={filtered.length} onChange={setFilters} onClose={() => setSheet(null)} />
+        <FiltersSheet value={filters} seasons={seasons} showSeries={showSeries} count={filtered.length} onChange={setFilters} onClose={() => setSheet(null)} />
       )}
       {sheet === 'sort' && (
         <Sheet label={t('add.sort')} testId="PD34" onClose={() => setSheet(null)}>

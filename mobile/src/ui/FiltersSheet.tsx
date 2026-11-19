@@ -31,12 +31,15 @@ function Chip({ on, label, onClick }: { on: boolean; label: string; onClick: () 
 export function FiltersSheet({
   value,
   seasons,
+  showSeries,
   onChange,
   onClose,
   count,
 }: {
   value: SearchFilters;
   seasons: FilterSeasonChip[];
+  /** «Только полный сезон» stays even when no season chip passed the threshold. */
+  showSeries?: boolean;
   onChange: (f: SearchFilters) => void;
   onClose: () => void;
   count: number;
@@ -109,7 +112,7 @@ export function FiltersSheet({
             <Chip on={f.rusSubs} label={t('filters.rusSubsChip')} onClick={() => set({ rusSubs: !f.rusSubs })} />
           </div>
         </div>
-        {(seasons.length > 0 || f.season > 0) && (
+        {(showSeries || seasons.length > 0 || f.season > 0 || f.specials || f.fullSeason) && (
           <div class="m-filter-group">
             <span class="m-filter-label">{t('category.tv')}</span>
             <div class="m-chips">

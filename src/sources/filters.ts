@@ -179,9 +179,9 @@ export function applyFilters<T extends { Title: string; Seed: number; sizeBytes?
   });
 }
 
-/** With a season chosen, titles that never name a season go under the ones that match. Order inside each part stays. */
-export function sinkUnknownSeasons<T extends { Title: string }>(list: T[], season: number): T[] {
-  if (!season) return list;
+/** With a season chosen, titles that never name a season go under the ones that match. Order inside each part stays. Specials use season 0, which is otherwise «no season». */
+export function sinkUnknownSeasons<T extends { Title: string }>(list: T[], season: number, specials = false): T[] {
+  if (!season && !specials) return list;
   const known: T[] = [];
   const unknown: T[] = [];
   for (let i = 0; i < list.length; i++) {

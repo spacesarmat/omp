@@ -436,7 +436,7 @@ export function sanitizeCard(e: TmdbEndpoint, raw: unknown, kind: Kind): Catalog
     cast: cast,
     seasons: seasons,
     airing: kind === 'tv' && (o.in_production === true || !!o.next_episode_to_air),
-    ...(specials ? { specials: true } : {}),
+    ...(kind === 'tv' ? { specials: specials } : {}),
     status: kind === 'tv' ? statusOf(o.status) : '',
     nextEpisode: kind === 'tv' ? nextEpisodeOf(o.next_episode_to_air) : null,
     lastAirDate: kind === 'tv' ? date(o.last_air_date) : '',

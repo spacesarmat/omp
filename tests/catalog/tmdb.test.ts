@@ -117,6 +117,7 @@ describe('sanitizers', () => {
     expect(withPoster.seasons[0].poster).toBe('https://img.mirror.test/t/p/' + posterImageSize() + '/s1.jpg');
     expect(c.airing).toBe(true);
     expect(c.specials).toBe(true);
+    expect(withPoster.specials).toBe(false);
     expect(c.seasons.some((s) => s.number === 0)).toBe(false);
     expect(c.cast.length).toBe(12);
     expect(c.runtime).toBeGreaterThan(0);

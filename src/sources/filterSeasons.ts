@@ -28,24 +28,52 @@ export function catalogQuery(query: string): string {
   return cut || (query || '').trim();
 }
 
-/** The TMDB title belongs to this search (the query contains it, or it starts with the query). */
-export function titleInQuery(query: string, title: string, original: string): boolean {
-  const q = fold(catalogQuery(query));
-  if (q.length < 2) return false;
-  const names = [title, original].map(fold).filter((s) => s.length >= 2);
-  return names.some((n) => q === n || q.indexOf(n) >= 0 || n.indexOf(q) === 0);
+export interface SeriesPick {
+  id: number;
+  title: string;
+  original: string;
+  year: number;
+  kind: string;
 }
 
-/** Season facts from a series card. Null when the card has no season list (TMDB was not there). */
+/**
+ * One TV show only when the query names it exactly (year too, when the query has one).
+ * A partial title or two shows with the same name is not a match: the caller keeps the fallback.
+ */
+export function uniqueSeries(query: string, items: SeriesPick[]): SeriesPick | null {
+  const q = fold(catalogQuery(query));
+  if (q.length < 2) return null;
+  const yearHit = /(?:^|[^0-9])((?:19|20)\d\d)(?![0-9])/.exec(q);
+  const wantYear = yearHit ? Number(yearHit[1]) : 0;
+  const qName = wantYear ? q.replace(yearHit![0], ' ').replace(/\s+/g, ' ').trim() : q;
+  if (qName.length < 2) return null;
+  const hits = items.filter((i) => {
+    if (i.kind !== 'tv') return false;
+    const names = [i.title, i.original].map(fold).filter((s) => s.length >= 2);
+    if (!names.some((n) => n === qName || n === q)) return false;
+    if (wantYear && i.year && i.year !== wantYear) return false;
+    return true;
+  });
+  return hits.length === 1 ? hits[0] : null;
+}
+
+/** Season facts from a series card. Null when the card has no season list or no explicit specials flag. */
 export function tmdbSeasonFacts(card: { kind?: string; seasons?: { number: number }[]; specials?: boolean } | null | undefined): TmdbSeasonFacts | null {
-  if (!card || card.kind !== 'tv' || !card.seasons) return null;
+  if (!card || card.kind !== 'tv' || !card.seasons || typeof card.specials !== 'boolean') return null;
   let count = 0;
   card.seasons.forEach((s) => {
     if (s.number > count) count = s.number;
   });
-  const specials = card.specials === true;
-  if (count < 1 && !specials) return null;
-  return { count, specials };
+  if (count < 1 && !card.specials) return null;
+  return { count, specials: card.specials };
+}
+
+/** A title names a season or a complete series, even when that is not enough for a chip. */
+export function titlesNameSeason(titles: string[]): boolean {
+  return titles.some((title) => {
+    const info = parseRelease(title);
+    return info.seasons.length > 0 || info.allSeasons;
+  });
 }
 
 function allowed(season: number, tmdb: TmdbSeasonFacts | null): boolean {
