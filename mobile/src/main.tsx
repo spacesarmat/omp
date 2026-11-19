@@ -1,6 +1,6 @@
 import { render } from 'preact';
 import { App } from './app';
-import '../../src/billing/deviceSyncClient';
+import { runDeviceSync } from '../../src/billing/deviceSyncClient';
 import './catalog/phoneCatalog'; // registers the catalog provider the shared series code uses
 import { resetTo, type MRoute } from './nav';
 import { activeServer, activeServerId, servers, setActiveServer } from '../../src/store/servers';
@@ -68,7 +68,7 @@ if (native.available) setTlsProbe(nativeTlsProbe((req) => native.http(req)));
 installPhoneTls();
 
 installErrorHooks();
-hydrateDeviceDb(() => undefined);
+hydrateDeviceDb(() => { runDeviceSync(); });
 expectBetaGate();
 import('../../src/report/presence').then((m) =>
   m.startPresence(phoneSourceContext, typeof __DESKTOP__ !== 'undefined' && __DESKTOP__ ? 'desktop' : 'phone'),
