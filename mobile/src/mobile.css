@@ -992,7 +992,9 @@ textarea.m-input, textarea.m-area {
 .m-rb-row { display: grid; gap: 10px; flex-shrink: 0; }
 .m-rb-media { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
 .m-rt-keys { grid-template-columns: 64px minmax(0, 1fr) minmax(0, 1fr) 64px; }
-.m-rt { gap: 14px; }
+.m-rt { gap: 14px; --seek-h: 44px; --seek-w: 44px; }
+.m-rt .m-rb-seek { justify-content: center; }
+.m-rt .m-rb-seekbtn { min-height: 44px; }
 /* the touchpad takes what is left: a smaller phone shrinks it, not the keys */
 .m-rt > .m-touchpad { flex: 1 1 0; height: auto; min-height: 100px; }
 .m-remote .m-rb-row .m-key, .m-remote .m-rb-row .m-media { height: 60px; }

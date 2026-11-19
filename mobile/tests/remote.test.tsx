@@ -984,6 +984,11 @@ describe('buttons mode fits the phone height (mobile.css)', () => {
     expect(rule('.m-ckey')).toContain('var(--pill)');
   });
 
+  it('swipes mode keeps a 44px tap height on the player buttons', () => {
+    expect(rule('.m-rt')).toContain('--seek-h: 44px');
+    expect(rule('.m-rt .m-rb-seekbtn')).toContain('min-height: 44px');
+  });
+
   it('no row is pinned to its full size, captions go on short phones', () => {
     expect(css).not.toMatch(/\.m-rb > \* \{[^}]*flex-shrink: 0/);
     expect(css).toMatch(/@media \(max-height: 700px\) \{\n {2}\.m-rkey-cap \{ display: none; \}/);
