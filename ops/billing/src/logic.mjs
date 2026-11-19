@@ -2275,11 +2275,17 @@ export function unbindDevice(state, { accountId, deviceId }) {
   return next;
 }
 
+// Pending links/logins are capped. When full we refuse the new start instead of evicting the oldest
+// unconsumed token, so a flood cannot push out a legitimate user's pending link/login (DoS).
+const LINK_PENDING_MAX = 80;
+const ADMIN_LOGIN_PENDING_MAX = 40;
+
 export function startDeviceLink(state, { deviceId, now }) {
   if (!deviceOk(deviceId)) return { state, result: { error: 'bad_device' } };
-  const token = randomId() + randomId();
   const fresh = (state.links || []).filter((l) => !l.usedAt && l.expiresAt > now);
-  const links = fresh.concat([{ token, deviceId, createdAt: now, expiresAt: now + 10 * 60 * 1000, usedAt: 0, accountId: '' }]).slice(-80);
+  if (fresh.length >= LINK_PENDING_MAX) return { state, result: { error: 'too_many_pending' } };
+  const token = randomId() + randomId();
+  const links = fresh.concat([{ token, deviceId, createdAt: now, expiresAt: now + 10 * 60 * 1000, usedAt: 0, accountId: '' }]);
   return { state: { ...state, links }, result: { token, expiresAt: now + 10 * 60 * 1000 } };
 }
 
@@ -2287,12 +2293,11 @@ const ADMIN_LOGIN_TTL = 10 * 60 * 1000;
 
 /** Start a Telegram login for the admin web panel. Payload: /start admin_TOKEN */
 export function startAdminPanelLogin(state, { now }) {
+  const fresh = (state.adminLogins || []).filter((l) => !l.consumedAt && l.expiresAt > now);
+  if (fresh.length >= ADMIN_LOGIN_PENDING_MAX) return { state, result: { error: 'too_many_pending' } };
   const token = randomId() + randomId();
   const expiresAt = now + ADMIN_LOGIN_TTL;
-  const fresh = (state.adminLogins || []).filter((l) => !l.consumedAt && l.expiresAt > now);
-  const adminLogins = fresh
-    .concat([{ token, createdAt: now, expiresAt, telegramId: '', confirmedAt: 0, consumedAt: 0, deniedAt: 0 }])
-    .slice(-40);
+  const adminLogins = fresh.concat([{ token, createdAt: now, expiresAt, telegramId: '', confirmedAt: 0, consumedAt: 0, deniedAt: 0 }]);
   return { state: { ...state, adminLogins }, result: { token, expiresAt } };
 }
 
