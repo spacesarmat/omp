@@ -179,4 +179,38 @@ describe('watch signals and rank', () => {
     const after = await file.query('SELECT COUNT(*)::int AS n FROM watch_votes WHERE voter = $1 AND infohash = $2', [voter, B]);
     expect(after.rows[0].n).toBe(100);
   });
+
+  it('concurrent batches cannot exceed the per-infohash file cap', async () => {
+    const file = await testStore();
+    const repo = createWatchRepo(file);
+    const voter = voterHash('acc-conc', DEV);
+    const mk = (from: number, to: number) => {
+      const a = [];
+      for (let i = from; i < to; i++) {
+        a.push({
+          infohash: B,
+          fileIndex: i,
+          title: 'Show S01E01 1080p',
+          titleKey: 'show s01e01',
+          season: 1,
+          episode: 1,
+          deviceClass: 'tv',
+          ttffMs: 1000,
+          rebufferN: 0,
+          rebufferMs: 0,
+          watchedPct: 95,
+          completed: true,
+          switched: false,
+          voice: '',
+          codecOk: true,
+          codecs: [],
+        });
+      }
+      return a;
+    };
+    const [a, b] = await Promise.all([repo.saveSignals(voter, mk(0, 60), Date.now()), repo.saveSignals(voter, mk(60, 120), Date.now())]);
+    expect(a + b).toBe(100);
+    const cnt = await file.query('SELECT COUNT(*)::int AS n FROM watch_votes WHERE voter = $1 AND infohash = $2', [voter, B]);
+    expect(cnt.rows[0].n).toBe(100);
+  });
 });

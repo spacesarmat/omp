@@ -197,7 +197,9 @@ export async function saveSignals(tx, voter, items, now) {
   await tx(async (query) => {
     for (let i = 0; i < items.length; i++) {
       const row = items[i];
-      await query('SELECT pg_advisory_xact_lock(hashtext($1)::bigint)', [voter + ':' + row.infohash + ':' + row.fileIndex]);
+      // Lock voter+infohash (not fileIndex) so concurrent requests for different files serialize and
+      // the per-infohash file cap cannot be exceeded by two transactions counting at once.
+      await query('SELECT pg_advisory_xact_lock(hashtext($1)::bigint)', [voter + ':' + row.infohash]);
       const found = await query(
         'SELECT device_class, title_key, voice, ttff_ms, rebuffer_n, rebuffer_ms, watched_pct, completed, switched, codec_ok, codec_known' +
           ' FROM watch_votes WHERE voter = $1 AND infohash = $2 AND file_index = $3 FOR UPDATE',
