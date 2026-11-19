@@ -473,7 +473,11 @@ function RemoteNow() {
   const names = usePlayingNames(s && linkStatus.value !== 'none' ? s : null);
   const line = names.title ? miniTitle(names) : '';
   if (!line) return null;
-  return <span class="m-remote-now">{line}</span>;
+  return (
+    <button type="button" class="m-remote-now" onClick={() => navigate({ name: 'nowPlaying' })}>
+      {line}
+    </button>
+  );
 }
 
 /** Pause and 10-second rewind for the OMP player. The mini bar is hidden on this screen. */

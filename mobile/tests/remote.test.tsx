@@ -647,6 +647,8 @@ describe('Remote with a TV', () => {
     expect(el.querySelector('.m-remote')!.classList.contains('mini')).toBe(false);
     expect(el.querySelector('.m-mini')).toBeNull();
     expect(el.querySelector('.m-remote-now')!.textContent).toContain('Тишина в эфире');
+    click(el.querySelector('.m-remote-now')!);
+    expect(currentRoute.value).toEqual({ name: 'nowPlaying' });
     nowPlaying.value = null;
     lastSeen.value = 0;
   });
