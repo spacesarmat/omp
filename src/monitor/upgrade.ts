@@ -48,6 +48,17 @@ export function upgradeQuery(t: LibraryTorrent): string {
 }
 
 /**
+ * «Найти другую раздачу»: the same name, plus «N сезон» so the search opens on that season.
+ * A full-series pack still matches the season filter.
+ */
+export function anotherReleaseQuery(name: string, season: number): string {
+  const q = (name || '').replace(/\s+/g, ' ').trim();
+  if (!q) return '';
+  if (!season) return q;
+  return q + ' ' + season + ' сезон';
+}
+
+/**
  * Releases of the same season of the series in a better quality, best first. The candidate: the same series name;
  * the year ±1 when both titles have one; the same season, or a pack of seasons that covers it; at least the episodes
  * the torrent has (its last episode ≥ ours, its first ≤ ours when both are known; a pack of seasons counts as whole);

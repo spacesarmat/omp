@@ -1,13 +1,13 @@
 import type { Torrent } from '../../../src/api/types';
 import { posterColor, shortTitle } from '../../../src/lib/libraryView';
-import { parseReleaseInfo, releaseBadges, displayBadge } from '../../../src/lib/releaseInfo';
+import { parseReleaseInfo, displayBadge } from '../../../src/lib/releaseInfo';
 import { torrentQuality } from '../../../src/lib/keptQuality';
 import { displayTitle } from '../../../src/lib/torrentName';
 
-/** Quality badge: the first release tag that is not just a year. */
+/** Resolution on a library card. Empty when the title does not name one. */
 export function qualityBadge(title: string): string {
-  const b = releaseBadges(parseReleaseInfo(title)).filter((x) => !/^\d{4}$/.test(x))[0];
-  return b ? displayBadge(b) : '';
+  const res = parseReleaseInfo(title).resolution;
+  return res ? displayBadge(res) : '';
 }
 
 const cssUrl = (u: string) => u.replace(/["()\\\s]/g, (c) => '%' + c.charCodeAt(0).toString(16).toUpperCase());

@@ -1,7 +1,7 @@
 // The text parts of a found-release row, shared by the phone and the TV: the short title with its meta
 // («Тёмная материя · 2 сезон · серии 1-6 из 10») and the quality chips. Pure; Chromium 53 safe.
 import { libraryTitle, type LibraryTitle } from '../lib/libraryView';
-import { displayBadge, parseReleaseInfo } from '../lib/releaseInfo';
+import { displayBadge, parseReleaseInfo, resolutionFromSize, resolutionToken } from '../lib/releaseInfo';
 import { parseRelease } from './filters';
 import { releaseKind, type KindFilter, type KindInput, type ReleaseKind } from '../lib/releaseKind';
 import { t } from '../i18n';
@@ -12,11 +12,14 @@ export function releaseTitle(raw: string): LibraryTitle {
 }
 
 /** Quality chips: resolution, HDR, source and voice-over, e.g. ['4K', 'HDR', 'WEB-DL', 'Дубляж']. */
-export function releaseChips(raw: string): string[] {
+export function releaseChips(raw: string, extra?: { quality?: string; sizeBytes?: number }): string[] {
   const info = parseReleaseInfo(raw || '');
+  const hint = parseReleaseInfo((extra && extra.quality) || '');
   const out: string[] = [];
-  if (info.resolution) out.push(displayBadge(info.resolution));
-  if (info.hdr) out.push(info.hdr);
+  const res = info.resolution || hint.resolution || resolutionToken(extra && extra.quality) || resolutionFromSize(raw || '', extra && extra.sizeBytes);
+  if (res) out.push(displayBadge(res));
+  if (info.hdr || hint.hdr) out.push(info.hdr || hint.hdr || '');
+  if (info.dv || hint.dv) out.push('DV');
   if (info.source) out.push(info.source);
   const r = parseRelease(raw || '');
   if (r.dub) out.push(t('filters.dubChip'));

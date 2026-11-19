@@ -49,7 +49,8 @@ import { catalogQuery, filterSeasonChips, titlesNameSeason, tmdbSeasonFacts, uni
 import { phoneCatalog } from '../catalog/phoneCatalog';
 import { FiltersSheet, loadSearchFilters, saveSearchFilters } from '../ui/FiltersSheet';
 import { ResultCard } from '../ui/ResultCard';
-import { releaseTitle } from '../ui/ReleaseRow';
+import { requestShow, type ShowHit } from '../../../src/catalog/resultPosters';
+import { groupSameTitles } from '../../../src/sources/groupTitles';
 import { SubSheet } from '../ui/SubSheet';
 import { addSearchResult, afterAdd, noteAlreadyHave, type RowBusy } from '../addResult';
 import { monitorVersion } from '../monitor/ui';
@@ -67,29 +68,11 @@ import { filterByKind, getKindFilter, releaseKind, searchModeForKind, setKindFil
 import { kindFilterOptions } from '../../../src/sources/releaseRow';
 import { TextField } from '../ui/TextField';
 
+export { groupSameTitles };
+
 const SEARCH = 'M5 11a6 6 0 1 0 12 0a6 6 0 1 0 -12 0M20 20l-4.5-4.5';
 const CHECK = 'M5 12l5 5l9-10';
 const BELL = 'M6 8a6 6 0 1 1 12 0c0 7 3 8 3 8H3s3-1 3-8M10 20a2 2 0 0 0 4 0';
-
-function groupKey(title: string): { key: string; label: string } {
-  const s = releaseTitle(title);
-  return { key: (s.title + '|' + s.meta).toLowerCase(), label: s.meta ? s.title + ' · ' + s.meta : s.title };
-}
-
-/** Same short title (and year) becomes one heading with the releases under it. */
-export function groupSameTitles(rows: SourceResult[]): { key: string; label: string; rows: SourceResult[] }[] {
-  const out: { key: string; label: string; rows: SourceResult[] }[] = [];
-  const at: { [k: string]: number } = {};
-  rows.forEach((r) => {
-    const g = groupKey(r.Title || '');
-    const i = at[g.key];
-    if (i === undefined) {
-      at[g.key] = out.length;
-      out.push({ key: g.key, label: g.label, rows: [r] });
-    } else out[i].rows.push(r);
-  });
-  return out;
-}
 
 function sameQuery(a: string, b: string): boolean {
   const n = (q: string) => q.replace(/\s+/g, ' ').trim().toLowerCase();
@@ -675,6 +658,31 @@ export function Add({
   const seasons = filterSeasonChips(seasonTitles, tmdbFacts);
   const showSeries = seasons.length > 0 || titlesNameSeason(seasonTitles);
   const searchedNow = memo.searched;
+  const [shows, setShows] = useState<{ q: string; map: { [title: string]: ShowHit } }>({ q: '', map: {} });
+  const askedShow = useRef<{ q: string; titles: { [title: string]: boolean } }>({ q: '', titles: {} });
+  const showTitles = visible.map((r) => r.Title || '').concat(similarVisible.map((r) => r.Title || '')).join('\n');
+  const showMap = shows.q === searchedNow ? shows.map : {};
+  useEffect(() => {
+    if (askedShow.current.q !== searchedNow) askedShow.current = { q: searchedNow, titles: {} };
+    const stops: (() => void)[] = [];
+    showTitles.split('\n').forEach((title) => {
+      if (!title || askedShow.current.titles[title]) return;
+      askedShow.current.titles[title] = true;
+      stops.push(requestShow(title, (hit) => {
+        if (!hit || !hit.id) return;
+        setShows((cur) => {
+          const map = cur.q === searchedNow ? cur.map : {};
+          if (map[title]) return cur.q === searchedNow ? cur : { q: searchedNow, map };
+          const next: { [k: string]: ShowHit } = { ...map };
+          next[title] = hit;
+          return { q: searchedNow, map: next };
+        });
+      }));
+    });
+    return () => {
+      stops.forEach((stop) => stop());
+    };
+  }, [searchedNow, showTitles]);
   useEffect(() => {
     const q = searchedNow.trim();
     setTmdbFacts(null);
@@ -725,7 +733,7 @@ export function Add({
     };
   }, [searching, pickKey]);
   const renderResults = (list: SourceResult[]) =>
-    groupSameTitles(list).map((g) => {
+    groupSameTitles(list, showMap).map((g) => {
       const many = g.rows.length > 1;
       const cards = g.rows.map((r) => {
         const k = resultKey(r);
@@ -734,6 +742,7 @@ export function Add({
             key={k}
             r={r}
             nested={many}
+            poster={g.poster}
             category={categoryOfRow(r)}
             busy={pending[k]}
             flag={k === pickKey && pick ? pick.badge : undefined}

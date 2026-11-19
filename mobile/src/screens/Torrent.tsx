@@ -10,6 +10,7 @@ import { Icon } from '../ui/Icon';
 import { CastStrip } from '../ui/CastStrip';
 import { useTorrentCast } from '../../../src/lib/useTorrentCast';
 import { Sheet } from '../ui/Sheet';
+import { WrongShowSheet } from '../ui/WrongShowSheet';
 import { TorrentRenameSheet } from '../ui/TorrentRenameSheet';
 import { PosterPickSheet } from '../ui/PosterPickSheet';
 import { posterTargets } from '../../../src/lib/posterPick';
@@ -61,7 +62,7 @@ import { useTrackChoice } from '../../../src/viewer/useTracks';
 import { takeAutoplay } from '../../../src/viewer/alternates';
 import { episodeProgressKey } from '../../../src/viewer/tracks';
 import { renameTorrent } from '../../../src/lib/renameTorrent';
-import { torrentQuery } from '../../../src/catalog/tmdb';
+import { seriesTorrentQuery } from '../../../src/catalog/tmdb';
 import { NO_SEASON, findGroup, isSeries, seasonMembers, seasonsOf, seriesKey } from '../../../src/lib/seriesGroups';
 import { comingEpisodeName, comingEpisodes, comingEpisodeText, lastEpisodes, seasonEpisodeList, realEpisodeName, type ComingEpisode, type EpisodeMap } from '../../../src/lib/episodeNames';
 import { useTmdbEpisodes } from '../../../src/lib/useTmdbEpisodes';
@@ -485,6 +486,7 @@ export function Torrent({ hash }: { hash: string }) {
   const [picking, setPicking] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [betterOpen, setBetterOpen] = useState(false);
+  const [wrongOpen, setWrongOpen] = useState(false);
   // a pack of several seasons: which chip's episodes are on screen
   const [seasonPick, setSeasonPick] = useState<PackPick | null>(null);
   // «Follow new episodes» (omp.w in the journal); null until read from the server
@@ -719,7 +721,7 @@ export function Torrent({ hash }: { hash: string }) {
       if (rows.length === 1) navigate(routeForHash(rows[0].hash));
       else navigate({ name: 'series', key: group.key, season: n });
     } else if (showNow) {
-      const q = torrentQuery({ title: showNow.title, original: showNow.original, year: showNow.year, kind: 'tv' }, n);
+      const q = seriesTorrentQuery(showNow, n);
       navigate({ name: 'add', query: q, run: true });
     }
   };
@@ -871,6 +873,11 @@ export function Torrent({ hash }: { hash: string }) {
                 </span>
               ))}
             </div>
+          )}
+          {group && (
+            <button type="button" class="m-btn-text" data-wrong-show onClick={() => setWrongOpen(true)}>
+              {t('titleCard.wrongShow')}
+            </button>
           )}
           {!book && chipSeasons.length > 1 && (
             <div class="m-chips m-tc-chips m-thead-chips" role="group" aria-label={t('titleCard.seasons')} data-block="seasons">
@@ -1040,7 +1047,8 @@ export function Torrent({ hash }: { hash: string }) {
           onClose={() => setPicking(false)}
         />}
       {marksOpen && <MarksSheet title={shortTitle(title)} prefs={skip.prefs} onSave={(p) => skip.save(p, false)} onClose={() => setMarksOpen(false)} />}
-      {betterOpen && <BetterSheet torrent={tor} files={allFiles} onReplaced={onUpgraded} onClose={() => setBetterOpen(false)} />}
+      {betterOpen && <BetterSheet torrent={tor} files={allFiles} season={typeof season === 'number' ? season : 0} onReplaced={onUpgraded} onClose={() => setBetterOpen(false)} />}
+      {wrongOpen && group && <WrongShowSheet group={group} onClose={() => setWrongOpen(false)} />}
       {sheet && (
         <WatchSheet
           torrent={tor}

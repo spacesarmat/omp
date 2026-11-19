@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { posterQuery, tmdbSearchUrl, tmdbSearchRequest, firstPoster } from '../../src/lib/posterSearch';
+import { posterChoice, posterName, posterQueries, requestPoster, setPosterLookup, showChoice } from '../../src/catalog/resultPosters';
 import { posterImageSize } from '../../src/catalog/tmdb';
 
 describe('posterQuery', () => {
@@ -21,6 +22,41 @@ describe('posterQuery', () => {
   it('is empty for an empty title', () => {
     expect(posterQuery('')).toBe('');
     expect(posterQuery('   ')).toBe('');
+  });
+
+  it('a grouped release asks for the show name, and an exact title supplies the poster', () => {
+    expect(posterName('Рагнарек · 1 сезон · серии 1-6 из 6')).toBe('Рагнарек');
+    const items = [
+      { kind: 'movie' as const, id: 1, title: 'Другое', original: '', year: 2024, poster: 'https://img/other.jpg', rating: 1 },
+      { kind: 'tv' as const, id: 2, title: 'Рагнарек', original: 'Ragnarok', year: 2024, poster: 'https://img/ragnarok.jpg', rating: 8 },
+    ];
+    expect(posterChoice(items, 'Рагнарек', 0)).toBe('https://img/ragnarok.jpg');
+    expect(posterChoice([], 'Рагнарек', 0)).toBe('');
+  });
+
+  it('a series release asks for the Latin title when the local name has no TV poster', async () => {
+    const raw = 'Ведьмак / The Witcher / Сезон: 4 / Серии: 1-8 из 8 [2025, фэнтези, WEBRip]';
+    expect(posterQueries(raw)).toEqual(['Ведьмак', 'The Witcher']);
+    const movie = { kind: 'movie' as const, id: 1, title: 'Ведьмак', original: 'The Hexer', year: 2001, poster: 'https://img/hexer.jpg', rating: 5 };
+    const tv = { kind: 'tv' as const, id: 71912, title: 'Ведьмак', original: 'The Witcher', year: 2019, poster: '', rating: 8 };
+    const tvEn = { kind: 'tv' as const, id: 71912, title: 'The Witcher', original: 'The Witcher', year: 2019, poster: 'https://img/witcher.jpg', rating: 8 };
+    expect(showChoice([movie, tv], 'Ведьмак', 2025, true)).toEqual(tv);
+    expect(posterChoice([movie, tv], 'Ведьмак', 2025, true)).toBe('');
+    expect(posterChoice([tvEn], 'The Witcher', 2025, true)).toBe('https://img/witcher.jpg');
+    const asked: string[] = [];
+    setPosterLookup((q) => {
+      asked.push(q);
+      return Promise.resolve(q === 'The Witcher' ? 'https://img/witcher.jpg' : '');
+    });
+    try {
+      const url = await new Promise<string>((resolve) => {
+        requestPoster(raw, resolve);
+      });
+      expect(asked).toEqual(['Ведьмак', 'The Witcher']);
+      expect(url).toBe('https://img/witcher.jpg');
+    } finally {
+      setPosterLookup(null);
+    }
   });
 });
 

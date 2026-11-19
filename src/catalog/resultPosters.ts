@@ -3,21 +3,77 @@
 // floods the network or slows the torrent search down. The phone plugs its own catalog in with setPosterLookup.
 // Chromium 53 safe.
 import { activeCatalog } from './activeCatalog';
-import { posterQuery } from '../lib/posterSearch';
+import { latinTitle, posterQuery } from '../lib/posterSearch';
+import { parseEpisodeRange } from '../monitor/episodes';
+import { libraryTitle } from '../lib/libraryView';
 import { yearOf } from '../lib/torrentName';
+import type { CatalogTitle } from './tmdb';
+
+/** The show name a poster search should use: before « · сезон» and the release tail. */
+export function posterName(title: string): string {
+  const named = libraryTitle({ hash: '', title: title || '' });
+  const base = named.meta ? named.title : (named.title || '').split(' · ')[0];
+  return posterQuery(base || title || '');
+}
+
+/** Queries for one release: the show name, then the Latin title when the torrent names both. */
+export function posterQueries(title: string): string[] {
+  const out: string[] = [];
+  const add = (q: string) => {
+    const n = (q || '').replace(/\s+/g, ' ').trim();
+    if (!n) return;
+    if (!out.some((x) => x.toLowerCase() === n.toLowerCase())) out.push(n);
+  };
+  add(posterName(title));
+  add(latinTitle([title || '']));
+  return out;
+}
+
+/** A series release names a season. The poster and the group then prefer the TV show over a film of the same name. */
+export function releaseIsSeries(title: string): boolean {
+  return parseEpisodeRange(title || '').season !== undefined;
+}
+
+/**
+ * The TMDB row to use. A series release takes the TV show (exact title first), and a film of the same
+ * name does not stand in for it. `year` picks among what is left.
+ */
+function withPosterFirst(list: CatalogTitle[], year: number): CatalogTitle | null {
+  const pictured = list.filter((x) => /^https?:\/\//i.test(x.poster || ''));
+  const use = pictured.length ? pictured : list;
+  const same = year ? use.filter((x) => x.year === year)[0] : undefined;
+  return same || use[0] || null;
+}
+
+export function showChoice(items: CatalogTitle[], query: string, year: number, series: boolean): CatalogTitle | null {
+  const q = (query || '').toLowerCase().replace(/\s+/g, ' ').trim();
+  const exact = q
+    ? items.filter((x) => (x.title || '').toLowerCase() === q || (x.original || '').toLowerCase() === q)
+    : [];
+  const pool = exact.length ? exact : items;
+  const tv = pool.filter((x) => x.kind === 'tv');
+  if (series && tv.length) return withPosterFirst(tv, year);
+  return withPosterFirst(pool, year);
+}
+
+/** A poster URL from a TMDB page. A series release returns a poster only from a TV show. */
+export function posterChoice(items: CatalogTitle[], query: string, year: number, series?: boolean): string {
+  const hit = showChoice(items, query, year, !!series);
+  if (!hit) return '';
+  if (series && hit.kind !== 'tv') return '';
+  return /^https?:\/\//i.test(hit.poster || '') ? hit.poster : '';
+}
 
 export const MAX_RUNNING = 3;
 
-/** The poster URL for a query ('' when none); `year` prefers a title of that year. */
-export type PosterLookup = (query: string, year: number) => Promise<string>;
+/** The poster URL for a query ('' when none); `year` prefers a title of that year. `series` keeps a film from standing in. */
+export type PosterLookup = (query: string, year: number, series?: boolean) => Promise<string>;
 
-const catalogLookup: PosterLookup = (query, year) =>
+const catalogLookup: PosterLookup = (query, year, series) =>
   activeCatalog()
     .then((c) => c.search(query, 1))
     .then((r) => {
-      const withPoster = r.items.filter((x) => !!x.poster);
-      const same = year ? withPoster.filter((x) => x.year === year)[0] : undefined;
-      return (same || withPoster[0] || { poster: '' }).poster;
+      return posterChoice(r.items, query, year, !!series);
     });
 
 let lookup: PosterLookup = catalogLookup;
@@ -26,6 +82,7 @@ interface Entry {
   key: string;
   query: string;
   year: number;
+  series: boolean;
   state: 'queued' | 'running' | 'done';
   url: string;
   waiters: ((url: string) => void)[];
@@ -39,7 +96,7 @@ let generation = 0;
 
 /** The dedupe key: the poster query of the title, case- and space-insensitive. */
 export function posterKey(title: string): string {
-  return posterQuery(title || '').toLowerCase().replace(/\s+/g, ' ').trim();
+  return posterName(title || '').toLowerCase().replace(/\s+/g, ' ').trim();
 }
 
 function pump(): void {
@@ -62,7 +119,7 @@ function pump(): void {
     };
     let p: Promise<string>;
     try {
-      p = lookup(e.query, e.year);
+      p = lookup(e.query, e.year, e.series);
     } catch (err) {
       p = Promise.reject(err);
     }
@@ -77,9 +134,8 @@ function pump(): void {
  * Asks for the poster of a release title; `done` gets the URL ('' when none). Returns a cancel function: a lookup
  * nobody waits for any more leaves the queue before it starts.
  */
-export function requestPoster(title: string, done: (url: string) => void): () => void {
-  const query = posterQuery(title || '');
-  const key = posterKey(title);
+function requestOne(query: string, title: string, series: boolean, done: (url: string) => void): () => void {
+  const key = query.toLowerCase().replace(/\s+/g, ' ').trim() + (series ? '\u0000tv' : '');
   if (!key) {
     done('');
     return () => undefined;
@@ -91,7 +147,7 @@ export function requestPoster(title: string, done: (url: string) => void): () =>
   }
   if (!e) {
     const y = yearOf((title || '').replace(/[._]+/g, ' '));
-    e = { key, query, year: y ? +y : 0, state: 'queued', url: '', waiters: [] };
+    e = { key, query, year: y ? +y : 0, series, state: 'queued', url: '', waiters: [] };
     entries[key] = e;
     queue.push(e);
   }
@@ -117,6 +173,38 @@ export function requestPoster(title: string, done: (url: string) => void): () =>
 }
 
 /**
+ * Asks for the poster of a release title; `done` gets the URL ('' when none). A series title tries the Latin
+ * name when the local one has no TV poster. Returns a cancel function.
+ */
+export function requestPoster(title: string, done: (url: string) => void): () => void {
+  const queries = posterQueries(title);
+  const series = releaseIsSeries(title);
+  if (!queries.length) {
+    done('');
+    return () => undefined;
+  }
+  let dead = false;
+  let cancelCurrent = (): void => undefined;
+  const step = (i: number) => {
+    if (dead) return;
+    if (i >= queries.length) {
+      done('');
+      return;
+    }
+    cancelCurrent = requestOne(queries[i], title, series, (url) => {
+      if (dead) return;
+      if (url || i + 1 >= queries.length) done(url);
+      else step(i + 1);
+    });
+  };
+  step(0);
+  return () => {
+    dead = true;
+    cancelCurrent();
+  };
+}
+
+/**
  * Sets the lookup (null restores the active-catalog one) and forgets every poster found so far: the phone plugs in
  * its catalog at start, tests a fake.
  */
@@ -126,4 +214,122 @@ export function setPosterLookup(fn: PosterLookup | null): void {
   queue = [];
   running = 0;
   generation++;
+}
+
+/** TMDB show a release resolved to. `poster` is '' when the page had the show but no image. */
+export interface ShowHit {
+  id: number;
+  title: string;
+  poster: string;
+}
+
+export type ShowLookup = (query: string, year: number) => Promise<CatalogTitle[]>;
+
+const defaultShowLookup: ShowLookup = (query) =>
+  activeCatalog()
+    .then((c) => c.search(query, 1))
+    .then((r) => r.items || [])
+    .catch(() => []);
+
+let showLookup: ShowLookup = defaultShowLookup;
+
+interface ShowEntry {
+  key: string;
+  title: string;
+  state: 'queued' | 'running' | 'done';
+  hit: ShowHit | null;
+  waiters: ((hit: ShowHit | null) => void)[];
+}
+
+let showEntries: { [key: string]: ShowEntry } = {};
+let showQueue: ShowEntry[] = [];
+let showRunning = 0;
+
+function posterOf(hit: CatalogTitle | null): string {
+  return hit && /^https?:\/\//i.test(hit.poster || '') ? hit.poster : '';
+}
+
+function resolveShow(title: string): Promise<ShowHit | null> {
+  const series = releaseIsSeries(title);
+  const y = yearOf((title || '').replace(/[._]+/g, ' '));
+  const year = y ? +y : 0;
+  const queries = posterQueries(title);
+  const step = (i: number, fallback: ShowHit | null): Promise<ShowHit | null> => {
+    if (i >= queries.length) return Promise.resolve(fallback);
+    return showLookup(queries[i], year).then(
+      (items) => {
+        const hit = showChoice(items || [], queries[i], year, series);
+        if (!hit || !hit.id) return step(i + 1, fallback);
+        const row: ShowHit = { id: hit.id, title: hit.title || queries[i], poster: posterOf(hit) };
+        if (row.poster && (!series || hit.kind === 'tv')) return Promise.resolve(row);
+        return step(i + 1, fallback || row);
+      },
+      () => step(i + 1, fallback),
+    );
+  };
+  return step(0, null);
+}
+
+function pumpShows(): void {
+  while (showRunning < MAX_RUNNING && showQueue.length) {
+    const e = showQueue.shift()!;
+    e.state = 'running';
+    showRunning++;
+    resolveShow(e.title).then((hit) => {
+      showRunning--;
+      if (showEntries[e.key] !== e) {
+        pumpShows();
+        return;
+      }
+      e.state = 'done';
+      e.hit = hit;
+      const w = e.waiters;
+      e.waiters = [];
+      for (let i = 0; i < w.length; i++) w[i](hit);
+      pumpShows();
+    });
+  }
+}
+
+/** The show (id, title, poster) for a release title. The same title shares one lookup. */
+export function requestShow(title: string, done: (hit: ShowHit | null) => void): () => void {
+  const queries = posterQueries(title);
+  const key = (queries.join('\n') + (releaseIsSeries(title) ? '\u0000tv' : '')).toLowerCase();
+  if (!queries.length) {
+    done(null);
+    return () => undefined;
+  }
+  let e = showEntries[key];
+  if (e && e.state === 'done') {
+    done(e.hit);
+    return () => undefined;
+  }
+  if (!e) {
+    e = { key, title, state: 'queued', hit: null, waiters: [] };
+    showEntries[key] = e;
+    showQueue.push(e);
+    pumpShows();
+  }
+  const entry = e;
+  let called = false;
+  const waiter = (hit: ShowHit | null) => {
+    if (!called) {
+      called = true;
+      done(hit);
+    }
+  };
+  entry.waiters.push(waiter);
+  return () => {
+    called = true;
+    const i = entry.waiters.indexOf(waiter);
+    if (i >= 0) entry.waiters.splice(i, 1);
+  };
+}
+
+/** Phone catalog, or null to restore the active-catalog search. Forgets shows found so far. */
+export function setShowLookup(fn: ShowLookup | null): void {
+  showLookup = fn || defaultShowLookup;
+  showEntries = {};
+  showQueue = [];
+  showRunning = 0;
 }

@@ -669,6 +669,17 @@ export function torrentQuery(t: { title: string; original: string; year: number;
   return t.year ? name + ' ' + t.year : name;
 }
 
+/** Season search for a matched show: the English original and the localized title, then «N сезон». */
+export function seriesTorrentQuery(t: { title: string; original: string }, season: number): string {
+  const local = (t.title || '').trim();
+  const original = (t.original || '').trim();
+  const latin = original && !/[а-яё]/i.test(original) ? original : '';
+  let name = local || original;
+  if (latin && local && latin.toLowerCase() !== local.toLowerCase()) name = latin + ' ' + local;
+  else if (!local) name = latin || original;
+  return torrentQuery({ title: name, original: '', year: 0, kind: 'tv' }, season);
+}
+
 /** «Title 11 сезон 7 серия»: the same season query plus this episode. */
 export function episodeTorrentQuery(t: { title: string; original: string; year: number; kind: Kind }, season: number, episode: number): string {
   return torrentQuery(t, season) + ' ' + ru.catalog.queryEpisode.replace('{n}', String(episode));

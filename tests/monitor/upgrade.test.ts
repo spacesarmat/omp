@@ -1,5 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { betterSeriesReleases, carryProgress, findUpgrades, isLowSeeds, pickUpgrades, seasonsCovered, upgradeKind, upgradeQuery } from '../../src/monitor/upgrade';
+import { anotherReleaseQuery, betterSeriesReleases, carryProgress, findUpgrades, isLowSeeds, pickUpgrades, seasonsCovered, upgradeKind, upgradeQuery } from '../../src/monitor/upgrade';
+import { parseSearchQuery } from '../../src/sources/queryParse';
+import { applyFilters, NO_FILTERS } from '../../src/sources/filters';
 import type { LibraryTorrent } from '../../src/monitor/newEpisodes';
 import type { SearchFn } from '../../src/monitor/check';
 import type { SourceContext, SourceResult } from '../../src/sources/types';
@@ -58,6 +60,19 @@ describe('what is offered', () => {
   it('queries: the film name and year, the series name', () => {
     expect(upgradeQuery(film())).toBe('Северный ветер 2026');
     expect(upgradeQuery(series())).toBe('Дом дракона');
+  });
+
+  it('another release of the current season opens on that season, and a full pack stays', () => {
+    const q = anotherReleaseQuery('Star Trek Discovery', 3);
+    expect(q).toBe('Star Trek Discovery 3 сезон');
+    expect(parseSearchQuery(q).season).toBe(3);
+    expect(parseSearchQuery(q).title).toBe('Star Trek Discovery');
+    const filters = { ...NO_FILTERS, season: 3 };
+    const row = (Title: string) => ({ Title, Seed: 1 });
+    const kept = (Title: string) => applyFilters([row(Title)], filters).map((r) => r.Title);
+    expect(kept('Star Trek Discovery S01 2160p Remux')).toEqual([]);
+    expect(kept('Star Trek Discovery S03E01 1080p WEB-DL')).toEqual(['Star Trek Discovery S03E01 1080p WEB-DL']);
+    expect(kept('Star Trek Discovery Complete Series 1080p')).toEqual(['Star Trek Discovery Complete Series 1080p']);
   });
 });
 

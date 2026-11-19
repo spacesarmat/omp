@@ -7,6 +7,11 @@ import { lang } from '../i18n';
 import { activeCatalog } from '../catalog/activeCatalog';
 import { findShow, pickShow as pick } from './tmdbShow';
 import { displayTitle, yearOf } from './torrentName';
+import { latinTitle } from './posterSearch';
+import { releaseText } from './keptQuality';
+import { parseRelease } from '../sources/filters';
+import { parseReleaseInfo } from './releaseInfo';
+import type { ShowFacts } from './tmdbShow';
 import type { CatalogCard, CatalogTitle } from '../catalog/tmdb';
 import { seriesKey, type SeriesGroup } from './seriesGroups';
 
@@ -20,7 +25,7 @@ const chosenId = new Map<string, number>();
 const SAVED_KEY = 'tsp.seriesTmdb';
 const SAVED_TTL = 7 * 24 * 60 * 60 * 1000;
 const SAVED_MAX = 400;
-interface Saved { id: number; s: string; at: number; m?: boolean; }
+interface Saved { id: number; s: string; at: number; m?: boolean; q?: string; }
 let saved: { [k: string]: Saved } | null = null;
 
 function savedMap(): { [k: string]: Saved } {
@@ -28,9 +33,9 @@ function savedMap(): { [k: string]: Saved } {
   const raw = loadJson<{ [k: string]: unknown }>(SAVED_KEY, {}, isObject);
   const out: { [k: string]: Saved } = {};
   Object.keys(raw).forEach((k) => {
-    const v = raw[k] as { id?: unknown; s?: unknown; at?: unknown; m?: unknown } | null;
+    const v = raw[k] as { id?: unknown; s?: unknown; at?: unknown; m?: unknown; q?: unknown } | null;
     if (v && typeof v.id === 'number' && v.id >= 0 && typeof v.at === 'number') {
-      out[k] = { id: v.id, s: typeof v.s === 'string' ? v.s : '', at: v.at, m: v.m === true };
+      out[k] = { id: v.id, s: typeof v.s === 'string' ? v.s : '', at: v.at, m: v.m === true, q: typeof v.q === 'string' ? v.q : '' };
     }
   });
   saved = out;
@@ -46,7 +51,7 @@ function savedOf(key: string): Saved | null {
   return age >= 0 && age < SAVED_TTL ? v : null;
 }
 
-function remember(key: string, card: CatalogCard | null, manual?: boolean): void {
+function remember(key: string, card: CatalogCard | null, manual?: boolean, stamp?: string): void {
   const map = savedMap();
   const prev = map[key];
   map[key] = {
@@ -54,6 +59,7 @@ function remember(key: string, card: CatalogCard | null, manual?: boolean): void
     s: card && card.status ? card.status : '',
     at: Date.now(),
     m: manual === true || !!(prev && prev.m && manual !== false),
+    q: stamp || (prev && prev.q) || '',
   };
   const keys = Object.keys(map);
   if (keys.length > SAVED_MAX) {
@@ -92,14 +98,40 @@ export function cachedSeriesMatch(key: string): CatalogCard | null | undefined {
 /** The show among search results: a series of that year, else the first series; films never match. */
 export const pickShow = pick;
 
-/** The earliest year in the titles of the series' torrents (the first season's, closest to the first air date). */
+/** The earliest year in the release strings (a cleaned title has no year; omp.rt still does). */
 function groupYear(g: SeriesGroup): number {
   let best = 0;
   g.members.forEach((m) => {
-    const y = +(yearOf(displayTitle(m).replace(/[._]+/g, ' ')) || 0);
+    const y = +(yearOf(releaseText(m).replace(/[._]+/g, ' ')) || 0);
     if (y && (!best || y < best)) best = y;
   });
   return best;
+}
+
+/** Visible name plus the Latin title from the release string, so «Локи» still searches «Loki». */
+function searchTitle(g: SeriesGroup): string {
+  const visible = displayTitle(g.named);
+  const raw = releaseText(g.named);
+  const latin = latinTitle([raw, visible]);
+  if (latin && visible.toLowerCase().indexOf(latin.toLowerCase()) < 0) return visible + ' / ' + latin;
+  return visible;
+}
+
+function factsOf(g: SeriesGroup): ShowFacts {
+  const raw = releaseText(g.named);
+  const rel = parseRelease(raw);
+  const info = parseReleaseInfo(raw);
+  let season = 0;
+  rel.seasons.forEach((n) => { if (n > season) season = n; });
+  const facts: ShowFacts = {};
+  if (season) facts.season = season;
+  if (rel.episodes) facts.episodes = rel.episodes.to - rel.episodes.from + 1;
+  if (info.resolution === '2160p' || info.hdr) facts.modern = true;
+  return facts;
+}
+
+function stampOf(g: SeriesGroup): string {
+  return displayTitle(g.named);
 }
 
 /** The TMDB card of the series (null when TMDB has no such show); rejects when TMDB cannot be reached. */
@@ -108,37 +140,40 @@ export function matchSeries(g: SeriesGroup, opts?: { force?: boolean }): Promise
   const force = !!(opts && opts.force);
   const hit = matches.get(key);
   const locked = lockedShow(key);
+  const stamp = stampOf(g);
+  const known = savedOf(key);
+  // an automatic match belongs to the title that produced it; a rename or cleanup searches again
+  const stale = !!(known && !known.m && known.q !== stamp);
   // a show the person picked is fetched by that id; a search that started earlier must not replace it
   if (locked) {
     if (hit && hit.id === locked && !(force && hit)) return Promise.resolve(hit);
     return activeCatalog().then((c) => (force ? c.card('tv', locked, { force: true }) : c.card('tv', locked)).then((card) => {
       if (lockedShow(key) !== locked) return keptCard(key);
       matches.set(key, card);
-      remember(key, card, true);
+      remember(key, card, true, stamp);
       return card;
     }));
   }
   // `force` (pull to refresh): the show found before, its card fetched again
-  if (hit !== undefined && !(force && hit)) return Promise.resolve(hit);
-  const known = savedOf(key);
+  if (!stale && hit !== undefined && !(force && hit)) return Promise.resolve(hit);
   return activeCatalog().then((c) => {
     if (lockedShow(key)) return keptCard(key);
-    if (known && known.id === 0) {
+    if (!stale && known && known.id === 0) {
       matches.set(key, null);
       return null;
     }
-    const found = hit ? Promise.resolve({ id: hit.id }) : known ? Promise.resolve({ id: known.id }) : findShow(c, displayTitle(g.named), groupYear(g));
+    const found = !stale && hit ? Promise.resolve({ id: hit.id }) : !stale && known ? Promise.resolve({ id: known.id }) : findShow(c, searchTitle(g), groupYear(g), factsOf(g));
     return found.then((show) => {
       if (lockedShow(key)) return keptCard(key);
       if (!show) {
         matches.set(key, null);
-        remember(key, null);
+        remember(key, null, false, stamp);
         return null;
       }
       return (force ? c.card('tv', show.id, { force: true }) : c.card('tv', show.id)).then((card) => {
         if (lockedShow(key)) return keptCard(key);
         matches.set(key, card);
-        remember(key, card);
+        remember(key, card, false, stamp);
         return card;
       });
     });
