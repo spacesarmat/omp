@@ -43,6 +43,15 @@ describe('applyPulled', () => {
     expect(torrents.value[0].data).not.toContain('"t":10');
   });
 
+  it('keeps a queued row when storage has no copy', () => {
+    torrents.value = [];
+    applyPulled([
+      { id: 'watch:abc', kind: 'watch', key: 'abc', body: { newEpisodes: false }, updatedAt: 30, deviceId: 'other' },
+    ]);
+    torrents.value = [{ hash: 'abc', title: 'Old', data: '{"omp":{"v":1,"h":[]}}' } as never];
+    expect(watchesNewEpisodes(torrents.value[0].data)).toBe(false);
+  });
+
   it('keeps a newer local position when an older delete arrives', () => {
     const hash = 'a'.repeat(40);
     saveProgress(hash, 1, 40, 100);

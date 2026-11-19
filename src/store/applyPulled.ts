@@ -1,5 +1,5 @@
 // A pulled row has to land in the stores the screens already read.
-import type { SyncRecord } from './syncMerge';
+import { newer, type SyncRecord } from './syncMerge';
 import { torrents } from './library';
 import { parseData, sanitizeSkip, serializeData, withOmp, withQualityWatch, withReleaseMeta, withWatch, type JournalEntry, type SkipPrefs } from '../lib/journal';
 import { applySyncedProgress } from './progress';
@@ -139,10 +139,11 @@ function liveRows(rows: SyncRecord[]): SyncRecord[] {
   const out: SyncRecord[] = [];
   const seen: { [id: string]: boolean } = {};
   for (let i = 0; i < rows.length; i++) {
-    const kept = have[rows[i].id];
-    if (!kept || seen[kept.id]) continue;
-    seen[kept.id] = true;
-    out.push(kept);
+    const queued = rows[i];
+    if (seen[queued.id]) continue;
+    seen[queued.id] = true;
+    const saved = have[queued.id];
+    out.push(saved ? newer(saved, queued) : queued);
   }
   return out;
 }
