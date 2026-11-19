@@ -3,6 +3,7 @@ import { createSubscription } from '../src/logic.mjs';
 import { createApp } from '../src/server.mjs';
 import { createCacheRepo } from '../src/db/pg/cacheNodesSql.mjs';
 import { createWatchRepo, rankSearchXml } from '../src/db/pg/watchSql.mjs';
+import { voterHash } from '../src/watchRank.mjs';
 import { runWatchFollow } from '../src/watchFollow.mjs';
 import { emptyState } from '../src/state.mjs';
 import { testStore, writeState } from './pg';
@@ -141,5 +142,41 @@ describe('watch signals and rank', () => {
     expect(stale.warmed).toBe(0);
     const admin = await call(app, 'GET', '/admin/api/watch-rank');
     expect(admin.status).toBe(401);
+  });
+
+  it('caps distinct file_index votes per voter+infohash but allows replacements', async () => {
+    const file = await testStore();
+    const repo = createWatchRepo(file);
+    const voter = voterHash('acc-cap', DEV);
+    const now = Date.now();
+    const items = [];
+    for (let i = 0; i < 120; i++) {
+      items.push({
+        infohash: B,
+        fileIndex: i,
+        title: 'Show S01E01 1080p',
+        titleKey: 'show s01e01',
+        season: 1,
+        episode: 1,
+        deviceClass: 'tv',
+        ttffMs: 1000,
+        rebufferN: 0,
+        rebufferMs: 0,
+        watchedPct: 95,
+        completed: true,
+        switched: false,
+        voice: '',
+        codecOk: true,
+        codecs: [],
+      });
+    }
+    const accepted = await repo.saveSignals(voter, items, now);
+    expect(accepted).toBe(100);
+    const cnt = await file.query('SELECT COUNT(*)::int AS n FROM watch_votes WHERE voter = $1 AND infohash = $2', [voter, B]);
+    expect(cnt.rows[0].n).toBe(100);
+    const replaced = await repo.saveSignals(voter, [Object.assign({}, items[0], { watchedPct: 50, completed: false })], now + 1000);
+    expect(replaced).toBe(1);
+    const after = await file.query('SELECT COUNT(*)::int AS n FROM watch_votes WHERE voter = $1 AND infohash = $2', [voter, B]);
+    expect(after.rows[0].n).toBe(100);
   });
 });

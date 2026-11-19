@@ -18,6 +18,10 @@ function num(v) {
   return n > 0 ? n : 0;
 }
 
+// A single voter may not stack unlimited file_index votes on one infohash (rank/storage spam).
+// Replacements of an existing file are always allowed; only brand-new files beyond the cap are skipped.
+const MAX_FILES_PER_VOTER_INFOHASH = 100;
+
 function statsOf(r) {
   return {
     samples: num(r.samples),
@@ -200,6 +204,14 @@ export async function saveSignals(tx, voter, items, now) {
         [voter, row.infohash, row.fileIndex],
       );
       const prev = prevVote(found.rows[0]);
+      if (!prev) {
+        const others = await query('SELECT COUNT(*)::int AS n FROM watch_votes WHERE voter = $1 AND infohash = $2 AND file_index <> $3', [
+          voter,
+          row.infohash,
+          row.fileIndex,
+        ]);
+        if (num(others.rows[0].n) >= MAX_FILES_PER_VOTER_INFOHASH) continue;
+      }
       if (prev && prev.deviceClass !== row.deviceClass) {
         await addStats(query, Object.assign({}, row, { deviceClass: prev.deviceClass }), removeDelta(prev), now);
         await addStats(query, row, voteDelta(null, row), now);
