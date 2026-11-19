@@ -1715,3 +1715,37 @@ exit 1
     expect(log(scpLog)).toBe('');
   });
 });
+
+describe('jacred init.yaml permissions', () => {
+  it('a normal deploy tightens a world-readable init.yaml to 600 and keeps its content', () => {
+    const box = world(release());
+    const f = path.join(box.root, 'jacred/init.yaml');
+    chmodSync(f, 0o644);
+    const result = runDeploy(box.env, ['main']);
+    expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
+    expect(statSync(f).mode & 0o777).toBe(0o600);
+    expect(readFileSync(f, 'utf8')).toBe('apikey: keep\n');
+  });
+
+  it('a dry run leaves the permissions untouched', () => {
+    const box = world(release());
+    const f = path.join(box.root, 'jacred/init.yaml');
+    chmodSync(f, 0o644);
+    const result = runDeploy(box.env, ['--dry-run', 'main']);
+    expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
+    expect(statSync(f).mode & 0o777).toBe(0o644);
+  });
+
+  it('does not follow a symlinked init.yaml', () => {
+    const box = world(release());
+    const f = path.join(box.root, 'jacred/init.yaml');
+    const target = path.join(box.parent, 'jacred-target.yaml');
+    writeFileSync(target, 'apikey: keep\n');
+    chmodSync(target, 0o644);
+    rmSync(f);
+    symlinkSync(target, f);
+    const result = runDeploy(box.env, ['main']);
+    expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
+    expect(statSync(target).mode & 0o777).toBe(0o644);
+  });
+});
