@@ -2,6 +2,7 @@ import type { Torrent } from '../../../src/api/types';
 import { posterColor, shortTitle } from '../../../src/lib/libraryView';
 import { parseReleaseInfo, releaseBadges, displayBadge } from '../../../src/lib/releaseInfo';
 import { torrentQuality } from '../../../src/lib/keptQuality';
+import { displayTitle } from '../../../src/lib/torrentName';
 
 /** Quality badge: the first release tag that is not just a year. */
 export function qualityBadge(title: string): string {

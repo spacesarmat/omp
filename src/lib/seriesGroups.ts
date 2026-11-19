@@ -5,6 +5,7 @@ import { seriesNameVariants } from '../monitor/newEpisodes';
 import { parseEpisodeRange } from '../monitor/episodes';
 import { guessCategory } from './categoryGuess';
 import { displayTitle, torrentFiles } from './torrentName';
+import { releaseText } from './keptQuality';
 import { parseEpisode, playableFiles } from './episodes';
 import { filterTorrents } from './librarySearch';
 import { lang, tp, CYRILLIC_LANGS } from '../i18n';
@@ -85,7 +86,7 @@ export function seriesKey(tor: Torrent): string {
 
 /** The seasons of one torrent: from its title («Сезоны 1-3», «S02»), else from its files; [] when unknown. */
 export function seasonsOf(tor: Torrent): number[] {
-  const r = parseEpisodeRange(displayTitle(tor));
+  const r = parseEpisodeRange(releaseText(tor));
   if (r.season !== undefined) {
     const out: number[] = [];
     const to = r.seasonTo !== undefined && r.seasonTo >= r.season ? r.seasonTo : r.season;
@@ -104,7 +105,7 @@ export function seasonsOf(tor: Torrent): number[] {
 
 /** The release names episodes (in its title or files) but no season. */
 function seasonlessEpisodes(tor: Torrent): boolean {
-  const r = parseEpisodeRange(displayTitle(tor));
+  const r = parseEpisodeRange(releaseText(tor));
   if (r.to !== undefined) return true;
   return playableFiles(filesOf(tor)).some((f) => !!fileEpisodes(f.path));
 }

@@ -12,15 +12,26 @@ const H3 = '3'.repeat(40);
 const data = JSON.stringify({ TorrServer: { Files: [{ id: 1, path: 'Moon.Garden.S02E01.1080p.mkv', length: 5 }, { id: 2, path: 'Moon.Garden.S02E02.1080p.mkv', length: 5 }] } });
 const tor = (hash: string, title: string, extra: Partial<Torrent> = {}): Torrent => ({ hash, title, stat: 0, data, ...extra });
 
-function fake(fail = false) {
-  const calls: { hash: string; title: string; poster?: string; category?: string }[] = [];
-  return {
+function fake(fail = false, withData = false) {
+  const calls: { hash: string; title: string; poster?: string; category?: string; data?: string }[] = [];
+  const out: {
+    calls: typeof calls;
+    setTitle: (t: any, title: string) => Promise<void>;
+    setData?: (t: any, data: string) => Promise<void>;
+  } = {
     calls,
     setTitle: (t: any, title: string) => {
       calls.push({ hash: t.hash, title, poster: t.poster, category: t.category });
       return fail ? Promise.reject(new Error('down')) : Promise.resolve();
     },
   };
+  if (withData) {
+    out.setData = (t: any, data: string) => {
+      calls.push({ hash: t.hash, title: t.title, poster: t.poster, category: t.category, data });
+      return fail ? Promise.reject(new Error('down')) : Promise.resolve();
+    };
+  }
+  return out;
 }
 
 beforeEach(() => {
@@ -65,14 +76,21 @@ describe('fixPlaceholderTitles', () => {
 });
 
 describe('cleanReleaseTitles', () => {
-  it('writes the clean name and keeps the release string for the quality badge', async () => {
-    const c = fake();
+  it('writes the clean name only after the release string is stored on the torrent', async () => {
+    const c = fake(false, true);
     const raw = 'Локи (2 сезон: 1-6 серии из 6) / Loki WEB-DL 1080p';
-    const done = await cleanReleaseTitles(c, [tor(H1, raw), tor(H2, 'Локи')]);
-    expect(done).toEqual([{ hash: H1, title: 'Локи' }]);
-    expect(c.calls).toEqual([{ hash: H1, title: 'Локи', poster: undefined, category: undefined }]);
-    expect(rememberedRawTitle(H1)).toBe(raw);
-    expect(torrentQuality({ hash: H1, title: 'Локи' })).toBe('1080p');
+    const done = await cleanReleaseTitles(c, [tor(H1, raw, { data: '{}' }), tor(H2, 'Локи')]);
+    expect(done.map((d) => ({ hash: d.hash, title: d.title }))).toEqual([{ hash: H1, title: 'Локи' }]);
+    expect(c.calls[0].data).toContain(raw);
+    expect(c.calls[1]).toMatchObject({ hash: H1, title: 'Локи' });
+    expect(torrentQuality({ hash: H1, title: 'Локи', data: c.calls[0].data })).toBe('1080p');
+  });
+  it('does not rewrite a name the person saved', async () => {
+    const c = fake(false, true);
+    const data = JSON.stringify({ omp: { v: 1, h: [], nm: true } });
+    const done = await cleanReleaseTitles(c, [tor(H1, 'Дюна [1984] WEB-DL 1080p', { data })]);
+    expect(done).toEqual([]);
+    expect(c.calls).toHaveLength(0);
   });
   it('reads the badge from a file when the title was already clean', () => {
     const files = [{ id: 1, path: 'Loki.S02E01.2160p.mkv', length: 1 }];

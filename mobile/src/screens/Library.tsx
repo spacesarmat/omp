@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { fmtSize, t, tp } from '../../../src/i18n';
 import { Icon, ICONS } from '../ui/Icon';
 import { Poster, qualityBadge } from '../ui/Poster';
+import { torrentQuality } from '../../../src/lib/keptQuality';
 import { Logo } from '../../../src/ui/Logo';
 import { TvChip } from '../ui/TvChip';
 import { TorrentMenu } from '../ui/TorrentMenu';
@@ -1104,7 +1105,7 @@ export function Library() {
                   const film = it.kind === 'film' ? it : null;
                   const tor = it.kind === 'series' ? it.named : it.kind === 'film' ? it.lead : it.tor;
                   const meta = rowBottom(it);
-                  const q = qualityBadge(titleOf(tor));
+                  const q = torrentQuality(tor);
                   return (
                     <RowSwipe key={k} id={k} anchor={k} class={sel(it)} disabled={selecting} onRemove={() => { hideHistory(g ? g.key : showKeyOf(tor)); setHideTick((n) => n + 1); }} onWatched={() => markCurrent(tor)}>
                       <button type="button" class={'m-crow' + (g ? ' m-series-card' : film ? ' m-film-card' : '')} {...pressProps(it)}>

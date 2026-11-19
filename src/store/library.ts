@@ -58,11 +58,15 @@ export function resetLibrary(): void {
  */
 export function repairTitles(c: TitleClient, list: Torrent[], onNamed?: (hash: string, title: string) => void): void {
   const my = gen;
-  const apply = (done: { hash: string; title: string }[]) => {
+  const apply = (done: { hash: string; title: string; data?: string }[]) => {
     if (my !== gen || !done.length) return;
-    const by: { [h: string]: string } = {};
-    done.forEach((d) => { by[d.hash] = d.title; });
-    torrents.value = torrents.value.map((x) => (by[x.hash] ? { ...x, title: by[x.hash] } : x));
+    const by: { [h: string]: { title: string; data?: string } } = {};
+    done.forEach((d) => { by[d.hash] = d; });
+    torrents.value = torrents.value.map((x) => {
+      const d = by[x.hash];
+      if (!d) return x;
+      return { ...x, title: d.title, data: d.data !== undefined ? d.data : x.data };
+    });
     if (onNamed) done.forEach((d) => onNamed(d.hash, d.title));
   };
   void fixPlaceholderTitles(c, list).then(apply);

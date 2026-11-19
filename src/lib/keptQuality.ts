@@ -4,6 +4,7 @@
 import type { TorrentFile } from '../api/types';
 import { displayBadge, parseReleaseInfo, releaseBadges } from './releaseInfo';
 import { displayTitle, torrentFiles } from './torrentName';
+import { rawReleaseOf } from './journal';
 import { isObject, loadJson, saveJson } from '../store/storage';
 
 const KEY = 'omp.rawTitle';
@@ -58,9 +59,16 @@ export function rememberedRawTitle(hash: string): string {
  * Badge for a library card. The current title wins, then the release title saved before a rename,
  * then a file name (`Show.S01E01.1080p.mkv`).
  */
+/** The release string readers should use: the one saved on the torrent, else the visible title. */
+export function releaseText(tor: { hash?: string; title?: string; name?: string; data?: string }): string {
+  return rawReleaseOf(tor.data) || displayTitle(tor);
+}
+
 export function torrentQuality(tor: { hash: string; title?: string; name?: string; data?: string; file_stats?: TorrentFile[] }): string {
   const own = qualityFrom(displayTitle(tor));
   if (own) return own;
+  const shared = qualityFrom(rawReleaseOf(tor.data));
+  if (shared) return shared;
   const saved = rememberedRawTitle(tor.hash);
   if (saved) {
     const q = qualityFrom(saved);

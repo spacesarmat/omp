@@ -6,7 +6,7 @@ The English translation covers the latest versions only; the full history (in Ru
 
 ## Unreleased
 
-- [phone] In My, a film or series is named without the release tail: "Loki", not "Loki (season 2: episodes 1-6 of 6) / Loki". Season and episodes stay on the line under the name. Raw titles already in the library are rewritten the same way. The quality badge is read from the original release title or from the files, and stays after a rename
+- [phone] In My, a film or series is named without the release tail: "Loki", not "Loki (season 2: episodes 1-6 of 6) / Loki". Season and episodes stay on the line under the name. Raw titles already in the library are rewritten the same way, and the original string stays on the torrent, so the quality badge, the season and the better-quality check still see it. A name the person typed is not rewritten
 - [phone] My and Discover can show a native Yandex ad on Android and iOS, in the same card. If Yandex has no ad, the own banner stays, then a normal card. History and search have no ads. Nothing changes until the admin switch is on
 - [tv] A TV linked to a subscribed phone follows the subscription group: own banners at that group's frequency. The group is off by default
 - [tech] Admin: Yandex Ads card (master switch, Android and iOS units, free and subscribed groups, own-banner fallback). Released apps ignore yandexAds. The privacy page names the Yandex Mobile Ads SDK and the advertising identifier. Needs a new billing image and a site deploy, on approval

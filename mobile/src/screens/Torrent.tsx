@@ -15,7 +15,6 @@ import { PosterPickSheet } from '../ui/PosterPickSheet';
 import { posterTargets } from '../../../src/lib/posterPick';
 import { posterStyle } from '../ui/Poster';
 import { torrentQuality } from '../../../src/lib/keptQuality';
-import { libraryTitle } from '../../../src/lib/libraryView';
 import { showToast } from '../ui/toast';
 import { LaunchError } from '../ui/LaunchError';
 import { currentRoute, goBack, navigate, replaceTop } from '../nav';

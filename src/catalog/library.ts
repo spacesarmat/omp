@@ -1,5 +1,6 @@
 // Library matching of TMDB titles against torrent titles. Pure.
 import { titleCore } from '../lib/posterSearch';
+import { rawReleaseOf } from '../lib/journal';
 import { parseRelease } from '../sources/filters';
 
 // ye as a char code: the guard strips regex literals but not string literals.
@@ -54,9 +55,10 @@ function nameKey(title: string): string {
 }
 
 /** Every 'name|N' key of a torrent title, with that torrent's hash (possibly empty). */
-function eachSeason(torrents: { title: string; hash?: string }[], visit: (key: string, hash: string) => void): void {
+function eachSeason(torrents: { title: string; hash?: string; data?: string }[], visit: (key: string, hash: string) => void): void {
   torrents.forEach((tr) => {
-    const raw = tr.title || '';
+    const saved = rawReleaseOf(tr.data);
+    const raw = saved || tr.title || '';
     const seasons = parseRelease(raw).seasons;
     if (!seasons.length) return;
     const hash = tr.hash || '';
