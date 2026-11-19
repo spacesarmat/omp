@@ -77,15 +77,16 @@ export function titlesNameSeason(titles: string[]): boolean {
 }
 
 function allowed(season: number, tmdb: TmdbSeasonFacts | null): boolean {
+  // Season 0 is specials: only when TMDB says the show has them. The two-release fallback is for regular seasons.
+  if (season === 0) return !!tmdb && tmdb.specials;
   if (!tmdb) return true;
-  if (season === 0) return tmdb.specials;
   return season >= 1 && season <= tmdb.count;
 }
 
 /**
  * Chips for the series section. With TMDB, only seasons 1..count that a release names, plus season 0 when TMDB has
- * specials and a release names them. A parsed season above the count is ignored. Without TMDB, a season
- * needs two releases. Order is the season number. At most 12 chips.
+ * specials and a release names them. A parsed season above the count is ignored. Without TMDB, a regular
+ * season needs two releases, and season 0 is not offered. Order is the season number. At most 12 chips.
  */
 export function filterSeasonChips(titles: string[], tmdb: TmdbSeasonFacts | null): FilterSeasonChip[] {
   const tallies: { [n: number]: number } = {};

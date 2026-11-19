@@ -44,6 +44,11 @@ describe('filterSeasonChips', () => {
     const titles = ['Локи S01 1080p', 'Локи S02 1080p', 'Локи S02 2160p', 'Чужой S05 WEB-DL', 'Локи S06 720p'];
     expect(filterSeasonChips(titles, null)).toEqual([{ season: 2, count: 2 }]);
   });
+
+  it('without TMDB does not offer season 0 even when two releases name it', () => {
+    const titles = ['Локи S00 1080p', 'Локи S00 2160p', 'Локи S02 1080p', 'Локи S02 720p'];
+    expect(filterSeasonChips(titles, null)).toEqual([{ season: 2, count: 2 }]);
+  });
 });
 
 describe('tmdbSeasonFacts', () => {
