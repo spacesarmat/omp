@@ -55,6 +55,7 @@ import { addSearchResult, afterAdd, noteAlreadyHave, type RowBusy } from '../add
 import { monitorVersion } from '../monitor/ui';
 import { phoneSourceContext } from '../searchContext';
 import { orderSearch } from '../../../src/sources/seedRank';
+import { searchPending } from '../../../src/sources/seedVerify';
 import { deviceCaps, pickDefaultSource } from '../../../src/viewer/sourcePick';
 import { lastLinkSpeed } from '../../../src/viewer/linkSpeed';
 import { noteAlternatePool } from '../../../src/viewer/alternates';
@@ -561,7 +562,7 @@ export function Add({
       query: q,
       ctx,
       getRows: () => h.results(),
-      getPending: () => h.pending().length,
+      getPending: () => searchPending(h),
       onApply: (list) => {
         memo.seedMeasures = list;
         if (memo.handle === h && listener) listener(h);

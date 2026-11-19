@@ -13,7 +13,7 @@ import type { SourceResult } from '../sources/types';
 import { phoneLink } from './phoneStore';
 import { PhoneRpcError, phoneRpc } from './rpc';
 import type { RpcFailure, RpcPoll, RpcResult } from './rpcTypes';
-import { relevantRowsAny } from '../sources/relevance';
+import { rowsForQuery } from '../sources/relevance';
 
 /** A row; `via` is set on the rows found by the phone (resolveTvResult asks the phone for their link). */
 export type TvResult = SourceResult & { via?: { handle: string; key: string } };
@@ -35,6 +35,8 @@ export interface TvSearchHandle {
   cancel(): void;
   /** Titles sent to the trackers. The TV sort uses them so an original title still scores. */
   queries?: () => string[];
+  /** False while a later title may still arrive. */
+  complete?: () => boolean;
   /** Called after every change; returns unsubscribe. */
   subscribe(cb: () => void): () => void;
 }
@@ -144,7 +146,7 @@ export function torrServerSearch(query: string): TvSearchHandle {
     by: 'torrserver',
     sourceIds: s.sourceIds,
     // a site that ignores the query (its latest list) brings nothing on the screen
-    results: () => relevantRowsAny(s.results(), s.queries ? s.queries() : [query]),
+    results: () => rowsForQuery(s.results(), query, s.queries ? s.queries() : [query]),
     pending: () => s.pending(),
     answered: () => s.answered(),
     failed: () => s.failed(),
@@ -152,6 +154,7 @@ export function torrServerSearch(query: string): TvSearchHandle {
     done: s.done,
     cancel: () => s.cancel(),
     queries: () => (s.queries ? s.queries() : [query]),
+    complete: () => (s.complete ? s.complete() : s.pending().length === 0),
     subscribe: (cb) => subs.add(cb),
   };
 }
@@ -285,14 +288,14 @@ function phoneHandle(query: string, started: SearchStarted): TvSearchHandle {
     results: () => {
       // the phone's rows without the ones that share no word with the query (TorrServer's are filtered by its handle)
       const qs = recall.length ? recall : [query];
-      if (!ts) return relevantRowsAny(rows, qs);
+      if (!ts) return rowsForQuery(rows, query, qs);
       // a release found by both: keep the TorrServer row (it has a magnet and resolves on the TV)
       const theirs = ts.results();
       const seen: { [hash: string]: boolean } = {};
       theirs.forEach((r) => {
         if (r.hash) seen[r.hash] = true;
       });
-      return relevantRowsAny(rows, qs).filter((r) => !r.hash || !seen[r.hash]).concat(theirs);
+      return rowsForQuery(rows, query, qs).filter((r) => !r.hash || !seen[r.hash]).concat(theirs);
     },
     pending: () => (ts ? pending.concat(ts.pending()) : pending.slice()),
     answered: () => (ts ? answered.concat(ts.answered()) : answered.slice()),
@@ -305,6 +308,11 @@ function phoneHandle(query: string, started: SearchStarted): TvSearchHandle {
       const extra = ts.queries();
       for (let i = 0; i < extra.length; i++) if (mine.indexOf(extra[i]) < 0) mine.push(extra[i]);
       return mine;
+    },
+    complete: () => {
+      if (!over) return false;
+      if (ts && ts.complete && !ts.complete()) return false;
+      return true;
     },
     cancel() {
       if (cancelled) return;

@@ -5,8 +5,9 @@
 // as the duplicate merge (merge.ts). A word of 5+ letters also matches by its stem (the word less its last two
 // letters), so an inflected Russian title still hits. A title is matched as a whole, so «Русское / English Title»
 // hits whichever side the query used. Chromium 53 safe.
+import { episodeRole, parseRelease } from './filters';
 import { normalizeTitle } from './merge';
-import { yearInTitle } from './queryParse';
+import { parseSearchQuery, yearInTitle } from './queryParse';
 
 const YEAR = /^(19|20)\d\d$/;
 const RESOLUTION = /^(\d{3,4}[pi]|[48]k|uhd|fhd|hdr)$/;
@@ -119,6 +120,25 @@ export function splitByQueries<T extends { Title: string }>(list: T[], queries: 
 /** Rows that match any query. */
 export function relevantRowsAny<T extends { Title: string }>(list: T[], queries: string[]): T[] {
   return splitByQueries(list, queries).hits;
+}
+
+/**
+ * What a screen shows for one typed query: title hits, then the season and episode from the query.
+ * A full-season pack that includes the asked episode stays. A different episode does not.
+ */
+export function rowsForQuery<T extends { Title: string }>(list: T[], query: string, queries: string[]): T[] {
+  const words = queries.length ? queries : [query];
+  const hits = relevantRowsAny(list, words);
+  const parsed = parseSearchQuery(query);
+  if (!parsed.season && !parsed.episode) return hits;
+  const out: T[] = [];
+  for (let i = 0; i < hits.length; i++) {
+    const info = parseRelease(hits[i].Title);
+    if (parsed.season && !info.allSeasons && info.seasons.length && info.seasons.indexOf(parsed.season) < 0) continue;
+    if (parsed.episode && episodeRole(hits[i].Title, parsed.season, parsed.episode) === 'other') continue;
+    out.push(hits[i]);
+  }
+  return out;
 }
 
 /**

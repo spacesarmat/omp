@@ -9,7 +9,7 @@ import { searchRecall } from '../../../src/sources/recallSearch';
 import { getHealth, isSourceOn, reloadSourcePrefs, setSourceOn } from '../../../src/sources/store';
 import { isCloudflare, resolveLink, resultDate, resultKey, sortResults } from '../../../src/sources/view';
 import { rankSearchResults } from '../../../src/sources/seedRank';
-import { applySeedRound, watchSeedVerify, type SeedMeasure } from '../../../src/sources/seedVerify';
+import { applySeedRound, searchPending, watchSeedVerify, type SeedMeasure } from '../../../src/sources/seedVerify';
 import type { Subscription } from '../../../src/monitor/types';
 import { monitorMethods } from './monitorMethods';
 import type { Source, SourceContext, SourceResult } from '../../../src/sources/types';
@@ -386,7 +386,7 @@ export function createRpcHandler(deps: RpcDeps): { dispatch(method: string, para
         query,
         ctx: deps.ctx(),
         getRows: () => entry.search.results(),
-        getPending: () => entry.search.pending().length,
+        getPending: () => searchPending(entry.search),
         onApply: (list) => {
           entry.measures = list;
         },

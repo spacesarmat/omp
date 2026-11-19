@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { isRelevant, isSimilar, queryWords, relevantRows, similarRows } from '../../src/sources/relevance';
+import { isRelevant, isSimilar, partitionByYear, queryWords, relevantRows, rowsForQuery, similarRows } from '../../src/sources/relevance';
+import { yearInTitle } from '../../src/sources/queryParse';
 
 describe('search relevance', () => {
   it('query words skip years, resolutions and 1-2 letter words', () => {
@@ -51,6 +52,30 @@ describe('search relevance', () => {
       'Ресторан Ужасов 3 [Anidub]',
     ]);
     expect(isRelevant('Американской истории ужасов S11E01', queryWords(q))).toBe(true);
+  });
+
+  it('on the TV, an asked episode drops other episodes and keeps the season pack', () => {
+    const q = 'Loki S02E03';
+    const rows = [
+      { Title: 'Loki S02E03 1080p' },
+      { Title: 'Loki S02E01 1080p' },
+      { Title: 'Loki S02 1080p' },
+      { Title: 'Loki S01E03 1080p' },
+    ];
+    expect(rowsForQuery(rows, q, ['Loki']).map((r) => r.Title)).toEqual([
+      'Loki S02E03 1080p',
+      'Loki S02 1080p',
+    ]);
+  });
+
+  it('a parenthetical release year beats a number in the title', () => {
+    expect(yearInTitle('Blade Runner 2049 (2017)')).toBe(2017);
+    const rows = [
+      { Title: 'Blade Runner 2049 (2017) 1080p' },
+      { Title: 'Blade Runner (1982) 1080p' },
+    ];
+    expect(partitionByYear(rows, 2017).match.map((r) => r.Title)).toEqual(['Blade Runner 2049 (2017) 1080p']);
+    expect(partitionByYear(rows, 2017).other.map((r) => r.Title)).toEqual(['Blade Runner (1982) 1080p']);
   });
 
   it('keeps every row for a query without meaningful words; drops all junk', () => {

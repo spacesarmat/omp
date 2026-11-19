@@ -13,12 +13,28 @@ export interface ParsedQuery {
   episode: number;
 }
 
-/** First standalone year of 1900-2099, or 0. A resolution (1080, 2160) is not a year. */
-export function yearInTitle(text: string): number {
-  const m = /(?:^|[^0-9])((?:19|20)\d\d)(?![0-9])/.exec(text || '');
-  if (!m) return 0;
-  const y = parseInt(m[1], 10);
+function asYear(raw: string): number {
+  const y = parseInt(raw, 10);
   return y >= 1900 && y <= 2099 ? y : 0;
+}
+
+/**
+ * The release year, or 0. A year in parentheses wins (`2049 (2017)` is 2017):
+ * the bare number can be part of the title. Otherwise the last standalone year.
+ * A resolution (1080, 2160) is not a year.
+ */
+export function yearInTitle(text: string): number {
+  const s = text || '';
+  const paren = /\(((?:19|20)\d\d)\)/.exec(s);
+  if (paren) return asYear(paren[1]);
+  let last = 0;
+  const re = /(?:^|[^0-9])((?:19|20)\d\d)(?![0-9])/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(s))) {
+    const y = asYear(m[1]);
+    if (y) last = y;
+  }
+  return last;
 }
 
 // Prefix is group 1 and is kept. Everything else in the match is a mark we drop.

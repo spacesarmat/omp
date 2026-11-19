@@ -38,14 +38,14 @@ import { noteAlternatePool } from '../viewer/alternates';
 import { connectionMetered, protectWarm, protectWarmLink, shouldPrebuffer, startWarm } from '../viewer/prebuffer';
 import { asWarm } from '../viewer/warmClient';
 import { settings } from '../store/settings';
-import { applySeedRound, watchSeedVerify, type SeedMeasure } from '../sources/seedVerify';
+import { applySeedRound, searchPending, watchSeedVerify, type SeedMeasure } from '../sources/seedVerify';
 import { sortTvResults, stableTvOrder, type TvSortKey } from '../sources/tvSort';
 import { posterKey, requestPoster } from '../catalog/resultPosters';
 import { phoneLink } from '../phone/phoneStore';
 import { PhoneRpcError, phoneRpc } from '../phone/rpc';
 import { rememberSourceNames } from '../sources/sourceNames';
 import { resultSizeText } from '../sources/resultSize';
-import { relevantRowsAny } from '../sources/relevance';
+import { rowsForQuery } from '../sources/relevance';
 import { episodeRole } from '../sources/filters';
 import { parseSearchQuery } from '../sources/queryParse';
 import { resolveTvResult, startTvSearch, type TvResult } from '../phone/phoneSearch';
@@ -345,7 +345,7 @@ export function AddScreen() {
     // a site that ignores the query (its latest list) brings nothing on the screen
     const h: Handle = {
       sourceIds: raw.sourceIds,
-      results: () => relevantRowsAny(raw.results(), raw.queries ? raw.queries() : [q]),
+      results: () => rowsForQuery(raw.results(), q, raw.queries ? raw.queries() : [q]),
       pending: () => raw.pending(),
       answered: () => raw.answered(),
       failed: () => raw.failed(),
@@ -357,7 +357,7 @@ export function AddScreen() {
       query: q,
       ctx: tvSourceContext(),
       getRows: () => h.results(),
-      getPending: () => h.pending().length,
+      getPending: () => searchPending(raw),
       onApply: (list) => {
         seedMeasures.current = list;
         if (alive.current && handle.current === h) sync(h);
@@ -406,7 +406,7 @@ export function AddScreen() {
           query: q,
           ctx: tvSourceContext(),
           getRows: () => h.results(),
-          getPending: () => h.pending().length,
+          getPending: () => searchPending(h),
           onApply: (list) => {
             seedMeasures.current = list;
             if (alive.current && handle.current === h) sync(h);
