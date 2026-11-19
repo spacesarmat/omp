@@ -6,6 +6,7 @@ The English translation covers the latest versions only; the full history (in Ru
 
 ## Unreleased
 
+- [tech] DHT sidecar: persistent routing table on a writable volume (DHT_STATE_FILE, rootfs stays read_only) - the node starts warm after a restart/idle instead of bootstrapping from scratch through filtered UDP ports; more real DHT seeder estimates. Stores only node ip:port:id, atomic write. Compose deploy needs agreement
 - [phone] An omp://billing?code= link no longer activates a subscription automatically: the code is only prefilled in the field and activation takes the Connect button. Prevents binding the device without consent via a stray link
 - [phone] Source search: the plus button is now two buttons, Magnet and Torrent. Magnet opens the link field, Torrent picks a .torrent file
 - [phone] Search filters, series: seasons come from the TMDB season count. A chip is shown only for a season that has releases, with that count (Season 2 · 14). A parsed season above the TMDB count is left out of the filter. Without TMDB, a season stays only when at least two releases name it. Season 0 is shown only when TMDB has specials and a release names them. Full season only stays
