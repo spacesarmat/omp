@@ -3,6 +3,7 @@ import { createSubscription } from '../src/logic.mjs';
 import { createApp } from '../src/server.mjs';
 import { createCacheRepo } from '../src/db/pg/cacheNodesSql.mjs';
 import { createWatchRepo, rankSearchXml } from '../src/db/pg/watchSql.mjs';
+import { voterHash } from '../src/watchRank.mjs';
 import { runWatchFollow } from '../src/watchFollow.mjs';
 import { emptyState } from '../src/state.mjs';
 import { testStore, writeState } from './pg';
@@ -141,5 +142,107 @@ describe('watch signals and rank', () => {
     expect(stale.warmed).toBe(0);
     const admin = await call(app, 'GET', '/admin/api/watch-rank');
     expect(admin.status).toBe(401);
+  });
+
+  it('caps distinct file_index votes per voter+infohash but allows replacements', async () => {
+    const file = await testStore();
+    const repo = createWatchRepo(file);
+    const voter = voterHash('acc-cap', DEV);
+    const now = Date.now();
+    const items = [];
+    for (let i = 0; i < 120; i++) {
+      items.push({
+        infohash: B,
+        fileIndex: i,
+        title: 'Show S01E01 1080p',
+        titleKey: 'show s01e01',
+        season: 1,
+        episode: 1,
+        deviceClass: 'tv',
+        ttffMs: 1000,
+        rebufferN: 0,
+        rebufferMs: 0,
+        watchedPct: 95,
+        completed: true,
+        switched: false,
+        voice: '',
+        codecOk: true,
+        codecs: [],
+      });
+    }
+    const accepted = await repo.saveSignals(voter, items, now);
+    expect(accepted).toBe(100);
+    const cnt = await file.query('SELECT COUNT(*)::int AS n FROM watch_votes WHERE voter = $1 AND infohash = $2', [voter, B]);
+    expect(cnt.rows[0].n).toBe(100);
+    const replaced = await repo.saveSignals(voter, [Object.assign({}, items[0], { watchedPct: 50, completed: false })], now + 1000);
+    expect(replaced).toBe(1);
+    const after = await file.query('SELECT COUNT(*)::int AS n FROM watch_votes WHERE voter = $1 AND infohash = $2', [voter, B]);
+    expect(after.rows[0].n).toBe(100);
+  });
+
+  it('concurrent batches cannot exceed the per-infohash file cap', async () => {
+    const file = await testStore();
+    const repo = createWatchRepo(file);
+    const voter = voterHash('acc-conc', DEV);
+    const mk = (from: number, to: number) => {
+      const a = [];
+      for (let i = from; i < to; i++) {
+        a.push({
+          infohash: B,
+          fileIndex: i,
+          title: 'Show S01E01 1080p',
+          titleKey: 'show s01e01',
+          season: 1,
+          episode: 1,
+          deviceClass: 'tv',
+          ttffMs: 1000,
+          rebufferN: 0,
+          rebufferMs: 0,
+          watchedPct: 95,
+          completed: true,
+          switched: false,
+          voice: '',
+          codecOk: true,
+          codecs: [],
+        });
+      }
+      return a;
+    };
+    const [a, b] = await Promise.all([repo.saveSignals(voter, mk(0, 60), Date.now()), repo.saveSignals(voter, mk(60, 120), Date.now())]);
+    expect(a + b).toBe(100);
+    const cnt = await file.query('SELECT COUNT(*)::int AS n FROM watch_votes WHERE voter = $1 AND infohash = $2', [voter, B]);
+    expect(cnt.rows[0].n).toBe(100);
+  });
+
+  it('concurrent batches listing torrents in opposite order do not deadlock', async () => {
+    const file = await testStore();
+    const repo = createWatchRepo(file);
+    const voter = voterHash('acc-dl', DEV);
+    const mk = (h: string, f: number) => ({
+      infohash: h,
+      fileIndex: f,
+      title: 'Show S01E01 1080p',
+      titleKey: 'show s01e01',
+      season: 1,
+      episode: 1,
+      deviceClass: 'tv',
+      ttffMs: 1000,
+      rebufferN: 0,
+      rebufferMs: 0,
+      watchedPct: 95,
+      completed: true,
+      switched: false,
+      voice: '',
+      codecOk: true,
+      codecs: [],
+    });
+    const [r1, r2] = await Promise.all([
+      repo.saveSignals(voter, [mk(A, 0), mk(B, 0)], Date.now()),
+      repo.saveSignals(voter, [mk(B, 1), mk(A, 1)], Date.now()),
+    ]);
+    expect(r1).toBe(2);
+    expect(r2).toBe(2);
+    const cnt = await file.query('SELECT COUNT(*)::int AS n FROM watch_votes WHERE voter = $1', [voter]);
+    expect(cnt.rows[0].n).toBe(4);
   });
 });
