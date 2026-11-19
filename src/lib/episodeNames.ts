@@ -10,7 +10,8 @@ import { yearOf } from '../monitor/newEpisodes';
 import { findShow } from './tmdbShow';
 import { displayTitle } from './torrentName';
 import { activeCatalog } from '../catalog/activeCatalog';
-import { t } from '../i18n';
+import { lang, t } from '../i18n';
+import { seriesMatchVersion } from './seriesMatch';
 import { airDateText } from './seriesStatus';
 import { parseEpisode, type TorrentFile } from './episodes';
 import { resetSeasonTotals } from './episodesOutOf';
@@ -32,27 +33,41 @@ export interface ShowInfo {
 
 const shows = new Map<string, Promise<ShowInfo | null>>();
 const episodeNames = new Map<string, string>();
+let nameStamp = '';
+
+function namesFresh(): void {
+  const next = lang.peek() + ':' + String(seriesMatchVersion.peek());
+  if (next === nameStamp) return;
+  nameStamp = next;
+  episodeNames.clear();
+}
 
 function episodeNameKey(hash: string, season: number, episode: number): string {
   return hash.toLowerCase() + ':' + season + ':' + episode;
 }
 
-/** A TMDB episode title already loaded for this file. Empty until a lookup has finished. */
+/** A TMDB episode title already loaded for this file, in the current language and show match. */
 export function cachedEpisodeName(hash: string, season: number | null, episode: number | null): string {
+  namesFresh();
   if (!hash || season === null || episode === null) return '';
   return episodeNames.get(episodeNameKey(hash, season, episode)) || '';
 }
 
-/** Remember a real episode title so playback can send it without waiting on TMDB again. */
+/** Remember a real episode title so playback can send it without waiting on TMDB again. An empty name drops the old one. */
 export function rememberEpisodeName(hash: string, season: number, episode: number, name: string): void {
+  if (!hash) return;
+  namesFresh();
+  const key = episodeNameKey(hash, season, episode);
   const real = realEpisodeName(name);
-  if (hash && real) episodeNames.set(episodeNameKey(hash, season, episode), real);
+  if (real) episodeNames.set(key, real);
+  else episodeNames.delete(key);
 }
 
 /** Forget the matched shows (tests). */
 export function resetEpisodeNames(): void {
   shows.clear();
   episodeNames.clear();
+  nameStamp = '';
   resetSeasonTotals();
 }
 

@@ -50,5 +50,5 @@ export function usePlayerHeading(item: PlayItem | undefined): string {
   }, [g ? g.key : '']);
   const fetched = useEpisodeName(n ? n.tor : undefined, n ? n.ep : { season: null, episode: null });
   const passed = item && item.episodeTitle ? item.episodeTitle : '';
-  return n ? playerHeading(n.name, episodeCode(n.ep), passed || fetched) : '';
+  return n ? playerHeading(n.name, episodeCode(n.ep), fetched || passed) : '';
 }

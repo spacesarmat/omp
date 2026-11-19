@@ -3,7 +3,7 @@
 // arrives (and for good when TMDB cannot be reached).
 import { useEffect, useState } from 'preact/hooks';
 import type { Torrent } from '../api/types';
-import { seasonEpisodes, showForTorrent, showOf, type EpisodeMap, type ShowInfo } from './episodeNames';
+import { rememberEpisodeName, seasonEpisodes, showForTorrent, showOf, type EpisodeMap, type ShowInfo } from './episodeNames';
 
 export function useTmdbEpisodes(tor: Torrent | null | undefined, seasons: number[], enabled: boolean, viaSeries = false): { show: ShowInfo | null; eps: EpisodeMap } {
   const [show, setShow] = useState<ShowInfo | null>(null);
@@ -24,7 +24,16 @@ export function useTmdbEpisodes(tor: Torrent | null | undefined, seasons: number
     if (!show || !wanted) return;
     let alive = true;
     seasons.forEach((n) => {
-      seasonEpisodes(show, n).then((m) => alive && setEps((cur) => ({ ...cur, [n]: m })));
+      seasonEpisodes(show, n).then((m) => {
+        if (!alive) return;
+        if (hash) {
+          Object.keys(m).forEach((k) => {
+            const row = m[+k];
+            rememberEpisodeName(hash, n, +k, row && row.title ? row.title : '');
+          });
+        }
+        setEps((cur) => ({ ...cur, [n]: m }));
+      });
     });
     return () => {
       alive = false;
