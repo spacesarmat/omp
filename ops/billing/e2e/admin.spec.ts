@@ -84,10 +84,20 @@ test('login, every section, revoke confirm, and the subscription rate', async ({
     }
 
     await page.goto(origin + '/admin/settings', { waitUntil: 'domcontentloaded' });
-    await expect(page.getByText(/подписка \d+/)).toBeVisible();
+    const rateLine = page.getByText(/подписка \d+/);
+    await expect(rateLine).toBeVisible();
+    const before = ((await rateLine.innerText()).match(/подписка (\d+)/) || [])[1];
+    expect(before).toBeTruthy();
     await page.locator('#priceRub').fill('250');
+    const saved = page.waitForResponse((res) => res.request().method() === 'POST' && res.url().indexOf('/admin/settings') >= 0);
+    const refreshed = page.waitForResponse((res) => res.request().method() === 'GET' && res.url().indexOf('/admin/api/home') >= 0);
     await page.getByRole('button', { name: 'Сохранить' }).first().click();
-    await expect(page.getByText(/подписка \d+/)).toBeVisible();
+    await saved;
+    await refreshed;
+    await expect(rateLine).toContainText('подписка ');
+    const after = ((await rateLine.innerText()).match(/подписка (\d+)/) || [])[1];
+    expect(after).toBeTruthy();
+    expect(after).not.toBe(before);
 
     await page.goto(origin + '/admin/promos', { waitUntil: 'domcontentloaded' });
     const dialog = page.getByRole('dialog', { name: 'Отозвать промокод' });
