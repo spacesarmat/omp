@@ -4,6 +4,10 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## Unreleased
+
+- [tech] Watch history, progress, chosen audio, skip settings, a manual TMDB match, renames and monitoring flags stay on the device and work without TorrServer. The first launch copies them from the server once. Subscribers sync them through billing. An admin switch chooses subscribers only or everyone, and subscribers only is the default. Without a subscription the data stays on the device and sync stops
+
 ## 0.30.1-beta.16
 
 - [phone] A library series is more likely to match the right TMDB show: an exact title beats a title that only contains the word, for any short name, not one show. Season, episode length, popularity and 4K count. A rename searches again. "Not this series?" is on the torrent page too. "+ Season" searches the English and the local title

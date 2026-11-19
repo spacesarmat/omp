@@ -764,6 +764,7 @@ export function SettingsCard({
   const [cryptoOn, setCryptoOn] = useState(false);
   const [cryptoTest, setCryptoTest] = useState(false);
   const [cryptoAbroad, setCryptoAbroad] = useState(false);
+  const [syncAudience, setSyncAudience] = useState('subscribers');
   const dirty = useRef(false);
   /** Lowering the base: what it does, asked before saving (the server refuses it without confirm=yes too). */
   const [lower, setLower] = useState<BaseImpact | null>(null);
@@ -776,6 +777,7 @@ export function SettingsCard({
       cryptoTestnet: cryptoTest ? 'true' : 'false',
       cryptoNonRu: cryptoAbroad ? 'true' : 'false',
       ...(confirm ? { confirm: 'yes' } : {}),
+      syncAudience,
     }).then((res) => {
       if (!res?.flash?.error) dirty.current = false;
       return res;
@@ -802,6 +804,7 @@ export function SettingsCard({
     setCryptoOn(settings.cryptoEnabled === true);
     setCryptoTest(settings.cryptoTestnet === true);
     setCryptoAbroad(settings.cryptoNonRu === true);
+    setSyncAudience(settings.syncAudience === 'all' ? 'all' : 'subscribers');
   }, [settings, rates]);
   return (
     <form
@@ -825,6 +828,13 @@ export function SettingsCard({
         Хранилище: {storage?.engine || '-'}
         {storage?.path ? ' · ' + storage.path : ''}
       </p>
+      <label className="flex items-center gap-2 text-sm">
+        Синхронизация
+        <select className="rounded border px-2 py-1" value={syncAudience} onChange={(e) => { dirty.current = true; setSyncAudience(e.target.value); }}>
+          <option value="subscribers">только подписчики</option>
+          <option value="all">все</option>
+        </select>
+      </label>
       {SETTING_GROUPS.map((group) => (
         <Card key={group.title}>
           <CardHeader>

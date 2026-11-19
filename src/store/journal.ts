@@ -11,6 +11,8 @@ import { t } from '../i18n';
 import { newestSeriesTracks, nextSeriesTracks, withSeriesTracks, sameDub, type SeriesTracks, type SeriesTracksPatch } from '../lib/seriesTracks';
 import { readVoice, withSeasonVoice } from '../lib/seasonVoice';
 import { enqueueTorrentWrite, torrentWriteSettled } from '../lib/dataQueue';
+import { putDeviceRecords } from './deviceDb';
+import { recordsForEdit } from './migrateRemembered';
 
 export interface JournalClient {
   list(): Promise<Torrent[]>;
@@ -26,13 +28,18 @@ function enqueue(hash: string, job: () => Promise<void>): Promise<void> {
 }
 
 /** Keeps the library copy in step, so «История» shows the write without waiting for the next refresh. */
-function patchLibrary(hash: string, data: string): void {
+function patchLibrary(hash: string, data: string, drop?: string[]): void {
   const list = torrents.value;
   for (let i = 0; i < list.length; i++) {
     if (list[i].hash === hash) {
       const copy = list.slice();
       copy[i] = { ...list[i], data };
       torrents.value = copy;
+      try {
+        putDeviceRecords(recordsForEdit({ hash, title: copy[i].title, data }, Date.now(), drop));
+      } catch (e) {
+        /* the server copy is already stored */
+      }
       return;
     }
   }
@@ -71,8 +78,19 @@ function update(c: JournalClient, hash: string, change: (j: JournalEntry[]) => J
 
 /** Records «watched `entry.f` up to `entry.t`» now; resolves when written or failed (never rejects). */
 export function recordWatch(c: JournalClient | null, hash: string, entry: Omit<JournalEntry, 'at'>, now?: number): Promise<void> {
+  const at = now === undefined ? Date.now() : now;
+  if (hash) {
+    putDeviceRecords([{
+      id: 'journal:' + hash.toLowerCase() + ':' + entry.f + ':' + entry.src,
+      kind: 'journal',
+      key: hash.toLowerCase(),
+      body: { f: entry.f, t: entry.t, d: entry.d, at, src: entry.src, name: entry.name || '' },
+      updatedAt: at,
+      deviceId: 'local',
+    }]);
+  }
   if (!c || !hash) return Promise.resolve();
-  return update(c, hash, (j) => addEntry(j, entry, now === undefined ? Date.now() : now));
+  return update(c, hash, (j) => addEntry(j, entry, at));
 }
 
 /** «Убрать из истории»: drops every entry of the file (shown right away, written in the background). */
@@ -80,6 +98,24 @@ export function forgetWatch(c: JournalClient | null, hash: string, f: number): P
   const t = torrents.value.filter((x) => x.hash === hash)[0];
   const local = t ? parseData(t.data) : null;
   if (local && local.journal.some((e) => e.f === f)) patchLibrary(hash, serializeData(local.obj, removeFile(local.journal, f), local.skip));
+    const at = Date.now();
+    putDeviceRecords([{
+      id: 'journal:' + hash.toLowerCase() + ':' + f + ':phone',
+      kind: 'journal',
+      key: hash.toLowerCase(),
+      body: {},
+      updatedAt: at,
+      deviceId: 'local',
+      deleted: true,
+    }, {
+      id: 'journal:' + hash.toLowerCase() + ':' + f + ':tv',
+      kind: 'journal',
+      key: hash.toLowerCase(),
+      body: {},
+      updatedAt: at,
+      deviceId: 'local',
+      deleted: true,
+    }]);
   if (!c || !hash) return Promise.resolve();
   return update(c, hash, (j) => removeFile(j, f));
 }
@@ -151,6 +187,7 @@ export function loadQualityWatch(c: Pick<JournalClient, 'list'>, hash: string): 
 }
 
 interface OmpFlag {
+  kind: string;
   read: (data: string | undefined | null) => boolean;
   write: (obj: { [k: string]: unknown }, on: boolean) => { [k: string]: unknown };
 }
@@ -168,7 +205,7 @@ function saveFlag(c: JournalClient, torrent: Pick<Torrent, 'hash'>, on: boolean,
       const base = baseOf(tor, parsed);
       const data = serializeData(flag.write(base.obj, on), base.journal, base.skip);
       return c.setData(tor, data).then(() => {
-        patchLibrary(tor.hash, data);
+        patchLibrary(tor.hash, data, on ? [flag.kind] : undefined);
         return on;
       });
     }),
@@ -180,12 +217,12 @@ function saveFlag(c: JournalClient, torrent: Pick<Torrent, 'hash'>, on: boolean,
  * settings and every other key of `data` are kept. Rejects on failure, like saveSkip.
  */
 export function saveWatch(c: JournalClient, torrent: Pick<Torrent, 'hash'>, watch: boolean): Promise<boolean> {
-  return saveFlag(c, torrent, watch, { read: watchesNewEpisodes, write: withWatch });
+  return saveFlag(c, torrent, watch, { kind: 'watch', read: watchesNewEpisodes, write: withWatch });
 }
 
 /** «Следить за качеством» of a film: false writes omp.q: false, true removes it. Rejects on failure. */
 export function saveQualityWatch(c: JournalClient, torrent: Pick<Torrent, 'hash'>, watch: boolean): Promise<boolean> {
-  return saveFlag(c, torrent, watch, { read: watchesBetterQuality, write: withQualityWatch });
+  return saveFlag(c, torrent, watch, { kind: 'quality', read: watchesBetterQuality, write: withQualityWatch });
 }
 
 /**
@@ -230,7 +267,7 @@ export function rememberTrackerSeeds(
 
 /** The category was picked by hand: writes omp.cm, so the automatic category check leaves it. Rejects on failure. */
 export function saveCategoryPicked(c: JournalClient, torrent: Pick<Torrent, 'hash'>): Promise<boolean> {
-  return saveFlag(c, torrent, true, { read: categoryPicked, write: withCategoryPicked });
+  return saveFlag(c, torrent, true, { kind: 'category', read: categoryPicked, write: withCategoryPicked });
 }
 
 /**

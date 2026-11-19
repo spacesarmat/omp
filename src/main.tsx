@@ -1,5 +1,6 @@
 import { render } from 'preact';
 import { init } from '@noriginmedia/norigin-spatial-navigation';
+import { runDeviceSync } from './billing/deviceSyncClient';
 import './styles.css';
 import { App } from './app';
 import { activeServer } from './store/servers';
@@ -13,6 +14,7 @@ import { nativeTlsProbe, setTlsProbe } from './api/tlsProbe';
 import { certQuestionText, installTorrServerTls } from './api/torrServerTls';
 import { confirmWithBody } from './ui/dialog';
 import { installCleartextSync } from './cleartextSync';
+import { hydrateDeviceDb } from './store/deviceDb';
 import { installErrorHooks, log, logStart } from './lib/log';
 import { t } from './i18n';
 import { setCatalogProvider } from './catalog/activeCatalog';
@@ -38,6 +40,7 @@ if (typeof w.queueMicrotask !== 'function') {
 
 init({ debug: false, visualDebug: false });
 ensureFirstRun();
+hydrateDeviceDb(() => { runDeviceSync(); });
 installTvAds();
 
 // The phone page registers saved HTTP hosts itself. This UI is what Android TV loads.

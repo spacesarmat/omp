@@ -9,6 +9,8 @@ import { cleanReleaseTitles, fixPlaceholderTitles, type TitleClient } from '../l
 import { fixCategories, type CategoryClient } from '../lib/categoryCheck';
 import { t } from '../i18n';
 import { rememberListed } from '../lib/knownFiles';
+import { migrateRemembered } from './migrateRemembered';
+import { progressSnapshot } from './progress';
 
 const KEY = 'tsp.torrents';
 const AT_KEY = 'tsp.torrentsAt';
@@ -108,6 +110,11 @@ export function refreshTorrents(c: { list(): Promise<Torrent[]> } & Partial<Titl
       if (my !== gen) return sorted;
       inflight = null;
       torrents.value = sorted;
+      try {
+        migrateRemembered(sorted, progressSnapshot(), true);
+      } catch (e) {
+        /* a bad torrent bag must not block the list */
+      }
       // the files of the releases TorrServer works on now, for when one stops answering (knownFiles)
       rememberListed(sorted);
       torrentsAt.value = Date.now();

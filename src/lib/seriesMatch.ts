@@ -14,6 +14,7 @@ import { parseReleaseInfo } from './releaseInfo';
 import type { ShowFacts } from './tmdbShow';
 import type { CatalogCard, CatalogTitle } from '../catalog/tmdb';
 import { seriesKey, type SeriesGroup } from './seriesGroups';
+import { putDeviceRecords } from '../store/deviceDb';
 
 const matches = new Map<string, CatalogCard | null>();
 // The show the person picked, written before its card request returns. A lookup that was already running
@@ -65,6 +66,25 @@ function remember(key: string, card: CatalogCard | null, manual?: boolean, stamp
   if (keys.length > SAVED_MAX) {
     keys.filter((k) => !map[k].m).sort((a, b) => map[a].at - map[b].at).slice(0, Math.max(0, keys.length - SAVED_MAX)).forEach((k) => delete map[k]);
   }
+  saveJson(SAVED_KEY, map);
+  if (map[key].m && map[key].id > 0) {
+    putDeviceRecords([{
+      id: 'match:' + key,
+      kind: 'match',
+      key,
+      body: { id: map[key].id, q: map[key].q || '' },
+      updatedAt: map[key].at,
+      deviceId: 'local',
+    }]);
+  }
+}
+
+/** A match pulled from another device. A newer local choice is kept. */
+export function applySyncedMatch(key: string, id: number, q: string, at: number): void {
+  const map = savedMap();
+  const prev = map[key];
+  if (prev && prev.at >= at) return;
+  map[key] = { id, s: prev && prev.s ? prev.s : '', at, m: true, q: q || (prev && prev.q) || '' };
   saveJson(SAVED_KEY, map);
 }
 
