@@ -746,6 +746,30 @@ describe('Remote with a TV', () => {
     expect(a.click).toHaveBeenCalledTimes(1);
   });
 
+  it('a paused OMP video resumes on the first tap and follows the TV', () => {
+    saveTv({ ip: '192.168.1.5', name: 'LG OLED' });
+    const paused = { title: 'Тишина', subtitle: '', time: 10, duration: 100, paused: true, buffering: false, hash: 'h', file: 1 };
+    nowPlaying.value = paused as any;
+    lastSeen.value = Date.now();
+    mount();
+    expect(lbl('Воспроизвести')).toBeTruthy();
+    expect(lbl('Пауза')).toBeNull();
+    click(lbl('Воспроизвести'));
+    expect(a.pressButton).not.toHaveBeenCalled();
+    expect(nowPlaying.value && nowPlaying.value.paused).toBe(false);
+    expect(lbl('Пауза')).toBeTruthy();
+    act(() => {
+      nowPlaying.value = { ...paused, paused: true } as any;
+    });
+    expect(lbl('Воспроизвести')).toBeTruthy();
+    click(text('Тачпад'));
+    click(lbl('Воспроизвести'));
+    expect(a.pressButton).not.toHaveBeenCalled();
+    expect(nowPlaying.value && nowPlaying.value.paused).toBe(false);
+    nowPlaying.value = null;
+    lastSeen.value = 0;
+  });
+
   it('play/pause label stays when the press fails', async () => {
     mount();
     a.pressButton.mockRejectedValueOnce(new Error('нет связи'));
