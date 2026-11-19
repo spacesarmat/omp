@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { yandexClip } from '../src/ads/yandexNative';
+import { yandexClip, yandexVisiblePlace } from '../src/ads/yandexNative';
 
 function box(top: number, bottom: number): DOMRect {
   return { top, bottom, left: 0, right: 100, width: 100, height: bottom - top, x: 0, y: top, toJSON: () => ({}) } as DOMRect;
@@ -25,6 +25,12 @@ describe('yandex clip', () => {
     expect(clip.top).toBe(120);
     expect(clip.bottom).toBe(640);
     expect(clip.bottom).toBeGreaterThan(clip.top);
+  });
+
+  it('keeps the full card size and only reports the clip window', () => {
+    const box = yandexVisiblePlace({ left: 12, top: 80, width: 160, height: 220 }, { top: 120, bottom: 640, blocked: false });
+    expect(box).toEqual({ x: 12, y: 80, width: 160, height: 220, clipTop: 120, clipBottom: 640 });
+    expect(yandexVisiblePlace({ left: 0, top: 700, width: 100, height: 40 }, { top: 120, bottom: 640, blocked: false })).toBeNull();
   });
 
   it('blocks the whole strip while a sheet is open', () => {

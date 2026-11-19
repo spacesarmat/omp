@@ -4,7 +4,7 @@
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { adPositions, adsFor, phoneYandexGroup, pickBanner, railPositions, type AdBanner, type AdSection } from '../../../src/ads/ads';
 import { adEvent } from '../../../src/ads/events';
-import { groupPlacement, impressionsLeft, noteYandexImpression, slotFill, yandexSlotId, yandexUnit } from '../../../src/ads/yandex';
+import { groupPlacement, impressionsLeft, noteYandexImpression, slotFill, yandexShouldLoad, yandexSlotId, yandexUnit } from '../../../src/ads/yandex';
 import { hideAllYandex, hideYandexSlot, loadYandexSlot, yandexOs } from './yandexNative';
 import { APP_VERSION } from '../../../src/version';
 import { ACCESS_KEY, ompSubscribed } from '../../../src/billing/entitlement';
@@ -89,6 +89,7 @@ export function useAdSlots(o: AdSlotOptions): AdSlots {
   const [subscribed, setSubscribed] = useState(() => ompSubscribed());
   const fills = useRef<{ [pos: number]: 'loading' | 'ready' | 'fail' }>({});
   const [fillTick, setFillTick] = useState(0);
+  const [nearTick, setNearTick] = useState(0);
   const [capTick, setCapTick] = useState(0);
 
   // the config is read while a catalog screen is open: the cached one now, the server's a moment later (not
@@ -244,16 +245,37 @@ export function useAdSlots(o: AdSlotOptions): AdSlots {
     const listKey = opts.current.listKey;
     const unit = yandexUnit(cfg.yandex, os);
     const shape = opts.current.layout === 'row' ? 'row' : 'card';
+    const viewport = window.innerHeight || document.documentElement.clientHeight || 0;
+    const shown = adm.key === listKey ? adm.list : [];
+    const rectOf = (p: number) => {
+      const el = opts.current.itemEl(p);
+      if (!el) return null;
+      const r = el.getBoundingClientRect();
+      return { top: r.top, bottom: r.bottom };
+    };
+    const near = (p: number) => yandexShouldLoad(rectOf(p), viewport);
+    for (let i = 0; i < positions.length; i++) {
+      const p = positions[i];
+      if (fills.current[p] !== 'ready' || shown.indexOf(p) >= 0 || near(p)) continue;
+      const id = slotIds.current[p];
+      if (id) hideYandexSlot(id);
+      delete fills.current[p];
+      delete slotIds.current[p];
+    }
+    const group = yRef.current;
+    const left = group ? impressionsLeft(group, audRef.current, Date.now()) : Number.POSITIVE_INFINITY;
+    let queued = 0;
     const todo: number[] = [];
     let inflight = 0;
     for (let i = 0; i < positions.length; i++) {
       const p = positions[i];
       const st = fills.current[p];
+      if ((st === 'loading' || st === 'ready') && !seenPos(p)) queued++;
       if (st === 'loading') inflight++;
-      else if (st === undefined) todo.push(p);
+      else if (st === undefined && near(p)) todo.push(p);
     }
-    // Two at a time. fillTick is a dependency so a finished request starts the next positions.
-    const room = 2 - inflight;
+    // Two at a time, and never more unshown ads than the group may still show.
+    const room = Math.min(2 - inflight, left - queued);
     for (let i = 0; i < todo.length && i < room; i++) {
       const p = todo[i];
       fills.current[p] = 'loading';
@@ -268,7 +290,40 @@ export function useAdSlots(o: AdSlotOptions): AdSlots {
         setFillTick((n) => n + 1);
       });
     }
-  }, [positions.join(','), yKey, o.listKey, fillTick]);
+    let frame = 0;
+    const poke = () => {
+      frame = 0;
+      const allowance = yRef.current ? impressionsLeft(yRef.current, audRef.current, Date.now()) : 0;
+      let held = 0;
+      for (let i = 0; i < positions.length; i++) {
+        const st = fills.current[positions[i]];
+        if ((st === 'loading' || st === 'ready') && !seenPos(positions[i])) held++;
+      }
+      if (!(allowance - held > 0)) return;
+      const h = window.innerHeight || document.documentElement.clientHeight || 0;
+      for (let i = 0; i < positions.length; i++) {
+        const p = positions[i];
+        if (fills.current[p] !== undefined) continue;
+        const el = opts.current.itemEl(p);
+        if (!el) continue;
+        const r = el.getBoundingClientRect();
+        if (!yandexShouldLoad({ top: r.top, bottom: r.bottom }, h)) continue;
+        setNearTick((n) => n + 1);
+        return;
+      }
+    };
+    const onScroll = () => {
+      if (!frame) frame = requestAnimationFrame(poke);
+    };
+    const how = { passive: true, capture: true };
+    window.addEventListener('scroll', onScroll, how);
+    window.addEventListener('resize', onScroll);
+    return () => {
+      if (frame) cancelAnimationFrame(frame);
+      window.removeEventListener('scroll', onScroll, how);
+      window.removeEventListener('resize', onScroll);
+    };
+  }, [positions.join(','), yKey, o.listKey, fillTick, nearTick, adm.list.join(',')]);
   useEffect(() => {
     if (!released.length) return;
     const k = opts.current.listKey;

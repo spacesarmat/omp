@@ -114,6 +114,15 @@ export function groupPlacement(group: YandexGroup): { everyN: number; firstAfter
  * Native slot id. Short on purpose: Android keeps 80 characters and a discover filter key is longer than that.
  * The same id is used for load, place and hide.
  */
+/** A position is worth a request when its card is within one screen above and two screens below. */
+export function yandexShouldLoad(rect: { top: number; bottom: number } | null, viewport: number): boolean {
+  if (!rect) return false;
+  const h = viewport > 0 ? viewport : 800;
+  if (rect.bottom < -h) return false;
+  if (rect.top > h * 3) return false;
+  return true;
+}
+
 export function yandexSlotId(pos: number, gen: number): string {
   const p = pos < 0 ? 0 : Math.floor(pos);
   const g = gen < 0 ? 0 : Math.floor(gen);

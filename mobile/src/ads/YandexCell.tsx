@@ -3,7 +3,7 @@
 import { useEffect, useRef } from 'preact/hooks';
 import { t } from '../../../src/i18n';
 import type { AdCellKind } from './AdCell';
-import { concealYandexSlot, hideYandexSlot, placeYandexSlot, yandexClip } from './yandexNative';
+import { concealYandexSlot, hideYandexSlot, placeYandexSlot, yandexClip, yandexVisiblePlace } from './yandexNative';
 
 const SHOWN_MS = 1000;
 
@@ -21,14 +21,13 @@ export function YandexCell({ kind, slotId, onShown }: { kind: AdCellKind; slotId
       const clip = yandexClip();
       const r = el.getBoundingClientRect();
       const viewportWidth = document.documentElement.clientWidth || window.innerWidth || r.width;
-      const y = Math.max(r.top, clip.top);
-      const height = Math.min(r.bottom, clip.bottom) - y;
-      // A sheet, the sticky header or the tab bar must stay above the native ad.
-      if (clip.blocked || height < 8 || r.width < 8) {
+      // The ad keeps the card's full size. A separate native container clips it to the catalog.
+      const box = yandexVisiblePlace({ left: r.left, top: r.top, width: r.width, height: r.height }, clip);
+      if (!box) {
         concealYandexSlot(slotId);
         return;
       }
-      placeYandexSlot(slotId, { x: r.left, y, width: r.width, height, viewportWidth });
+      placeYandexSlot(slotId, { ...box, viewportWidth });
     };
     const onScroll = () => {
       if (!frame) frame = requestAnimationFrame(place);

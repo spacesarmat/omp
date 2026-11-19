@@ -23,10 +23,14 @@ public class YandexAdsPlugin: CAPPlugin, CAPBridgedPlugin {
         let loader: NativeAdLoader
         let ad: NativeAd
         let view: OmpNativeAdView
+        let clip = UIView(frame: .zero)
         init(loader: NativeAdLoader, ad: NativeAd, view: OmpNativeAdView) {
             self.loader = loader
             self.ad = ad
             self.view = view
+            clip.clipsToBounds = true
+            clip.backgroundColor = .clear
+            clip.addSubview(view)
         }
     }
 
@@ -61,7 +65,7 @@ public class YandexAdsPlugin: CAPPlugin, CAPBridgedPlugin {
                         ad.delegate = nil
                         do {
                             try ad.bind(with: view)
-                            self.slots[slotId]?.view.removeFromSuperview()
+                            self.slots[slotId]?.clip.removeFromSuperview()
                             self.slots[slotId] = Slot(loader: loader, ad: ad, view: view)
                             if view.sponsoredLabel?.text?.isEmpty != false {
                                 view.sponsoredLabel?.text = "Реклама"
@@ -88,6 +92,8 @@ public class YandexAdsPlugin: CAPPlugin, CAPBridgedPlugin {
             call.reject("bad-rect")
             return
         }
+        let clipTop = call.getDouble("clipTop") ?? y
+        let clipBottom = call.getDouble("clipBottom") ?? (y + height)
         DispatchQueue.main.async { [weak self] in
             guard let self = self, let slot = self.slots[slotId], let web = self.bridge?.webView else {
                 call.reject("gone")
@@ -98,15 +104,30 @@ public class YandexAdsPlugin: CAPPlugin, CAPBridgedPlugin {
                 return
             }
             let scale = viewport > 0 ? web.bounds.width / CGFloat(viewport) : 1
-            if slot.view.superview !== host {
-                slot.view.removeFromSuperview()
-                host.addSubview(slot.view)
+            let visTop = max(y, clipTop)
+            let visBottom = min(y + height, clipBottom)
+            let visHeight = visBottom - visTop
+            if visHeight < 1 || width < 1 {
+                slot.clip.isHidden = true
+                call.resolve()
+                return
+            }
+            if slot.clip.superview !== host {
+                slot.clip.removeFromSuperview()
+                host.addSubview(slot.clip)
             }
             let origin = web.convert(CGPoint.zero, to: host)
+            slot.clip.isHidden = false
             slot.view.isHidden = false
-            slot.view.frame = CGRect(
+            slot.clip.frame = CGRect(
                 x: origin.x + CGFloat(x) * scale,
-                y: origin.y + CGFloat(y) * scale,
+                y: origin.y + CGFloat(visTop) * scale,
+                width: max(1, CGFloat(width) * scale),
+                height: max(1, CGFloat(visHeight) * scale)
+            )
+            slot.view.frame = CGRect(
+                x: 0,
+                y: CGFloat(y - visTop) * scale,
                 width: max(1, CGFloat(width) * scale),
                 height: max(1, CGFloat(height) * scale)
             )
@@ -120,7 +141,7 @@ public class YandexAdsPlugin: CAPPlugin, CAPBridgedPlugin {
             return
         }
         DispatchQueue.main.async { [weak self] in
-            self?.slots[slotId]?.view.isHidden = true
+            self?.slots[slotId]?.clip.isHidden = true
             call.resolve()
         }
     }
@@ -131,14 +152,14 @@ public class YandexAdsPlugin: CAPPlugin, CAPBridgedPlugin {
             return
         }
         DispatchQueue.main.async { [weak self] in
-            self?.slots.removeValue(forKey: slotId)?.view.removeFromSuperview()
+            self?.slots.removeValue(forKey: slotId)?.clip.removeFromSuperview()
             call.resolve()
         }
     }
 
     @objc func hideAll(_ call: CAPPluginCall) {
         DispatchQueue.main.async { [weak self] in
-            self?.slots.values.forEach { $0.view.removeFromSuperview() }
+            self?.slots.values.forEach { $0.clip.removeFromSuperview() }
             self?.slots.removeAll()
             call.resolve()
         }

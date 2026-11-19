@@ -8,6 +8,28 @@ export interface YandexRect {
   width: number;
   height: number;
   viewportWidth: number;
+  /** The native view stays the full card. The host clips it to this window. */
+  clipTop: number;
+  clipBottom: number;
+}
+
+/** Full card box when enough of it is inside the clip. Null means conceal. */
+export function yandexVisiblePlace(
+  card: { left: number; top: number; width: number; height: number },
+  clip: { top: number; bottom: number; blocked: boolean },
+): { x: number; y: number; width: number; height: number; clipTop: number; clipBottom: number } | null {
+  if (clip.blocked || card.width < 8 || card.height < 8) return null;
+  const visTop = Math.max(card.top, clip.top);
+  const visBottom = Math.min(card.top + card.height, clip.bottom);
+  if (visBottom - visTop < 8) return null;
+  return {
+    x: card.left,
+    y: card.top,
+    width: card.width,
+    height: card.height,
+    clipTop: clip.top,
+    clipBottom: clip.bottom,
+  };
 }
 
 interface YandexPlugin {

@@ -678,6 +678,29 @@ describe('yandex native ads on the phone', () => {
     expect(el.querySelectorAll('.m-ad')).toHaveLength(0);
   });
 
+  it('does not load more native ads than the session cap allows', async () => {
+    let n = 0;
+    saveAdsConfig({
+      ...yandexConfig,
+      yandexAds: {
+        ...yandexConfig.yandexAds,
+        groups: {
+          ...yandexConfig.yandexAds.groups,
+          free: { ...yandexConfig.yandexAds.groups.free, maxPerSession: 1 },
+        },
+      },
+    });
+    setYandexOsForTests('android');
+    setYandexLoaderForTests(async () => {
+      n += 1;
+      return true;
+    });
+    adsConfig.value = cachedAdsConfig();
+    mount(<Library />);
+    for (let i = 0; i < 8; i++) await flush();
+    expect(n).toBe(1);
+  });
+
   it('asks Yandex for the later cards after the first two requests finish', async () => {
     let n = 0;
     saveAdsConfig({

@@ -12,6 +12,7 @@ import {
   sanitizeYandexAds,
   slotFill,
   tvLinkedMode,
+  yandexShouldLoad,
   yandexSlotId,
   yandexUnit,
 } from '../../src/ads/yandex';
@@ -125,6 +126,12 @@ describe('what fills the card', () => {
     expect(slotFill({ yandexReady: false, yandexFailed: true, house: true, fallback: false })).toBe('none');
     expect(slotFill({ yandexReady: false, yandexFailed: true, house: false, fallback: true })).toBe('none');
     expect(slotFill({ yandexReady: false, yandexFailed: false, house: true, fallback: true })).toBe('none');
+  });
+
+  it('loads a card near the screen and skips one far down the list', () => {
+    expect(yandexShouldLoad({ top: 900, bottom: 1100 }, 800)).toBe(true);
+    expect(yandexShouldLoad({ top: 5000, bottom: 5200 }, 800)).toBe(false);
+    expect(yandexShouldLoad(null, 800)).toBe(false);
   });
 
   it('builds a short slot id that does not include the filter key', () => {

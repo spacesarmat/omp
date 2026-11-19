@@ -25,7 +25,7 @@ import com.yandex.mobile.ads.nativeads.NativeAdViewBinder
  */
 @CapacitorPlugin(name = "YandexAds")
 class YandexAdsPlugin : Plugin() {
-    private class Slot(val loader: NativeAdLoader, val ad: NativeAd, val view: NativeAdView)
+    private class Slot(val loader: NativeAdLoader, val ad: NativeAd, val view: NativeAdView, val clip: FrameLayout)
 
     private val slots = HashMap<String, Slot>()
     private val waiters = ArrayList<() -> Unit>()
@@ -55,8 +55,12 @@ class YandexAdsPlugin : Plugin() {
                                 call.reject("bind")
                                 return@runOnUiThread
                             }
-                            slots[slotId]?.view?.let { (it.parent as? ViewGroup)?.removeView(it) }
-                            slots[slotId] = Slot(loader, nativeAd, root)
+                            slots[slotId]?.let { old -> (old.clip.parent as? ViewGroup)?.removeView(old.clip) }
+                            val clip = FrameLayout(act)
+                            clip.clipChildren = true
+                            clip.clipToPadding = true
+                            clip.addView(root, FrameLayout.LayoutParams(1, 1))
+                            slots[slotId] = Slot(loader, nativeAd, root, clip)
                             call.resolve()
                             }
                         }
@@ -79,6 +83,8 @@ class YandexAdsPlugin : Plugin() {
         val width = call.getDouble("width")
         val height = call.getDouble("height")
         val viewport = call.getDouble("viewportWidth")
+        val clipTop = call.getDouble("clipTop")
+        val clipBottom = call.getDouble("clipBottom")
         if (x == null || y == null || width == null || height == null || viewport == null) return call.reject("bad-rect")
         act.runOnUiThread {
             val slot = slots[slotId] ?: return@runOnUiThread call.reject("gone")
@@ -89,18 +95,34 @@ class YandexAdsPlugin : Plugin() {
             web.getLocationOnScreen(webLoc)
             host.getLocationOnScreen(hostLoc)
             val scale = if (viewport > 0) web.width.toDouble() / viewport else web.resources.displayMetrics.density.toDouble()
-            val view = slot.view
-            if (view.parent !== host) {
-                (view.parent as? ViewGroup)?.removeView(view)
-                host.addView(view, FrameLayout.LayoutParams(1, 1))
+            val top = clipTop ?: y
+            val bottom = clipBottom ?: (y + height)
+            val visTop = maxOf(y, top)
+            val visBottom = minOf(y + height, bottom)
+            val visHeight = visBottom - visTop
+            if (visHeight < 1 || width < 1) {
+                slot.clip.visibility = View.GONE
+                call.resolve()
+                return@runOnUiThread
             }
-            val lp = view.layoutParams as FrameLayout.LayoutParams
+            if (slot.clip.parent !== host) {
+                (slot.clip.parent as? ViewGroup)?.removeView(slot.clip)
+                host.addView(slot.clip, FrameLayout.LayoutParams(1, 1))
+            }
+            val lp = slot.clip.layoutParams as FrameLayout.LayoutParams
             lp.width = (width * scale).toInt().coerceAtLeast(1)
-            lp.height = (height * scale).toInt().coerceAtLeast(1)
-            view.layoutParams = lp
-            view.x = (webLoc[0] - hostLoc[0] + x * scale).toFloat()
-            view.y = (webLoc[1] - hostLoc[1] + y * scale).toFloat()
-            view.visibility = View.VISIBLE
+            lp.height = (visHeight * scale).toInt().coerceAtLeast(1)
+            slot.clip.layoutParams = lp
+            slot.clip.x = (webLoc[0] - hostLoc[0] + x * scale).toFloat()
+            slot.clip.y = (webLoc[1] - hostLoc[1] + visTop * scale).toFloat()
+            val inner = slot.view.layoutParams as FrameLayout.LayoutParams
+            inner.width = (width * scale).toInt().coerceAtLeast(1)
+            inner.height = (height * scale).toInt().coerceAtLeast(1)
+            slot.view.layoutParams = inner
+            slot.view.x = 0f
+            slot.view.y = ((y - visTop) * scale).toFloat()
+            slot.view.visibility = View.VISIBLE
+            slot.clip.visibility = View.VISIBLE
             call.resolve()
         }
     }
@@ -110,7 +132,7 @@ class YandexAdsPlugin : Plugin() {
         val slotId = call.getString("slotId") ?: return call.reject("bad-slot")
         val act = activity ?: return call.resolve()
         act.runOnUiThread {
-            slots[slotId]?.view?.visibility = View.GONE
+            slots[slotId]?.clip?.visibility = View.GONE
             call.resolve()
         }
     }
@@ -206,7 +228,7 @@ class YandexAdsPlugin : Plugin() {
 
     private fun drop(slotId: String) {
         val slot = slots.remove(slotId) ?: return
-        (slot.view.parent as? ViewGroup)?.removeView(slot.view)
+        (slot.clip.parent as? ViewGroup)?.removeView(slot.clip)
     }
 
     private fun clear() {
