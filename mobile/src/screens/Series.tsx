@@ -54,7 +54,7 @@ import { parseEpisode, type TorrentFile } from '../../../src/lib/episodes';
 import { useTmdbEpisodes } from '../../../src/lib/useTmdbEpisodes';
 import { TmdbEpisodeRows, WatchSheet } from './Torrent';
 import { SeasonEpisodes } from './catalog/SeasonEpisodes';
-import { realEpisodeName, seasonEpisodeList } from '../../../src/lib/episodeNames';
+import { realEpisodeName, rememberEpisodeName, seasonEpisodeList } from '../../../src/lib/episodeNames';
 import { ReleaseSwitch, ReleasesSheet } from '../ui/ReleasesSheet';
 import { playOnPhone } from '../watchHere';
 import { playWhere } from '../../../src/lib/playWhere';
@@ -416,7 +416,7 @@ function DubRow({ group, season, hash, files }: { group: SeriesGroup; season: nu
     return () => {
       live = false;
     };
-  }, [open, known, hash, fileKey, tryN]);
+  }, [open, known, hash, fileKey, tryN, season]);
   useEffect(() => {
     if (pickInfo.toast) showToast(pickInfo.toast);
   }, [season, pickInfo.toast]);
@@ -618,8 +618,13 @@ function Body({ group, card }: { group: SeriesGroup; card: CatalogCard | null })
       .then(
         (d) => {
           if (!live || !d) return;
+          const hash = main ? main.hash : '';
           setCardTitles(
-            (d.episodes || []).map((e) => ({ episode: e.n, title: realEpisodeName(e.title), runtime: e.runtime || 0 })),
+            (d.episodes || []).map((e) => {
+              const title = realEpisodeName(e.title);
+              if (hash) rememberEpisodeName(hash, season, e.n, title);
+              return { episode: e.n, title, runtime: e.runtime || 0 };
+            }),
           );
         },
         () => undefined,
@@ -627,7 +632,7 @@ function Body({ group, card }: { group: SeriesGroup; card: CatalogCard | null })
     return () => {
       live = false;
     };
-  }, [card && card.id, season, lang.value]);
+  }, [card && card.id, season, lang.value, main ? main.hash : '']);
   const torrentTitles = seasonTitles(tmdb.eps, season);
   const episodeTitles = cardTitles.some((e) => e.title) ? cardTitles : torrentTitles;
   const tmdbOnly = noFiles ? seasonEpisodeList(tmdb.eps, season) : [];

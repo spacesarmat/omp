@@ -11,7 +11,7 @@ import { libraryTitle } from '../../../src/lib/libraryView';
 import { parseTorrentData } from '../../../src/api/torrserver';
 import { seriesMatchVersion } from '../../../src/lib/seriesMatch';
 import { torrentName as cleanTorrentName } from '../../../src/lib/cleanNames';
-import { realEpisodeName, seasonEpisodes, showForTorrent } from '../../../src/lib/episodeNames';
+import { realEpisodeName, rememberEpisodeName, seasonEpisodes, showForTorrent } from '../../../src/lib/episodeNames';
 import { torrents } from '../../../src/store/library';
 
 const httpPoster = (u: string | undefined) => (/^https?:\/\//i.test(u || '') ? String(u) : '');
@@ -98,7 +98,11 @@ export function episodeNameOf(tor: Torrent, path: string): Promise<string> {
   return showForTorrent(tor)
     .then((show) => (show ? seasonEpisodes(show, season) : {}))
     .then(
-      (m: { [n: number]: { title: string } }) => (m[ep] ? realEpisodeName(m[ep].title) : ''),
+      (m: { [n: number]: { title: string } }) => {
+        const name = m[ep] ? realEpisodeName(m[ep].title) : '';
+        if (name) rememberEpisodeName(tor.hash, season, ep, name);
+        return name;
+      },
       () => '',
     );
 }

@@ -93,8 +93,8 @@ describe('platform previews', () => {
 
   it('marks internal phone and TV components with active overrides', () => {
     mount(h(PhonePreview, props('settings', 'android-phone')));
-    expect(host.querySelector('button.m-btn')!.getAttribute('data-design-id')).toBe('button');
-    expect(host.querySelector('button.m-btn')!.getAttribute('data-design-overrides')).toContain('page-android-phone');
+    expect(host.querySelector('button.m-set-row')!.getAttribute('data-design-id')).toBe('choice-row');
+    expect(host.querySelector('button.m-set-row')!.getAttribute('data-design-overrides')).toContain('page-android-phone');
 
     mount(h(TvPreview, props('settings', 'android-tv')));
     expect(host.querySelector('.choice-row')!.getAttribute('data-design-id')).toBe('choice-row');

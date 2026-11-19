@@ -31,10 +31,28 @@ export interface ShowInfo {
 }
 
 const shows = new Map<string, Promise<ShowInfo | null>>();
+const episodeNames = new Map<string, string>();
+
+function episodeNameKey(hash: string, season: number, episode: number): string {
+  return hash.toLowerCase() + ':' + season + ':' + episode;
+}
+
+/** A TMDB episode title already loaded for this file. Empty until a lookup has finished. */
+export function cachedEpisodeName(hash: string, season: number | null, episode: number | null): string {
+  if (!hash || season === null || episode === null) return '';
+  return episodeNames.get(episodeNameKey(hash, season, episode)) || '';
+}
+
+/** Remember a real episode title so playback can send it without waiting on TMDB again. */
+export function rememberEpisodeName(hash: string, season: number, episode: number, name: string): void {
+  const real = realEpisodeName(name);
+  if (hash && real) episodeNames.set(episodeNameKey(hash, season, episode), real);
+}
 
 /** Forget the matched shows (tests). */
 export function resetEpisodeNames(): void {
   shows.clear();
+  episodeNames.clear();
   resetSeasonTotals();
 }
 

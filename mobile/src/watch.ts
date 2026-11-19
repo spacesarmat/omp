@@ -34,7 +34,8 @@ import { torrents } from '../../src/store/library';
 import { knownFiles } from '../../src/lib/knownFiles';
 import { sharedResume } from './lib/sharedProgress';
 import { t as tr } from '../../src/i18n';
-import { episodeNameOf, filePath, launchLabel, libraryTorrent } from './lib/playingNames';
+import { filePath, launchLabel, libraryTorrent } from './lib/playingNames';
+import { cachedEpisodeName } from '../../src/lib/episodeNames';
 
 export interface WatchOnTvParams {
   server: string;
@@ -509,7 +510,8 @@ export function useTvLaunch(): { start: (opts: TvLaunchOpts) => Promise<boolean>
       if (o.file !== undefined) {
         const tor = libraryTorrent(o.hash);
         const path = filePath(tor, o.file);
-        if (tor && path) epName = await episodeNameOf(tor, path).catch(() => '');
+        const pe = path ? parseEpisode(path) : { season: null, episode: null };
+        if (tor) epName = cachedEpisodeName(tor.hash, pe.season, pe.episode);
       }
       await actions.launchOnTv(watchOnTvParams(serverUrl, o.hash, o.file, t, report || undefined, from, seasonFiles, epName));
       if (report && landing === 'nowPlaying') markLaunched();
