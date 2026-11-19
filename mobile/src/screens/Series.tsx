@@ -54,7 +54,7 @@ import { parseEpisode, type TorrentFile } from '../../../src/lib/episodes';
 import { useTmdbEpisodes } from '../../../src/lib/useTmdbEpisodes';
 import { TmdbEpisodeRows, WatchSheet } from './Torrent';
 import { SeasonEpisodes } from './catalog/SeasonEpisodes';
-import { realEpisodeName, rememberEpisodeName, seasonEpisodeList } from '../../../src/lib/episodeNames';
+import { forgetEpisodeNames, realEpisodeName, rememberEpisodeName, seasonEpisodeList } from '../../../src/lib/episodeNames';
 import { ReleaseSwitch, ReleasesSheet } from '../ui/ReleasesSheet';
 import { playOnPhone } from '../watchHere';
 import { playWhere } from '../../../src/lib/playWhere';
@@ -213,7 +213,7 @@ function WrongShowSheet({ group, onClose }: { group: SeriesGroup; onClose: () =>
         <input class="m-input" value={q} onInput={(e) => setQ((e.currentTarget as HTMLInputElement).value)} />
       </form>
       {items.map((it) => (
-        <button key={it.id} type="button" class="m-opt" onClick={() => { void chooseSeries(group, it.id).then(() => onClose()); }}>
+        <button key={it.id} type="button" class="m-opt" onClick={() => { forgetEpisodeNames(group.members.map((m) => m.hash)); void chooseSeries(group, it.id).then(() => onClose()); }}>
           <span class="m-opt-name">{it.title + (it.year ? ' (' + it.year + ')' : '')}</span>
         </button>
       ))}

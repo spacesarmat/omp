@@ -11,7 +11,6 @@ import { findShow } from './tmdbShow';
 import { displayTitle } from './torrentName';
 import { activeCatalog } from '../catalog/activeCatalog';
 import { lang, t } from '../i18n';
-import { seriesMatchVersion } from './seriesMatch';
 import { airDateText } from './seriesStatus';
 import { parseEpisode, type TorrentFile } from './episodes';
 import { resetSeasonTotals } from './episodesOutOf';
@@ -33,12 +32,12 @@ export interface ShowInfo {
 
 const shows = new Map<string, Promise<ShowInfo | null>>();
 const episodeNames = new Map<string, string>();
-let nameStamp = '';
+let nameLang = '';
 
 function namesFresh(): void {
-  const next = lang.peek() + ':' + String(seriesMatchVersion.peek());
-  if (next === nameStamp) return;
-  nameStamp = next;
+  const next = lang.peek();
+  if (next === nameLang) return;
+  nameLang = next;
   episodeNames.clear();
 }
 
@@ -46,7 +45,7 @@ function episodeNameKey(hash: string, season: number, episode: number): string {
   return hash.toLowerCase() + ':' + season + ':' + episode;
 }
 
-/** A TMDB episode title already loaded for this file, in the current language and show match. */
+/** A TMDB episode title already loaded for this file, in the current language. */
 export function cachedEpisodeName(hash: string, season: number | null, episode: number | null): string {
   namesFresh();
   if (!hash || season === null || episode === null) return '';
@@ -63,11 +62,19 @@ export function rememberEpisodeName(hash: string, season: number, episode: numbe
   else episodeNames.delete(key);
 }
 
+/** Drop saved titles for these torrents. A corrected show must not keep the previous show's names. */
+export function forgetEpisodeNames(hashes: string[]): void {
+  const drop = new Set(hashes.map((h) => h.toLowerCase()));
+  Array.from(episodeNames.keys()).forEach((key) => {
+    if (drop.has(key.split(':')[0])) episodeNames.delete(key);
+  });
+}
+
 /** Forget the matched shows (tests). */
 export function resetEpisodeNames(): void {
   shows.clear();
   episodeNames.clear();
-  nameStamp = '';
+  nameLang = '';
   resetSeasonTotals();
 }
 
