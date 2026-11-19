@@ -4,6 +4,7 @@ import { torrents } from './library';
 import { parseData, sanitizeSkip, serializeData, withOmp, withQualityWatch, withReleaseMeta, withWatch, type JournalEntry, type SkipPrefs } from '../lib/journal';
 import { applySyncedProgress } from './progress';
 import { applySyncedMatch } from '../lib/seriesMatch';
+import { deviceRecords } from './deviceDb';
 
 function journalFile(row: SyncRecord): { f: number; src: 'tv' | 'phone' } | null {
   const src = row.body.src;
@@ -131,11 +132,26 @@ export function applyPulled(rows: SyncRecord[]): void {
   applyLibrary(rows);
 }
 
+function liveRows(rows: SyncRecord[]): SyncRecord[] {
+  const have: { [id: string]: SyncRecord } = {};
+  const all = deviceRecords();
+  for (let i = 0; i < all.length; i++) have[all[i].id] = all[i];
+  const out: SyncRecord[] = [];
+  const seen: { [id: string]: boolean } = {};
+  for (let i = 0; i < rows.length; i++) {
+    const kept = have[rows[i].id];
+    if (!kept || seen[kept.id]) continue;
+    seen[kept.id] = true;
+    out.push(kept);
+  }
+  return out;
+}
+
 torrents.subscribe(() => {
   if (applying || !parked.length || !torrents.value.length) return;
-  const rows = parked;
+  const rows = liveRows(parked);
   parked = [];
   applying = true;
-  applyLibrary(rows);
+  if (rows.length) applyLibrary(rows);
   applying = false;
 });

@@ -3,7 +3,7 @@ import { applyPulled } from '../../src/store/applyPulled';
 import { torrents } from '../../src/store/library';
 import { watchesNewEpisodes } from '../../src/lib/journal';
 import { getLocalProgress, reloadProgress, saveProgress } from '../../src/store/progress';
-import { resetDeviceDb } from '../../src/store/deviceDb';
+import { putDeviceRecords, resetDeviceDb } from '../../src/store/deviceDb';
 
 beforeEach(() => {
   localStorage.clear();
@@ -24,12 +24,23 @@ describe('applyPulled', () => {
   });
 
   it('applies a flag that arrived before the torrent list', () => {
+    const row = { id: 'watch:abc', kind: 'watch', key: 'abc', body: { newEpisodes: false }, updatedAt: 20, deviceId: 'other' };
+    putDeviceRecords([row]);
     torrents.value = [];
-    applyPulled([
-      { id: 'watch:abc', kind: 'watch', key: 'abc', body: { newEpisodes: false }, updatedAt: 20, deviceId: 'other' },
-    ]);
+    applyPulled([row]);
     torrents.value = [{ hash: 'abc', title: 'Old', data: '{"omp":{"v":1,"h":[]}}' } as never];
     expect(watchesNewEpisodes(torrents.value[0].data)).toBe(false);
+  });
+
+  it('keeps a newer local journal entry over a queued older one', () => {
+    const old = { id: 'journal:abc:1:phone', kind: 'journal', key: 'abc', body: { f: 1, t: 10, d: 100, at: 20, src: 'phone' }, updatedAt: 20, deviceId: 'other' };
+    putDeviceRecords([old]);
+    torrents.value = [];
+    applyPulled([old]);
+    putDeviceRecords([{ id: old.id, kind: 'journal', key: 'abc', body: { f: 1, t: 80, d: 100, at: 100, src: 'phone' }, updatedAt: 100, deviceId: 'local' }]);
+    torrents.value = [{ hash: 'abc', title: 'Old', data: '{"omp":{"v":1,"h":[]}}' } as never];
+    expect(torrents.value[0].data).toContain('"t":80');
+    expect(torrents.value[0].data).not.toContain('"t":10');
   });
 
   it('keeps a newer local position when an older delete arrives', () => {
