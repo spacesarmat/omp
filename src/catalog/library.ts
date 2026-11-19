@@ -78,7 +78,7 @@ function eachSeason(torrents: { title: string; hash?: string; data?: string }[],
  * Keys 'name|N' of the series seasons in the torrents (from the season marks of the title; none without them),
  * each with the hash of the first torrent that has it.
  */
-export function seasonIndex(torrents: { title: string; hash?: string }[]): Map<string, string> {
+export function seasonIndex(torrents: { title: string; hash?: string; data?: string }[]): Map<string, string> {
   const idx = new Map<string, string>();
   eachSeason(torrents, (k, hash) => {
     if (!idx.has(k)) idx.set(k, hash);
@@ -87,7 +87,7 @@ export function seasonIndex(torrents: { title: string; hash?: string }[]): Map<s
 }
 
 /** Same keys as seasonIndex, with every torrent hash that carries the season (a season split across releases). */
-export function seasonHashIndex(torrents: { title: string; hash?: string }[]): Map<string, string[]> {
+export function seasonHashIndex(torrents: { title: string; hash?: string; data?: string }[]): Map<string, string[]> {
   const idx = new Map<string, string[]>();
   eachSeason(torrents, (k, hash) => {
     if (!hash) return;

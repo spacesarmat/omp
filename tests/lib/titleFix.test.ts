@@ -85,6 +85,22 @@ describe('cleanReleaseTitles', () => {
     expect(c.calls[1]).toMatchObject({ hash: H1, title: 'Локи' });
     expect(torrentQuality({ hash: H1, title: 'Локи', data: c.calls[0].data })).toBe('1080p');
   });
+  it('calls setData on the client, so this stays the client', async () => {
+    const seen: string[] = [];
+    const client = {
+      mark: 'client',
+      setTitle() {
+        return Promise.resolve();
+      },
+      setData(this: { mark: string }) {
+        seen.push(this.mark);
+        return Promise.resolve();
+      },
+    };
+    const raw = 'Локи (2 сезон: 1-6 серии из 6) / Loki WEB-DL 1080p';
+    await cleanReleaseTitles(client, [tor(H1, raw, { data: '{}' })]);
+    expect(seen).toEqual(['client']);
+  });
   it('does not rewrite a name the person saved', async () => {
     const c = fake(false, true);
     const data = JSON.stringify({ omp: { v: 1, h: [], nm: true } });

@@ -20,10 +20,10 @@ function qualityFrom(title: string): string {
 function ensure(): void {
   if (loaded) return;
   loaded = true;
-  const saved = loadJson<unknown>(KEY, {}, isObject);
+  const saved = loadJson<{ [k: string]: unknown }>(KEY, {}, isObject);
   const keys = Object.keys(saved);
   for (let i = 0; i < keys.length; i++) {
-    const v = (saved as { [k: string]: unknown })[keys[i]];
+    const v = saved[keys[i]];
     if (typeof v === 'string' && v) mem[keys[i]] = v;
   }
 }
@@ -60,7 +60,7 @@ export function rememberedRawTitle(hash: string): string {
  * then a file name (`Show.S01E01.1080p.mkv`).
  */
 /** The release string readers should use: the one saved on the torrent, else the visible title. */
-export function releaseText(tor: { hash?: string; title?: string; name?: string; data?: string }): string {
+export function releaseText(tor: { hash: string; title?: string; name?: string; data?: string; file_stats?: TorrentFile[] }): string {
   return rawReleaseOf(tor.data) || displayTitle(tor);
 }
 

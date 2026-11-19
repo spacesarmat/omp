@@ -278,6 +278,21 @@ export function nameLocked(data: string | undefined | null): boolean {
  * A copy of `obj` that keeps the original release string (omp.rt) and, when `locked`,
  * marks the title as typed by the person (omp.nm). Write it with serializeData.
  */
+/**
+ * The omp bag copied onto a replacement torrent. `rt` is the new release string:
+ * the old bag's rt would keep the previous quality after an upgrade.
+ */
+export function ompForReplacement(
+  oldOmp: { [k: string]: unknown } | null,
+  newOmp: { [k: string]: unknown } | null,
+  releaseTitle: string,
+): { [k: string]: unknown } {
+  const merged: { [k: string]: unknown } = { ...(newOmp || {}), ...(oldOmp || {}), v: JOURNAL_VERSION };
+  if (releaseTitle) merged.rt = releaseTitle;
+  else delete merged.rt;
+  return merged;
+}
+
 export function withReleaseMeta(obj: { [k: string]: unknown }, raw: string, locked: boolean): { [k: string]: unknown } {
   return withOmp(obj, (omp) => {
     if (raw && !omp.rt) omp.rt = raw;

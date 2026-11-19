@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { rememberRawTitle, resetKeptQuality, torrentQuality } from '../../src/lib/keptQuality';
+import { ompForReplacement } from '../../src/lib/journal';
 import { seasonsOf } from '../../src/lib/seriesGroups';
 import { seasonIndex } from '../../src/catalog/library';
 import type { Torrent } from '../../src/api/types';
@@ -28,5 +29,10 @@ describe('torrentQuality', () => {
     expect(seasonsOf(tor)).toEqual([2]);
     const keys = Array.from(seasonIndex([{ title: 'Show', hash: H, data }]).keys());
     expect(keys.some((k) => k.slice(-2) === '|2')).toBe(true);
+  });
+  it('a replacement keeps the new release string, not the old one', () => {
+    const bag = ompForReplacement({ rt: 'Dune (2021) 1080p WEB-DL', w: false }, { v: 1 }, 'Dune (2021) 2160p WEB-DL');
+    expect(bag.rt).toBe('Dune (2021) 2160p WEB-DL');
+    expect(bag.w).toBe(false);
   });
 });

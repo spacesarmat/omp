@@ -3,10 +3,12 @@ import { isPlaceholderTitle, deriveName, torrentFiles, displayTitle } from './to
 import { cleanStoredTitle } from './libraryView';
 import { rememberRawTitle } from './keptQuality';
 import { nameLocked, parseData, serializeData, withReleaseMeta } from './journal';
+import { enqueueTorrentWrite } from './dataQueue';
 
 export interface TitleClient {
   setTitle(t: Pick<Torrent, 'hash' | 'poster' | 'category'>, title: string): Promise<void>;
   setData?(t: Pick<Torrent, 'hash' | 'title' | 'poster' | 'category'>, data: string): Promise<void>;
+  list?(): Promise<Torrent[]>;
 }
 
 // hashes handled in this session: a written one is never touched again; a failed write is retried after RETRY_MS,
@@ -59,37 +61,52 @@ export function fixPlaceholderTitles(c: TitleClient, list: Torrent[], now: numbe
  * (omp.rt) so quality and season checks still see it. A title the person typed (omp.nm) is left as it is.
  * Without setData, or when the data is not a JSON object, nothing is written.
  */
-export function cleanReleaseTitles(c: TitleClient, list: Torrent[], now: number = Date.now()): Promise<{ hash: string; title: string }[]> {
-  const todo: { t: Torrent; title: string; data: string }[] = [];
+function freshOf(c: TitleClient, t: Torrent): Promise<Torrent> {
+  if (!c.list) return Promise.resolve(t);
+  return c.list().then(
+    (all) => {
+      const hit = (all || []).filter((x) => !!x && String(x.hash).toLowerCase() === t.hash.toLowerCase())[0];
+      return hit || t;
+    },
+    () => t,
+  );
+}
+
+export function cleanReleaseTitles(c: TitleClient, list: Torrent[], now: number = Date.now()): Promise<{ hash: string; title: string; data: string }[]> {
+  const todo: Torrent[] = [];
   if (!c.setData) return Promise.resolve([]);
-  const writeData = c.setData;
   list.forEach((t) => {
     const prev = cleaned[t.hash];
     if (prev && (prev.ok || prev.n >= MAX_TRIES || now - prev.at < RETRY_MS)) return;
     if (nameLocked(t.data)) return;
-    const title = cleanStoredTitle(t);
-    if (!title) return;
-    const parsed = parseData(t.data);
-    if (!parsed) return;
-    const raw = displayTitle(t);
-    rememberRawTitle(t.hash, raw);
-    const data = serializeData(withReleaseMeta(parsed.obj, raw, false), parsed.journal);
+    if (!cleanStoredTitle(t)) return;
+    if (!parseData(t.data)) return;
     cleaned[t.hash] = { at: now, n: prev ? prev.n + 1 : 1, ok: false };
-    todo.push({ t, title, data });
+    todo.push(t);
   });
   const done: { hash: string; title: string; data: string }[] = [];
   return todo
     .reduce(
-      (p, x) =>
+      (p, t) =>
         p.then(() =>
-          writeData({ hash: x.t.hash, title: x.t.title || '', poster: x.t.poster, category: x.t.category }, x.data).then(
-            () => c.setTitle(x.t, x.title),
-            () => Promise.reject(new Error('data')),
+          enqueueTorrentWrite(t.hash, () =>
+            freshOf(c, t).then((cur) => {
+              if (nameLocked(cur.data)) return;
+              const title = cleanStoredTitle(cur);
+              const parsed = parseData(cur.data);
+              if (!title || !parsed || !c.setData) return;
+              const raw = displayTitle(cur);
+              rememberRawTitle(cur.hash, raw);
+              const data = serializeData(withReleaseMeta(parsed.obj, raw, false), parsed.journal);
+              return c.setData({ hash: cur.hash, title: cur.title || '', poster: cur.poster, category: cur.category }, data).then(() =>
+                c.setTitle(cur, title).then(() => {
+                  cleaned[cur.hash].ok = true;
+                  done.push({ hash: cur.hash, title, data });
+                }),
+              );
+            }),
           ).then(
-            () => {
-              cleaned[x.t.hash].ok = true;
-              done.push({ hash: x.t.hash, title: x.title, data: x.data });
-            },
+            () => undefined,
             () => undefined,
           ),
         ),
