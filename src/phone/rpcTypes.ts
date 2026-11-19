@@ -59,6 +59,8 @@ export interface RpcPoll {
   failed: RpcFailure[];
   /** Only when `rev` differs from the one the TV sent. */
   results?: RpcResult[];
+  /** Titles the phone actually searched. Absent on an older phone. */
+  queries?: string[];
 }
 
 // --- monitoring (the new-findings feed and subscriptions on the TV)

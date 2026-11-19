@@ -35,6 +35,7 @@ function same(a: Item, b: Item): boolean {
   const ha = hashKey(a.r);
   const hb = hashKey(b.r);
   if (ha && hb) return ha === hb;
+  if (a.r.Link && b.r.Link && a.r.Link === b.r.Link) return true;
   return a.title !== '' && a.title === b.title && sameSize(a.r.sizeBytes, b.r.sizeBytes);
 }
 

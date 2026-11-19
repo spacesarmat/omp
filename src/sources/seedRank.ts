@@ -3,9 +3,10 @@
 import { qualityRank } from '../monitor/quality';
 import { t, tp } from '../i18n';
 import { seedCheckLine } from './dhtPeers';
-import { parseRelease } from './filters';
+import { episodeRole, parseRelease } from './filters';
 import { infohashOf, phoneSeedBits, trackerTargets, type SeedDisplay } from './liveSeeds';
 import { matchCount, queryWords } from './relevance';
+import { parseSearchQuery, yearFits } from './queryParse';
 import { communityBoost } from '../viewer/communityRank';
 import { sortResults, type SortKey } from './view';
 import type { SourceResult } from './types';
@@ -51,16 +52,50 @@ export function estimateSeedCount(r: SourceResult): number {
   return Math.max(r.dhtSeeds || 0, counted ? r.Seed || 0 : 0);
 }
 
+function bestHit(title: string, query: string, extras?: string[]): number {
+  const list = [query].concat(extras || []);
+  let best = 0;
+  for (let i = 0; i < list.length; i++) {
+    const words = queryWords(list[i]);
+    if (!words.length) continue;
+    const n = matchCount(title, words);
+    if (n > best) best = n;
+  }
+  return best;
+}
+
+/** 1 when the title's year is the asked one, -1 when it names another year, 0 when it names none. */
+export function yearScore(title: string, year: number): number {
+  const fit = yearFits(title, year);
+  if (fit === 'yes') return 1;
+  if (fit === 'no') return -1;
+  return 0;
+}
+
+/** 2 for the episode itself, 1 for a full-season pack that includes it, -1 for a different episode. */
+export function episodeScore(title: string, season: number, episode: number): number {
+  if (!episode) return 0;
+  const role = episodeRole(title, season, episode);
+  if (role === 'episode') return 2;
+  if (role === 'pack') return 1;
+  if (role === 'other') return -1;
+  return 0;
+}
+
 /**
  * Higher is better. A checked swarm is always above an unchecked row.
- * Inside that, more seeds win, then a fresher measurement, then the title match, the season, the quality, the size.
+ * Inside that, more seeds win, then a fresher measurement, then the title, the year, the season,
+ * the episode, the preferred quality (higher resolution, then a better source), the size.
+ * `extras` are the other titles of the same search (original, transliteration).
  */
-export function rankScore(r: SourceResult, query: string, now: number): number {
-  const words = queryWords(query);
-  const seasons = parseRelease(query).seasons;
-  const hit = words.length ? matchCount(r.Title || '', words) : 0;
+export function rankScore(r: SourceResult, query: string, now: number, extras?: string[]): number {
+  const parsed = parseSearchQuery(query);
+  const seasons = parsed.season ? [parsed.season] : parseRelease(query).seasons;
+  const hit = bestHit(r.Title || '', query, extras);
   const season = seasonScore(r.Title || '', seasons);
-  let score = hit * 4000 + season * 8000 + qualityRank(r.Title || '') * 100 + sizeScore(r.sizeBytes);
+  const year = yearScore(r.Title || '', parsed.year);
+  const episode = episodeScore(r.Title || '', parsed.season, parsed.episode);
+  let score = hit * 4000 + year * 12000 + season * 8000 + episode * 5000 + qualityRank(r.Title || '') * 100 + sizeScore(r.sizeBytes);
   const estSeeds = estimateSeedCount(r);
   if (r.seedCheck === 'live' && (r.Seed || 0) > 0) {
     const age = typeof r.seedCheckAt === 'number' ? now - r.seedCheckAt : FRESH_WINDOW_MS;
@@ -79,9 +114,9 @@ export function rankScore(r: SourceResult, query: string, now: number): number {
   return score;
 }
 
-export function rankSearchResults<T extends SourceResult>(list: T[], query: string, now: number): T[] {
+export function rankSearchResults<T extends SourceResult>(list: T[], query: string, now: number, extras?: string[]): T[] {
   return list
-    .map((r, i) => ({ r: r, i: i, s: rankScore(r, query, now) }))
+    .map((r, i) => ({ r: r, i: i, s: rankScore(r, query, now, extras) }))
     .sort((a, b) => b.s - a.s || a.i - b.i)
     .map((x) => x.r);
 }
@@ -97,8 +132,8 @@ function hasCommunity(list: { communityReason?: string }[]): boolean {
 }
 
 /** Seed sort uses the checked ranking once a round has finished. A community mark reorders before that. Date and size stay as they were. */
-export function orderSearch<T extends SourceResult>(list: T[], sort: SortKey, query: string, now: number): T[] {
-  if (sort === 'seeds' && (roundStarted(list) || hasCommunity(list))) return rankSearchResults(list, query, now);
+export function orderSearch<T extends SourceResult>(list: T[], sort: SortKey, query: string, now: number, extras?: string[]): T[] {
+  if (sort === 'seeds' && (roundStarted(list) || hasCommunity(list))) return rankSearchResults(list, query, now, extras);
   return sortResults(list, sort) as T[];
 }
 

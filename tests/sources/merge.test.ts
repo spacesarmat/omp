@@ -74,6 +74,15 @@ describe('mergeResults', () => {
     expect(out.map((x) => x.source + '/' + (x.sources || []).join(','))).toEqual(['a/', 'c/b']);
   });
 
+  it('merges the same page link even without a hash or a size', () => {
+    const out = mergeResults([
+      r({ source: 'rutor', Title: 'Ёлки', Link: 'http://rutor/1', Seed: 1 }),
+      r({ source: 'rutor', Title: 'Елки', Link: 'http://rutor/1', Seed: 4 }),
+    ]);
+    expect(out).toHaveLength(1);
+    expect(out[0].Seed).toBe(4);
+  });
+
   it('does not mutate the input', () => {
     const a = r({ source: 'rutor', Title: 'X', hash: 'cc', Seed: 9 });
     const b = r({ source: 'bitru', Title: 'X', hash: 'cc', Seed: 1 });

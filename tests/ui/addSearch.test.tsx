@@ -70,7 +70,7 @@ describe('TV search', () => {
     mount();
     await flush();
     expect((host.querySelectorAll('input')[0] as HTMLInputElement).value).toBe('Starbound 1 сезон');
-    expect(s).toHaveBeenCalledWith('Starbound 1 сезон', 'rutor');
+    expect(s).toHaveBeenCalledWith('Starbound', 'rutor');
     expect(host.querySelectorAll('.list-item')).toHaveLength(1);
     routeStack.value = [{ name: 'connect' }];
   });

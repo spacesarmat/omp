@@ -44,7 +44,7 @@ describe('parseEpisodeRange', () => {
     ['Сериал / 24 серии / 1080p', {}],
     ['Сериал / 12 серий (2024)', {}],
     ['Сериал, 24 серии 1080p (2024)', {}],
-    ['Сериал (24 серии из 24) 1080p', { from: 24, to: 24, total: 24 }],
+    ['Сериал (24 серии из 24) 1080p', { from: 1, to: 24, total: 24 }],
     // a studio name is not an episode
     ['Сериал / Show [S07] (2024) WEB-DL 1080p | 2x2', { season: 7 }],
     ['Show Season 4 Complete', { season: 4 }],
