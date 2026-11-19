@@ -468,13 +468,13 @@ function screenClass(): string {
 }
 
 /** One line under the TV name: what is playing. Pause and seek stay on the remote itself. */
-function RemoteNow() {
+function RemoteNow({ onShowPlayer }: { onShowPlayer?: () => void }) {
   const s = nowPlaying.value;
   const names = usePlayingNames(s && linkStatus.value !== 'none' ? s : null);
   const line = names.title ? miniTitle(names) : '';
   if (!line) return null;
   return (
-    <button type="button" class="m-remote-now" onClick={() => navigate({ name: 'nowPlaying' })}>
+    <button type="button" class="m-remote-now" onClick={() => (onShowPlayer ? onShowPlayer() : navigate({ name: 'nowPlaying' }))}>
       {line}
     </button>
   );
@@ -921,7 +921,7 @@ function BoxRow({ tv }: { tv: SavedTv }) {
  * приставкой» connected every key goes to the whole box (system Home, volume, other apps; OMP gets them too), and
  * Settings, mute and media keys appear; OMP's channel keeps text, «Сейчас играет» and the player.
  */
-function AtvRemote({ tv }: { tv: SavedTv }) {
+function AtvRemote({ tv, onShowPlayer }: { tv: SavedTv; onShowPlayer?: () => void }) {
   const keys = useRemoteKeys(true);
   const state = tvState.value;
   const [kbd, setKbd] = useState(false);
@@ -1015,7 +1015,7 @@ function AtvRemote({ tv }: { tv: SavedTv }) {
             <TvSwitch tv={tv} live={atvStateText(shown)} class="m-remote-title" />
             {' · '}
             <span class={'m-remote-state' + (state === 'connected' ? ' on' : '')}>{t('remote.atvLine', { state: atvStateText(shown) })}</span>
-            <RemoteNow />
+            <RemoteNow onShowPlayer={onShowPlayer} />
           </span>
         }
       />
@@ -1154,7 +1154,7 @@ function AtvRemote({ tv }: { tv: SavedTv }) {
   );
 }
 
-export function Remote() {
+export function Remote({ onShowPlayer }: { onShowPlayer?: () => void } = {}) {
   const tv = activeTv.value;
   const keys = useRemoteKeys(!!tv && tv.kind !== 'atv');
   const state = tvState.value;
@@ -1228,7 +1228,7 @@ export function Remote() {
     );
   }
 
-  if (tv.kind === 'atv') return <AtvRemote tv={tv} />;
+  if (tv.kind === 'atv') return <AtvRemote tv={tv} onShowPlayer={onShowPlayer} />;
 
   const press = (name: RemoteButton) => {
     vibrate();
@@ -1334,7 +1334,7 @@ export function Remote() {
               {state === 'connected' ? <span class="m-bill-dot" data-remote-dot /> : null}
               {shownState}
             </span>
-            <RemoteNow />
+            <RemoteNow onShowPlayer={onShowPlayer} />
           </span>
         }
       >

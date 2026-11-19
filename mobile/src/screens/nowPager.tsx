@@ -1,5 +1,6 @@
 // «Сейчас на ТВ» as three pages. A swipe down pulls the card down and the remote in from the top;
 // a swipe up pulls the card up and the episodes of this release in from below. A sideways swipe on an episode plays it.
+import { cloneElement, isValidElement } from 'preact';
 import { useEffect, useLayoutEffect, useRef, useState } from 'preact/hooks';
 import type { ComponentChildren } from 'preact';
 import { t } from '../../../src/i18n';
@@ -344,7 +345,9 @@ export function NowDeck({
         style={{ transform: 'translateY(' + (-index * height + shift) + 'px)' }}
       >
         <section class="m-now-pane" data-pane="remote">
-          {opened.remote || pane === 'remote' ? remote : null}
+          {opened.remote || pane === 'remote'
+            ? (isValidElement(remote) ? cloneElement(remote, { onShowPlayer: () => setPane('now') }) : remote)
+            : null}
         </section>
         <section class="m-now-pane" data-pane="now" ref={nowRef} onScroll={remeasure}>
           {children}

@@ -649,6 +649,12 @@ describe('Remote with a TV', () => {
     expect(el.querySelector('.m-remote-now')!.textContent).toContain('Тишина в эфире');
     click(el.querySelector('.m-remote-now')!);
     expect(currentRoute.value).toEqual({ name: 'nowPlaying' });
+    resetTo({ name: 'remote' });
+    const back = vi.fn();
+    act(() => render(<Remote onShowPlayer={back} />, el));
+    click(el.querySelector('.m-remote-now')!);
+    expect(back).toHaveBeenCalledTimes(1);
+    expect(currentRoute.value.name).toBe('remote');
     nowPlaying.value = null;
     lastSeen.value = 0;
   });
