@@ -6,6 +6,7 @@ import { readFileSync } from 'node:fs';
 import { render } from 'preact';
 import { act } from 'preact/test-utils';
 import { Library } from '../src/screens/Library';
+import { setCatalogMode } from '../src/catalog/phoneCatalog';
 import { SearchMine } from '../src/screens/SearchMine';
 import { setWatchActions, noWifi } from '../src/watch';
 import { localServer, setLocalServerDeps } from '../src/server/localServer';
@@ -521,18 +522,70 @@ describe('Library', () => {
     const row = el.querySelector('[data-code="P02.19"]')!;
     expect(row).toBeTruthy();
     expect(row.querySelector('.m-resume-title')!.textContent).toBe('Продолжить просмотр');
-    expect(row.querySelector('.m-resume-layouts')).toBeTruthy();
+    expect(row.querySelector('.m-resume-layouts')).toBeNull();
+    expect(row.textContent).not.toContain('Крупно');
     expect(row.querySelector('[data-code="P02.21"]')).toBeNull();
     const cards = row.querySelectorAll('[data-resume-hash]');
     expect(cards.length).toBe(1);
     expect(cards[0].getAttribute('data-resume-hash')).toBe('h1');
+    expect(cards[0].querySelector('.m-resume-name')!.textContent).toContain('Starbound');
+    expect(cards[0].querySelector('.m-resume-ep')!.textContent).toBe('S02E02');
+    expect(cards[0].querySelector('.m-resume-play')).toBeTruthy();
+    expect(cards[0].querySelector('.m-resume-edge')).toBeTruthy();
     expect(cards[0].textContent).toContain('осталось 38 мин');
+    expect(row.querySelector('.m-resume-row')!.getAttribute('data-resume-visible')).toBe('4');
     // the chips have no «История» any more
     expect(tab('История')).toBeUndefined();
     act(() => (el.querySelector('[data-code="P02.20"]') as HTMLElement).click());
     expect(libraryTab.value).toBe('history');
     expect(el.querySelector('[data-code="P02.19"]')).toBeNull();
     expect(el.querySelectorAll('.m-history .m-hrow').length).toBe(1);
+  });
+
+  it('a saved mini layout still shows titled cards, and a series tile uses a badge for the episode code', async () => {
+    saveProgress('h1', 2, 1394, 3651);
+    updateSettings({ continueLayout: 'mini', libraryView: 'large' });
+    mount();
+    await flush();
+    const row = el.querySelector('[data-code="P02.19"]')!;
+    expect(row.querySelector('.m-resume-layouts')).toBeNull();
+    expect(row.textContent).not.toContain('Плитки');
+    expect(row.textContent).not.toContain('Строки');
+    const card = row.querySelector('[data-resume-hash="h1"]')!;
+    expect(card.querySelector('.m-resume-name')!.textContent).toContain('Starbound');
+    expect(card.querySelector('.m-resume-ep')!.textContent).toBe('S02E02');
+    const tile = Array.from(el.querySelectorAll('.m-grid .m-card')).find((c) => (c.textContent || '').includes('Starbound'))!;
+    expect(tile.querySelector('.m-watch-tag')).toBeNull();
+    const code = tile.querySelector('.m-watch-code')!;
+    expect(code.textContent).toBe('S02E02');
+    expect(code.className).toContain('m-new-badge');
+    expect(code.className).toContain('outline');
+    expect(code.parentElement!.classList.contains('m-poster-stack')).toBe(true);
+  });
+
+  it('measures the continue row when «Мои» opens after «Обзор»', async () => {
+    saveProgress('h1', 2, 1394, 3651);
+    setCatalogMode('discover');
+    const own = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'clientWidth');
+    Object.defineProperty(HTMLElement.prototype, 'clientWidth', {
+      configurable: true,
+      get() {
+        return (this as HTMLElement).classList.contains('m-resume-row') ? 900 : 0;
+      },
+    });
+    onTestFinished(() => {
+      setCatalogMode('mine');
+      if (own) Object.defineProperty(HTMLElement.prototype, 'clientWidth', own);
+    });
+    mount();
+    await flush();
+    expect(el.querySelector('[data-code="P02.19"]')).toBeNull();
+    act(() => tab('Мои').click());
+    await flush();
+    const row = el.querySelector('.m-resume-row') as HTMLElement;
+    expect(row).toBeTruthy();
+    expect(Number(row.getAttribute('data-resume-visible'))).toBeGreaterThan(4);
+    expect(row.getAttribute('style') || '').toContain('--m-resume-card:');
   });
 
   it('two releases of one film are one card with «2 раздачи»; a tap opens the release that leads', async () => {

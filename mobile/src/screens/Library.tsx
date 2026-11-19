@@ -44,6 +44,7 @@ import { Discover } from './catalog/Discover';
 import { setDiscoverHeadSlot, useCompactCatalogBar } from './catalog/compactBar';
 import { usePinchStep } from '../ui/usePinchStep';
 import { cardWidth, gridCols, gridTemplate, useContentWidth, type GridMode } from '../ui/landscapeCols';
+import { resumeCardStyle, resumeRowActive, resumeRowLayout } from '../ui/resumeRow';
 import { useHint } from '../ui/Hint';
 import { SeriesMenu } from '../ui/SeriesMenu';
 import { SeriesTileBadge } from '../ui/SeriesTileBadge';
@@ -242,6 +243,7 @@ export function Library() {
   const bodyRef = useRef<HTMLDivElement>(null);
   const tabsRef = useRef<HTMLDivElement>(null);
   const gridRef = useRef<HTMLDivElement>(null);
+  const resumeRef = useRef<HTMLDivElement>(null);
   const nudged = useRef(false);
   // selection mode (null = off) and the torrent whose menu is open; a long press that fired swallows the click after it
   const [selected, setSelected] = useState<string[] | null>(null);
@@ -516,6 +518,16 @@ export function Library() {
   const fixedCols = view === 'one' ? 1 : 0;
   const gridWidth = useContentWidth(gridRef, gridView);
   const gridColsNow = gridView && gridWidth > 0 ? gridCols(gridWidth, gridMode) : 0;
+  const resumeOpen = resumeRowActive({
+    mine,
+    history: isHistory,
+    selecting: selected !== null,
+    unavailable,
+    open: settings.value.continueOpen,
+    count: resume.length,
+  });
+  const resumeWidth = useContentWidth(resumeRef, resumeOpen);
+  const resumeLayout = resumeRowLayout(resumeWidth);
   const gridStyle = gridView ? { gridTemplateColumns: fixedCols ? 'repeat(' + fixedCols + ', minmax(0, 1fr))' : gridTemplate(gridMode) } : undefined;
 
   // two fingers on the list step the view once per gesture (spread = bigger), animated after the change
@@ -925,22 +937,14 @@ export function Library() {
                   <span class="m-resume-title">{t('nav.continueRow')}</span>
                   <Icon d={ICONS.collapse} size={18} />
                 </button>
-                <div class="m-resume-layouts" role="group" aria-label={t('nav.viewHead')}>
-                  {(['cards', 'mini', 'line'] as const).map((id) => (
-                    <button
-                      key={id}
-                      type="button"
-                      class={'m-resume-layout' + (settings.value.continueLayout === id ? ' on' : '')}
-                      aria-pressed={settings.value.continueLayout === id}
-                      onClick={() => updateSettings({ continueLayout: id })}
-                    >
-                      {t(id === 'cards' ? 'history.continueCards' : id === 'mini' ? 'history.continueMini' : 'history.continueLine')}
-                    </button>
-                  ))}
-                </div>
               </div>
               {settings.value.continueOpen && (
-              <div class={'m-resume-row m-scroll-x m-resume-' + settings.value.continueLayout}>
+              <div
+                class="m-resume-row m-scroll-x"
+                ref={resumeRef}
+                data-resume-visible={String(resumeLayout.visible)}
+                style={resumeCardStyle(resumeLayout.cardPx)}
+              >
                 {resume.map((e) => {
                   const tor = list.filter((x) => x.hash === e.hash)[0];
                   if (!tor) return null;
@@ -954,20 +958,6 @@ export function Library() {
                     if (key) navigate({ name: 'series', key });
                     else navigate(routeForTorrent(tor));
                   };
-                  const line = [displayTitle(tor), e.code, line3].filter(Boolean).join(', ');
-                  if (settings.value.continueLayout === 'line') {
-                    return (
-                      <button
-                        key={e.showKey + ':' + e.fileIndex}
-                        type="button"
-                        class="m-resume-line"
-                        data-resume-hash={e.hash}
-                        onClick={() => void continueOnTv(e.hash, e.fileIndex, e.time, e.duration, label)}
-                      >
-                        {line || displayTitle(tor)}
-                      </button>
-                    );
-                  }
                   const openMenu = (ev: Event) => {
                     ev.preventDefault();
                     setResumeMenu(e);
@@ -1004,7 +994,7 @@ export function Library() {
                         }}
                       >
                         <span class="m-resume-name"><TileName tor={tor} /></span>
-                        {line2 && <span class="m-muted m-small">{line2}</span>}
+                        {line2 && <span class="m-resume-ep">{line2}</span>}
                         {line3 && <span class="m-muted m-small">{line3}</span>}
                         <span class="m-resume-src">{continueSourceLine(e.src, e.name, e.updated, Date.now())}</span>
                       </button>
@@ -1155,9 +1145,9 @@ export function Library() {
                         <Poster torrent={tor} morphKey={k} initial />
                         <span class="m-poster-stack">
                           {g ? <SeriesTileBadge group={g} /> : <SeriesTileBadge tor={tor} />}
+                          {hit && hit.code && <span class="m-new-badge outline m-watch-code">{hit.code}</span>}
                           {foot && <span class="m-poster-foot">{foot}</span>}
                         </span>
-                        {hit && <span class="m-watch-tag">{statusFor(show)}</span>}
                         {hit && hit.duration > 0 && (
                           <span class="m-poster-bar"><span style={{ width: Math.min(100, (hit.time / hit.duration) * 100) + '%' }} /></span>
                         )}
