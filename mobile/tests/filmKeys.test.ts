@@ -66,6 +66,12 @@ describe('filmKeys: only the names before the year, never tags', () => {
     tor.data = JSON.stringify({ omp: { rt: 'Дюна / Dune (2021) 1080p WEB-DL' } });
     expect(filmKeys(tor)).toEqual(['дюна|2021', 'dune|2021']);
   });
+
+  it('a title the person typed is the film, not the old release string', () => {
+    const tor = mk('d2', 'Дюна (2021)');
+    tor.data = JSON.stringify({ omp: { rt: 'Дюна / Dune (1984) 1080p', nm: true } });
+    expect(filmKeys(tor)).toEqual(['дюна|2021']);
+  });
 });
 
 describe('«Мои» film cards with the real library', () => {

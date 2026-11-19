@@ -4,7 +4,7 @@
 import type { TorrentFile } from '../api/types';
 import { displayBadge, parseReleaseInfo, releaseBadges } from './releaseInfo';
 import { displayTitle, torrentFiles } from './torrentName';
-import { rawReleaseOf } from './journal';
+import { nameLocked, rawReleaseOf } from './journal';
 import { isObject, loadJson, saveJson } from '../store/storage';
 
 const KEY = 'omp.rawTitle';
@@ -62,6 +62,16 @@ export function rememberedRawTitle(hash: string): string {
 /** The release string readers should use: the one saved on the torrent, else the visible title. */
 export function releaseText(tor: { hash: string; title?: string; name?: string; data?: string; file_stats?: TorrentFile[] }): string {
   return rawReleaseOf(tor.data) || displayTitle(tor);
+}
+
+/**
+ * The name and year film matching should use. A title the person typed (omp.nm) wins.
+ * An automatic cleanup keeps the saved release string, which still has the year.
+ */
+export function identityText(tor: { hash?: string; title?: string; name?: string; data?: string; file_stats?: TorrentFile[] }): string {
+  const named = { hash: tor.hash || '', title: tor.title, name: tor.name, data: tor.data, file_stats: tor.file_stats };
+  if (nameLocked(tor.data)) return displayTitle(named);
+  return rawReleaseOf(tor.data) || displayTitle(named);
 }
 
 export function torrentQuality(tor: { hash: string; title?: string; name?: string; data?: string; file_stats?: TorrentFile[] }): string {

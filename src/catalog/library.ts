@@ -1,6 +1,7 @@
 // Library matching of TMDB titles against torrent titles. Pure.
 import { titleCore } from '../lib/posterSearch';
 import { rawReleaseOf } from '../lib/journal';
+import { identityText } from '../lib/keptQuality';
 import { parseRelease } from '../sources/filters';
 
 // ye as a char code: the guard strips regex literals but not string literals.
@@ -26,8 +27,7 @@ export function yearOf(title: string): number {
 export function libraryIndex(torrents: { title: string; data?: string }[]): Set<string> {
   const idx = new Set<string>();
   torrents.forEach((tr) => {
-    // a cleaned visible title drops the year; the saved release string still has it
-    const raw = rawReleaseOf(tr.data) || tr.title || '';
+    const raw = identityText(tr);
     const year = yearOf(raw);
     const add = (s: string): void => {
       const core = titleCore(s);

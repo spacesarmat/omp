@@ -6,7 +6,7 @@ import { qualityLabel } from '../../../src/monitor/quality';
 import { libraryKey } from '../../../src/catalog/library';
 import { titleCore } from '../../../src/lib/posterSearch';
 import { displayTitle } from '../../../src/lib/torrentName';
-import { releaseText } from '../../../src/lib/keptQuality';
+import { identityText } from '../../../src/lib/keptQuality';
 import { shortTitle } from '../../../src/lib/libraryView';
 import { contentsText, extrasText } from './releaseContents';
 import { torrents } from '../../../src/store/library';
@@ -70,8 +70,8 @@ export function isTechPart(part: string): boolean {
  * names, and tag-only parts never are: otherwise «2026|2026» or «blu ray remux|2026» made different films one.
  */
 export function filmKeys(tor: Torrent): string[] {
-  // the clean name has no year; the release string saved on the torrent still does
-  const raw = releaseText(tor);
+  // a typed name wins; otherwise the saved release string still has the year
+  const raw = identityText(tor);
   const field = /[\[(](?:[^\])]*[^0-9\])])?((?:19|20)\d\d)(?![0-9])/.exec(raw);
   const any = field ? null : /(?:^|[^0-9x])((?:19|20)\d\d)(?![0-9xp])/i.exec(raw);
   const year = field ? +field[1] : any ? +any[1] : 0;

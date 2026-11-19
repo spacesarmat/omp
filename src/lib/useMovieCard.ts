@@ -7,7 +7,7 @@ import type { CatalogCard } from '../catalog/tmdb';
 import type { Torrent } from '../api/types';
 import { isLibraryFilm } from '../monitor/better';
 import { titleCore } from './posterSearch';
-import { releaseText } from './keptQuality';
+import { identityText } from './keptQuality';
 import { findMovie } from './tmdbMovie';
 
 const cache = new Map<string, CatalogCard | null>();
@@ -25,7 +25,7 @@ export function useMovieCard(tor: Torrent | undefined | null): CatalogCard | nul
 /** The card plus «pending»: a film that will be (or is being) looked up and has no answer yet, so the screen can reserve the cast row. */
 export function useMovieLookup(tor: Torrent | undefined | null): { card: CatalogCard | null; pending: boolean } {
   const hash = tor ? tor.hash : '';
-  const source = tor ? releaseText(tor) : '';
+  const source = tor ? identityText(tor) : '';
   const film = !!tor && isLibraryFilm({ title: source, category: tor.category });
   const willLookUp = film && !!titleCore(source) && !!yearOf(source);
   const [card, setCard] = useState<CatalogCard | null>(() => (film && cache.has(hash) ? cache.get(hash) || null : null));
