@@ -81,6 +81,11 @@ android {
             pickFirsts += ['**/libavcodec.so', '**/libavutil.so', '**/libswscale.so', '**/libswresample.so']
         }
     }
+    lint {
+        // The SDK refuses a release build when Yandex has published a newer build the same week.
+        // OMP pins the version it was tested with and bumps it on purpose.
+        disable 'YandexAdsSdkOutdatedVersion'
+    }
     buildTypes {
         // test builds install next to the released app (different package, its own data) for device checks
         debug {
@@ -118,6 +123,8 @@ dependencies {
     implementation 'com.squareup.okhttp3:okhttp:4.12.1'
     // monitoring: background checks (monitor/MonitorWorker.kt) in a hidden WebView served from the APK assets
     implementation 'androidx.work:work-runtime-ktx:2.12.0'
+    // Phone only. The plugin does not initialize the SDK on a TV. 8.7.0 is the current release on ads.maven.yandex.net.
+    implementation 'com.yandex.android:mobileads:8.7.0'
     implementation "androidx.webkit:webkit:$androidxWebkitVersion"
     // native player on Android TV (player/PlayerActivity.kt)
     // Media3 is aligned with 2160 Player's player-core (it exposes media3-exoplayer as api), see the version

@@ -29,6 +29,7 @@ class MainActivity : BridgeActivity() {
         skipLaunchIntent = savedInstanceState != null ||
             ((intent?.flags ?: 0) and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) != 0
         registerPlugin(OmpNativePlugin::class.java)
+        registerPlugin(YandexAdsPlugin::class.java)
         tvMode = TvMode.isTv(this)
         if (!tvMode) requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
         // BridgeActivity.onCreate passes the launch intent to onNewIntent below

@@ -15,10 +15,12 @@ import { torrents, libraryTab, libraryQuery, librarySearchOpen } from '../../src
 import { reloadProgress, serverViewed } from '../../src/store/progress';
 import { settings, updateSettings } from '../../src/store/settings';
 import { TorrServerClient } from '../../src/api/torrserver';
-import { cachedAdsConfig, pickBanner, saveAdsConfig, type AdBanner } from '../../src/ads/ads';
+import { cachedAdsConfig, pickBanner, sanitizeAdsConfig, saveAdsConfig, type AdBanner } from '../../src/ads/ads';
 import { pendingAdEvents, resetAdEvents } from '../../src/ads/events';
 import { adsConfig, setAdsIo } from '../src/ads/phoneAds';
 import { markAdImagesLoaded } from '../src/ads/useAdSlots';
+import { setYandexLoaderForTests, setYandexOsForTests } from '../src/ads/yandexNative';
+import { resetYandexCaps } from '../../src/ads/yandex';
 import { ACCESS_KEY, ompSubscribed, saveBillingAccess } from '../../src/billing/entitlement';
 import { emitBillingChange, saveBillingSession } from '../../src/billing/session';
 import type { Torrent } from '../../src/api/types';
@@ -148,6 +150,9 @@ afterEach(() => {
   setAdsIo(null);
   setCatalogClientForTests(null);
   setCatalogMode('mine');
+  setYandexOsForTests(undefined);
+  setYandexLoaderForTests(null);
+  resetYandexCaps();
 });
 
 const adIndex = (list: Element) => Array.from(list.children).findIndex((c) => c.classList.contains('m-ad') || c.classList.contains('m-ad-wrap'));
@@ -527,7 +532,7 @@ describe('ads in «Мои»', () => {
     }
   });
 
-  it('reads the server a moment after the screen opens, and never for a subscriber', async () => {
+  it('reads the server a moment after the screen opens, including for a subscriber', async () => {
     localStorage.removeItem('tsp.adsConfig');
     vi.useFakeTimers({ toFake: ['setTimeout', 'setInterval'] });
     try {
@@ -554,7 +559,7 @@ describe('ads in «Мои»', () => {
         vi.advanceTimersByTime(6 * 60 * 1000);
       });
       await flush();
-      expect(get).not.toHaveBeenCalled();
+      expect(get).toHaveBeenCalled();
     } finally {
       vi.useRealTimers();
     }
@@ -609,5 +614,194 @@ describe('ads in «Обзор»', () => {
     expect(kids.map((k) => (k.classList.contains('m-ad-rail') ? 'ad' : 'rail'))).toEqual(['rail', 'rail', 'ad', 'rail', 'rail', 'rail', 'ad', 'rail']);
     expect(home.querySelector('.m-ad-rail .m-disc-rail-title')!.textContent).toBe('Реклама');
     expect(home.querySelector('.m-ad-rail')!.textContent).toContain('erid: 2SDnjcVm1aB');
+  });
+});
+
+describe('yandex native ads on the phone', () => {
+  const yandexConfig = {
+    ...CONFIG,
+    yandexAds: {
+      enabled: true,
+      fallbackHouse: true,
+      androidUnit: '',
+      iosUnit: '',
+      groups: {
+        free: { enabled: true, everyN: 10, afterInstallDays: 3, maxPerSession: 0, maxPerDay: 0 },
+        sub: { enabled: false, everyN: 10, afterInstallDays: 3, maxPerSession: 0, maxPerDay: 0 },
+      },
+    },
+  };
+
+  function arm(load: (slotId: string, unit: string) => Promise<boolean>) {
+    saveAdsConfig(yandexConfig);
+    setYandexOsForTests('android');
+    setYandexLoaderForTests(load);
+  }
+
+  it('draws the native card in the same slot when Yandex fills, with the label and the demo unit', async () => {
+    const units: string[] = [];
+    arm(async (_id, unit) => {
+      units.push(unit);
+      return true;
+    });
+    mount(<Library />);
+    await flush();
+    await flush();
+    await flush();
+    const cell = el.querySelector('[data-yandex]');
+    expect(cell).toBeTruthy();
+    expect(cell!.classList.contains('m-card')).toBe(true);
+    expect(cell!.querySelector('.m-ad-badge')!.textContent).toBe('Реклама');
+    expect(cell!.textContent).not.toContain('erid:');
+    expect(units[0]).toBe('demo-native-content-yandex');
+    expect(el.querySelectorAll('.m-ad-erid')).toHaveLength(0);
+  });
+
+  it('falls back to the own banner when Yandex has no fill', async () => {
+    arm(async () => false);
+    mount(<Library />);
+    await flush();
+    await flush();
+    await flush();
+    expect(el.querySelector('[data-yandex]')).toBeNull();
+    expect(el.querySelector('.m-ad-erid')!.textContent).toBe('erid: 2SDnjcVm1aB');
+  });
+
+  it('leaves the list as content when Yandex fails and the own banner is not a fallback', async () => {
+    saveAdsConfig({ ...yandexConfig, yandexAds: { ...yandexConfig.yandexAds, fallbackHouse: false } });
+    setYandexOsForTests('android');
+    setYandexLoaderForTests(async () => false);
+    mount(<Library />);
+    await flush();
+    await flush();
+    await flush();
+    expect(el.querySelectorAll('.m-ad')).toHaveLength(0);
+  });
+
+  it('does not load more native ads than the session cap allows', async () => {
+    let n = 0;
+    saveAdsConfig({
+      ...yandexConfig,
+      yandexAds: {
+        ...yandexConfig.yandexAds,
+        groups: {
+          ...yandexConfig.yandexAds.groups,
+          free: { ...yandexConfig.yandexAds.groups.free, maxPerSession: 1 },
+        },
+      },
+    });
+    setYandexOsForTests('android');
+    setYandexLoaderForTests(async () => {
+      n += 1;
+      return true;
+    });
+    adsConfig.value = cachedAdsConfig();
+    mount(<Library />);
+    for (let i = 0; i < 8; i++) await flush();
+    expect(n).toBe(1);
+  });
+
+  it('asks Yandex for the later cards after the first two requests finish', async () => {
+    let n = 0;
+    saveAdsConfig({
+      ...yandexConfig,
+      yandexAds: {
+        ...yandexConfig.yandexAds,
+        groups: {
+          ...yandexConfig.yandexAds.groups,
+          free: { ...yandexConfig.yandexAds.groups.free, everyN: 6 },
+        },
+      },
+    });
+    setYandexOsForTests('android');
+    setYandexLoaderForTests(async () => {
+      n += 1;
+      return true;
+    });
+    mount(<Library />);
+    for (let i = 0; i < 8; i++) await flush();
+    expect(n).toBeGreaterThanOrEqual(4);
+  });
+
+  it('gives the next list its own slot ids so a late load cannot remove them', async () => {
+    const ids: string[] = [];
+    let releaseOld: (ok: boolean) => void = () => {};
+    const old = new Promise<boolean>((resolve) => {
+      releaseOld = resolve;
+    });
+    let first = true;
+    arm((id) => {
+      ids.push(id);
+      if (first) {
+        first = false;
+        return old;
+      }
+      return Promise.resolve(true);
+    });
+    mount(<Library />);
+    await flush();
+    const before = ids.slice();
+    expect(before.length).toBeGreaterThan(0);
+    act(() => updateSettings({ librarySort: 'title' }));
+    await flush();
+    await flush();
+    const after = ids.slice(before.length);
+    expect(after.length).toBeGreaterThan(0);
+    for (let i = 0; i < after.length; i++) expect(before.indexOf(after[i])).toBe(-1);
+    releaseOld(true);
+    await flush();
+    expect(el.querySelector('[data-yandex]')).toBeTruthy();
+    act(() => updateSettings({ librarySort: 'new' }));
+  });
+
+  it('drops a Yandex answer that belongs to the previous unit', async () => {
+    let releaseOld: (ok: boolean) => void = () => {};
+    let releaseNew: (ok: boolean) => void = () => {};
+    const old = new Promise<boolean>((resolve) => {
+      releaseOld = resolve;
+    });
+    const newer = new Promise<boolean>((resolve) => {
+      releaseNew = resolve;
+    });
+    setYandexOsForTests('android');
+    setYandexLoaderForTests((_id, unit) => (unit === 'demo-native-content-yandex' ? old : newer));
+    saveAdsConfig(yandexConfig);
+    mount(<Library />);
+    await flush();
+    act(() => {
+      adsConfig.value = sanitizeAdsConfig({
+        ...yandexConfig,
+        yandexAds: { ...yandexConfig.yandexAds, androidUnit: 'R-M-100-1' },
+      });
+    });
+    await flush();
+    releaseOld(true);
+    await flush();
+    expect(el.querySelector('[data-yandex]')).toBeNull();
+    releaseNew(true);
+    await flush();
+    expect(el.querySelector('[data-yandex]')).toBeTruthy();
+  });
+
+  it('does not put a Yandex card in History', async () => {
+    arm(async () => true);
+    libraryTab.value = 'history';
+    mount(<Library />);
+    await flush();
+    await flush();
+    await flush();
+    expect(el.querySelectorAll('.m-ad, [data-yandex]')).toHaveLength(0);
+  });
+
+  it('a subscriber sees nothing while the subscription group is off', async () => {
+    arm(async () => true);
+    saveBillingSession({ token: 'tok', deviceId: 'd'.repeat(32), paidUntil: Date.now() + 10 * DAY } as never);
+    saveBillingAccess({ active: true, accessUntil: Date.now() + 10 * DAY });
+    mount(<Library />);
+    await flush();
+    await flush();
+    await flush();
+    expect(el.querySelectorAll('.m-ad')).toHaveLength(0);
+    saveBillingSession(null as never);
   });
 });

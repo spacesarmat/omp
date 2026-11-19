@@ -173,6 +173,69 @@ describe('ads events and stats', () => {
   });
 });
 
+describe('yandex phone ads', () => {
+  it('stays off in the public answer until the master switch is on, with the free group on and subscribers off', () => {
+    const cfg = adsConfig({});
+    expect(cfg.yandex.enabled).toBe(false);
+    expect(cfg.yandex.fallbackHouse).toBe(true);
+    expect(cfg.yandex.groups.free.enabled).toBe(true);
+    expect(cfg.yandex.groups.free.everyN).toBe(10);
+    expect(cfg.yandex.groups.free.afterInstallDays).toBe(3);
+    expect(cfg.yandex.groups.sub.enabled).toBe(false);
+    expect(publicAdsConfig({}, NOW)).toEqual({ v: 1, enabled: false, ttlSec: 300 });
+  });
+
+  it('publishes yandexAds without renaming the house payload, even when there is no banner', () => {
+    const saved = applyAdsSettings({}, {
+      yandex: {
+        enabled: true,
+        fallbackHouse: false,
+        androidUnit: 'R-M-100-1',
+        iosUnit: 'demo-native-app-yandex',
+        groups: {
+          free: { everyN: '8', maxPerSession: '', maxPerDay: '5' },
+          sub: { enabled: true, everyN: '15', afterInstallDays: '1', maxPerSession: '2' },
+        },
+      },
+    });
+    expect(saved.error).toBeUndefined();
+    const settings = { ads: saved.config };
+    const pub = publicAdsConfig(settings, NOW);
+    expect(pub.enabled).toBe(false);
+    expect(Object.keys(pub)).not.toContain('yandex');
+    expect(pub.yandexAds.enabled).toBe(true);
+    expect(pub.yandexAds.fallbackHouse).toBe(false);
+    expect(pub.yandexAds.androidUnit).toBe('R-M-100-1');
+    expect(pub.yandexAds.iosUnit).toBe('demo-native-app-yandex');
+    expect(pub.yandexAds.groups.free).toMatchObject({ enabled: true, everyN: 8, maxPerSession: 0, maxPerDay: 5 });
+    expect(pub.yandexAds.groups.sub).toMatchObject({ enabled: true, everyN: 15, afterInstallDays: 1, maxPerSession: 2 });
+    expect(pub.sections.mine).toBe(true);
+    expect(pub.platforms.phone).toBe(true);
+    expect(adsSettingsDiff(adsConfig({}), saved.config!)).toContain('яндекс: включена');
+    expect(adsSettingsDiff(adsConfig({}), saved.config!)).toContain('с подпиской: вкл');
+  });
+
+  it('keeps house banners on provider house and adds yandexAds beside them', () => {
+    const one = withBanner();
+    const turned = applyAdsSettings(one.settings!, { enabled: true, yandex: { enabled: true, androidUnit: 'demo-native-content-yandex' } });
+    const pub = publicAdsConfig(turned.config ? { ads: { ...turned.config, banners: one.settings!.ads.banners } } : {}, NOW);
+    expect(pub.enabled).toBe(true);
+    expect(pub.provider).toBe('house');
+    expect(pub.yandexAds.androidUnit).toBe('demo-native-content-yandex');
+    expect(Object.keys(pub)).not.toContain('yandex');
+  });
+
+  it('refuses a unit and a frequency outside the ranges', () => {
+    expect(applyAdsSettings({}, { yandex: { androidUnit: 'ca-app-pub' } }).error).toContain('R-M-');
+    expect(applyAdsSettings({}, { yandex: { groups: { free: { everyN: '3' } } } }).error).toContain('6-30');
+    expect(applyAdsSettings({}, { yandex: { groups: { sub: { maxPerDay: '900' } } } }).error).toContain('0-500');
+    const legacy = adsConfig({ ads: { yandex: { nativeUnitPhone: 'R-M-7-2', everyN: 4 } } });
+    expect(legacy.yandex.nativeUnitPhone).toBe('R-M-7-2');
+    expect(legacy.yandex.androidUnit).toBe('');
+    expect(legacy.everyN).toBe(10);
+  });
+});
+
 describe('ads images and etag', () => {
   it('takes JPEG, PNG and WebP up to 300 KB that look like what they say', () => {
     const png = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(20)]);

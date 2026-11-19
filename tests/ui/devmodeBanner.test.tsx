@@ -95,10 +95,16 @@ describe('Developer Mode expiry banner', () => {
       await act(async () => { vi.advanceTimersByTime(50); });
       expect(host.querySelector('[data-fk="lib-devmode-extend"]')).toBeNull();
       vi.setSystemTime(start + LEAD + 1000);
-      await act(async () => {
-        vi.advanceTimersByTime(10000);
-      });
-      expect(host.querySelector('[data-fk="lib-devmode-extend"]')).toBeTruthy();
+      // The catalog interval is 10s and can be re-armed by a render inside the same step.
+      // Walk several periods with the async timer helper so the callback actually runs.
+      let shown = false;
+      for (let i = 0; i < 4 && !shown; i++) {
+        await act(async () => {
+          await vi.advanceTimersByTimeAsync(10000);
+        });
+        shown = !!host.querySelector('[data-fk="lib-devmode-extend"]');
+      }
+      expect(shown).toBe(true);
     } finally {
       options.debounceRendering = prevRender;
       vi.useRealTimers();

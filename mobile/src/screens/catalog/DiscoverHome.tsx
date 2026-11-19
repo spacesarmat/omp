@@ -13,6 +13,7 @@ import { ratingText } from './CatalogSearch';
 import { PosterButton } from '../../share/PosterButton';
 import { withAds } from '../../../../src/ads/ads';
 import { AdCell } from '../../ads/AdCell';
+import { YandexCell } from '../../ads/YandexCell';
 import { useAdSlots } from '../../ads/useAdSlots';
 import { isGridDiscoverView, railTilePx, type DiscoverView } from './discoverCols';
 
@@ -149,6 +150,7 @@ export function DiscoverHome({
     perScreen: 3,
     active: !error && !!sections && sections.length > 2,
     listKey: kind + '|' + window + '|' + view,
+    layout: view === 'list' || view === 'compact' ? 'row' : 'card',
     itemEl: (i) => (homeRef.current ? homeRef.current.querySelectorAll('[data-rail]')[i] || null : null),
   });
 
@@ -231,9 +233,12 @@ export function DiscoverHome({
       </div>
       {withAds(sections, ads.admitted).map((e) => {
         if (e.item === undefined) {
-          const b = ads.banner(e.ad);
           const pos = e.ad;
           const kind = view === 'compact' ? 'compact' : view === 'list' ? 'list' : 'rail';
+          if (ads.fill(pos) === 'yandex') {
+            return <YandexCell key={'ad:rails:' + pos} kind={kind} slotId={ads.slotId(pos)} onShown={() => ads.shown(pos)} />;
+          }
+          const b = ads.banner(pos);
           return b ? <AdCell key={'ad:rails:' + pos} kind={kind} banner={b} onShown={() => ads.shown(pos)} onClick={() => ads.click(pos)} /> : null;
         }
         const s = e.item;
