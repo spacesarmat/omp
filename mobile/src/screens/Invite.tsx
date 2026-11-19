@@ -57,7 +57,7 @@ export function Invite({
       return;
     }
     let alive = true;
-    void QRCode.toDataURL(view.link, { margin: 1, width: 180, color: { dark: '#0F1115', light: '#FFFFFF' } }).then(
+    void QRCode.toDataURL(view.link, { margin: 1, width: 180 }).then(
       (url: string) => {
         if (alive) setQr(url);
       },
