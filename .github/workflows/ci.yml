@@ -218,6 +218,10 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
         run: |
           set -eu
+          # A failed run on this branch saved a partial modules cache: Gradle then
+          # treats jars that exist on Maven Central as missing and does not download them.
+          # Drop the restored modules cache so this build fetches them again.
+          rm -rf "${GRADLE_USER_HOME:-$HOME/.gradle}/caches/modules-2"
           # Pull requests pass -PompAbi=arm64-v8a: one debug split, no universal APK.
           # Push and workflow_dispatch omit it and keep every ABI. assembleDebug is the real task (splits are not flavors).
           # --build-cache (org.gradle.caching) and --parallel (org.gradle.parallel) apply to this invocation,
