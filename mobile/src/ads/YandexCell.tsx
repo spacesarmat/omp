@@ -47,9 +47,14 @@ export function YandexCell({ kind, slotId, onShown }: { kind: AdCellKind; slotId
       window.removeEventListener('resize', onScroll);
       if (mo) mo.disconnect();
       if (ro) ro.disconnect();
-      hideYandexSlot(slotId);
+      // Kind changes (list and compact) keep the same loaded slot. Conceal it until the next place.
+      concealYandexSlot(slotId);
     };
   }, [slotId, kind]);
+
+  useEffect(() => {
+    return () => hideYandexSlot(slotId);
+  }, [slotId]);
 
   useEffect(() => {
     const el = ref.current;
