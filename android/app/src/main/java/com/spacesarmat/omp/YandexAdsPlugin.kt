@@ -1,9 +1,12 @@
 package com.spacesarmat.omp
 
+import android.view.MotionEvent
 import android.view.View
+import android.view.ViewConfiguration
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.TextView
+import kotlin.math.abs
 import com.getcapacitor.Plugin
 import com.getcapacitor.PluginCall
 import com.getcapacitor.PluginMethod
@@ -56,7 +59,7 @@ class YandexAdsPlugin : Plugin() {
                                 return@runOnUiThread
                             }
                             slots[slotId]?.let { old -> (old.clip.parent as? ViewGroup)?.removeView(old.clip) }
-                            val clip = FrameLayout(act)
+                            val clip = ClipFrame(act)
                             clip.clipChildren = true
                             clip.clipToPadding = true
                             clip.addView(root, FrameLayout.LayoutParams(1, 1))
@@ -211,6 +214,65 @@ class YandexAdsPlugin : Plugin() {
         val sponsored = root.findViewById<TextView>(R.id.yandex_sponsored)
         if (sponsored.text.isNullOrBlank()) sponsored.text = "Реклама"
         return true
+    }
+
+    /** A drag that starts on the ad is a catalog scroll. A short tap stays on the ad. */
+    private inner class ClipFrame(context: android.content.Context) : FrameLayout(context) {
+        private var downRawX = 0f
+        private var downRawY = 0f
+        private var dragging = false
+        private var sentDown = false
+        private val slop = ViewConfiguration.get(context).scaledTouchSlop
+
+        override fun onInterceptTouchEvent(ev: MotionEvent): Boolean {
+            when (ev.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    downRawX = ev.rawX
+                    downRawY = ev.rawY
+                    dragging = false
+                    sentDown = false
+                    return false
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    if (abs(ev.rawX - downRawX) > slop || abs(ev.rawY - downRawY) > slop) {
+                        dragging = true
+                        return true
+                    }
+                }
+            }
+            return false
+        }
+
+        override fun onTouchEvent(ev: MotionEvent): Boolean {
+            if (!dragging) return super.onTouchEvent(ev)
+            val target = bridge.webView
+            if (target != null) {
+                val loc = IntArray(2)
+                target.getLocationOnScreen(loc)
+                if (!sentDown) {
+                    val down = MotionEvent.obtain(
+                        ev.downTime,
+                        ev.eventTime,
+                        MotionEvent.ACTION_DOWN,
+                        downRawX - loc[0],
+                        downRawY - loc[1],
+                        ev.metaState,
+                    )
+                    target.dispatchTouchEvent(down)
+                    down.recycle()
+                    sentDown = true
+                }
+                val copy = MotionEvent.obtain(ev)
+                copy.setLocation(ev.rawX - loc[0], ev.rawY - loc[1])
+                target.dispatchTouchEvent(copy)
+                copy.recycle()
+            }
+            if (ev.actionMasked == MotionEvent.ACTION_UP || ev.actionMasked == MotionEvent.ACTION_CANCEL) {
+                dragging = false
+                sentDown = false
+            }
+            return true
+        }
     }
 
     private fun host(): FrameLayout? {
