@@ -302,6 +302,13 @@ jobs:
         env:
           BILLING_TEST_DATABASE_URL: postgres://test:test@localhost:5432/billing_test
           BILLING_TEST_REQUIRE_PG: '1'
+      - name: Admin browser
+        working-directory: ops/billing
+        run: |
+          npx playwright install --with-deps chromium
+          npx playwright test
+        env:
+          BILLING_TEST_DATABASE_URL: postgres://test:test@localhost:5432/billing_test
       - name: Admin typecheck
         working-directory: ops/billing/admin
         run: npx tsc --noEmit -p tsconfig.app.json && npx tsc --noEmit -p tsconfig.node.json
