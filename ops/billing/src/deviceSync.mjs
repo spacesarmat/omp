@@ -95,7 +95,7 @@ export function createSyncStore(query) {
             ' updated_at = EXCLUDED.updated_at, device_id = EXCLUDED.device_id, deleted = EXCLUDED.deleted,' +
             ' seq = nextval(pg_get_serial_sequence(\'device_sync\', \'seq\'))' +
             ' WHERE device_sync.updated_at < EXCLUDED.updated_at' +
-            ' OR (device_sync.updated_at = EXCLUDED.updated_at AND device_sync.device_id <= EXCLUDED.device_id)',
+            ' OR (device_sync.updated_at = EXCLUDED.updated_at AND device_sync.device_id < EXCLUDED.device_id)',
           [accountId, row.id, row.kind, row.key, JSON.stringify(row.body || {}), row.updatedAt, row.deviceId, row.deleted === true],
         );
       }

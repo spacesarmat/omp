@@ -1,7 +1,7 @@
 // Push and pull remembered rows. A refused sync (no subscription) leaves the local copy as it is.
 import { BILLING_ORIGIN } from './config';
 import { billingSession, deviceId } from './session';
-import { deviceRecords, markSynced, noteSyncAccount, onDeviceWrite, putDeviceRecords, setSyncCursor, syncCursor, syncEnabled } from '../store/deviceDb';
+import { ackSent, markSynced, noteSyncAccount, onDeviceWrite, putDeviceRecords, setSyncCursor, syncCursor, syncEnabled, unsentRecords } from '../store/deviceDb';
 import { applyPulled } from '../store/applyPulled';
 import type { SyncRecord } from '../store/syncMerge';
 
@@ -42,9 +42,16 @@ function pump(access: string, since: number, pending: SyncRecord[]): Promise<str
     if (ans.status !== 200 || !ans.data.ok) return 'error';
     const incoming = ans.data.records || [];
     if (incoming.length) {
-      putDeviceRecords(incoming);
-      applyPulled(incoming);
+      const merged = putDeviceRecords(incoming, true);
+      const won: SyncRecord[] = [];
+      for (let i = 0; i < incoming.length; i++) {
+        const row = incoming[i];
+        const kept = merged.filter((m) => m.id === row.id)[0];
+        if (kept && kept.updatedAt === row.updatedAt && kept.deviceId === row.deviceId && !!kept.deleted === !!row.deleted) won.push(kept);
+      }
+      if (won.length) applyPulled(won);
     }
+    if (chunk.length) ackSent(chunk);
     const next = typeof ans.data.nextSeq === 'number' ? ans.data.nextSeq : since;
     setSyncCursor(next);
     markSynced(Date.now());
@@ -62,7 +69,7 @@ export function runDeviceSync(): Promise<string> {
   if (syncing) return Promise.resolve('busy');
   syncing = true;
   const epoch = noteSyncAccount(session && session.id ? session.id : access.slice(0, 16));
-  const pending = deviceRecords().filter((r) => r.updatedAt >= epoch);
+  const pending = unsentRecords(epoch);
   return pump(access, syncCursor(), pending).then(
     (status) => {
       syncing = false;

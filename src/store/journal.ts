@@ -28,7 +28,7 @@ function enqueue(hash: string, job: () => Promise<void>): Promise<void> {
 }
 
 /** Keeps the library copy in step, so «История» shows the write without waiting for the next refresh. */
-function patchLibrary(hash: string, data: string): void {
+function patchLibrary(hash: string, data: string, drop?: string[]): void {
   const list = torrents.value;
   for (let i = 0; i < list.length; i++) {
     if (list[i].hash === hash) {
@@ -36,7 +36,7 @@ function patchLibrary(hash: string, data: string): void {
       copy[i] = { ...list[i], data };
       torrents.value = copy;
       try {
-        putDeviceRecords(recordsForEdit({ hash, title: copy[i].title, data }, Date.now()));
+        putDeviceRecords(recordsForEdit({ hash, title: copy[i].title, data }, Date.now(), drop));
       } catch (e) {
         /* the server copy is already stored */
       }
@@ -187,6 +187,7 @@ export function loadQualityWatch(c: Pick<JournalClient, 'list'>, hash: string): 
 }
 
 interface OmpFlag {
+  kind: string;
   read: (data: string | undefined | null) => boolean;
   write: (obj: { [k: string]: unknown }, on: boolean) => { [k: string]: unknown };
 }
@@ -204,7 +205,7 @@ function saveFlag(c: JournalClient, torrent: Pick<Torrent, 'hash'>, on: boolean,
       const base = baseOf(tor, parsed);
       const data = serializeData(flag.write(base.obj, on), base.journal, base.skip);
       return c.setData(tor, data).then(() => {
-        patchLibrary(tor.hash, data);
+        patchLibrary(tor.hash, data, on ? [flag.kind] : undefined);
         return on;
       });
     }),
@@ -216,12 +217,12 @@ function saveFlag(c: JournalClient, torrent: Pick<Torrent, 'hash'>, on: boolean,
  * settings and every other key of `data` are kept. Rejects on failure, like saveSkip.
  */
 export function saveWatch(c: JournalClient, torrent: Pick<Torrent, 'hash'>, watch: boolean): Promise<boolean> {
-  return saveFlag(c, torrent, watch, { read: watchesNewEpisodes, write: withWatch });
+  return saveFlag(c, torrent, watch, { kind: 'watch', read: watchesNewEpisodes, write: withWatch });
 }
 
 /** «Следить за качеством» of a film: false writes omp.q: false, true removes it. Rejects on failure. */
 export function saveQualityWatch(c: JournalClient, torrent: Pick<Torrent, 'hash'>, watch: boolean): Promise<boolean> {
-  return saveFlag(c, torrent, watch, { read: watchesBetterQuality, write: withQualityWatch });
+  return saveFlag(c, torrent, watch, { kind: 'quality', read: watchesBetterQuality, write: withQualityWatch });
 }
 
 /**
@@ -266,7 +267,7 @@ export function rememberTrackerSeeds(
 
 /** The category was picked by hand: writes omp.cm, so the automatic category check leaves it. Rejects on failure. */
 export function saveCategoryPicked(c: JournalClient, torrent: Pick<Torrent, 'hash'>): Promise<boolean> {
-  return saveFlag(c, torrent, true, { read: categoryPicked, write: withCategoryPicked });
+  return saveFlag(c, torrent, true, { kind: 'category', read: categoryPicked, write: withCategoryPicked });
 }
 
 /**

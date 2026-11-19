@@ -36,15 +36,14 @@ export function recordsFromTorrent(t: MigrateTorrent, now = 1): SyncRecord[] {
   return out;
 }
 
-const SETTING_KINDS = ['skip', 'audio', 'watch', 'quality', 'title', 'journal'];
-
-/** A library edit: current rows, plus tombstones for settings and journal entries this torrent no longer has. */
-export function recordsForEdit(t: MigrateTorrent, now: number): SyncRecord[] {
+/** A library edit. `drop` lists kinds this write removed on purpose. Other missing rows stay. */
+export function recordsForEdit(t: MigrateTorrent, now: number, drop?: string[]): SyncRecord[] {
   const fresh = recordsFromTorrent(t, now);
+  if (!drop || !drop.length) return fresh;
   const hash = (t.hash || '').toLowerCase();
   const have: { [id: string]: boolean } = {};
   for (let i = 0; i < fresh.length; i++) have[fresh[i].id] = true;
-  const old = deviceRecords().filter((r) => r.key === hash && !r.deleted && SETTING_KINDS.indexOf(r.kind) >= 0 && !have[r.id]);
+  const old = deviceRecords().filter((r) => r.key === hash && !r.deleted && drop.indexOf(r.kind) >= 0 && !have[r.id]);
   const tombs: SyncRecord[] = [];
   for (let i = 0; i < old.length; i++) {
     const at = now > old[i].updatedAt ? now : old[i].updatedAt + 1;

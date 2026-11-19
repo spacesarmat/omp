@@ -16,10 +16,12 @@ interface Bag {
   lastSeq: number;
   accountId: string;
   syncEpoch: number;
+  /** updatedAt last accepted by the server, so the same row is not uploaded again. */
+  sent: { [id: string]: number };
 }
 
 function empty(): Bag {
-  return { records: {}, migrated: false, syncOn: true, lastSync: 0, lastSeq: 0, accountId: '', syncEpoch: 0 };
+  return { records: {}, migrated: false, syncOn: true, lastSync: 0, lastSeq: 0, accountId: '', syncEpoch: 0, sent: {} };
 }
 
 function read(): Bag {
@@ -33,14 +35,27 @@ function read(): Bag {
     lastSeq: typeof raw.lastSeq === 'number' ? raw.lastSeq : 0,
     accountId: typeof raw.accountId === 'string' ? raw.accountId : '',
     syncEpoch: typeof raw.syncEpoch === 'number' ? raw.syncEpoch : 0,
+    sent: sentOf(raw.sent),
   };
 }
 
-function write(bag: Bag): void {
+function sentOf(raw: unknown): { [id: string]: number } {
+  if (!isObject(raw)) return {};
+  const out: { [id: string]: number } = {};
+  const keys = Object.keys(raw);
+  for (let i = 0; i < keys.length; i++) {
+    const n = raw[keys[i]];
+    if (typeof n === 'number') out[keys[i]] = n;
+  }
+  return out;
+}
+
+/** `quiet` stores bookkeeping (cursor, account, ack) without scheduling another sync. */
+function write(bag: Bag, quiet: boolean): void {
   writes++;
   saveJson(KEY, bag);
   mirrorIndexed(bag);
-  afterWrite();
+  if (!quiet) afterWrite();
 }
 
 export function deviceRecords(): SyncRecord[] {
@@ -48,15 +63,44 @@ export function deviceRecords(): SyncRecord[] {
   return Object.keys(bag.records).map((id) => bag.records[id]);
 }
 
-export function putDeviceRecords(rows: SyncRecord[]): SyncRecord[] {
+export function putDeviceRecords(rows: SyncRecord[], quiet?: boolean): SyncRecord[] {
   const bag = read();
   const list = Object.keys(bag.records).map((id) => bag.records[id]);
   const merged = mergeRecords(list, rows);
   const next: { [id: string]: SyncRecord } = {};
-  for (let i = 0; i < merged.length; i++) next[merged[i].id] = merged[i];
+  for (let i = 0; i < merged.length; i++) {
+    const row = merged[i];
+    const prev = bag.records[row.id];
+    if (!prev || prev.updatedAt !== row.updatedAt || prev.deviceId !== row.deviceId || !!prev.deleted !== !!row.deleted) delete bag.sent[row.id];
+    next[row.id] = row;
+  }
   bag.records = next;
-  write(bag);
+  write(bag, quiet === true);
   return merged;
+}
+
+/** Rows not yet accepted at this updatedAt. `epoch` hides the previous account. */
+export function unsentRecords(epoch: number): SyncRecord[] {
+  const bag = read();
+  const ids = Object.keys(bag.records);
+  const out: SyncRecord[] = [];
+  for (let i = 0; i < ids.length; i++) {
+    const row = bag.records[ids[i]];
+    if (row.updatedAt < epoch) continue;
+    if (bag.sent[row.id] === row.updatedAt) continue;
+    out.push(row);
+  }
+  return out;
+}
+
+/** Remember a batch the server accepted. A newer local edit of the same id is left unsent. */
+export function ackSent(rows: SyncRecord[]): void {
+  const bag = read();
+  for (let i = 0; i < rows.length; i++) {
+    const cur = bag.records[rows[i].id];
+    if (cur && cur.updatedAt === rows[i].updatedAt && cur.deviceId === rows[i].deviceId) bag.sent[rows[i].id] = cur.updatedAt;
+  }
+  write(bag, true);
 }
 
 export function deviceMigrated(): boolean {
@@ -66,7 +110,7 @@ export function deviceMigrated(): boolean {
 export function markDeviceMigrated(): void {
   const bag = read();
   bag.migrated = true;
-  write(bag);
+  write(bag, true);
 }
 
 export function syncEnabled(): boolean {
@@ -76,7 +120,7 @@ export function syncEnabled(): boolean {
 export function setSyncEnabled(on: boolean): void {
   const bag = read();
   bag.syncOn = on;
-  write(bag);
+  write(bag, true);
 }
 
 export function lastSyncAt(): number {
@@ -86,7 +130,7 @@ export function lastSyncAt(): number {
 export function markSynced(at: number): void {
   const bag = read();
   bag.lastSync = at;
-  write(bag);
+  write(bag, true);
 }
 
 export function syncCursor(): number {
@@ -95,19 +139,26 @@ export function syncCursor(): number {
 
 export function setSyncCursor(seq: number): void {
   const bag = read();
-  if (seq > bag.lastSeq) bag.lastSeq = seq;
-  write(bag);
+  if (seq <= bag.lastSeq) return;
+  bag.lastSeq = seq;
+  write(bag, true);
 }
 
 /** Another billing account must not upload this device's earlier rows. Local rows stay. */
 export function noteSyncAccount(id: string): number {
   const bag = read();
+  let changed = false;
   if (bag.accountId && id && bag.accountId !== id) {
     bag.syncEpoch = Date.now();
     bag.lastSeq = 0;
+    bag.sent = {};
+    changed = true;
   }
-  if (id) bag.accountId = id;
-  write(bag);
+  if (id && bag.accountId !== id) {
+    bag.accountId = id;
+    changed = true;
+  }
+  if (changed) write(bag, true);
   return bag.syncEpoch;
 }
 
@@ -116,7 +167,7 @@ export function syncEpoch(): number {
 }
 
 export function resetDeviceDb(): void {
-  write(empty());
+  write(empty(), true);
 }
 
 let afterWrite: () => void = () => undefined;

@@ -75,16 +75,16 @@ export function applySyncedProgress(rows: { key: string; body: { [k: string]: un
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
     if (row.deleted) {
-      if (local[row.key]) {
-        delete local[row.key];
-        changed = true;
-      }
+      const prev = local[row.key];
+      if (!prev || prev.updated > row.updatedAt) continue;
+      delete local[row.key];
+      changed = true;
       continue;
     }
     const time = typeof row.body.time === 'number' ? row.body.time : 0;
     const duration = typeof row.body.duration === 'number' ? row.body.duration : 0;
     const prev = local[row.key];
-    if (prev && prev.updated >= row.updatedAt) continue;
+    if (prev && prev.updated > row.updatedAt) continue;
     local[row.key] = { time, duration, updated: row.updatedAt };
     changed = true;
   }

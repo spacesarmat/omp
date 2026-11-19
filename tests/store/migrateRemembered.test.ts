@@ -1,6 +1,6 @@
 import { describe, expect, it, beforeEach } from 'vitest';
 import { migrateRemembered, recordsForEdit, recordsFromTorrent } from '../../src/store/migrateRemembered';
-import { deviceMigrated, deviceRecords, noteSyncAccount, putDeviceRecords, resetDeviceDb, setSyncCursor, syncCursor } from '../../src/store/deviceDb';
+import { deviceMigrated, deviceRecords, noteSyncAccount, onDeviceWrite, putDeviceRecords, resetDeviceDb, setSyncCursor, syncCursor } from '../../src/store/deviceDb';
 
 const DATA = JSON.stringify({
   omp: {
@@ -57,13 +57,29 @@ describe('migrateRemembered', () => {
     expect(deviceRecords().filter((r) => r.id === 'progress:abc:1')[0].body.time).toBe(9);
   });
 
-  it('turning monitoring back on tombstones the old off flag', () => {
+  it('turning monitoring back on tombstones only that flag', () => {
     putDeviceRecords(recordsFromTorrent({ hash: 'abc', title: 'Show', data: DATA }, 10));
     const plain = JSON.stringify({ omp: { v: 1, h: [{ f: 1, t: 40, d: 100, at: 50, src: 'phone' }] } });
-    const edited = recordsForEdit({ hash: 'abc', title: 'Show', data: plain }, 30);
+    const watched = recordsForEdit({ hash: 'abc', title: 'Show', data: plain }, 30);
+    expect(watched.filter((r) => r.id === 'watch:abc').length).toBe(0);
+    expect(watched.filter((r) => r.id === 'skip:abc').length).toBe(0);
+    const edited = recordsForEdit({ hash: 'abc', title: 'Show', data: plain }, 30, ['watch']);
     const watch = edited.filter((r) => r.id === 'watch:abc')[0];
     expect(watch.deleted).toBe(true);
     expect(watch.updatedAt).toBe(30);
+    expect(edited.filter((r) => r.id === 'skip:abc').length).toBe(0);
     expect(edited.filter((r) => r.id === 'journal:abc:1:phone')[0].deleted).toBe(false);
+  });
+
+  it('sync bookkeeping does not schedule another upload', () => {
+    let n = 0;
+    onDeviceWrite(() => { n++; });
+    noteSyncAccount('account-a');
+    setSyncCursor(4);
+    putDeviceRecords([{ id: 'progress:abc:1', kind: 'progress', key: 'abc:1', body: { time: 3 }, updatedAt: 9, deviceId: 'local' }], true);
+    expect(n).toBe(0);
+    putDeviceRecords([{ id: 'progress:abc:2', kind: 'progress', key: 'abc:2', body: { time: 4 }, updatedAt: 11, deviceId: 'local' }]);
+    expect(n).toBe(1);
+    onDeviceWrite(() => undefined);
   });
 });

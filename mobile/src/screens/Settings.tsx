@@ -403,7 +403,7 @@ function SyncRow() {
   const at = lastSyncAt();
   const when = at ? new Date(at).toLocaleString() : t('settings.syncNever');
   useEffect(() => {
-    runDeviceSync();
+    runDeviceSync().then(() => setTick((n) => n + 1), () => setTick((n) => n + 1));
   }, []);
   return (
     <div class="m-set-row" data-row="sync">

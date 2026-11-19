@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { applyPulled } from '../../src/store/applyPulled';
 import { torrents } from '../../src/store/library';
 import { watchesNewEpisodes } from '../../src/lib/journal';
-import { getLocalProgress, reloadProgress } from '../../src/store/progress';
+import { getLocalProgress, reloadProgress, saveProgress } from '../../src/store/progress';
 import { resetDeviceDb } from '../../src/store/deviceDb';
 
 beforeEach(() => {
@@ -21,5 +21,20 @@ describe('applyPulled', () => {
     ]);
     expect(getLocalProgress('abc', 1)!.time).toBe(40);
     expect(watchesNewEpisodes(torrents.value[0].data)).toBe(false);
+  });
+
+  it('keeps a newer local position when an older delete arrives', () => {
+    const hash = 'a'.repeat(40);
+    saveProgress(hash, 1, 40, 100);
+    applyPulled([{
+      id: 'progress:' + hash + ':1',
+      kind: 'progress',
+      key: hash + ':1',
+      body: {},
+      updatedAt: 1,
+      deviceId: 'other',
+      deleted: true,
+    }]);
+    expect(getLocalProgress(hash, 1)).not.toBeNull();
   });
 });
