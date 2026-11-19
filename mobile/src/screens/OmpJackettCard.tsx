@@ -77,31 +77,20 @@ export function OmpJackettCard() {
   }
 
   useEffect(() => {
-    async function applyPending(raw: string) {
-      setCode(raw);
-      if (billingSession()) return;
-      setBusy(true);
-      setError('');
-      try {
-        const row = await activateCode(phoneSourceContext(), raw);
-        setSession(row);
-        setCode('');
-        setPendingBillingCode(null);
-        await refreshAccount();
-      } catch (e) {
-        setError(e instanceof Error ? e.message : t('sources.billing.down'));
-      } finally {
-        setBusy(false);
-      }
-    }
+    // A deep link only prefills the code; activating it always takes an explicit «Подключить» tap,
+    // so a stray omp://billing?code= link cannot bind the device without the user's consent.
     const pending = pendingBillingCode();
-    if (pending) void applyPending(pending);
+    if (pending) {
+      setCode(pending);
+      setPendingBillingCode(null);
+    }
     return onBillingChange(() => {
       setSession(billingSession());
       const next = pendingBillingCode();
-      if (next && !billingSession()) void applyPending(next);
-      else if (next) setCode(next);
-      else void refreshAccount();
+      if (next) {
+        setCode(next);
+        setPendingBillingCode(null);
+      } else void refreshAccount();
     });
   }, []);
 

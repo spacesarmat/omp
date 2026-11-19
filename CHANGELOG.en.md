@@ -6,6 +6,7 @@ The English translation covers the latest versions only; the full history (in Ru
 
 ## Unreleased
 
+- [phone] An omp://billing?code= link no longer activates a subscription automatically: the code is only prefilled in the field and activation takes the Connect button. Prevents binding the device without consent via a stray link
 - [phone] Torrent search reads a year, season and episode from the query ("Loki 2023", "season 2 episode 3", "s02e03") and turns them into filters you can remove in one tap. It also searches the Russian, original and other TMDB titles, and retries without the year and the subtitle when nothing matches. Suggestions show a poster. A different year sits under "Show more". An episode is found in that episode and in the full season
 - [tv] Torrent search reads the year, season and episode the same way, also searches the original title, and ranks a matching year, season and live seeds higher
 - [phone] Source search: the plus button is now two buttons, Magnet and Torrent. Magnet opens the link field, Torrent picks a .torrent file
