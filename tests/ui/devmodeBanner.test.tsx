@@ -92,10 +92,13 @@ describe('Developer Mode expiry banner', () => {
       const start = Date.now();
       localStorage.setItem('omp.devmode.extendAt', JSON.stringify(start));
       const host = mountLib();
+      // let the catalog effect install its 10s timer before the clock jumps
+      await act(async () => { await Promise.resolve(); });
       await act(async () => { vi.advanceTimersByTime(50); });
       expect(host.querySelector('[data-fk="lib-devmode-extend"]')).toBeNull();
       vi.setSystemTime(start + LEAD + 1000);
       await act(async () => {
+        vi.advanceTimersByTime(10000);
         vi.advanceTimersByTime(10000);
       });
       expect(host.querySelector('[data-fk="lib-devmode-extend"]')).toBeTruthy();
