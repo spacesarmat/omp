@@ -11,6 +11,9 @@ import type { CatalogCard, CatalogTitle } from '../catalog/tmdb';
 import type { SeriesGroup } from './seriesGroups';
 
 const matches = new Map<string, CatalogCard | null>();
+// The show the person picked, written before its card request returns. A lookup that was already running
+// must not replace it when that lookup finishes later.
+const chosenId = new Map<string, number>();
 
 // The match outlives the page: series key → TMDB id (0: no show) with the show's status, for SAVED_TTL. A cold start
 // then asks the card by id instead of searching again, and the calendar skips the shows known to be over.
@@ -67,6 +70,20 @@ export function knownOver(key: string): boolean {
 
 const cacheKey = (key: string) => lang.peek() + '|' + key;
 
+/** The show id a person locked for this series, including one saved on a previous launch. 0 when none. */
+function lockedShow(key: string): number {
+  const picked = chosenId.get(key);
+  if (picked) return picked;
+  const v = savedOf(key);
+  return v && v.m && v.id > 0 ? v.id : 0;
+}
+
+/** The card already stored for a locked show. */
+function keptCard(key: string): CatalogCard | null {
+  const kept = matches.get(key);
+  return kept === undefined ? null : kept;
+}
+
 /** The match found before: a card, null (no show), undefined (not looked up yet). */
 export function cachedSeriesMatch(key: string): CatalogCard | null | undefined {
   return matches.get(cacheKey(key));
@@ -90,24 +107,36 @@ export function matchSeries(g: SeriesGroup, opts?: { force?: boolean }): Promise
   const key = cacheKey(g.key);
   const force = !!(opts && opts.force);
   const hit = matches.get(key);
+  const locked = lockedShow(key);
+  // a show the person picked is fetched by that id; a search that started earlier must not replace it
+  if (locked) {
+    if (hit && hit.id === locked && !(force && hit)) return Promise.resolve(hit);
+    return activeCatalog().then((c) => (force ? c.card('tv', locked, { force: true }) : c.card('tv', locked)).then((card) => {
+      if (lockedShow(key) !== locked) return keptCard(key);
+      matches.set(key, card);
+      remember(key, card, true);
+      return card;
+    }));
+  }
   // `force` (pull to refresh): the show found before, its card fetched again
   if (hit !== undefined && !(force && hit)) return Promise.resolve(hit);
   const known = savedOf(key);
   return activeCatalog().then((c) => {
+    if (lockedShow(key)) return keptCard(key);
     if (known && known.id === 0) {
       matches.set(key, null);
       return null;
     }
-    const found = (known && known.m && known.id) || (hit && known && known.m)
-      ? Promise.resolve({ id: known && known.id ? known.id : hit ? hit.id : 0 })
-      : hit ? Promise.resolve({ id: hit.id }) : known ? Promise.resolve({ id: known.id }) : findShow(c, displayTitle(g.named), groupYear(g));
+    const found = hit ? Promise.resolve({ id: hit.id }) : known ? Promise.resolve({ id: known.id }) : findShow(c, displayTitle(g.named), groupYear(g));
     return found.then((show) => {
+      if (lockedShow(key)) return keptCard(key);
       if (!show) {
         matches.set(key, null);
         remember(key, null);
         return null;
       }
       return (force ? c.card('tv', show.id, { force: true }) : c.card('tv', show.id)).then((card) => {
+        if (lockedShow(key)) return keptCard(key);
         matches.set(key, card);
         remember(key, card);
         return card;
@@ -170,11 +199,16 @@ export function seriesMatchFailed(key: string): boolean {
 /** The person picked this show («Не тот сериал?»). Later lookups keep it. */
 export function chooseSeries(g: SeriesGroup, id: number): Promise<CatalogCard | null> {
   const key = cacheKey(g.key);
+  chosenId.set(key, id);
   return activeCatalog().then((c) => c.card('tv', id).then((card) => {
+    if (chosenId.get(key) !== id) return keptCard(key);
     matches.set(key, card);
     remember(key, card, true);
     seriesMatchVersion.value++;
     return card;
+  }, (err) => {
+    if (chosenId.get(key) === id) chosenId.delete(key);
+    throw err;
   }));
 }
 
@@ -185,6 +219,7 @@ export function resetSeriesMatches(): void {
   waiting.length = 0;
   pending.clear();
   failedAt.clear();
+  chosenId.clear();
   running = 0;
   generation++;
 }

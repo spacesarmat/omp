@@ -756,7 +756,9 @@ export function Series({ seriesKey }: { seriesKey: string }) {
   }, [seriesKey]);
   progressVersion.value; // re-render when local progress changes
   serverViewed.value;
-  const group = useMemo(() => findGroup(list, seriesKey), [list, seriesKey]);
+  // a manual choice bumps this: the open page takes the new card and any releases that now share that show
+  const matchVersion = seriesMatchVersion.value;
+  const group = useMemo(() => findGroup(list, seriesKey), [list, seriesKey, matchVersion]);
   const card = useSeriesCard(group);
   const hero = !!(group && card);
   // the last release of the series deleted here: back to the library (a series already gone on arrival says so)

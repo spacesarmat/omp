@@ -97,6 +97,30 @@ describe('film release dates', () => {
     await createCatalogClient(E, http).card('movie', 101);
     expect(urls).toHaveLength(2);
   });
+
+  it('a film card cached before `collection` existed is fetched again', async () => {
+    const urls: string[] = [];
+    const http: SourceHttp = {
+      get: (url) => {
+        urls.push(url);
+        return Promise.resolve({ status: 200, url: url, text: JSON.stringify({ ...MOVIE_CARD, release_dates: RELEASES, belongs_to_collection: { id: 7, name: 'Мир' } }) });
+      },
+      post: () => Promise.reject(new Error('no')),
+      clearCookies: () => Promise.resolve(),
+    };
+    const fresh = await createCatalogClient(E, http).card('movie', 101);
+    expect(fresh.collection).toEqual({ id: 7, name: 'Мир' });
+    flushCatalogCache();
+    const stored = JSON.parse(localStorage.getItem(CACHE_KEY) || '{}');
+    Object.keys(stored).forEach((k) => delete stored[k].data.collection);
+    localStorage.setItem(CACHE_KEY, JSON.stringify(stored));
+    resetCatalogCache();
+    const again = await createCatalogClient(E, http).card('movie', 101);
+    expect(urls).toHaveLength(2);
+    expect(again.collection).toEqual({ id: 7, name: 'Мир' });
+    await createCatalogClient(E, http).card('movie', 101);
+    expect(urls).toHaveLength(2);
+  });
 });
 
 describe('«Скоро в цифре»', () => {

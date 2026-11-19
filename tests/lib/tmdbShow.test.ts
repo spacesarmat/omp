@@ -1,7 +1,7 @@
 import { describe, expect, it, afterEach } from 'vitest';
 import { pickShow } from '../../src/lib/tmdbShow';
 import { groupLibrary, singleGroup } from '../../src/lib/seriesGroups';
-import { chooseSeries, resetSeriesMatches } from '../../src/lib/seriesMatch';
+import { chooseSeries, matchSeries, resetSeriesMatches } from '../../src/lib/seriesMatch';
 import { setCatalogProvider } from '../../src/catalog/activeCatalog';
 import type { CatalogTitle, CatalogCard } from '../../src/catalog/tmdb';
 import type { Torrent } from '../../src/api/types';
@@ -50,5 +50,29 @@ describe('groupLibrary TMDB id', () => {
     const groups = groupLibrary([a, b]).filter((x) => x.kind === 'series');
     expect(groups).toHaveLength(1);
     if (groups[0].kind === 'series') expect(groups[0].members).toHaveLength(2);
+  });
+
+  it('a lookup that finishes after a manual choice keeps the chosen show', async () => {
+    localStorage.clear();
+    resetSeriesMatches();
+    let release: () => void = () => undefined;
+    const gate = new Promise<void>((r) => { release = r; });
+    let started = false;
+    setCatalogProvider(() => Promise.resolve({
+      search: () => {
+        started = true;
+        return gate.then(() => ({ items: [show('Чужой', 2010, 5)], pages: 1 }));
+      },
+      card: (_k: string, id: number) => Promise.resolve(card(id)),
+    } as never));
+    const g = singleGroup(tor('Тьма S01 1080p', 'c'.repeat(40)));
+    expect(g).toBeTruthy();
+    const pending = matchSeries(g!);
+    for (let i = 0; i < 20 && !started; i++) await Promise.resolve();
+    expect(started).toBe(true);
+    await chooseSeries(g!, 99);
+    release();
+    expect((await pending)!.id).toBe(99);
+    expect((await matchSeries(g!))!.id).toBe(99);
   });
 });

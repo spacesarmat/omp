@@ -51,8 +51,11 @@ export interface CatalogCard extends CatalogTitle {
   firstAirDate?: string;
   /** Films only; absent in film cards cached before 0.17.0-beta.6 (they are fetched again). */
   releases?: Releases;
-  /** Films only: the TMDB collection this film belongs to. */
-  collection?: { id: number; name: string };
+  /**
+   * Films only: the TMDB collection, or null when the film is not in one.
+   * Absent on cards cached before collections were kept; those are fetched again.
+   */
+  collection?: { id: number; name: string } | null;
 }
 /** One film of a TMDB collection. */
 export interface CollectionPart { id: number; title: string; year: number; poster: string; }
@@ -450,7 +453,8 @@ export function sanitizeCard(e: TmdbEndpoint, raw: unknown, kind: Kind): Catalog
     lastAirDate: kind === 'tv' ? date(o.last_air_date) : '',
     firstAirDate: kind === 'tv' ? date(o.first_air_date) : '',
     releases: kind === 'movie' ? releasesOf(o.release_dates, releaseRegions()) : undefined,
-    collection: kind === 'movie' ? collectionOf(o.belongs_to_collection) : undefined,
+    // null, not a missing field: a film with no collection still differs from a card cached before this existed
+    collection: kind === 'movie' ? (collectionOf(o.belongs_to_collection) || null) : undefined,
   };
 }
 

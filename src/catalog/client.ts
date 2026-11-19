@@ -383,7 +383,9 @@ export function createCatalogClient(
         return c;
       }, (c) => (kind === 'tv'
         ? (c as { status?: unknown }).status !== undefined && typeof (c as CatalogCard).specials === 'boolean'
-        : (c as { releases?: unknown }).releases !== undefined)
+        : (c as { releases?: unknown }).releases !== undefined
+          // a film card cached before collections were kept has no `collection` (null means the film has none)
+          && (c as { collection?: unknown }).collection !== undefined)
         // cards cached before 0.19.0-beta.1 have people without a TMDB id
         && (c as CatalogCard).cast.every((p) => typeof p.id === 'number'), opts);
     },
