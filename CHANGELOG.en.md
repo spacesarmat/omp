@@ -4,7 +4,7 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
-## Unreleased
+## 0.30.1-beta.17
 
 - [tech] Watch history, progress, chosen audio, skip settings, a manual TMDB match, renames and monitoring flags stay on the device and work without TorrServer. The first launch copies them from the server once. Subscribers sync them through billing. An admin switch chooses subscribers only or everyone, and subscribers only is the default. Without a subscription the data stays on the device and sync stops
 
