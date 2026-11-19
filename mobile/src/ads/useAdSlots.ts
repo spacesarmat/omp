@@ -192,6 +192,10 @@ export function useAdSlots(o: AdSlotOptions): AdSlots {
     seen.current = new Set();
     held.current = {};
     fills.current = {};
+    slotIds.current = {};
+    // A new list must not reuse the previous list's slot names. A late load would
+    // replace the new ad and then delete it, leaving a ready cell with nothing to draw.
+    genRef.current += 1;
     hideAllYandex();
   }
   if (!banners.length) held.current = {};

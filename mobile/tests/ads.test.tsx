@@ -700,6 +700,37 @@ describe('yandex native ads on the phone', () => {
     expect(n).toBeGreaterThanOrEqual(4);
   });
 
+  it('gives the next list its own slot ids so a late load cannot remove them', async () => {
+    const ids: string[] = [];
+    let releaseOld: (ok: boolean) => void = () => {};
+    const old = new Promise<boolean>((resolve) => {
+      releaseOld = resolve;
+    });
+    let first = true;
+    arm((id) => {
+      ids.push(id);
+      if (first) {
+        first = false;
+        return old;
+      }
+      return Promise.resolve(true);
+    });
+    mount(<Library />);
+    await flush();
+    const before = ids.slice();
+    expect(before.length).toBeGreaterThan(0);
+    act(() => updateSettings({ librarySort: 'title' }));
+    await flush();
+    await flush();
+    const after = ids.slice(before.length);
+    expect(after.length).toBeGreaterThan(0);
+    for (let i = 0; i < after.length; i++) expect(before.indexOf(after[i])).toBe(-1);
+    releaseOld(true);
+    await flush();
+    expect(el.querySelector('[data-yandex]')).toBeTruthy();
+    act(() => updateSettings({ librarySort: 'new' }));
+  });
+
   it('drops a Yandex answer that belongs to the previous unit', async () => {
     let releaseOld: (ok: boolean) => void = () => {};
     let releaseNew: (ok: boolean) => void = () => {};
