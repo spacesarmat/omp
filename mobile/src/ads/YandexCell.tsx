@@ -3,7 +3,7 @@
 import { useEffect, useRef } from 'preact/hooks';
 import { t } from '../../../src/i18n';
 import type { AdCellKind } from './AdCell';
-import { hideYandexSlot, placeYandexSlot, yandexClip } from './yandexNative';
+import { concealYandexSlot, hideYandexSlot, placeYandexSlot, yandexClip } from './yandexNative';
 
 const SHOWN_MS = 1000;
 
@@ -25,7 +25,7 @@ export function YandexCell({ kind, slotId, onShown }: { kind: AdCellKind; slotId
       const height = Math.min(r.bottom, clip.bottom) - y;
       // A sheet, the sticky header or the tab bar must stay above the native ad.
       if (clip.blocked || height < 8 || r.width < 8) {
-        hideYandexSlot(slotId);
+        concealYandexSlot(slotId);
         return;
       }
       placeYandexSlot(slotId, { x: r.left, y, width: r.width, height, viewportWidth });

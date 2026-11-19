@@ -14,6 +14,7 @@ public class YandexAdsPlugin: CAPPlugin, CAPBridgedPlugin {
     public let pluginMethods: [CAPPluginMethod] = [
         CAPPluginMethod(name: "load", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "place", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "conceal", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "hide", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "hideAll", returnType: CAPPluginReturnPromise),
     ]
@@ -102,12 +103,24 @@ public class YandexAdsPlugin: CAPPlugin, CAPBridgedPlugin {
                 host.addSubview(slot.view)
             }
             let origin = web.convert(CGPoint.zero, to: host)
+            slot.view.isHidden = false
             slot.view.frame = CGRect(
                 x: origin.x + CGFloat(x) * scale,
                 y: origin.y + CGFloat(y) * scale,
                 width: max(1, CGFloat(width) * scale),
                 height: max(1, CGFloat(height) * scale)
             )
+            call.resolve()
+        }
+    }
+
+    @objc func conceal(_ call: CAPPluginCall) {
+        guard let slotId = call.getString("slotId") else {
+            call.reject("bad-slot")
+            return
+        }
+        DispatchQueue.main.async { [weak self] in
+            self?.slots[slotId]?.view.isHidden = true
             call.resolve()
         }
     }

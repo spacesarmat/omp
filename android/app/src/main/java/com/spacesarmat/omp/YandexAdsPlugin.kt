@@ -1,5 +1,6 @@
 package com.spacesarmat.omp
 
+import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.TextView
@@ -99,6 +100,17 @@ class YandexAdsPlugin : Plugin() {
             view.layoutParams = lp
             view.x = (webLoc[0] - hostLoc[0] + x * scale).toFloat()
             view.y = (webLoc[1] - hostLoc[1] + y * scale).toFloat()
+            view.visibility = View.VISIBLE
+            call.resolve()
+        }
+    }
+
+    @PluginMethod
+    fun conceal(call: PluginCall) {
+        val slotId = call.getString("slotId") ?: return call.reject("bad-slot")
+        val act = activity ?: return call.resolve()
+        act.runOnUiThread {
+            slots[slotId]?.view?.visibility = View.GONE
             call.resolve()
         }
     }

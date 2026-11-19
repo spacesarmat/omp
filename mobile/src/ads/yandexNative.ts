@@ -13,6 +13,8 @@ export interface YandexRect {
 interface YandexPlugin {
   load(o: { slotId: string; adUnitId: string; layout: string }): Promise<void>;
   place(o: { slotId: string } & YandexRect): Promise<void>;
+  /** Take the view off screen without dropping the loaded ad. */
+  conceal(o: { slotId: string }): Promise<void>;
   hide(o: { slotId: string }): Promise<void>;
   hideAll(): Promise<void>;
 }
@@ -54,10 +56,11 @@ export function yandexClip(): { top: number; bottom: number; blocked: boolean } 
   let bottom = window.innerHeight || document.documentElement.clientHeight || 0;
   const sticky = document.querySelector('.m-lib-sticky');
   if (sticky) top = Math.max(top, sticky.getBoundingClientRect().bottom);
-  const tabs = document.querySelector('.m-tabs');
-  if (tabs) {
-    const t = tabs.getBoundingClientRect().top;
-    if (t > 0) bottom = Math.min(bottom, t);
+  // .m-tabs is the category row inside the sticky header. The bottom bar is .m-nav.
+  const nav = document.querySelector('.m-nav');
+  if (nav) {
+    const t = nav.getBoundingClientRect().top;
+    if (t > top) bottom = Math.min(bottom, t);
   }
   return { top, bottom, blocked: false };
 }
@@ -74,6 +77,11 @@ export function loadYandexSlot(slotId: string, adUnitId: string, layout: YandexL
 export function placeYandexSlot(slotId: string, rect: YandexRect): void {
   if (loader || !yandexOs()) return;
   void plugin.place({ slotId, ...rect }).catch(() => undefined);
+}
+
+export function concealYandexSlot(slotId: string): void {
+  if (loader || !yandexOs()) return;
+  void plugin.conceal({ slotId }).catch(() => undefined);
 }
 
 export function hideYandexSlot(slotId: string): void {
