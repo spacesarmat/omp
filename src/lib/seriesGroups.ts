@@ -303,7 +303,22 @@ export function findGroup(list: Torrent[], key: string): SeriesGroup | null {
       if (namesOf(it.members[j]).indexOf(key) >= 0) return it;
     }
   }
-  return null;
+  // one torrent is not a library card, but the series screen still opens on its name
+  const keys = seriesKeys(list);
+  let own = '';
+  for (let i = 0; i < list.length && !own; i++) {
+    if (keys[i] && (keys[i] === key || namesOf(list[i]).indexOf(key) >= 0)) own = keys[i];
+  }
+  if (!own) return null;
+  const members = list.filter((_, i) => keys[i] === own);
+  const id = showIdOf(own);
+  if (id) {
+    list.forEach((tor, i) => {
+      if (!keys[i] || members.some((m) => m.hash === tor.hash)) return;
+      if (showIdOf(keys[i]) === id) members.push(tor);
+    });
+  }
+  return members.length ? makeGroup(own, uniqMembers(members)) : null;
 }
 
 /** A lone series torrent as a group of one (its TMDB lookup and tile badge); null for a film. */
