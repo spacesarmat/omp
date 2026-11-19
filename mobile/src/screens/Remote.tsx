@@ -3,7 +3,7 @@ import { createPortal } from 'preact/compat';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { t } from '../../../src/i18n';
 import { native } from '../platform/native';
-import { Icon } from '../ui/Icon';
+import { Icon, ICONS } from '../ui/Icon';
 import { showToast } from '../ui/toast';
 import { askConfirm } from '../ui/confirm';
 import { navigate } from '../nav';
@@ -21,7 +21,9 @@ import { foundTvNoWifi, foundTvRows, foundTvScanning } from '../tv/foundTvDiscov
 import { TouchpadSheet } from '../ui/TouchpadSheet';
 import { useBackHandler } from '../ui/backStack';
 import { touchpad, cursorGain, scrollFactor } from '../tv/touchpad';
-import { linkStatus } from '../tv/playerLink';
+import { linkStatus, nowPlaying, sendCmd } from '../tv/playerLink';
+import { usePlayingNames } from '../lib/playingNames';
+import { miniTitle } from '../ui/MiniPlayer';
 import type { FoundOmpTv } from '../platform/native';
 import {
   tvState,
@@ -460,9 +462,45 @@ function Touchpad() {
   );
 }
 
-/** Remote screen class: fits the viewport; the mini-player (64 px) takes room. Typing overlays on top. */
+/** Remote screen class: fits the viewport. The mini-player is not shown here. Typing overlays on top. */
 function screenClass(): string {
-  return 'm-screen m-remote' + (linkStatus.value !== 'none' ? ' mini' : '');
+  return 'm-screen m-remote';
+}
+
+/** One line under the TV name: what is playing. Pause and seek stay on the remote itself. */
+function RemoteNow({ onShowPlayer }: { onShowPlayer?: () => void }) {
+  const s = nowPlaying.value;
+  const names = usePlayingNames(s && linkStatus.value !== 'none' ? s : null);
+  const line = names.title ? miniTitle(names) : '';
+  if (!line) return null;
+  return (
+    <button type="button" class="m-remote-now" onClick={() => (onShowPlayer ? onShowPlayer() : navigate({ name: 'nowPlaying' }))}>
+      {line}
+    </button>
+  );
+}
+
+/** Pause and 10-second rewind for the OMP player. The mini bar is hidden on this screen. */
+function PlayerLinkRow() {
+  const s = nowPlaying.value;
+  if (!s || linkStatus.value === 'none') return null;
+  const live = linkStatus.value === 'live';
+  return (
+    <div class="m-rb-seek" data-player-cmds>
+      <button type="button" class="m-rb-seekbtn" aria-label={t('remote.mini.back10')} disabled={!live} onClick={() => sendCmd({ type: 'skip', d: -10 })}>
+        <Icon d={ICONS.back10} size={18} />
+      </button>
+      <button
+        type="button"
+        class="m-rb-seekbtn"
+        aria-label={s.paused ? t('remote.mini.play') : t('remote.mini.pause')}
+        disabled={!live}
+        onClick={() => sendCmd({ type: s.paused ? 'play' : 'pause' })}
+      >
+        <Icon d={s.paused ? ICONS.play : ICONS.pause} size={18} />
+      </button>
+    </div>
+  );
 }
 
 const fail = (e: unknown) => showToast(errorMessage(e));
@@ -883,7 +921,7 @@ function BoxRow({ tv }: { tv: SavedTv }) {
  * приставкой» connected every key goes to the whole box (system Home, volume, other apps; OMP gets them too), and
  * Settings, mute and media keys appear; OMP's channel keeps text, «Сейчас играет» and the player.
  */
-function AtvRemote({ tv }: { tv: SavedTv }) {
+function AtvRemote({ tv, onShowPlayer }: { tv: SavedTv; onShowPlayer?: () => void }) {
   const keys = useRemoteKeys(true);
   const state = tvState.value;
   const [kbd, setKbd] = useState(false);
@@ -977,6 +1015,7 @@ function AtvRemote({ tv }: { tv: SavedTv }) {
             <TvSwitch tv={tv} live={atvStateText(shown)} class="m-remote-title" />
             {' · '}
             <span class={'m-remote-state' + (state === 'connected' ? ' on' : '')}>{t('remote.atvLine', { state: atvStateText(shown) })}</span>
+            <RemoteNow onShowPlayer={onShowPlayer} />
           </span>
         }
       />
@@ -1023,6 +1062,7 @@ function AtvRemote({ tv }: { tv: SavedTv }) {
               <Icon d={KEYBOARD} size={22} />
             </button>
           </div>
+          <PlayerLinkRow />
           <div class="m-vol m-rt-vol">
             <button type="button" class="m-key" aria-label={t('remote.volDown')} onClick={() => vol('down')}>
               −
@@ -1078,7 +1118,10 @@ function AtvRemote({ tv }: { tv: SavedTv }) {
                 </button>
               </div>
             ) : (
-              <span class="m-rocker-cap">{t('remote.nowPlaying')}</span>
+              <>
+                <PlayerLinkRow />
+                {!nowPlaying.value || linkStatus.value === 'none' ? <span class="m-rocker-cap">{t('remote.nowPlaying')}</span> : null}
+              </>
             )}
           </div>
           <div class="m-rocker">
@@ -1111,7 +1154,7 @@ function AtvRemote({ tv }: { tv: SavedTv }) {
   );
 }
 
-export function Remote() {
+export function Remote({ onShowPlayer }: { onShowPlayer?: () => void } = {}) {
   const tv = activeTv.value;
   const keys = useRemoteKeys(!!tv && tv.kind !== 'atv');
   const state = tvState.value;
@@ -1185,14 +1228,22 @@ export function Remote() {
     );
   }
 
-  if (tv.kind === 'atv') return <AtvRemote tv={tv} />;
+  if (tv.kind === 'atv') return <AtvRemote tv={tv} onShowPlayer={onShowPlayer} />;
 
   const press = (name: RemoteButton) => {
     vibrate();
     act.pressButton(name).catch(fail);
   };
+  // The mini-player is hidden here. While the player link is live, pause follows it so the
+  // first tap resumes a video that is already paused. A stale link keeps the LG button.
+  const session = nowPlaying.value && linkStatus.value === 'live' ? nowPlaying.value : null;
+  const showPause = session ? !session.paused : playing;
   const togglePlay = () => {
     vibrate();
+    if (session) {
+      sendCmd({ type: session.paused ? 'play' : 'pause' });
+      return;
+    }
     act
       .pressButton(playing ? 'PAUSE' : 'PLAY')
       .then(() => setPlaying(!playing))
@@ -1264,7 +1315,7 @@ export function Remote() {
     <div class="m-rb-row m-rb-media">
       {media(t('remote.back10s'), REW10, () => press('REWIND'))}
       {media(t('remote.prevEpisode'), PREV, () => press('CHANNELDOWN'))}
-      {media(playing ? t('remote.mini.pause') : t('remote.playBtn'), playing ? PAUSE : PLAY, togglePlay, true)}
+      {media(showPause ? t('remote.mini.pause') : t('remote.playBtn'), showPause ? PAUSE : PLAY, togglePlay, true)}
       {media(t('remote.nextEpisode'), NEXT, () => press('CHANNELUP'))}
       {media(t('remote.fwd10s'), FF10, () => press('FASTFORWARD'))}
     </div>
@@ -1291,6 +1342,7 @@ export function Remote() {
               {state === 'connected' ? <span class="m-bill-dot" data-remote-dot /> : null}
               {shownState}
             </span>
+            <RemoteNow onShowPlayer={onShowPlayer} />
           </span>
         }
       >
@@ -1353,10 +1405,10 @@ export function Remote() {
               <button
                 type="button"
                 class="m-rb-playbtn"
-                aria-label={playing ? t('remote.mini.pause') : t('remote.playBtn')}
+                aria-label={showPause ? t('remote.mini.pause') : t('remote.playBtn')}
                 onClick={togglePlay}
               >
-                <Icon d={playing ? PAUSE : PLAY} size={26} />
+                <Icon d={showPause ? PAUSE : PLAY} size={26} />
               </button>
               <div class="m-rb-seek">
                 <button type="button" class="m-rb-seekbtn" aria-label={t('remote.back10s')} onClick={() => press('REWIND')}>
