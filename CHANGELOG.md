@@ -2,7 +2,7 @@
 
 <!-- Markers [phone] [tv] [lg] [atv] [tech]: see docs/changelog-markers.md. [tech] bullets are technical or admin-only and never reach users. -->
 
-## Не выпущено
+## 0.30.1-beta.15
 
 - [phone] Настройки: строки одной высоты в общих карточках, у перехода стрелка. Кнопка проверки обновлений не рвёт карточку
 - [phone] Справка: «Помогло?» рядом с «Полезно» и «Не помогло», между ними зазор. Кнопка действия под ответом на всю ширину
