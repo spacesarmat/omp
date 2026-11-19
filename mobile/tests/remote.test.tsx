@@ -770,6 +770,24 @@ describe('Remote with a TV', () => {
     lastSeen.value = 0;
   });
 
+  it('a stale player link keeps the LG play button', async () => {
+    saveTv({ ip: '192.168.1.5', name: 'LG OLED' });
+    nowPlaying.value = { title: 'Тишина', subtitle: '', time: 10, duration: 100, paused: true, buffering: false, hash: 'h', file: 1 } as any;
+    lastSeen.value = Date.now() - 6000;
+    mount();
+    const btn = lbl('Пауза') as HTMLButtonElement;
+    expect(btn.disabled).toBe(false);
+    click(btn);
+    expect(a.pressButton).toHaveBeenLastCalledWith('PAUSE');
+    await flush();
+    const next = lbl('Воспроизвести') as HTMLButtonElement;
+    expect(next.disabled).toBe(false);
+    click(text('Тачпад'));
+    expect((lbl('Воспроизвести') as HTMLButtonElement).disabled).toBe(false);
+    nowPlaying.value = null;
+    lastSeen.value = 0;
+  });
+
   it('play/pause label stays when the press fails', async () => {
     mount();
     a.pressButton.mockRejectedValueOnce(new Error('нет связи'));

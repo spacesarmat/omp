@@ -1234,15 +1234,14 @@ export function Remote({ onShowPlayer }: { onShowPlayer?: () => void } = {}) {
     vibrate();
     act.pressButton(name).catch(fail);
   };
-  // The mini-player is hidden here. While OMP is on screen, pause follows the player link
-  // so the first tap resumes a video that is already paused.
-  const session = nowPlaying.value && linkStatus.value !== 'none' ? nowPlaying.value : null;
+  // The mini-player is hidden here. While the player link is live, pause follows it so the
+  // first tap resumes a video that is already paused. A stale link keeps the LG button.
+  const session = nowPlaying.value && linkStatus.value === 'live' ? nowPlaying.value : null;
   const showPause = session ? !session.paused : playing;
-  const playLive = !session || linkStatus.value === 'live';
   const togglePlay = () => {
     vibrate();
     if (session) {
-      if (linkStatus.value === 'live') sendCmd({ type: session.paused ? 'play' : 'pause' });
+      sendCmd({ type: session.paused ? 'play' : 'pause' });
       return;
     }
     act
@@ -1278,8 +1277,8 @@ export function Remote({ onShowPlayer }: { onShowPlayer?: () => void } = {}) {
     showToast(t('remote.turningOn', { name: tv.name }));
     void act.warmUp();
   };
-  const media = (label: string, d: string, onClick: () => void, primary = false, enabled = true) => (
-    <button type="button" class={'m-media' + (primary ? ' primary' : '')} aria-label={label} disabled={!enabled} onClick={onClick}>
+  const media = (label: string, d: string, onClick: () => void, primary = false) => (
+    <button type="button" class={'m-media' + (primary ? ' primary' : '')} aria-label={label} onClick={onClick}>
       <Icon d={d} size={22} />
     </button>
   );
@@ -1316,7 +1315,7 @@ export function Remote({ onShowPlayer }: { onShowPlayer?: () => void } = {}) {
     <div class="m-rb-row m-rb-media">
       {media(t('remote.back10s'), REW10, () => press('REWIND'))}
       {media(t('remote.prevEpisode'), PREV, () => press('CHANNELDOWN'))}
-      {media(showPause ? t('remote.mini.pause') : t('remote.playBtn'), showPause ? PAUSE : PLAY, togglePlay, true, playLive)}
+      {media(showPause ? t('remote.mini.pause') : t('remote.playBtn'), showPause ? PAUSE : PLAY, togglePlay, true)}
       {media(t('remote.nextEpisode'), NEXT, () => press('CHANNELUP'))}
       {media(t('remote.fwd10s'), FF10, () => press('FASTFORWARD'))}
     </div>
@@ -1407,7 +1406,6 @@ export function Remote({ onShowPlayer }: { onShowPlayer?: () => void } = {}) {
                 type="button"
                 class="m-rb-playbtn"
                 aria-label={showPause ? t('remote.mini.pause') : t('remote.playBtn')}
-                disabled={!playLive}
                 onClick={togglePlay}
               >
                 <Icon d={showPause ? PAUSE : PLAY} size={26} />
