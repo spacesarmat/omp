@@ -151,6 +151,8 @@ describe('episode filter', () => {
     const manual = applyParsedFilters({ ...NO_FILTERS, season: 5 }, parseSearchQuery('Варкрафт'), null);
     expect(manual.season).toBe(5);
     expect(filtersForStorage(manual, parseSearchQuery('Варкрафт')).season).toBe(5);
+    expect(filtersForStorage({ ...f, year: 2019 }, parsed).year).toBe(2019);
+    expect(episodeRole('Show S02 (24 серии из 24) WEB-DL', 2, 3)).toBe('pack');
   });
 });
 

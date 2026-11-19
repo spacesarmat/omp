@@ -381,7 +381,8 @@ export function Add({
     memo.filters = v;
     memo.order = [];
     memo.similarOrder = [];
-    saveSearchFilters(v);
+    const parsed = memo.parsedPrev || { raw: '', title: '', year: 0, season: 0, episode: 0 };
+    saveSearchFilters(filtersForStorage(v, parsed));
     setFiltersState(v);
   };
   const setSort = (v: SortKey) => {

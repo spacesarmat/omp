@@ -273,9 +273,9 @@ export function applyParsedFilters(f: SearchFilters, parsed: ParsedQuery, prev: 
 export function filtersForStorage(f: SearchFilters, parsed: ParsedQuery): SearchFilters {
   return {
     ...f,
-    year: parsed.year ? 0 : f.year,
-    season: parsed.season ? 0 : f.season,
-    episode: parsed.episode ? 0 : f.episode,
+    year: parsed.year && f.year === parsed.year ? 0 : f.year,
+    season: parsed.season && f.season === parsed.season ? 0 : f.season,
+    episode: parsed.episode && f.episode === parsed.episode ? 0 : f.episode,
   };
 }
 

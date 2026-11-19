@@ -127,11 +127,19 @@ function stripMarks(text: string): string {
 export function parseSearchQuery(raw: string): ParsedQuery {
   const text = (raw || '').replace(/\s+/g, ' ').trim();
   const found = readSeasonEpisode(text);
-  const year = yearInTitle(text);
+  let year = yearInTitle(text);
   let title = stripMarks(text);
   // A film whose name is the year ("1917") must still be searched.
   if (!title && year) title = String(year);
+  // That number is the whole title, not a release year: "1917 (2019)" stays in the main list.
+  if (year && bareYear(text) === year) year = 0;
   return { raw: text, title: title, year: year, season: found.season, episode: found.episode };
+}
+
+/** The query is only a year, with optional brackets: "1917" or "(1917)". */
+function bareYear(text: string): number {
+  const s = (text || '').replace(/[()[\]]/g, '').replace(/\s+/g, '');
+  return /^\d{4}$/.test(s) ? asYear(s) : 0;
 }
 
 /** The part before ":" or " - ". A hyphen inside a word ("Spider-Man") stays. */

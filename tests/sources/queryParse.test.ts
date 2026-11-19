@@ -9,7 +9,8 @@ describe('parseSearchQuery', () => {
     expect(parseSearchQuery('Blade Runner 2049')).toMatchObject({ title: 'Blade Runner', year: 2049 });
     expect(yearInTitle('Blade Runner 2049 (2017)')).toBe(2017);
     expect(yearInTitle('Локи 2021')).toBe(2021);
-    expect(parseSearchQuery('1917')).toMatchObject({ title: '1917', year: 1917 });
+    expect(parseSearchQuery('1917')).toMatchObject({ title: '1917', year: 0 });
+    expect(parseSearchQuery('(1917)')).toMatchObject({ title: '1917', year: 0 });
     expect(parseSearchQuery('The Matrix')).toMatchObject({ title: 'The Matrix', year: 0, season: 0, episode: 0 });
   });
 
