@@ -6,6 +6,7 @@ import { readFileSync } from 'node:fs';
 import { render } from 'preact';
 import { act } from 'preact/test-utils';
 import { Library } from '../src/screens/Library';
+import { setCatalogMode } from '../src/catalog/phoneCatalog';
 import { SearchMine } from '../src/screens/SearchMine';
 import { setWatchActions, noWifi } from '../src/watch';
 import { localServer, setLocalServerDeps } from '../src/server/localServer';
@@ -560,6 +561,31 @@ describe('Library', () => {
     expect(code.className).toContain('m-new-badge');
     expect(code.className).toContain('outline');
     expect(code.parentElement!.classList.contains('m-poster-stack')).toBe(true);
+  });
+
+  it('measures the continue row when «Мои» opens after «Обзор»', async () => {
+    saveProgress('h1', 2, 1394, 3651);
+    setCatalogMode('discover');
+    const own = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'clientWidth');
+    Object.defineProperty(HTMLElement.prototype, 'clientWidth', {
+      configurable: true,
+      get() {
+        return (this as HTMLElement).classList.contains('m-resume-row') ? 900 : 0;
+      },
+    });
+    onTestFinished(() => {
+      setCatalogMode('mine');
+      if (own) Object.defineProperty(HTMLElement.prototype, 'clientWidth', own);
+    });
+    mount();
+    await flush();
+    expect(el.querySelector('[data-code="P02.19"]')).toBeNull();
+    act(() => tab('Мои').click());
+    await flush();
+    const row = el.querySelector('.m-resume-row') as HTMLElement;
+    expect(row).toBeTruthy();
+    expect(Number(row.getAttribute('data-resume-visible'))).toBeGreaterThan(4);
+    expect(row.getAttribute('style') || '').toContain('--m-resume-card:');
   });
 
   it('two releases of one film are one card with «2 раздачи»; a tap opens the release that leads', async () => {

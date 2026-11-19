@@ -25,6 +25,22 @@ export function resumeRowLayout(width: number): ResumeRowLayout {
   return { visible, cardPx };
 }
 
+/**
+ * The measured row is in the document only in «Мои», not in history, selection or the unavailable state,
+ * and only while the section is open and has cards. The width hook must follow the same flag: a row that
+ * mounts later (Discover, then Mine) is measured on that mount, not left on the four-card fallback.
+ */
+export function resumeRowActive(o: {
+  mine: boolean;
+  history: boolean;
+  selecting: boolean;
+  unavailable: boolean;
+  open: boolean;
+  count: number;
+}): boolean {
+  return o.mine && !o.history && !o.selecting && !o.unavailable && o.open && o.count > 0;
+}
+
 /** Inline style for the measured card width. Unset until the row has a width, so the CSS fallback applies. */
 export function resumeCardStyle(cardPx: number): string | undefined {
   return cardPx > 0 ? '--m-resume-card:' + cardPx + 'px' : undefined;

@@ -44,7 +44,7 @@ import { Discover } from './catalog/Discover';
 import { setDiscoverHeadSlot, useCompactCatalogBar } from './catalog/compactBar';
 import { usePinchStep } from '../ui/usePinchStep';
 import { cardWidth, gridCols, gridTemplate, useContentWidth, type GridMode } from '../ui/landscapeCols';
-import { resumeCardStyle, resumeRowLayout } from '../ui/resumeRow';
+import { resumeCardStyle, resumeRowActive, resumeRowLayout } from '../ui/resumeRow';
 import { useHint } from '../ui/Hint';
 import { SeriesMenu } from '../ui/SeriesMenu';
 import { SeriesTileBadge } from '../ui/SeriesTileBadge';
@@ -517,7 +517,14 @@ export function Library() {
   const fixedCols = view === 'one' ? 1 : 0;
   const gridWidth = useContentWidth(gridRef, gridView);
   const gridColsNow = gridView && gridWidth > 0 ? gridCols(gridWidth, gridMode) : 0;
-  const resumeOpen = !isHistory && settings.value.continueOpen && resume.length > 0;
+  const resumeOpen = resumeRowActive({
+    mine,
+    history: isHistory,
+    selecting: selected !== null,
+    unavailable,
+    open: settings.value.continueOpen,
+    count: resume.length,
+  });
   const resumeWidth = useContentWidth(resumeRef, resumeOpen);
   const resumeLayout = resumeRowLayout(resumeWidth);
   const gridStyle = gridView ? { gridTemplateColumns: fixedCols ? 'repeat(' + fixedCols + ', minmax(0, 1fr))' : gridTemplate(gridMode) } : undefined;

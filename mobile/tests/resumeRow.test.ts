@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { RESUME_CARD_TARGET, RESUME_GAP, RESUME_MIN_VISIBLE, resumeCardStyle, resumeRowLayout } from '../src/ui/resumeRow';
+import { RESUME_CARD_TARGET, RESUME_GAP, RESUME_MIN_VISIBLE, resumeCardStyle, resumeRowActive, resumeRowLayout } from '../src/ui/resumeRow';
 
 function fills(width: number): void {
   const row = resumeRowLayout(width);
@@ -8,6 +8,20 @@ function fills(width: number): void {
   const used = row.visible * row.cardPx + (row.visible - 1) * RESUME_GAP;
   expect(used).toBeCloseTo(width, 6);
 }
+
+const shown = { mine: true, history: false, selecting: false, unavailable: false, open: true, count: 3 };
+
+describe('resumeRowActive', () => {
+  it('measures only while the continue row is actually on screen', () => {
+    expect(resumeRowActive(shown)).toBe(true);
+    expect(resumeRowActive({ ...shown, mine: false })).toBe(false);
+    expect(resumeRowActive({ ...shown, history: true })).toBe(false);
+    expect(resumeRowActive({ ...shown, selecting: true })).toBe(false);
+    expect(resumeRowActive({ ...shown, unavailable: true })).toBe(false);
+    expect(resumeRowActive({ ...shown, open: false })).toBe(false);
+    expect(resumeRowActive({ ...shown, count: 0 })).toBe(false);
+  });
+});
 
 describe('resumeRowLayout', () => {
   it('puts at least 4 cards across a phone portrait row and fills it', () => {
