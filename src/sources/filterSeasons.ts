@@ -19,7 +19,7 @@ export interface FilterSeasonChip {
 const MAX_CHIPS = 12;
 
 function fold(s: string): string {
-  return (s || '').toLowerCase().replace(/ё/g, 'е').replace(/\s+/g, ' ').trim();
+  return (s || '').toLowerCase().replace(/\u0451/g, '\u0435').replace(/\s+/g, ' ').trim();
 }
 
 /** The catalog search for a tracker query: the season words at the end are not part of the title. */
@@ -83,7 +83,7 @@ function allowed(season: number, tmdb: TmdbSeasonFacts | null): boolean {
 }
 
 /**
- * Chips for «СЕРИАЛЫ». With TMDB, only seasons 1..count that a release names, plus season 0 when TMDB has
+ * Chips for the series section. With TMDB, only seasons 1..count that a release names, plus season 0 when TMDB has
  * specials and a release names them. A parsed season above the count is ignored. Without TMDB, a season
  * needs two releases. Order is the season number. At most 12 chips.
  */
