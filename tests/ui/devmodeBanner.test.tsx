@@ -95,6 +95,12 @@ describe('Developer Mode expiry banner', () => {
       await act(async () => { vi.advanceTimersByTime(50); });
       expect(host.querySelector('[data-fk="lib-devmode-extend"]')).toBeNull();
       vi.setSystemTime(start + LEAD + 1000);
+      // The catalog interval is 10s. Flush effects first, then step two periods: under fake
+      // timers the interval can be armed at the end of the first step and miss that tick.
+      await act(async () => {});
+      await act(async () => {
+        vi.advanceTimersByTime(10000);
+      });
       await act(async () => {
         vi.advanceTimersByTime(10000);
       });
