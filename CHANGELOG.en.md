@@ -6,6 +6,7 @@ The English translation covers the latest versions only; the full history (in Ru
 
 ## Unreleased
 
+- [phone] An omp://billing?code= link no longer activates a subscription automatically: the code is only prefilled in the field and activation takes the Connect button. Prevents binding the device without consent via a stray link
 - [phone] Source search: the plus button is now two buttons, Magnet and Torrent. Magnet opens the link field, Torrent picks a .torrent file
 - [phone] Search filters, series: seasons come from the TMDB season count. A chip is shown only for a season that has releases, with that count (Season 2 · 14). A parsed season above the TMDB count is left out of the filter. Without TMDB, a season stays only when at least two releases name it. Season 0 is shown only when TMDB has specials and a release names them. Full season only stays
 - [phone] Continue watching cards are compact: the width comes from the screen and at least four fit across. Each card shows the title, a series keeps its episode code, and the progress bar and play button stay. The Large / Tiles / Rows switch is gone from that header. A series tile shows the episode code as a yellow badge at the bottom of the poster
