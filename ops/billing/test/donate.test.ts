@@ -426,4 +426,28 @@ describe('donate draft growth', () => {
     expect(cur.donations.find((d) => d.id === 'pay1')).toBeTruthy();
     expect(cur.donations).toHaveLength(2);
   });
+
+  it('prunes another account cancelled rows only past the 7-day cutoff and keeps live rows', () => {
+    const { state, account } = on();
+    const DAY = 86400000;
+    const other = 'other-account';
+    const seed = [
+      { id: 'old-cancelled', accountId: other, status: 'cancelled', createdAt: NOW - 7 * DAY - 1000 },
+      { id: 'at-cutoff', accountId: other, status: 'cancelled', createdAt: NOW - 7 * DAY },
+      { id: 'recent-cancelled', accountId: other, status: 'cancelled', createdAt: NOW - 7 * DAY + 1000 },
+      { id: 'own-cancelled', accountId: account.id, status: 'cancelled', createdAt: NOW },
+      { id: 'other-draft', accountId: other, status: 'draft', createdAt: NOW },
+      { id: 'other-pending', accountId: other, status: 'pending', createdAt: NOW - 30 * DAY },
+      { id: 'other-held', accountId: other, status: 'pending', held: true, createdAt: NOW - 30 * DAY },
+      { id: 'other-refunded', accountId: other, status: 'refunded', createdAt: NOW - 30 * DAY },
+    ];
+    const cur = botCallback({ ...state, donations: seed }, { chatId: '42', data: 'dn:c', now: NOW }).state;
+    const ids = cur.donations.map((d) => d.id);
+    expect(ids).not.toContain('old-cancelled');
+    expect(ids).not.toContain('own-cancelled');
+    for (const keep of ['at-cutoff', 'recent-cancelled', 'other-draft', 'other-pending', 'other-held', 'other-refunded']) {
+      expect(ids).toContain(keep);
+    }
+    expect(cur.donations.filter((d) => d.accountId === account.id && d.status === 'draft')).toHaveLength(1);
+  });
 });
