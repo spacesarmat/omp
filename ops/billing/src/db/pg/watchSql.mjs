@@ -18,6 +18,10 @@ function num(v) {
   return n > 0 ? n : 0;
 }
 
+// A single voter may not stack unlimited file_index votes on one infohash (rank/storage spam).
+// Replacements of an existing file are always allowed; only brand-new files beyond the cap are skipped.
+const MAX_FILES_PER_VOTER_INFOHASH = 100;
+
 function statsOf(r) {
   return {
     samples: num(r.samples),
@@ -191,15 +195,29 @@ export async function saveSignals(tx, voter, items, now) {
   if (!voter || !items.length) return 0;
   let n = 0;
   await tx(async (query) => {
+    // Lock every voter+infohash in a consistent (sorted) order up front: serializes concurrent
+    // different-file batches for the cap, and avoids deadlocks when two batches list torrents in
+    // opposite orders. Locks are held until the batch commits.
+    const keys = [...new Set(items.map((r) => voter + ':' + r.infohash))].sort();
+    for (let k = 0; k < keys.length; k++) {
+      await query('SELECT pg_advisory_xact_lock(hashtext($1)::bigint)', [keys[k]]);
+    }
     for (let i = 0; i < items.length; i++) {
       const row = items[i];
-      await query('SELECT pg_advisory_xact_lock(hashtext($1)::bigint)', [voter + ':' + row.infohash + ':' + row.fileIndex]);
       const found = await query(
         'SELECT device_class, title_key, voice, ttff_ms, rebuffer_n, rebuffer_ms, watched_pct, completed, switched, codec_ok, codec_known' +
           ' FROM watch_votes WHERE voter = $1 AND infohash = $2 AND file_index = $3 FOR UPDATE',
         [voter, row.infohash, row.fileIndex],
       );
       const prev = prevVote(found.rows[0]);
+      if (!prev) {
+        const others = await query('SELECT COUNT(*)::int AS n FROM watch_votes WHERE voter = $1 AND infohash = $2 AND file_index <> $3', [
+          voter,
+          row.infohash,
+          row.fileIndex,
+        ]);
+        if (num(others.rows[0].n) >= MAX_FILES_PER_VOTER_INFOHASH) continue;
+      }
       if (prev && prev.deviceClass !== row.deviceClass) {
         await addStats(query, Object.assign({}, row, { deviceClass: prev.deviceClass }), removeDelta(prev), now);
         await addStats(query, row, voteDelta(null, row), now);
