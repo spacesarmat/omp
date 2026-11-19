@@ -28,6 +28,7 @@ export const en: EnDict<typeof ru> = {
     originalChip: 'Original',
     rusSubsChip: 'Rus subtitles',
     fullSeasonOnly: 'Full season only',
+    seasonChip: 'Season {n} · {count}',
     show: { one: 'Show {n} torrent', other: 'Show {n} torrents' },
   },
   common: {

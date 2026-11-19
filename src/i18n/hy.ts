@@ -26,6 +26,7 @@ export const hy: EnDict<typeof ru> = {
     originalChip: "Առաջնօրինակ",
     rusSubsChip: "ռուսերեն ենթագրեր",
     fullSeasonOnly: "Միայն ամբողջ մրցաշրջան",
+    seasonChip: "Մրցաշրջան {n} · {count}",
     show: {
       one: "Ցուցադրել ձեռքը {n}",
       other: "Ցույց տալ {n}-ի ձեռքերը",

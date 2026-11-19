@@ -25,6 +25,7 @@ export const uk: typeof ru = {
     originalChip: "Оригінал",
     rusSubsChip: "Рос. субтитри",
     fullSeasonOnly: "Лише повний сезон",
+    seasonChip: "Сезон {n} · {count}",
     show: { one: "Показати {n} роздачу", few: "Показати {n} роздачі", many: "Показати {n} роздач" },
   },
   common: {

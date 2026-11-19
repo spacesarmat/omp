@@ -2,6 +2,7 @@ import { Sheet } from './Sheet';
 import { t, tp } from '../../../src/i18n';
 import { loadJson, saveJson } from '../../../src/store/storage';
 import { NO_FILTERS, sanitizeFilters, type SearchFilters, type Res, type Source, type Voice } from '../../../src/sources/filters';
+import type { FilterSeasonChip } from '../../../src/sources/filterSeasons';
 import { TextField } from './TextField';
 
 const KEY = 'tsp.searchFilters';
@@ -35,7 +36,7 @@ export function FiltersSheet({
   count,
 }: {
   value: SearchFilters;
-  seasons: number[];
+  seasons: FilterSeasonChip[];
   onChange: (f: SearchFilters) => void;
   onClose: () => void;
   count: number;
@@ -112,7 +113,13 @@ export function FiltersSheet({
           <div class="m-filter-group">
             <span class="m-filter-label">{t('category.tv')}</span>
             <div class="m-chips">
-              {seasons.map((s) => <Chip key={s} on={f.season === s} label={t('library.season', { n: s })} onClick={() => set({ season: f.season === s ? 0 : s })} />)}
+              {seasons.map((s) => {
+                const on = s.season === 0 ? f.specials : f.season === s.season;
+                const pick = () => s.season === 0
+                  ? set({ specials: !f.specials, season: 0 })
+                  : set({ season: f.season === s.season ? 0 : s.season, specials: false });
+                return <Chip key={s.season} on={on} label={t('filters.seasonChip', { n: s.season, count: s.count })} onClick={pick} />;
+              })}
               <Chip on={f.fullSeason} label={t('filters.fullSeasonOnly')} onClick={() => set({ fullSeason: !f.fullSeason })} />
             </div>
           </div>

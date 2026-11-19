@@ -26,6 +26,7 @@ export const az: EnDict<typeof ru> = {
     originalChip: "Orijinal",
     rusSubsChip: "Rus alt yazıları",
     fullSeasonOnly: "Yalnız tam mövsüm",
+    seasonChip: "{n} mövsümü · {count}",
     show: {
       one: "Əli göstər {n}",
       other: "{n}-in əllərini göstər",

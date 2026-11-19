@@ -44,6 +44,8 @@ export interface Releases { theatrical?: string; digital?: string; physical?: st
  */
 export interface CatalogCard extends CatalogTitle {
   backdrop: string; genres: string[]; runtime: number; overview: string; cast: Person[]; seasons: Season[]; airing: boolean;
+  /** True when TMDB lists a specials season (number 0). Absent when it does not, including older cached cards. */
+  specials?: boolean;
   status?: SeriesStatus; nextEpisode?: NextEpisode | null; lastAirDate?: string;
   /** First air date 'YYYY-MM-DD' (series). Absent on cards cached before it was kept. */
   firstAirDate?: string;
@@ -413,8 +415,9 @@ export function sanitizeCard(e: TmdbEndpoint, raw: unknown, kind: Kind): Catalog
   const last = o.last_episode_to_air && typeof o.last_episode_to_air === 'object' ? (o.last_episode_to_air as { [k: string]: unknown }) : null;
   const lastSeason = last ? n(last.season_number) : 0;
   const lastEp = last ? n(last.episode_number) : 0;
-  const seasons: Season[] = kind === 'tv' && Array.isArray(o.seasons)
-    ? (o.seasons as unknown[]).map((s) => {
+  const rawSeasons = kind === 'tv' && Array.isArray(o.seasons) ? (o.seasons as unknown[]) : [];
+  const specials = rawSeasons.some((s) => n(((s || {}) as { [k: string]: unknown }).season_number) === 0);
+  const seasons: Season[] = rawSeasons.map((s) => {
         const x = (s || {}) as { [k: string]: unknown };
         const num = n(x.season_number);
         const eps = n(x.episode_count);
@@ -423,8 +426,7 @@ export function sanitizeCard(e: TmdbEndpoint, raw: unknown, kind: Kind): Catalog
           airDate: date(x.air_date),
           poster: imageUrl(e, x.poster_path, posterImageSize()),
         };
-      }).filter((s) => s.number > 0).sort((a, b) => b.number - a.number)
-    : [];
+      }).filter((s) => s.number > 0).sort((a, b) => b.number - a.number);
   return {
     kind: t.kind, id: t.id, title: t.title, original: t.original, year: t.year, poster: t.poster, rating: t.rating,
     backdrop: imageUrl(e, o.backdrop_path, backdropImageSize()),
@@ -434,6 +436,7 @@ export function sanitizeCard(e: TmdbEndpoint, raw: unknown, kind: Kind): Catalog
     cast: cast,
     seasons: seasons,
     airing: kind === 'tv' && (o.in_production === true || !!o.next_episode_to_air),
+    ...(specials ? { specials: true } : {}),
     status: kind === 'tv' ? statusOf(o.status) : '',
     nextEpisode: kind === 'tv' ? nextEpisodeOf(o.next_episode_to_air) : null,
     lastAirDate: kind === 'tv' ? date(o.last_air_date) : '',

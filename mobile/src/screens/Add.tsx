@@ -38,7 +38,9 @@ import {
 } from '../../../src/sources/view';
 import type { SourceResult } from '../../../src/sources/types';
 import { loadSubs } from '../../../src/monitor/subs';
-import { applyFilters, activeFilterCount, filterChips, parseRelease, sinkUnknownSeasons, subQualityOf, type SearchFilters } from '../../../src/sources/filters';
+import { applyFilters, activeFilterCount, filterChips, sinkUnknownSeasons, subQualityOf, type SearchFilters } from '../../../src/sources/filters';
+import { catalogQuery, filterSeasonChips, titleInQuery, tmdbSeasonFacts, type TmdbSeasonFacts } from '../../../src/sources/filterSeasons';
+import { phoneCatalog } from '../catalog/phoneCatalog';
 import { splitByRelevance } from '../../../src/sources/relevance';
 import { FiltersSheet, loadSearchFilters, saveSearchFilters } from '../ui/FiltersSheet';
 import { ResultCard } from '../ui/ResultCard';
@@ -291,6 +293,7 @@ export function Add({
   const [fileBusy, setFileBusy] = useState(false);
   const [recent, setRecent] = useState<string[]>(() => loadRecentQueries());
   const [clipHint, setClipHint] = useState<string | null>(null);
+  const [tmdbFacts, setTmdbFacts] = useState<TmdbSeasonFacts | null>(null);
   // a link or a ready tracker query is for «Источники»; else the tab asked for, else the one used last
   // the route's fields choose only the first tab of the entry
   const [scope, setScopeState] = useState<SearchScope>(
@@ -647,7 +650,28 @@ export function Add({
   // unknown seasons stay in the count, under the releases of the chosen season
   const visible = sinkUnknownSeasons(ordered, filters.season);
   memo.order = visible.map(resultKey);
-  const seasons = Array.from(new Set((rows || []).reduce((a: number[], r) => a.concat(parseRelease(r.Title).seasons), []))).sort((a, b) => a - b).slice(0, 12);
+  const seasons = filterSeasonChips((rows || []).map((r) => r.Title), tmdbFacts);
+  const searchedNow = memo.searched;
+  useEffect(() => {
+    const q = searchedNow.trim();
+    setTmdbFacts(null);
+    if (!q) return;
+    let stop = false;
+    phoneCatalog()
+      .then((c) => c.search(catalogQuery(q), 1).then((res) => ({ c, res })))
+      .then(({ c, res }) => {
+        if (stop) return null;
+        const tv = (res.items || []).filter((i) => i.kind === 'tv' && titleInQuery(q, i.title, i.original))[0];
+        return tv ? c.card('tv', tv.id) : null;
+      })
+      .then((card) => {
+        if (stop || !card) return;
+        const facts = tmdbSeasonFacts(card);
+        if (facts) setTmdbFacts(facts);
+      })
+      .catch(() => undefined);
+    return () => { stop = true; };
+  }, [searchedNow]);
   const nFilters = activeFilterCount(filters);
   const blocked = prog ? prog.failed.filter((id) => isCloudflare((getHealth(id) || { message: '' }).message)) : [];
   // a site that showed its code page: its own message («torrent.by просит ввести проверочный код»)

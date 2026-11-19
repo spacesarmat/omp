@@ -35,11 +35,13 @@ export interface SearchFilters {
   voice: Voice[];
   rusSubs: boolean;
   season: number;
+  /** Season 0 (specials). `season` stays 0, which also means «no season chosen». */
+  specials: boolean;
   fullSeason: boolean;
 }
 
 export const NO_FILTERS: SearchFilters = {
-  res: [], hdr: false, source: [], hideCam: false, minGb: 0, maxGb: 0, minSeeds: 0, voice: [], rusSubs: false, season: 0, fullSeason: false,
+  res: [], hdr: false, source: [], hideCam: false, minGb: 0, maxGb: 0, minSeeds: 0, voice: [], rusSubs: false, season: 0, specials: false, fullSeason: false,
 };
 
 function resOf(s: string): Res {
@@ -113,6 +115,7 @@ export function sanitizeFilters(v: unknown): SearchFilters {
     voice: listOf(o.voice, VOICES),
     rusSubs: o.rusSubs === true,
     season: Math.floor(num(o.season, 99)),
+    specials: o.specials === true,
     fullSeason: o.fullSeason === true,
   };
 }
@@ -141,7 +144,8 @@ export function filterChips(f: SearchFilters): string[] {
   if (f.minSeeds) out.push(t('filters.seeds', { n: f.minSeeds }));
   if (f.voice.length) out.push(f.voice.map(voiceLabel).join(', '));
   if (f.rusSubs) out.push(t('filters.rusSubs'));
-  if (f.season) out.push(t('filters.season', { n: f.season }));
+  if (f.specials) out.push(t('library.season', { n: 0 }));
+  else if (f.season) out.push(t('filters.season', { n: f.season }));
   if (f.fullSeason) out.push(t('filters.fullSeason'));
   return out;
 }
@@ -168,7 +172,8 @@ export function applyFilters<T extends { Title: string; Seed: number; sizeBytes?
     if (f.rusSubs && !i.rusSubs) return false;
     // a named season set must include the choice; a pack («S01-S03», «1-3 сезоны») and «Complete series» stay;
     // a title with no season stays (sorted below the matches)
-    if (f.season && !i.allSeasons && i.seasons.length && i.seasons.indexOf(f.season) < 0) return false;
+    const want = f.specials ? 0 : f.season;
+    if ((f.specials || f.season) && !i.allSeasons && i.seasons.length && i.seasons.indexOf(want) < 0) return false;
     if (f.fullSeason && i.episodes && (i.episodes.from > 1 || i.episodes.to < i.episodes.of)) return false;
     return true;
   });
