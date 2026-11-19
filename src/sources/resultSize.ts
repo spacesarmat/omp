@@ -4,6 +4,14 @@
 import { fmtSize } from '../i18n';
 import { parseSize } from './html';
 
+/** Bytes of a search row: the parsed size, or the tracker's own text («5,1 ГБ») when the feed left bytes out. */
+export function resultBytes(r: { Size?: string; sizeBytes?: number }): number | undefined {
+  const known = typeof r.sizeBytes === 'number' && isFinite(r.sizeBytes) && r.sizeBytes > 0 ? r.sizeBytes : 0;
+  if (known) return known;
+  const parsed = parseSize(r.Size || '');
+  return parsed !== null && parsed > 0 ? parsed : undefined;
+}
+
 export function resultSizeText(r: { Size?: string; sizeBytes?: number }): string {
   const known = typeof r.sizeBytes === 'number' && isFinite(r.sizeBytes) && r.sizeBytes > 0 ? r.sizeBytes : null;
   const bytes = known !== null ? known : parseSize(r.Size || '');

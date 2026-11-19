@@ -44,7 +44,7 @@ import { posterKey, requestPoster } from '../catalog/resultPosters';
 import { phoneLink } from '../phone/phoneStore';
 import { PhoneRpcError, phoneRpc } from '../phone/rpc';
 import { rememberSourceNames } from '../sources/sourceNames';
-import { resultSizeText } from '../sources/resultSize';
+import { resultBytes, resultSizeText } from '../sources/resultSize';
 import { rowsForQuery } from '../sources/relevance';
 import { episodeRole } from '../sources/filters';
 import { parseSearchQuery } from '../sources/queryParse';
@@ -624,7 +624,7 @@ export function AddScreen() {
           {sorted.map((r, i) => {
             const key = resultKey(r);
             const s = releaseTitle(r.Title);
-            const chips = releaseChips(r.Title);
+            const chips = releaseChips(r.Title, { quality: r.qualityHint, sizeBytes: resultBytes(r) });
             const kind = resultKindLabel(r);
             const hash = (r.hash || r.Hash || '').toLowerCase();
             const also = r.sources && r.sources.length ? t('search.alsoOn', { list: r.sources.map(sourceName).join(', ') }) : '';

@@ -55,8 +55,10 @@ export const NO_FILTERS: SearchFilters = {
 
 function resOf(s: string): Res {
   if (/(^|[^0-9a-z])(2160[pi]?|4k|uhd)([^0-9a-z]|$)/i.test(s)) return 2160;
-  if (/(^|[^0-9])1080[pi]/i.test(s)) return 1080;
-  if (/(^|[^0-9])720p/i.test(s)) return 720;
+  if (/(^|[^0-9a-z])(1080[pi]?|fhdr|fhd|full[ .]?hd)([^0-9a-z]|$)/i.test(s)) return 1080;
+  if (/(^|[^0-9a-z])720[pi]([^0-9a-z]|$)/i.test(s)) return 720;
+  // Bare HD is 720p. HDR, FHD, FHDR, HDTV and HDRip fail the boundary after "hd".
+  if (/(^|[^0-9a-z])hd([^0-9a-z]|$)/i.test(s)) return 720;
   return 0;
 }
 

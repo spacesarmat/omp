@@ -17,12 +17,17 @@ import { replaceAbort, replaceWithResult, type ReplaceAbort, type ReplaceResult 
 import { findingsOf, removeFindings } from '../../../src/monitor/subs';
 import { BETTER_ID, EPISODES_ID } from '../../../src/monitor/types';
 import {
+  anotherReleaseQuery,
   carryProgress,
   findUpgrades,
   isLowSeeds,
+  upgradeKind,
   upgradeQuery,
   type UpgradeOutcome,
 } from '../../../src/monitor/upgrade';
+import { parseReleaseInfo } from '../../../src/lib/releaseInfo';
+import { setKindFilter } from '../../../src/lib/releaseKind';
+import { loadSearchFilters, saveSearchFilters } from './FiltersSheet';
 import { getSource } from '../../../src/sources/registry';
 import { resultKey, seedsText, sourceName } from '../../../src/sources/view';
 import { SeedCheck } from '../../../src/ui/SeedCheck';
@@ -63,12 +68,15 @@ function dropFindingsOf(hash: string): void {
 export function BetterSheet({
   torrent,
   files,
+  season,
   onReplaced,
   onClose,
 }: {
   torrent: Torrent;
   /** Every file of the torrent (the phone's watch positions are keyed by file index). */
   files: TorrentFile[];
+  /** The season on screen (continue / selected), or the missing one from «+ Сезон N». 0 when it is a film. */
+  season?: number;
   /** Called with the new torrent's hash after a successful replace (the sheet is closing). */
   onReplaced?: (hash: string) => void;
   onClose: () => void;
@@ -95,7 +103,15 @@ export function BetterSheet({
   const have = qualityOrUnknown(title);
 
   const searchAll = () => {
-    const q = upgradeQuery(lib);
+    const series = upgradeKind(lib) === 'series';
+    const q = anotherReleaseQuery(upgradeQuery(lib), series ? season || 0 : 0);
+    if (series) setKindFilter('series');
+    const res = parseReleaseInfo(title).resolution;
+    const pref = res === '2160p' ? 2160 : res === '1080p' ? 1080 : res === '720p' ? 720 : 0;
+    if (pref) {
+      const cur = loadSearchFilters();
+      if (!cur.res.length) saveSearchFilters({ ...cur, res: [pref] });
+    }
     onClose();
     navigate({ name: 'add', query: q, run: true });
   };

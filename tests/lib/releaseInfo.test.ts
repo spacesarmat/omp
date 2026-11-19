@@ -10,7 +10,8 @@ describe('parseReleaseInfo', () => {
     expect(b('Clevatess II Majuu no Ou to Itsuwari no Yuusha Denshou [WEB-DL 1080p]')).toEqual(['1080p', 'WEB-DL']);
     expect(b('Внешняя угроза / The Outer Threat [2026, Канада, США, Триллер, WEB-DLRip-AVC] MVO')).toEqual(['AVC', 'WEBRip', '2026']);
     expect(b('Трудно быть богом / Сезон: 1 [2026, Фантастика, драма, WEBRip 1080p]')).toEqual(['1080p', 'WEBRip', '2026']);
-    expect(b('Матрица / The Matrix / 1999-2021 / UHD BDRemux 2160p | 4K | HDR | Dolby Vision Profile 8')).toEqual(['2160p', 'DV', 'Remux', '1999']);
+    expect(b('Матрица / The Matrix / 1999-2021 / UHD BDRemux 2160p | 4K | HDR | Dolby Vision Profile 8')).toEqual(['2160p', 'HDR', 'DV', 'Remux', '1999']);
+    expect(b('Star Trek Discovery - Season 5 (2024) FHDR+DV cz en')).toEqual(['1080p', 'HDR', 'DV', '2024']);
   });
   it('handles other markers', () => {
     expect(b('Movie.2010.4K.HDR10+.HEVC.BluRay')).toEqual(['2160p', 'HDR10+', 'HEVC', 'BluRay', '2010']);

@@ -174,6 +174,13 @@ describe('found release rows', () => {
     expect(releaseChips('Северный ветер (2026) WEB-DL 2160p HDR | Дубляж')).toEqual(['4K', 'HDR', 'WEB-DL', 'Дубляж']);
     expect(releaseChips('Фильм 1080p BDRip MVO')).toEqual(['1080p', 'BluRay', 'Многоголосый']);
     expect(releaseChips('Дюна')).toEqual([]);
+    expect(releaseChips('Star Trek Discovery - Season 5 (2024) FHDR+DV cz en')).toEqual(['1080p', 'HDR', 'DV']);
+    expect(releaseChips('Звёздный путь: Дискавери · 5 сезон WEBRip', { quality: '1080p' })).toEqual(['1080p', 'WEBRip']);
+    expect(releaseChips('Звёздный путь: Дискавери · 5 сезон WEBRip', { quality: '720' })).toEqual(['720p', 'WEBRip']);
+    expect(releaseChips('Star Trek Discovery · 5 сезон', { sizeBytes: 27.7e9 })).toEqual(['1080p']);
+    expect(releaseChips('Movie HDR')).toEqual(['HDR']);
+    expect(releaseChips('Movie HDRip')).toEqual([]);
+    expect(releaseChips('Ведьмак / Сезон: 4 / Серии: 1-8 из 8 [WEBRip]', { sizeBytes: 5.1e9 })).toEqual(['720p', 'WEBRip']);
     mount([res('Северный ветер (2026) WEB-DL 2160p HDR | Дубляж')]);
     const chips = Array.from(el.querySelectorAll('.m-rel-chips .m-badge-inline')).map((n) => n.textContent);
     // the kind of the release comes first (a year and no series marks: a film)

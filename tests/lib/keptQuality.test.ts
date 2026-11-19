@@ -21,6 +21,10 @@ describe('torrentQuality', () => {
   it('is empty when nothing names a resolution', () => {
     expect(torrentQuality({ hash: H, title: 'Loki' })).toBe('');
   });
+  it('reads FHDR as 1080p and estimates a season pack from its size', () => {
+    expect(torrentQuality({ hash: H, title: 'Star Trek Discovery - Season 5 (2024) FHDR+DV cz en' })).toBe('1080p');
+    expect(torrentQuality({ hash: H, title: 'Star Trek Discovery · 5 сезон', torrent_size: 27.7e9 })).toBe('1080p');
+  });
   it('reads a badge and a season from the release string stored on the torrent', () => {
     const raw = 'Show S02 (24 серии из 24) 1080p';
     const data = JSON.stringify({ omp: { v: 1, h: [], rt: raw } });

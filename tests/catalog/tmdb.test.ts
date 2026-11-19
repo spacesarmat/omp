@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 // @ts-ignore node builtins
 import { readFileSync } from 'node:fs';
-import { endpointOf, noveltiesUrl, homeListUrl, homeSectionIds, searchUrl, cardUrl, seasonUrl, imageUrl, posterImageSize, sanitizeList, sanitizeCard, sanitizeSeason, torrentQuery, statusOf, nextEpisodeOf, readableTitle, englishTitle, sanitizePerson, personBioUrl } from '../../src/catalog/tmdb';
+import { endpointOf, noveltiesUrl, homeListUrl, homeSectionIds, searchUrl, cardUrl, seasonUrl, imageUrl, posterImageSize, sanitizeList, sanitizeCard, sanitizeSeason, torrentQuery, seriesTorrentQuery, statusOf, nextEpisodeOf, readableTitle, englishTitle, sanitizePerson, personBioUrl } from '../../src/catalog/tmdb';
 import { isTmdbV4Token } from '../../src/catalog/tmdbToken';
 import { applyLanguageSetting } from '../../src/i18n';
 import { MOVIE_LIST, TV_LIST, MULTI, MOVIE_CARD, TV_CARD, TV_SEASON } from './fixtures';
@@ -103,7 +103,7 @@ describe('sanitizers', () => {
   it('lists keep films and series, drop people and junk', () => {
     const l = sanitizeList(E, MULTI, null);
     expect(l.items.map((i) => i.kind + ':' + i.id)).toEqual(['movie:101', 'tv:202']);
-    expect(l.items[0]).toEqual({ kind: 'movie', id: 101, title: 'Северный ветер', original: 'North Wind', year: 2026, poster: 'https://img.mirror.test/t/p/' + posterImageSize() + '/nw.jpg', rating: 7.4 });
+    expect(l.items[0]).toEqual({ kind: 'movie', id: 101, title: 'Северный ветер', original: 'North Wind', year: 2026, poster: 'https://img.mirror.test/t/p/' + posterImageSize() + '/nw.jpg', rating: 7.4, voteCount: 312 });
     expect(sanitizeList(E, MOVIE_LIST, 'movie').pages).toBe(3);
     expect(sanitizeList(E, 'junk', 'movie')).toEqual({ items: [], pages: 0 });
   });
@@ -229,6 +229,8 @@ describe('torrent query', () => {
     expect(torrentQuery({ title: 'Северный ветер', original: 'North Wind', year: 2026, kind: 'movie' })).toBe('Северный ветер 2026');
     expect(torrentQuery({ title: 'Орбитальная станция', original: 'Orbit Station', year: 2024, kind: 'tv' })).toBe('Орбитальная станция');
     expect(torrentQuery({ title: 'Орбитальная станция', original: 'Orbit Station', year: 2024, kind: 'tv' }, 2)).toBe('Орбитальная станция 2 сезон');
+    expect(seriesTorrentQuery({ title: 'Локи', original: 'Loki' }, 1)).toBe('Loki Локи 1 сезон');
+    expect(seriesTorrentQuery({ title: 'Локи', original: 'Локи' }, 1)).toBe('Локи 1 сезон');
     expect(torrentQuery({ title: '', original: 'Orbit Station', year: 2024, kind: 'tv' })).toBe('Orbit Station');
   });
 });

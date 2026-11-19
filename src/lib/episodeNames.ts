@@ -3,10 +3,9 @@
 // then shows what it showed before.
 import type { Torrent } from '../api/types';
 import type { CatalogCard, Episode, SeasonDetails } from '../catalog/tmdb';
-import { yearOf } from '../monitor/newEpisodes';
-import { findShow } from './tmdbShow';
-import { displayTitle } from './torrentName';
 import { activeCatalog } from '../catalog/activeCatalog';
+import { singleGroup } from './seriesGroups';
+import { matchSeries, seriesMatchVersion } from './seriesMatch';
 import { t } from '../i18n';
 import { airDateText } from './seriesStatus';
 import { parseEpisode, type TorrentFile } from './episodes';
@@ -36,39 +35,36 @@ export function resetEpisodeNames(): void {
 }
 
 
-async function match(tor: Torrent): Promise<ShowInfo | null> {
-  const title = tor.title || displayTitle(tor);
-  const c = await activeCatalog();
-  const item = await findShow(c, title, yearOf(title) || 0);
-  if (!item) return null;
-  const hit = item;
-  let card: CatalogCard | null = null;
-  try {
-    card = await c.card('tv', hit.id);
-  } catch {
-    // the seasons list is a bonus: the names still work
-  }
+function infoOf(card: CatalogCard): ShowInfo {
   const seasonPosters: { [n: number]: string } = {};
   const episodeCounts: { [n: number]: number } = {};
-  if (card) card.seasons.forEach((s) => {
+  card.seasons.forEach((s) => {
     if (s.poster) seasonPosters[s.number] = s.poster;
     if (s.episodes > 0) episodeCounts[s.number] = s.episodes;
   });
   return {
-    id: item.id,
-    title: item.title,
-    original: item.original,
-    year: item.year,
-    seasons: card ? card.seasons.map((s) => s.number).filter((n) => n > 0).sort((a, b) => a - b) : [],
-    poster: (card && card.poster) || item.poster || '',
+    id: card.id,
+    title: card.title,
+    original: card.original,
+    year: card.year,
+    seasons: card.seasons.map((s) => s.number).filter((n) => n > 0).sort((a, b) => a - b),
+    poster: card.poster || '',
     seasonPosters: seasonPosters,
     episodeCounts: episodeCounts,
   };
 }
 
+async function match(tor: Torrent): Promise<ShowInfo | null> {
+  const g = singleGroup(tor);
+  if (!g) return null;
+  const card = await matchSeries(g);
+  return card ? infoOf(card) : null;
+}
+
 /** The TMDB show of a torrent, matched once per hash; null when there is none or TMDB is out of reach. */
 export function showOf(tor: Torrent): Promise<ShowInfo | null> {
-  const key = tor.hash;
+  // the visible title is part of the key: a rename must not keep the show found for the old name
+  const key = tor.hash + '|' + (tor.title || '') + '|' + String(seriesMatchVersion.peek());
   let p = shows.get(key);
   if (!p) {
     p = match(tor).then(

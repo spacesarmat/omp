@@ -82,6 +82,7 @@ interface Fields {
   torrent?: string;
   detailUrl?: string;
   categories?: string;
+  quality?: string;
 }
 
 function toResult(sourceId: string, f: Fields): SourceResult | null {
@@ -116,6 +117,7 @@ function toResult(sourceId: string, f: Fields): SourceResult | null {
   if (detail) r.detailUrl = detail;
   if (f.date !== undefined) r.date = f.date;
   if (f.sizeBytes !== undefined) r.sizeBytes = f.sizeBytes;
+  if (f.quality) r.qualityHint = f.quality;
   return r;
 }
 
@@ -197,6 +199,7 @@ export function parseTorznab(xml: string, sourceId: string, kind: Kind = 'jacket
       torrent: plain(enclosureUrl) || plain(link),
       detailUrl: childText(item, 'comments') || undefined,
       categories: cats.join(', '),
+      quality: attrs.video_resolution || attrs.resolution || attrs.quality || '',
     });
     if (r) {
       const rank = num(attrs.omp_rank);

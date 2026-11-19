@@ -4,6 +4,14 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## Unreleased
+
+- [phone] A library series is more likely to match the right TMDB show: an exact title beats a title that only contains the word, for any short name, not one show. Season, episode length, popularity and 4K count. A rename searches again. "Not this series?" is on the torrent page too. "+ Season" searches the English and the local title
+- [phone] Grouped source results show the TMDB poster, or the title's first letter when there is none
+- [phone] Find another release opens search on the current season, with type Series and that release's quality. A complete series stays in the results
+- [phone] A release has its own resolution chip: from the title (4K, 1080p, FHD, FHDR, 720p, HD, SD), from the indexer field, or from the season or episode size when neither names one. The same chip is on a library card. FHDR is 1080p and HDR, next to DV
+- [phone] Search quality chips wrap onto the next line instead of being cut off. Releases of one season in different title languages share one group and one TMDB poster. A size written as text still yields a resolution chip
+
 ## 0.30.1-beta.15
 
 - [phone] Settings rows share one height inside grouped cards, and a row that opens a screen has a chevron. The update check no longer splits the card

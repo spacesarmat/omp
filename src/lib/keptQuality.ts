@@ -2,7 +2,7 @@
 // The first release string that names a resolution is kept by hash; file names cover a title that was
 // already clean before this build. Chromium 53: no ?., no ??.
 import type { TorrentFile } from '../api/types';
-import { displayBadge, parseReleaseInfo, releaseBadges } from './releaseInfo';
+import { displayBadge, parseReleaseInfo, resolutionFromSize } from './releaseInfo';
 import { displayTitle, torrentFiles } from './torrentName';
 import { nameLocked, rawReleaseOf } from './journal';
 import { isObject, loadJson, saveJson } from '../store/storage';
@@ -13,8 +13,8 @@ const mem: { [hash: string]: string } = {};
 let loaded = false;
 
 function qualityFrom(title: string): string {
-  const badges = releaseBadges(parseReleaseInfo(title)).filter((x) => !/^\d{4}$/.test(x));
-  return badges.length ? displayBadge(badges[0]) : '';
+  const res = parseReleaseInfo(title).resolution;
+  return res ? displayBadge(res) : '';
 }
 
 function ensure(): void {
@@ -84,7 +84,7 @@ export function identityText(tor: { hash?: string; title?: string; name?: string
   return y ? visible + ' (' + y + ')' : visible;
 }
 
-export function torrentQuality(tor: { hash: string; title?: string; name?: string; data?: string; file_stats?: TorrentFile[] }): string {
+export function torrentQuality(tor: { hash: string; title?: string; name?: string; data?: string; file_stats?: TorrentFile[]; torrent_size?: number }): string {
   const own = qualityFrom(displayTitle(tor));
   if (own) return own;
   const shared = qualityFrom(rawReleaseOf(tor.data));
@@ -99,5 +99,7 @@ export function torrentQuality(tor: { hash: string; title?: string; name?: strin
     const q = qualityFrom(files[i].path || '');
     if (q) return q;
   }
-  return '';
+  const named = displayTitle(tor) + ' ' + (rawReleaseOf(tor.data) || '');
+  const est = resolutionFromSize(named, tor.torrent_size);
+  return est ? displayBadge(est) : '';
 }
