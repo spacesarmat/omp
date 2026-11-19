@@ -55,6 +55,7 @@ import { tvFirst, playOnPhone } from '../watchHere';
 import { cachedSeriesMatch, seriesMatchVersion } from '../../../src/lib/seriesMatch';
 import { withAds } from '../../../src/ads/ads';
 import { AdCell, type AdCellKind } from '../ads/AdCell';
+import { YandexCell } from '../ads/YandexCell';
 import { PER_SCREEN, useAdSlots } from '../ads/useAdSlots';
 
 const POLL_MS = 15000;
@@ -562,9 +563,13 @@ export function Library() {
     perScreen: gridColsNow || PER_SCREEN[view] || PER_SCREEN.list,
     active: mine && !isHistory && !unavailable && !selecting && !query.trim() && loaded,
     listKey: tab + '|' + sort,
+    layout: view === 'list' || view === 'compact' ? 'row' : 'card',
     itemEl: (i) => (bodyRef.current ? bodyRef.current.querySelectorAll('[data-anchor]')[i] || null : null),
   });
   const adCell = (pos: number, kind: AdCellKind) => {
+    if (ads.fill(pos) === 'yandex') {
+      return <YandexCell key={'ad:mine:' + pos} kind={kind} slotId={ads.slotId(pos)} onShown={() => ads.shown(pos)} />;
+    }
     const b = ads.banner(pos);
     return b ? <AdCell key={'ad:mine:' + pos} kind={kind} banner={b} onShown={() => ads.shown(pos)} onClick={() => ads.click(pos)} /> : null;
   };

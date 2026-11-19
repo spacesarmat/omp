@@ -20,6 +20,27 @@ export type AdBanner = {
   createdAt?: number;
 };
 
+export type YandexGroup = {
+  enabled: boolean;
+  everyN: number;
+  afterInstallDays: number;
+  /** 0 or empty: no cap. */
+  maxPerSession: number;
+  /** 0 or empty: no cap. */
+  maxPerDay: number;
+};
+
+export type YandexAdsSettings = {
+  nativeUnitPhone: string;
+  nativeUnitTv: string;
+  bannerUnit: string;
+  enabled: boolean;
+  fallbackHouse: boolean;
+  androidUnit: string;
+  iosUnit: string;
+  groups: { free: YandexGroup; sub: YandexGroup };
+};
+
 export type AdsConfig = {
   enabled: boolean;
   provider: 'house' | 'yandex';
@@ -33,7 +54,7 @@ export type AdsConfig = {
   hideForSubscribers: boolean;
   tvHideIfLinkedSubscriber: boolean;
   minAppVersion: string;
-  yandex: { nativeUnitPhone: string; nativeUnitTv: string; bannerUnit: string };
+  yandex: YandexAdsSettings;
   banners: AdBanner[];
 };
 
