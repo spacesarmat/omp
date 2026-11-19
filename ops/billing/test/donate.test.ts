@@ -406,3 +406,24 @@ describe('donate checkout retry', () => {
     expect(again.state.donations.find((d) => d.id === draft.id).gross).toBe(pay.state.donations.find((d) => d.id === draft.id).gross);
   });
 });
+
+describe('donate draft growth', () => {
+  it('repeated donate commands do not accumulate drafts/cancelled rows', () => {
+    const { state } = on();
+    let cur = state;
+    for (let i = 0; i < 10; i++) {
+      cur = botCallback(cur, { chatId: '42', data: 'dn:c', now: NOW + i }).state;
+      expect(cur.donations).toHaveLength(1);
+      expect(cur.donations[0].status).toBe('draft');
+    }
+  });
+
+  it('keeps financial rows while pruning superseded drafts', () => {
+    const { state, account } = on();
+    const paid = { id: 'pay1', accountId: account.id, status: 'paid', amountRub: 100, createdAt: NOW };
+    let cur = { ...state, donations: [paid] };
+    cur = botCallback(cur, { chatId: '42', data: 'dn:c', now: NOW }).state;
+    expect(cur.donations.find((d) => d.id === 'pay1')).toBeTruthy();
+    expect(cur.donations).toHaveLength(2);
+  });
+});
