@@ -20,7 +20,7 @@ const me: {
 vi.mock('../src/searchContext', () => ({ phoneSourceContext: () => site.ctx }));
 
 import { OmpJackettCard } from '../src/screens/OmpJackettCard';
-import { billingNotice, billingSession, saveBillingSession, setBillingNotice } from '../../src/billing/session';
+import { billingNotice, billingSession, saveBillingSession, setBillingNotice, setPendingBillingCode, pendingBillingCode } from '../../src/billing/session';
 import { BILLING_BOT_URL } from '../../src/billing/config';
 import { REFRESH_SECRET } from '../../src/billing/tokens';
 import { clearBilling } from '../../src/sources/ompJackett';
@@ -83,6 +83,20 @@ describe('OMP subscription card', () => {
     expect(billingNotice()).toBe('');
     expect(el.querySelector('[data-notice="revoked"]')).toBeNull();
     expect(el.querySelector('#omp-code')).toBeNull();
+  });
+
+  it('a deep-link code is prefilled but not activated until the user taps connect', async () => {
+    setPendingBillingCode('DEEP-CODE');
+    await act(async () => render(<OmpJackettCard />, el));
+    await flush();
+    const input = el.querySelector('#omp-code') as HTMLInputElement;
+    expect(input.value).toBe('DEEP-CODE');
+    expect(pendingBillingCode()).toBeFalsy();
+    expect(billingSession()).toBeNull();
+    const button = Array.from(el.querySelectorAll('button')).find((b) => (b.textContent || '').trim() === 'Подключить')!;
+    act(() => button.click());
+    await flush();
+    expect(billingSession()!.access).toBe('a1.x');
   });
 
   it('says the key was not saved when the Keystore copy is missing after a restart', async () => {
