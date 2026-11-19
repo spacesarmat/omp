@@ -213,4 +213,36 @@ describe('watch signals and rank', () => {
     const cnt = await file.query('SELECT COUNT(*)::int AS n FROM watch_votes WHERE voter = $1 AND infohash = $2', [voter, B]);
     expect(cnt.rows[0].n).toBe(100);
   });
+
+  it('concurrent batches listing torrents in opposite order do not deadlock', async () => {
+    const file = await testStore();
+    const repo = createWatchRepo(file);
+    const voter = voterHash('acc-dl', DEV);
+    const mk = (h: string, f: number) => ({
+      infohash: h,
+      fileIndex: f,
+      title: 'Show S01E01 1080p',
+      titleKey: 'show s01e01',
+      season: 1,
+      episode: 1,
+      deviceClass: 'tv',
+      ttffMs: 1000,
+      rebufferN: 0,
+      rebufferMs: 0,
+      watchedPct: 95,
+      completed: true,
+      switched: false,
+      voice: '',
+      codecOk: true,
+      codecs: [],
+    });
+    const [r1, r2] = await Promise.all([
+      repo.saveSignals(voter, [mk(A, 0), mk(B, 0)], Date.now()),
+      repo.saveSignals(voter, [mk(B, 1), mk(A, 1)], Date.now()),
+    ]);
+    expect(r1).toBe(2);
+    expect(r2).toBe(2);
+    const cnt = await file.query('SELECT COUNT(*)::int AS n FROM watch_votes WHERE voter = $1', [voter]);
+    expect(cnt.rows[0].n).toBe(4);
+  });
 });
