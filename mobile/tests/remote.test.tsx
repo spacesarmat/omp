@@ -754,6 +754,22 @@ describe('Remote for Android TV', () => {
     tvState.value = 'idle';
   });
 
+  it('pause and rewind control the player in both modes when the box is off', () => {
+    nowPlaying.value = { hash: 'h', file: 1, title: 'Тишина', subtitle: '', time: 30, duration: 100, paused: false, buffering: false } as any;
+    lastSeen.value = Date.now();
+    mount();
+    click(lbl('Пауза'));
+    expect(nowPlaying.value && nowPlaying.value.paused).toBe(true);
+    expect(a.pressAtvKey).not.toHaveBeenCalled();
+    click(lbl('Назад на 10 секунд'));
+    expect(nowPlaying.value && nowPlaying.value.time).toBe(20);
+    click(text('Свайпы'));
+    expect(el.querySelector('[data-atv-remote] [data-player-cmds]')).toBeTruthy();
+    expect(lbl('Играть')).toBeTruthy();
+    nowPlaying.value = null;
+    lastSeen.value = 0;
+  });
+
   it('the LG «Кнопки» layout: the «Пульт» header with the name and state, colour keys, Назад · Домой · Меню; no power or channel keys', () => {
     mount();
     act(() => {

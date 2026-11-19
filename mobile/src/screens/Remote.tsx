@@ -3,7 +3,7 @@ import { createPortal } from 'preact/compat';
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { t } from '../../../src/i18n';
 import { native } from '../platform/native';
-import { Icon } from '../ui/Icon';
+import { Icon, ICONS } from '../ui/Icon';
 import { showToast } from '../ui/toast';
 import { askConfirm } from '../ui/confirm';
 import { navigate } from '../nav';
@@ -21,7 +21,7 @@ import { foundTvNoWifi, foundTvRows, foundTvScanning } from '../tv/foundTvDiscov
 import { TouchpadSheet } from '../ui/TouchpadSheet';
 import { useBackHandler } from '../ui/backStack';
 import { touchpad, cursorGain, scrollFactor } from '../tv/touchpad';
-import { linkStatus, nowPlaying } from '../tv/playerLink';
+import { linkStatus, nowPlaying, sendCmd } from '../tv/playerLink';
 import { usePlayingNames } from '../lib/playingNames';
 import { miniTitle } from '../ui/MiniPlayer';
 import type { FoundOmpTv } from '../platform/native';
@@ -474,6 +474,29 @@ function RemoteNow() {
   const line = names.title ? miniTitle(names) : '';
   if (!line) return null;
   return <span class="m-remote-now">{line}</span>;
+}
+
+/** Pause and 10-second rewind for the OMP player. The mini bar is hidden on this screen. */
+function PlayerLinkRow() {
+  const s = nowPlaying.value;
+  if (!s || linkStatus.value === 'none') return null;
+  const live = linkStatus.value === 'live';
+  return (
+    <div class="m-rb-seek" data-player-cmds>
+      <button type="button" class="m-rb-seekbtn" aria-label={t('remote.mini.back10')} disabled={!live} onClick={() => sendCmd({ type: 'skip', d: -10 })}>
+        <Icon d={ICONS.back10} size={18} />
+      </button>
+      <button
+        type="button"
+        class="m-rb-seekbtn"
+        aria-label={s.paused ? t('remote.mini.play') : t('remote.mini.pause')}
+        disabled={!live}
+        onClick={() => sendCmd({ type: s.paused ? 'play' : 'pause' })}
+      >
+        <Icon d={s.paused ? ICONS.play : ICONS.pause} size={18} />
+      </button>
+    </div>
+  );
 }
 
 const fail = (e: unknown) => showToast(errorMessage(e));
@@ -1035,6 +1058,7 @@ function AtvRemote({ tv }: { tv: SavedTv }) {
               <Icon d={KEYBOARD} size={22} />
             </button>
           </div>
+          <PlayerLinkRow />
           <div class="m-vol m-rt-vol">
             <button type="button" class="m-key" aria-label={t('remote.volDown')} onClick={() => vol('down')}>
               −
@@ -1090,7 +1114,10 @@ function AtvRemote({ tv }: { tv: SavedTv }) {
                 </button>
               </div>
             ) : (
-              <span class="m-rocker-cap">{t('remote.nowPlaying')}</span>
+              <>
+                <PlayerLinkRow />
+                {!nowPlaying.value || linkStatus.value === 'none' ? <span class="m-rocker-cap">{t('remote.nowPlaying')}</span> : null}
+              </>
             )}
           </div>
           <div class="m-rocker">
