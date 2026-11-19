@@ -16,7 +16,7 @@ import { client } from '../../../src/store/servers';
 import { torrents, refreshTorrents } from '../../../src/store/library';
 import { renameTorrent } from '../../../src/lib/renameTorrent';
 import { displayTitle } from '../../../src/lib/torrentName';
-import { shortTitle } from '../../../src/lib/libraryView';
+import { libraryTitle, shortTitle } from '../../../src/lib/libraryView';
 import { playableFiles } from '../../../src/lib/episodes';
 import type { Torrent } from '../../../src/api/types';
 
@@ -110,7 +110,7 @@ export function TorrentMenu({
   };
 
   if (picking) return <PosterPickSheet tor={tor} targets={posterTargets(torrents.value, tor)} onClose={() => { setPicking(false); onClose(); }} />;
-  if (renaming) return <TorrentRenameSheet initial={title} onSave={rename} onClose={() => { setRenaming(false); onClose(); }} />;
+  if (renaming) return <TorrentRenameSheet initial={libraryTitle(tor).title || title} onSave={rename} onClose={() => { setRenaming(false); onClose(); }} />;
 
   return (
     <Sheet label={heading || shortTitle(title)} testId="PD06" onClose={onClose}>

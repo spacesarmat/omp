@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { fixPlaceholderTitles, resetTitleFix, RETRY_MS, MAX_TRIES } from '../../src/lib/titleFix';
+import { cleanReleaseTitles, fixPlaceholderTitles, resetTitleFix, RETRY_MS, MAX_TRIES } from '../../src/lib/titleFix';
+import { rememberedRawTitle, resetKeptQuality, torrentQuality } from '../../src/lib/keptQuality';
 import { renameTorrent, checkTitle, TITLE_MAX } from '../../src/lib/renameTorrent';
 import { TorrServerClient } from '../../src/api/torrserver';
 import { torrents, refreshTorrents, resetLibrary } from '../../src/store/library';
@@ -22,7 +23,10 @@ function fake(fail = false) {
   };
 }
 
-beforeEach(() => resetTitleFix());
+beforeEach(() => {
+  resetTitleFix();
+  resetKeptQuality();
+});
 
 describe('fixPlaceholderTitles', () => {
   it('writes the derived title only for placeholders and passes poster/category along', async () => {
@@ -57,6 +61,22 @@ describe('fixPlaceholderTitles', () => {
     expect(c.calls).toHaveLength(0);
     await fixPlaceholderTitles(c, [tor(H3, 'infohash:' + H3)]);
     expect(c.calls).toHaveLength(1);
+  });
+});
+
+describe('cleanReleaseTitles', () => {
+  it('writes the clean name and keeps the release string for the quality badge', async () => {
+    const c = fake();
+    const raw = 'Локи (2 сезон: 1-6 серии из 6) / Loki WEB-DL 1080p';
+    const done = await cleanReleaseTitles(c, [tor(H1, raw), tor(H2, 'Локи')]);
+    expect(done).toEqual([{ hash: H1, title: 'Локи' }]);
+    expect(c.calls).toEqual([{ hash: H1, title: 'Локи', poster: undefined, category: undefined }]);
+    expect(rememberedRawTitle(H1)).toBe(raw);
+    expect(torrentQuality({ hash: H1, title: 'Локи' })).toBe('1080p');
+  });
+  it('reads the badge from a file when the title was already clean', () => {
+    const files = [{ id: 1, path: 'Loki.S02E01.2160p.mkv', length: 1 }];
+    expect(torrentQuality({ hash: H2, title: 'Локи', file_stats: files })).toBe('4K');
   });
 });
 

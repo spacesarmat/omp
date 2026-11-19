@@ -1,5 +1,6 @@
 import type { Torrent } from '../api/types';
 import { t } from '../i18n';
+import { rememberRawTitle } from './keptQuality';
 
 export const TITLE_MAX = 200;
 
@@ -18,8 +19,9 @@ export interface RenameClient {
 }
 
 /** Renames a torrent on the server (poster, category and data stay as stored); resolves with the saved title. */
-export function renameTorrent(c: RenameClient, t: Pick<Torrent, 'hash' | 'poster' | 'category'>, raw: string): Promise<string> {
+export function renameTorrent(c: RenameClient, tor: Pick<Torrent, 'hash' | 'poster' | 'category' | 'title'>, raw: string): Promise<string> {
   const v = checkTitle(raw);
   if (!v.ok) return Promise.reject(new Error(v.error));
-  return c.setTitle(t, v.title).then(() => v.title);
+  rememberRawTitle(tor.hash, tor.title || '');
+  return c.setTitle(tor, v.title).then(() => v.title);
 }

@@ -17,7 +17,8 @@ import { SubsLimitSheet } from '../ui/SubsLimitSheet';
 import { airDateText, upcomingSeasons, type Upcoming } from '../../../src/lib/seriesStatus';
 import { mainButtonLines } from '../../../src/lib/phoneContinue';
 import { pickSeasonVoice, studiosOf, voiceDiffers } from '../../../src/lib/seasonVoice';
-import { Poster, qualityBadge } from '../ui/Poster';
+import { Poster } from '../ui/Poster';
+import { torrentQuality } from '../../../src/lib/keptQuality';
 import { LaunchError } from '../ui/LaunchError';
 import { currentRoute, goBack, navigate, switchTab, type MRoute } from '../nav';
 import { filesOf, useTvLaunch } from '../watch';
@@ -212,7 +213,7 @@ function Hero({ card, group }: { card: CatalogCard; group: SeriesGroup }) {
           <h1 class="m-tc-title m-series-title">{card.title || libraryTitle(group.named).title}</h1>
           {meta && <span class="m-muted m-small m-sh-meta">{meta}</span>}
           <SeriesPill card={card} />
-          <span class="m-muted m-small">{[seriesCountText(group, card), qualityBadge(group.lead.title || '')].filter(Boolean).join(' · ')}</span>
+          <span class="m-muted m-small">{[seriesCountText(group, card), torrentQuality(group.lead)].filter(Boolean).join(' · ')}</span>
         </div>
       </div>
     </>
