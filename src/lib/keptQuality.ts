@@ -64,14 +64,24 @@ export function releaseText(tor: { hash: string; title?: string; name?: string; 
   return rawReleaseOf(tor.data) || displayTitle(tor);
 }
 
+function yearIn(title: string): number {
+  const m = /(?:^|[^0-9])((?:19|20)\d\d)(?![0-9])/.exec(title || '');
+  return m ? +m[1] : 0;
+}
+
 /**
- * The name and year film matching should use. A title the person typed (omp.nm) wins.
- * An automatic cleanup keeps the saved release string, which still has the year.
+ * The name and year film matching should use. An automatic cleanup keeps the saved release string.
+ * A title the person typed wins, and a year they typed replaces the old one. A rename that
+ * leaves the year out keeps the year from the release string.
  */
 export function identityText(tor: { hash?: string; title?: string; name?: string; data?: string; file_stats?: TorrentFile[] }): string {
   const named = { hash: tor.hash || '', title: tor.title, name: tor.name, data: tor.data, file_stats: tor.file_stats };
-  if (nameLocked(tor.data)) return displayTitle(named);
-  return rawReleaseOf(tor.data) || displayTitle(named);
+  const visible = displayTitle(named);
+  const raw = rawReleaseOf(tor.data);
+  if (!nameLocked(tor.data)) return raw || visible;
+  if (yearIn(visible)) return visible;
+  const y = yearIn(raw);
+  return y ? visible + ' (' + y + ')' : visible;
 }
 
 export function torrentQuality(tor: { hash: string; title?: string; name?: string; data?: string; file_stats?: TorrentFile[] }): string {
