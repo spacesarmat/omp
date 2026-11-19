@@ -159,6 +159,7 @@ import { createCrowdRepo } from './db/pg/seedCrowdSql.mjs';
 import { CROWD_CACHE_TTL_MS, crowdDeviceKey } from './seedCrowd.mjs';
 import { createPlaybackStore } from './db/pg/playbackSql.mjs';
 import { parseProgressBody, parseProgressQuery } from './playbackProgress.mjs';
+import { createSyncStore, maySync, parseSyncBody, syncAudience } from './deviceSync.mjs';
 import { createCacheRepo } from './db/pg/cacheNodesSql.mjs';
 import { cacheEnabled } from './cacheNodes.mjs';
 import { isCachePath, routeCache } from './cacheHttp.mjs';
@@ -1599,6 +1600,7 @@ export function createApp(file, fetchImpl, opts) {
   const seedTransport = (opts && opts.seedTransport) || defaultSeedTransport();
   const seedCache = (opts && opts.seedCache) || (typeof store.query === 'function' ? createPgSeedCache(store) : createMemorySeedCache());
   const playback = (opts && opts.playback) || (typeof store.query === 'function' ? createPlaybackStore(store) : null);
+  const syncDb = (opts && opts.syncDb) || (typeof store.query === 'function' ? createSyncStore(store.query.bind(store)) : null);
   const progressRate = createRateLimit(40, 60 * 1000);
   // Crypto Pay invoices. Ten creates per device per 10 minutes.
   const cryptoPayRate = createRateLimit(10, 10 * 60 * 1000);
@@ -3432,6 +3434,7 @@ export function createApp(file, fetchImpl, opts) {
           // The monitoring list is stored on the phone only, so this is the cap that app enforces. 0: no cap.
           // Apps already released ignore the field and keep their own check.
           monitorMax: monitorMaxFor(isActive),
+          sync: { audience: syncAudience(state.settings), allowed: maySync(state.settings, isActive) },
           // Popular-release cache. Omitted by old servers. False until an admin turns it on.
           cache: { enabled: cacheEnabled(state.settings) },
           referral: publicReferral(state.settings && state.settings.referral, account.id, state.referralJournal, state.referralBinds || []),
@@ -3478,6 +3481,32 @@ export function createApp(file, fetchImpl, opts) {
         if (parsed.error) return json(res, 400, parsed);
         await playback.save(accountId, { ...parsed, deviceId: device }, Date.now());
         return json(res, 200, { ok: true });
+      }
+      if (req.method === 'POST' && path === '/v1/sync') {
+        const device = String(req.headers['x-device-id'] || '');
+        const token = bearer(req);
+        if (!token) return json(res, 401, { error: 'bad_token' });
+        if (!syncDb) return json(res, 503, { error: 'unavailable' });
+        const state = await store.read();
+        const caller = await deviceCaller(state, token, device, Date.now());
+        if (!caller || caller.error) return json(res, 401, { error: (caller && caller.error) || 'bad_token' });
+        const sub = state.subscriptions.find((s) => s.id === caller.code.subscriptionId);
+        const accountId = sub && sub.accountId ? String(sub.accountId) : '';
+        if (!accountId) return json(res, 404, { error: 'not_linked' });
+        const view = subscriptionView(state, accountId, Date.now());
+        const active = !!(view && view.active);
+        if (!maySync(state.settings, active)) return json(res, 403, { error: 'subscribers_only' });
+        const body = await readBody(req);
+        const parsed = parseSyncBody(body);
+        if (parsed.error) return json(res, 400, { error: parsed.error });
+        const stamped = [];
+        for (let i = 0; i < parsed.records.length; i++) {
+          const row = parsed.records[i];
+          stamped.push({ ...row, deviceId: device || row.deviceId });
+        }
+        await syncDb.push(accountId, stamped);
+        const records = await syncDb.pull(accountId, parsed.since);
+        return json(res, 200, { ok: true, records, serverTime: Date.now() });
       }
       if (req.method === 'GET' && path === '/v1/dht-peers') {
         // Same device token as /v1/me. A paid subscription is not required: the button is on every release.

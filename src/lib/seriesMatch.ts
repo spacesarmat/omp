@@ -14,6 +14,7 @@ import { parseReleaseInfo } from './releaseInfo';
 import type { ShowFacts } from './tmdbShow';
 import type { CatalogCard, CatalogTitle } from '../catalog/tmdb';
 import { seriesKey, type SeriesGroup } from './seriesGroups';
+import { putDeviceRecords } from '../store/deviceDb';
 
 const matches = new Map<string, CatalogCard | null>();
 // The show the person picked, written before its card request returns. A lookup that was already running
@@ -66,6 +67,16 @@ function remember(key: string, card: CatalogCard | null, manual?: boolean, stamp
     keys.filter((k) => !map[k].m).sort((a, b) => map[a].at - map[b].at).slice(0, Math.max(0, keys.length - SAVED_MAX)).forEach((k) => delete map[k]);
   }
   saveJson(SAVED_KEY, map);
+  if (map[key].m && map[key].id > 0) {
+    putDeviceRecords([{
+      id: 'match:' + key,
+      kind: 'match',
+      key,
+      body: { id: map[key].id, q: map[key].q || '' },
+      updatedAt: map[key].at,
+      deviceId: 'local',
+    }]);
+  }
 }
 
 /** The series is known (from a match of the last 7 days) to be over (ended, canceled) or to be no TMDB show. */

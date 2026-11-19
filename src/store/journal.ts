@@ -11,6 +11,8 @@ import { t } from '../i18n';
 import { newestSeriesTracks, nextSeriesTracks, withSeriesTracks, sameDub, type SeriesTracks, type SeriesTracksPatch } from '../lib/seriesTracks';
 import { readVoice, withSeasonVoice } from '../lib/seasonVoice';
 import { enqueueTorrentWrite, torrentWriteSettled } from '../lib/dataQueue';
+import { putDeviceRecords } from './deviceDb';
+import { recordsFromTorrent } from './migrateRemembered';
 
 export interface JournalClient {
   list(): Promise<Torrent[]>;
@@ -33,6 +35,11 @@ function patchLibrary(hash: string, data: string): void {
       const copy = list.slice();
       copy[i] = { ...list[i], data };
       torrents.value = copy;
+      try {
+        putDeviceRecords(recordsFromTorrent({ hash, title: copy[i].title, data }));
+      } catch (e) {
+        /* the server copy is already stored */
+      }
       return;
     }
   }
@@ -71,8 +78,19 @@ function update(c: JournalClient, hash: string, change: (j: JournalEntry[]) => J
 
 /** Records «watched `entry.f` up to `entry.t`» now; resolves when written or failed (never rejects). */
 export function recordWatch(c: JournalClient | null, hash: string, entry: Omit<JournalEntry, 'at'>, now?: number): Promise<void> {
+  const at = now === undefined ? Date.now() : now;
+  if (hash) {
+    putDeviceRecords([{
+      id: 'journal:' + hash.toLowerCase() + ':' + entry.f + ':' + entry.src,
+      kind: 'journal',
+      key: hash.toLowerCase(),
+      body: { f: entry.f, t: entry.t, d: entry.d, at, src: entry.src, name: entry.name || '' },
+      updatedAt: at,
+      deviceId: 'local',
+    }]);
+  }
   if (!c || !hash) return Promise.resolve();
-  return update(c, hash, (j) => addEntry(j, entry, now === undefined ? Date.now() : now));
+  return update(c, hash, (j) => addEntry(j, entry, at));
 }
 
 /** «Убрать из истории»: drops every entry of the file (shown right away, written in the background). */

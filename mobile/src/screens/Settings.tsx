@@ -21,6 +21,8 @@ import { openWhatsNew } from '../../../src/store/whatsNew';
 import { openOnboarding } from '../../../src/onboarding/gate';
 import { resetHints } from '../../../src/onboarding/hints';
 import { loadMonitorSettings } from '../../../src/monitor/settings';
+import { lastSyncAt, setSyncEnabled, syncEnabled } from '../../../src/store/deviceDb';
+import { runDeviceSync } from '../../../src/billing/deviceSyncClient';
 import { hoursText } from '../monitor/text';
 import { activeMethods, openDonate } from '../donate';
 import { Sheet } from '../ui/Sheet';
@@ -393,6 +395,44 @@ function PhoneServerRow() {
   );
 }
 
+function SyncRow() {
+  const [tick, setTick] = useState(0);
+  const [busy, setBusy] = useState(false);
+  void tick;
+  const on = syncEnabled();
+  const at = lastSyncAt();
+  const when = at ? new Date(at).toLocaleString() : t('settings.syncNever');
+  return (
+    <div class="m-set-row" data-row="sync">
+      <div class="m-set-text">
+        <span>{t('settings.syncTitle')}</span>
+        <span class="m-muted m-small">{on ? t('settings.syncLast', { when }) : t('settings.syncLocal')}</span>
+      </div>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={on}
+        aria-label={t('settings.syncTitle')}
+        class={'m-switch' + (on ? ' on' : '')}
+        disabled={busy}
+        onClick={() => {
+          const next = !on;
+          setSyncEnabled(next);
+          setTick((n) => n + 1);
+          if (!next) return;
+          setBusy(true);
+          runDeviceSync().then(() => {
+            setBusy(false);
+            setTick((n) => n + 1);
+          }, () => setBusy(false));
+        }}
+      >
+        <span class="m-switch-knob" />
+      </button>
+    </div>
+  );
+}
+
 export function Settings() {
   const [query, setQuery] = useState('');
   const server = activeServer.value;
@@ -421,6 +461,7 @@ export function Settings() {
   const rowOn = (text: string) => settingsHit(query, text);
   const rows = {
     account: rowOn([t('settings.account'), t('common.signIn'), t('settings.signedIn'), t('settings.accountChecking'), t('settings.subscribedUntil', { date: '' })].join(' ')),
+    sync: rowOn([t('settings.syncTitle'), t('settings.syncLast', { when: '' }), t('settings.syncLocal'), t('settings.syncNever')].join(' ')),
     invite: rowOn(t('invite.title')),
     tv: rowOn([t('history.tv'), tvLine].join(' ')),
     tvSearch: rowOn([t('settings.tvSearch'), t('settings.tvSearchHint'), t('settings.tvSearchOff')].join(' ')),
@@ -471,10 +512,11 @@ export function Settings() {
         </p>
       )}
 
-      {(rows.account || rows.invite) && (
+      {(rows.account || rows.invite || rows.sync) && (
       <section class="m-set-group" data-section="account">
         <div class="m-set-label">{t('settings.account')}</div>
         {rows.account && <AccountRow />}
+        {rows.sync && <SyncRow />}
         {rows.invite && (
           <button type="button" class="m-set-row m-set-pick" data-row="invite" onClick={() => navigate({ name: 'invite' })}>
             <span>{t('invite.title')}</span>

@@ -819,6 +819,25 @@ ALTER TABLE bot_copy_versions ADD CONSTRAINT bot_copy_versions_lang_check CHECK 
 ALTER TABLE refresh_tokens ADD COLUMN IF NOT EXISTS grace_used integer NOT NULL DEFAULT 0;
 `,
   },
+  {
+    version: '019_device_sync',
+    sql: `
+-- Remembered app data (progress, journal, titles, matches) synced per account.
+-- deleted is a tombstone. updated_at is unix ms. Old apps never read this table.
+CREATE TABLE device_sync (
+  account_id text NOT NULL,
+  record_id text NOT NULL,
+  kind text NOT NULL,
+  rec_key text NOT NULL DEFAULT '',
+  body jsonb NOT NULL DEFAULT '{}',
+  updated_at bigint NOT NULL,
+  device_id text NOT NULL DEFAULT '',
+  deleted boolean NOT NULL DEFAULT false,
+  PRIMARY KEY (account_id, record_id)
+);
+CREATE INDEX device_sync_updated ON device_sync (account_id, updated_at);
+`,
+  },
 ];
 
 /** Apply pending migrations. Safe to run from several processes: they wait on the lock. */

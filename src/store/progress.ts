@@ -1,5 +1,7 @@
 import { signal } from '@preact/signals';
 import { loadJson, saveJson, isObject } from './storage';
+import { putDeviceRecords } from './deviceDb';
+import { recordsFromProgress } from './migrateRemembered';
 import type { Torrent, ViewedEntry } from '../api/types';
 import type { TorrServerClient } from '../api/torrserver';
 
@@ -48,6 +50,12 @@ function stamp(): number {
 function persist() {
   saveJson(KEY, local);
   progressVersion.value++;
+  putDeviceRecords(recordsFromProgress(local));
+}
+
+/** The local progress map, for the one-time copy out of this device. */
+export function progressSnapshot(): { [k: string]: Progress } {
+  return local;
 }
 
 export function reloadProgress(): void {

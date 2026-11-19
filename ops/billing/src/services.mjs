@@ -98,6 +98,7 @@ export function publicAdminSettings(settings, env) {
     bitmagnetEnabled: s.bitmagnetEnabled === true,
     cacheNodesEnabled: s.cacheNodesEnabled === true,
     watchRankEnabled: s.watchRankEnabled !== false,
+    syncAudience: s.syncAudience === 'all' ? 'all' : 'subscribers',
     cachePrefixMb: prefixMbOf(s),
     cachePrefixPercent: prefixPercentOf(s),
     torrserverUrl: s.torrserverUrl || '',
@@ -189,6 +190,7 @@ export function mergeSettings(prev, body) {
     bitmagnetEnabled: bool(b.bitmagnetEnabled, cur.bitmagnetEnabled === true),
     cacheNodesEnabled: b.cacheNodesEnabled !== undefined ? bool(b.cacheNodesEnabled, false) : cur.cacheNodesEnabled === true,
     watchRankEnabled: b.watchRankEnabled !== undefined ? bool(b.watchRankEnabled, true) : cur.watchRankEnabled !== false,
+    syncAudience: b.syncAudience === 'all' || b.syncAudience === 'subscribers' ? b.syncAudience : cur.syncAudience === 'all' ? 'all' : 'subscribers',
     cachePrefixMb:
       b.cachePrefixMb !== undefined && b.cachePrefixMb !== '' && validPrefixMb(b.cachePrefixMb)
         ? Number(b.cachePrefixMb)
