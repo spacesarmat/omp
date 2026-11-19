@@ -51,8 +51,12 @@ export function showChoice(items: CatalogTitle[], query: string, year: number, s
     ? items.filter((x) => (x.title || '').toLowerCase() === q || (x.original || '').toLowerCase() === q)
     : [];
   const pool = exact.length ? exact : items;
-  const tv = pool.filter((x) => x.kind === 'tv');
-  if (series && tv.length) return withPosterFirst(tv, year);
+  if (series) {
+    const tvExact = exact.filter((x) => x.kind === 'tv');
+    const shows = tvExact.length ? tvExact : items.filter((x) => x.kind === 'tv');
+    if (!shows.length) return null;
+    return withPosterFirst(shows, year);
+  }
   return withPosterFirst(pool, year);
 }
 
@@ -135,7 +139,8 @@ function pump(): void {
  * nobody waits for any more leaves the queue before it starts.
  */
 function requestOne(query: string, title: string, series: boolean, done: (url: string) => void): () => void {
-  const key = query.toLowerCase().replace(/\s+/g, ' ').trim() + (series ? '\u0000tv' : '');
+  const y = yearOf((title || '').replace(/[._]+/g, ' '));
+  const key = query.toLowerCase().replace(/\s+/g, ' ').trim() + '\u0000' + (y || '0') + (series ? '\u0000tv' : '');
   if (!key) {
     done('');
     return () => undefined;
@@ -259,9 +264,9 @@ function resolveShow(title: string): Promise<ShowHit | null> {
     return showLookup(queries[i], year).then(
       (items) => {
         const hit = showChoice(items || [], queries[i], year, series);
-        if (!hit || !hit.id) return step(i + 1, fallback);
+        if (!hit || !hit.id || (series && hit.kind !== 'tv')) return step(i + 1, fallback);
         const row: ShowHit = { id: hit.id, title: hit.title || queries[i], poster: posterOf(hit) };
-        if (row.poster && (!series || hit.kind === 'tv')) return Promise.resolve(row);
+        if (row.poster) return Promise.resolve(row);
         return step(i + 1, fallback || row);
       },
       () => step(i + 1, fallback),
@@ -294,7 +299,8 @@ function pumpShows(): void {
 /** The show (id, title, poster) for a release title. The same title shares one lookup. */
 export function requestShow(title: string, done: (hit: ShowHit | null) => void): () => void {
   const queries = posterQueries(title);
-  const key = (queries.join('\n') + (releaseIsSeries(title) ? '\u0000tv' : '')).toLowerCase();
+  const y = yearOf((title || '').replace(/[._]+/g, ' '));
+  const key = (queries.join('\n') + '\u0000' + (y || '0') + (releaseIsSeries(title) ? '\u0000tv' : '')).toLowerCase();
   if (!queries.length) {
     done(null);
     return () => undefined;

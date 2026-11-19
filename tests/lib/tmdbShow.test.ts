@@ -1,5 +1,6 @@
 import { describe, expect, it, afterEach } from 'vitest';
 import { findShow, pickShow } from '../../src/lib/tmdbShow';
+import { endpointOf, sanitizeList } from '../../src/catalog/tmdb';
 import { groupLibrary, singleGroup } from '../../src/lib/seriesGroups';
 import { chooseSeries, matchSeries, resetSeriesMatches } from '../../src/lib/seriesMatch';
 import { setCatalogProvider } from '../../src/catalog/activeCatalog';
@@ -25,6 +26,21 @@ afterEach(() => {
 });
 
 describe('pickShow', () => {
+  it('reads popularity, votes, seasons and runtime from a normal search answer', () => {
+    const raw = {
+      results: [
+        { id: 1, media_type: 'tv', name: 'Локи', original_name: 'Loki', first_air_date: '2021-01-01', popularity: 10, vote_count: 100, number_of_seasons: 1, episode_run_time: [12] },
+        { id: 84958, media_type: 'tv', name: 'Локи', original_name: 'Loki', first_air_date: '2021-06-09', popularity: 10, vote_count: 100, number_of_seasons: 2, episode_run_time: [50] },
+      ],
+    };
+    const items = sanitizeList(endpointOf({ APIKey: 'k' })!, raw, null).items;
+    expect(items.map((x) => [x.id, x.popularity, x.voteCount, x.seasonCount, x.runtime])).toEqual([
+      [1, 10, 100, 1, 12],
+      [84958, 10, 100, 2, 50],
+    ]);
+    expect(pickShow(items, 2021, 'локи', { season: 2, runtimeMin: 50 })!.id).toBe(84958);
+  });
+
   it('prefers the show of the asked year whose title is the query, not a different show that only contains the word', () => {
     const picked = pickShow([
       show('Мифический детектив Локи', 2010, 7.2),

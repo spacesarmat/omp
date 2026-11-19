@@ -103,7 +103,7 @@ describe('sanitizers', () => {
   it('lists keep films and series, drop people and junk', () => {
     const l = sanitizeList(E, MULTI, null);
     expect(l.items.map((i) => i.kind + ':' + i.id)).toEqual(['movie:101', 'tv:202']);
-    expect(l.items[0]).toEqual({ kind: 'movie', id: 101, title: 'Северный ветер', original: 'North Wind', year: 2026, poster: 'https://img.mirror.test/t/p/' + posterImageSize() + '/nw.jpg', rating: 7.4 });
+    expect(l.items[0]).toEqual({ kind: 'movie', id: 101, title: 'Северный ветер', original: 'North Wind', year: 2026, poster: 'https://img.mirror.test/t/p/' + posterImageSize() + '/nw.jpg', rating: 7.4, voteCount: 312 });
     expect(sanitizeList(E, MOVIE_LIST, 'movie').pages).toBe(3);
     expect(sanitizeList(E, 'junk', 'movie')).toEqual({ items: [], pages: 0 });
   });

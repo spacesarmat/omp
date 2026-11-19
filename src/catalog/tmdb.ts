@@ -16,6 +16,10 @@ export type Kind = 'movie' | 'tv';
 export interface CatalogTitle {
   kind: Kind; id: number; title: string; original: string; year: number; poster: string; rating: number;
   digital?: string; popularity?: number;
+  /** Search answers: vote_count, and for a series number_of_seasons and episode_run_time when TMDB sent them. */
+  voteCount?: number;
+  seasonCount?: number;
+  runtime?: number;
 }
 export type PersonJob = 'cast' | 'director' | 'creator';
 /** `id`: the TMDB person id (opens the person's filmography); `job`: why the person is on the card. */
@@ -306,12 +310,32 @@ function titleOf(e: TmdbEndpoint, o: { [k: string]: unknown }, kind: Kind): Cata
   if (!title && !original) return null;
   // no Russian title: TMDB gives the original («仙逆剧场版»); an original in Latin letters reads better
   if (!readableTitle(title) && readableTitle(original)) title = original;
-  return {
+  const titleRow: CatalogTitle = {
     kind: kind, id: id, title: title || original, original: original || title,
     year: year(kind === 'movie' ? o.release_date : o.first_air_date),
     poster: imageUrl(e, o.poster_path, posterImageSize()),
     rating: Math.round(n(o.vote_average) * 10) / 10,
   };
+  const pop = n(o.popularity);
+  if (pop > 0) titleRow.popularity = pop;
+  const votes = n(o.vote_count);
+  if (votes > 0) titleRow.voteCount = votes;
+  const seasons = n(o.number_of_seasons);
+  if (seasons > 0) titleRow.seasonCount = seasons;
+  const runtime = runtimeMinutes(o);
+  if (runtime > 0) titleRow.runtime = runtime;
+  return titleRow;
+}
+
+function runtimeMinutes(o: { [k: string]: unknown }): number {
+  const list = Array.isArray(o.episode_run_time) ? (o.episode_run_time as unknown[]).map(n).filter((v) => v > 0) : [];
+  if (list.length) {
+    let sum = 0;
+    for (let i = 0; i < list.length; i++) sum += list[i];
+    return Math.round(sum / list.length);
+  }
+  const one = n(o.runtime);
+  return one > 0 ? one : 0;
 }
 
 /**

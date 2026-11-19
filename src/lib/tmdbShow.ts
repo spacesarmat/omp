@@ -55,11 +55,10 @@ function popularityOf(s: CatalogTitle): number {
 }
 
 function extraOf(s: CatalogTitle): { voteCount: number; seasonCount: number; runtime: number } {
-  const x = s as CatalogTitle & { voteCount?: number; seasonCount?: number; runtime?: number };
   return {
-    voteCount: x.voteCount && x.voteCount > 0 ? x.voteCount : 0,
-    seasonCount: x.seasonCount && x.seasonCount > 0 ? x.seasonCount : 0,
-    runtime: x.runtime && x.runtime > 0 ? x.runtime : 0,
+    voteCount: s.voteCount && s.voteCount > 0 ? s.voteCount : 0,
+    seasonCount: s.seasonCount && s.seasonCount > 0 ? s.seasonCount : 0,
+    runtime: s.runtime && s.runtime > 0 ? s.runtime : 0,
   };
 }
 

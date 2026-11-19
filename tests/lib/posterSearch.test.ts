@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { posterQuery, tmdbSearchUrl, tmdbSearchRequest, firstPoster } from '../../src/lib/posterSearch';
-import { posterChoice, posterName, posterQueries, requestPoster, setPosterLookup, showChoice } from '../../src/catalog/resultPosters';
+import { posterChoice, posterName, posterQueries, requestPoster, requestShow, setPosterLookup, setShowLookup, showChoice, type ShowHit } from '../../src/catalog/resultPosters';
 import { posterImageSize } from '../../src/catalog/tmdb';
 
 describe('posterQuery', () => {
@@ -41,6 +41,7 @@ describe('posterQuery', () => {
     const tv = { kind: 'tv' as const, id: 71912, title: 'Ведьмак', original: 'The Witcher', year: 2019, poster: '', rating: 8 };
     const tvEn = { kind: 'tv' as const, id: 71912, title: 'The Witcher', original: 'The Witcher', year: 2019, poster: 'https://img/witcher.jpg', rating: 8 };
     expect(showChoice([movie, tv], 'Ведьмак', 2025, true)).toEqual(tv);
+    expect(showChoice([movie], 'Ведьмак', 2001, true)).toBeNull();
     expect(posterChoice([movie, tv], 'Ведьмак', 2025, true)).toBe('');
     expect(posterChoice([tvEn], 'The Witcher', 2025, true)).toBe('https://img/witcher.jpg');
     const asked: string[] = [];
@@ -56,6 +57,25 @@ describe('posterQuery', () => {
       expect(url).toBe('https://img/witcher.jpg');
     } finally {
       setPosterLookup(null);
+    }
+  });
+
+  it('a remake of another year does not reuse the first show, and a film is not a series', async () => {
+    setShowLookup((_q, year) => {
+      if (!year) return Promise.resolve([{ kind: 'movie', id: 9, title: 'Ведьмак', original: 'The Hexer', year: 2001, poster: 'https://img/hexer.jpg', rating: 5 }]);
+      const id = year === 1963 ? 1 : 2;
+      return Promise.resolve([{ kind: 'tv', id, title: 'Doctor Who', original: 'Doctor Who', year, poster: 'https://img/' + id + '.jpg', rating: 8 }]);
+    });
+    try {
+      const ask = (title: string) => new Promise<ShowHit | null>((resolve) => { requestShow(title, resolve); });
+      const oldShow = await ask('Doctor Who (1963) S01');
+      const reboot = await ask('Doctor Who (2005) S01');
+      const film = await ask('Ведьмак / Сезон: 1');
+      expect(oldShow && oldShow.id).toBe(1);
+      expect(reboot && reboot.id).toBe(2);
+      expect(film).toBeNull();
+    } finally {
+      setShowLookup(null);
     }
   });
 });

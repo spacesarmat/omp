@@ -1047,7 +1047,7 @@ export function Torrent({ hash }: { hash: string }) {
           onClose={() => setPicking(false)}
         />}
       {marksOpen && <MarksSheet title={shortTitle(title)} prefs={skip.prefs} onSave={(p) => skip.save(p, false)} onClose={() => setMarksOpen(false)} />}
-      {betterOpen && <BetterSheet torrent={tor} files={allFiles} season={typeof season === 'number' ? season : 0} onReplaced={onUpgraded} onClose={() => setBetterOpen(false)} />}
+      {betterOpen && <BetterSheet torrent={tor} files={allFiles} season={typeof selectedSeason === 'number' ? selectedSeason : typeof season === 'number' ? season : 0} onReplaced={onUpgraded} onClose={() => setBetterOpen(false)} />}
       {wrongOpen && group && <WrongShowSheet group={group} onClose={() => setWrongOpen(false)} />}
       {sheet && (
         <WatchSheet

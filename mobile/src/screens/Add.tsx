@@ -561,7 +561,12 @@ export function Add({
     if (!q || !fresh.current) return;
     if (entry) takenEntries.add(entry);
     memo.query = initialQuery || '';
-    if (run) runSearch(q, {});
+    if (run) {
+      // a sheet may have just stored a resolution; the memo still has the previous visit
+      memo.filters = loadSearchFilters();
+      setFiltersState(memo.filters);
+      runSearch(q, {});
+    }
   }, []);
   // a search that ran while the registry was empty stays at 0 until sources exist again
   useEffect(() => {
@@ -681,6 +686,12 @@ export function Add({
     });
     return () => {
       stops.forEach((stop) => stop());
+      // a later result list asks again; the lookup cache keeps the job that is already running
+      if (askedShow.current.q === searchedNow) {
+        showTitles.split('\n').forEach((title) => {
+          delete askedShow.current.titles[title];
+        });
+      }
     };
   }, [searchedNow, showTitles]);
   useEffect(() => {

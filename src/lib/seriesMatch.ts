@@ -126,7 +126,9 @@ function factsOf(g: SeriesGroup): ShowFacts {
   const facts: ShowFacts = {};
   if (season) facts.season = season;
   if (rel.episodes) facts.episodes = rel.episodes.to - rel.episodes.from + 1;
-  if (info.resolution === '2160p' || info.hdr) facts.modern = true;
+  if (info.resolution === '2160p' || info.hdr || info.dv) facts.modern = true;
+  const mins = /(?:^|[^0-9])(\d{2,3})\s*(?:мин|min)(?:[^a-zа-яё]|$)/i.exec(raw);
+  if (mins) facts.runtimeMin = +mins[1];
   return facts;
 }
 
