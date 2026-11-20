@@ -60,7 +60,7 @@
 **Interfaces:**
 - Legacy records receive deterministic `v1:<deviceId>:<recordId>:<updatedAt>` mutation ids.
 - `/v1/sync` keeps its `nextSeq` response but shares the v2 mutation path.
-- Expired mutation responses use HTTP 409 `{ error: "mutation_expired" }`.
+- V2 expired mutation responses use HTTP 409 `{ error: "mutation_expired" }`; legacy retries return the saved ack without applying the expired body, so a legacy batch can continue with newer records.
 
 - [ ] Write failing tests proving `/v1` rows are visible to `/v2`, two concurrent writers produce a gapless revision stream and expired retries do not change the snapshot.
 - [ ] Implement the smallest shared legacy mapping and expiry response.

@@ -37,7 +37,7 @@ function changeRecord(row) {
 
 export function createSyncV2Store(store) {
   return {
-    async mutate(accountId, deviceId, records, now) {
+    async mutate(accountId, deviceId, records, now, options = {}) {
       return store.withClient(async (query) => {
         const locked = await query(
           'INSERT INTO device_sync_counters (account_id, next_revision) VALUES ($1, 1)' +
@@ -55,7 +55,7 @@ export function createSyncV2Store(store) {
             [accountId, row.mutationId],
           );
           if (existing.rows.length) {
-            if (Number(existing.rows[0].expires_at) <= now) throw expiredMutation();
+            if (Number(existing.rows[0].expires_at) <= now && !options.ackExpired) throw expiredMutation();
             ack.push(existing.rows[0].result);
             continue;
           }
@@ -71,11 +71,16 @@ export function createSyncV2Store(store) {
               ' OR (device_sync.updated_at = EXCLUDED.updated_at AND device_sync.device_id < EXCLUDED.device_id)',
             [accountId, row.id, row.kind, row.key, JSON.stringify(row.body || {}), row.updatedAt, row.deviceId, row.deleted === true],
           );
+          const current = await query(
+            'SELECT kind, rec_key, body, updated_at, device_id, deleted FROM device_sync WHERE account_id = $1 AND record_id = $2',
+            [accountId, row.id],
+          );
+          const winner = current.rows[0];
           await query(
             'INSERT INTO device_sync_changes' +
               ' (account_id, revision, record_id, kind, rec_key, body, updated_at, device_id, deleted, mutation_id, created_at)' +
               ' VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, $10, $11)',
-            [accountId, revision, row.id, row.kind, row.key, JSON.stringify(row.body || {}), row.updatedAt, row.deviceId, row.deleted === true, row.mutationId, now],
+            [accountId, revision, row.id, winner.kind, winner.rec_key || '', JSON.stringify(winner.body || {}), winner.updated_at, winner.device_id || '', winner.deleted === true, row.mutationId, now],
           );
           const result = { recordId: row.id, mutationId: row.mutationId, revision };
           ack.push(result);

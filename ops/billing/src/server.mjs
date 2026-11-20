@@ -3546,12 +3546,7 @@ export function createApp(file, fetchImpl, opts) {
           stamped.push({ ...stampedRow, mutationId: legacyMutationId(stampedRow) });
         }
         if (syncV2Db) {
-          try {
-            await syncV2Db.mutate(accountId, device, stamped, Date.now());
-          } catch (error) {
-            if (error && error.code === 'mutation_expired') return json(res, 409, { error: 'mutation_expired' });
-            throw error;
-          }
+          await syncV2Db.mutate(accountId, device, stamped, Date.now(), { ackExpired: true });
         } else {
           await syncDb.push(accountId, stamped);
         }
