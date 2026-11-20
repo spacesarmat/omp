@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { MIGRATIONS } from '../src/db/pg/schema.mjs';
 import { createSyncV2Store, parseSyncV2Body } from '../src/deviceSyncV2.mjs';
 import { createSubscription, deviceCode } from '../src/logic.mjs';
 import { createApp } from '../src/server.mjs';
@@ -58,15 +59,25 @@ async function call(
   return { status: res.status, data: JSON.parse(res.body) as Record<string, unknown> };
 }
 
-async function tokenFor(app: (req: unknown, res: unknown) => Promise<void>, file: Awaited<ReturnType<typeof testStore>>) {
+async function tokenFor(app: (req: unknown, res: unknown) => Promise<void>, file: Awaited<ReturnType<typeof testStore>>, accountId = 'acc-v2-http') {
   const now = Date.now();
-  const created = createSubscription(await readState(file), { accountId: 'acc-v2-http', now, days: 30 });
+  const created = createSubscription(await readState(file), { accountId, now, days: 30 });
   await writeState(file, created.state);
   const slot = deviceCode(await readState(file), created.result.subscriptionId, now);
   await writeState(file, slot.state);
   const activated = await call(app, '/v1/activate', { json: { code: slot.code, deviceId: DEVICE, tokens: 'pair' } });
   expect(activated.status).toBe(200);
   return activated.data.accessToken as string;
+}
+
+async function httpApp() {
+  const file = await testStore();
+  const app = createApp(file, async () => ({ status: 200, headers: { get: () => null }, text: async () => '{}' }), {
+    env: {},
+    monitor: { health: () => null },
+  });
+  const token = await tokenFor(app, file);
+  return { file, app, headers: { authorization: 'Bearer ' + token, 'x-device-id': DEVICE } };
 }
 
 describe('sync v2 parser', () => {
@@ -92,13 +103,7 @@ describe('sync v2 mutations', () => {
   });
 
   it('serves the combined HTTP mutation and pull contract', async () => {
-    const file = await testStore();
-    const app = createApp(file, async () => ({ status: 200, headers: { get: () => null }, text: async () => '{}' }), {
-      env: {},
-      monitor: { health: () => null },
-    });
-    const token = await tokenFor(app, file);
-    const headers = { authorization: 'Bearer ' + token, 'x-device-id': DEVICE };
+    const { file, app, headers } = await httpApp();
     const saved = await call(app, '/v2/sync', { headers, json: { since: 0, records: [row] } });
     expect(saved.status).toBe(200);
     expect(saved.data.ack).toEqual([{ recordId: row.id, mutationId: row.mutationId, revision: 1 }]);
@@ -112,5 +117,74 @@ describe('sync v2 mutations', () => {
     expect(repeated.data.ack).toEqual(saved.data.ack);
     expect(repeated.data.records).toEqual([]);
     expect(repeated.data.nextRevision).toBe(1);
+  });
+
+  it('assigns gapless revisions to concurrent account writers', async () => {
+    const file = await testStore();
+    const db = createSyncV2Store(file);
+    const first = { ...row, id: 'progress:abc:1', mutationId: 'concurrent-1' };
+    const second = { ...row, id: 'progress:abc:2', mutationId: 'concurrent-2' };
+    const acks = await Promise.all([
+      db.mutate('acc-concurrent', 'device-a', [first], 1000),
+      db.mutate('acc-concurrent', 'device-b', [second], 1000),
+    ]);
+    expect(acks.flat().map((ack) => ack.revision).sort()).toEqual([1, 2]);
+    const changes = await db.pull('acc-concurrent', 0);
+    expect(changes.map((change) => change.revision)).toEqual([1, 2]);
+  });
+
+  it('migrates an existing snapshot into the revision zero pull', async () => {
+    const file = await testStore();
+    await file.query('DROP TABLE device_sync_changes, device_sync_counters, device_sync_mutations');
+    await file.query(
+      'INSERT INTO device_sync (account_id, record_id, kind, rec_key, body, updated_at, device_id, deleted)' +
+        ' VALUES ($1, $2, $3, $4, $5::jsonb, $6, $7, $8)',
+      ['acc-migrated', row.id, row.kind, row.key, JSON.stringify(row.body), row.updatedAt, row.deviceId, false],
+    );
+    const migration = MIGRATIONS.find((item) => item.version === '022_device_sync_v2');
+    await file.query(migration.sql);
+    const db = createSyncV2Store(file);
+    const changes = await db.pull('acc-migrated', 0);
+    expect(changes).toHaveLength(1);
+    expect(changes[0]).toMatchObject({ id: row.id, revision: 1, body: { time: 40 } });
+    const next = await db.mutate('acc-migrated', 'device-b', [{ ...row, id: 'progress:abc:2', mutationId: 'after-migration' }], 2000);
+    expect(next[0].revision).toBe(2);
+  });
+
+  it('projects legacy writes into v2 without changing the v1 response', async () => {
+    const { app, headers } = await httpApp();
+    const legacy = { ...row, mutationId: undefined };
+    const saved = await call(app, '/v1/sync', { headers, json: { since: 0, records: [legacy] } });
+    expect(saved.status).toBe(200);
+    expect(saved.data.nextSeq).toBeGreaterThan(0);
+    expect(saved.data.records).toHaveLength(1);
+    expect(saved.data.records[0].mutationId).toBeUndefined();
+    expect(saved.data.ack).toBeUndefined();
+    const pulled = await call(app, '/v2/sync', { headers, json: { since: 0, records: [] } });
+    expect(pulled.status).toBe(200);
+    expect(pulled.data.records).toHaveLength(1);
+    expect(pulled.data.records[0]).toMatchObject({
+      id: row.id,
+      revision: 1,
+      mutationId: `v1:${DEVICE}:${row.id}:${row.updatedAt}`,
+    });
+  });
+
+  it('rejects an expired retry without applying its late body', async () => {
+    const { file, app, headers } = await httpApp();
+    const saved = await call(app, '/v2/sync', { headers, json: { since: 0, records: [row] } });
+    expect(saved.status).toBe(200);
+    await file.query("UPDATE device_sync_mutations SET expires_at = 0 WHERE account_id = 'acc-v2-http' AND mutation_id = $1", [row.mutationId]);
+    const expired = await call(app, '/v2/sync', {
+      headers,
+      json: { since: 1, records: [{ ...row, body: { time: 999 } }] },
+    });
+    expect(expired.status).toBe(409);
+    expect(expired.data).toEqual({ error: 'mutation_expired' });
+    const snapshot = await file.query("SELECT body FROM device_sync WHERE account_id = 'acc-v2-http' AND record_id = $1", [row.id]);
+    expect(snapshot.rows[0].body).toEqual({ time: 40 });
+    const pulled = await call(app, '/v2/sync', { headers, json: { since: 0, records: [] } });
+    expect(pulled.data.records).toHaveLength(1);
+    expect(pulled.data.nextRevision).toBe(1);
   });
 });
