@@ -4,6 +4,10 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## Unreleased
+
+- [phone] Sync reliably reapplies library changes after a restart and no longer moves Continue back when an older network response arrives after a newer one
+
 ## 0.30.3-beta.1
 
 - The built-in TorrServer is updated to MatriX.151

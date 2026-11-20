@@ -52,13 +52,15 @@ export function recordsForEdit(t: MigrateTorrent, now: number, drop?: string[]):
   return fresh.concat(tombs);
 }
 
-export function recordsFromProgress(map: { [k: string]: { time: number; duration: number; updated: number } }): SyncRecord[] {
+export function recordsFromProgress(map: { [k: string]: { time: number; duration: number; updated: number; open?: boolean } }): SyncRecord[] {
   const out: SyncRecord[] = [];
   const keys = Object.keys(map || {});
   for (let i = 0; i < keys.length; i++) {
     const p = map[keys[i]];
     if (!p || typeof p.updated !== 'number') continue;
-    out.push(row('progress:' + keys[i], 'progress', keys[i], { time: p.time, duration: p.duration }, p.updated));
+    const body: { [k: string]: unknown } = { time: p.time, duration: p.duration };
+    if (p.open === true) body.open = true;
+    out.push(row('progress:' + keys[i], 'progress', keys[i], body, p.updated));
   }
   return out;
 }

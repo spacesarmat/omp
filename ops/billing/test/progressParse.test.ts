@@ -16,6 +16,8 @@ describe('progress body', () => {
     expect(parseProgressBody({ titleKey: '', episodeKey: 's01e02', positionSec: 10 }).error).toBe('bad_body');
     expect(parseProgressBody({ titleKey: 'show', episodeKey: 's01e02', positionSec: 0 })).toMatchObject({ positionSec: 0 });
     expect(parseProgressBody({ titleKey: 'show', episodeKey: 's01e02', positionSec: 999999 }).error).toBe('bad_body');
+    expect(parseProgressBody({ titleKey: 'show', episodeKey: 's01e02', positionSec: 10, writerSeq: '42' }).writerSeq).toBe(42);
+    expect(parseProgressBody({ titleKey: 'show', episodeKey: 's01e02', positionSec: 10, writerSeq: -1 }).writerSeq).toBe(0);
   });
 
   it('reads the query and strips control characters', () => {

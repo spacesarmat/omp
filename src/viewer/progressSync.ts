@@ -24,6 +24,7 @@ export interface ProgressPush {
   durationSec: number;
   title: string;
   label: string;
+  writerSeq?: number;
 }
 
 let contextOf: () => SourceContext | null = defaultContext;
@@ -128,6 +129,7 @@ export function pushProgress(row: ProgressPush): void {
     durationSec: String(Math.floor(row.durationSec > 0 ? row.durationSec : 0)),
     title: (row.title || '').slice(0, 180),
     label: (row.label || '').slice(0, 80),
+    writerSeq: String(row.writerSeq || 0),
     deviceId: deviceId(),
   };
   withDeviceToken(ctx, (headers) => billingPost(ctx, '/v1/progress', body, { headers: headers, timeoutMs: 8000 })).then(

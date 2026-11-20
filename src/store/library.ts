@@ -36,6 +36,11 @@ export const libraryQuery = signal('');
 
 let inflight: Promise<Torrent[]> | null = null;
 let gen = 0;
+let afterRefresh: () => void = () => undefined;
+
+export function onLibraryRefresh(fn: () => void): void {
+  afterRefresh = fn;
+}
 
 /** Bumped by resetLibrary. A late write must not put the previous server's torrents into the new list. */
 export function libraryGeneration(): number {
@@ -115,6 +120,7 @@ export function refreshTorrents(c: { list(): Promise<Torrent[]> } & Partial<Titl
       } catch (e) {
         /* a bad torrent bag must not block the list */
       }
+      afterRefresh();
       // the files of the releases TorrServer works on now, for when one stops answering (knownFiles)
       rememberListed(sorted);
       torrentsAt.value = Date.now();

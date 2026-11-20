@@ -7,6 +7,7 @@ import { activeServer, activeServerId, servers, setActiveServer } from '../../sr
 import { installErrorHooks, logStart } from '../../src/lib/log';
 import { registerBuiltinSources } from '../../src/sources/builtin';
 import { hydrateDeviceDb } from '../../src/store/deviceDb';
+import { reapplyDeviceRecords } from '../../src/store/applyPulled';
 import { startPremiumRecheck } from '../../src/billing/recheck';
 import { startBillingKeepAlive } from '../../src/billing/tokens';
 import { ensureLinkedBilling } from '../../src/sources/ompJackett';
@@ -68,7 +69,7 @@ if (native.available) setTlsProbe(nativeTlsProbe((req) => native.http(req)));
 installPhoneTls();
 
 installErrorHooks();
-hydrateDeviceDb(() => { runDeviceSync(); });
+hydrateDeviceDb(() => { reapplyDeviceRecords(); runDeviceSync(); });
 if (native.available) setSyncContext(phoneSourceContext);
 expectBetaGate();
 import('../../src/report/presence').then((m) =>

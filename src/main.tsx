@@ -15,6 +15,7 @@ import { certQuestionText, installTorrServerTls } from './api/torrServerTls';
 import { confirmWithBody } from './ui/dialog';
 import { installCleartextSync } from './cleartextSync';
 import { hydrateDeviceDb } from './store/deviceDb';
+import { reapplyDeviceRecords } from './store/applyPulled';
 import { installErrorHooks, log, logStart } from './lib/log';
 import { t } from './i18n';
 import { setCatalogProvider } from './catalog/activeCatalog';
@@ -40,7 +41,7 @@ if (typeof w.queueMicrotask !== 'function') {
 
 init({ debug: false, visualDebug: false });
 ensureFirstRun();
-hydrateDeviceDb(() => { runDeviceSync(); });
+hydrateDeviceDb(() => { reapplyDeviceRecords(); runDeviceSync(); });
 if (platformKind() === 'androidtv') setSyncContext(() => tvSourceContext());
 installTvAds();
 

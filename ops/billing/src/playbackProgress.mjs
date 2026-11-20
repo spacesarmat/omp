@@ -16,6 +16,11 @@ function pos(v) {
   return n;
 }
 
+function seq(v) {
+  const n = Number(v);
+  return Number.isSafeInteger(n) && n >= 0 ? n : 0;
+}
+
 /** GET query. `episodeKey` may be empty: the newest row of the title. */
 export function parseProgressQuery(params) {
   const titleKey = clean(params.get('titleKey'), KEY_MAX);
@@ -39,5 +44,6 @@ export function parseProgressBody(body) {
     durationSec,
     title: clean(src.title, 180),
     label: clean(src.label, 80),
+    writerSeq: seq(src.writerSeq),
   };
 }

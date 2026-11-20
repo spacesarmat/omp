@@ -109,4 +109,28 @@ describe('GET and POST /v1/progress', () => {
     });
     expect(hidden.status).toBe(404);
   });
+
+  it('rejects a delayed same-device write and accepts another device', async () => {
+    const file = await testStore();
+    const app = createApp(file, async () => ({ status: 200, headers: { get: () => null }, text: async () => '{}' }), {
+      env: {},
+      monitor: { health: () => null },
+    });
+    const tokenA = await tokenFor(app, file, 'acc-progress-order', DEV_A);
+    const headersA = { authorization: 'Bearer ' + tokenA, 'x-device-id': DEV_A };
+    const save = (positionSec: number, writerSeq: number, headers = headersA) => call(app, 'POST', '/v1/progress', {
+      json: { titleKey: 'show', episodeKey: 's01e02', positionSec, durationSec: 2400, writerSeq },
+      headers,
+    });
+    expect((await save(120, 2)).status).toBe(200);
+    expect((await save(90, 1)).status).toBe(200);
+    const kept = await call(app, 'GET', '/v1/progress?titleKey=show&episodeKey=s01e02', { headers: headersA });
+    expect(kept.data.positionSec).toBe(120);
+
+    const tokenB = await tokenFor(app, file, 'acc-progress-order', DEV_B);
+    const headersB = { authorization: 'Bearer ' + tokenB, 'x-device-id': DEV_B };
+    expect((await save(140, 1, headersB)).status).toBe(200);
+    const other = await call(app, 'GET', '/v1/progress?titleKey=show&episodeKey=s01e02', { headers: headersB });
+    expect(other.data.positionSec).toBe(140);
+  });
 });

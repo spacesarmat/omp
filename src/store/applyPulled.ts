@@ -1,6 +1,6 @@
 // A pulled row has to land in the stores the screens already read.
 import { newer, type SyncRecord } from './syncMerge';
-import { torrents } from './library';
+import { torrents, onLibraryRefresh } from './library';
 import { parseData, sanitizeSkip, serializeData, withOmp, withQualityWatch, withReleaseMeta, withWatch, type JournalEntry, type SkipPrefs } from '../lib/journal';
 import { applySyncedProgress } from './progress';
 import { applySyncedMatch } from '../lib/seriesMatch';
@@ -132,6 +132,10 @@ export function applyPulled(rows: SyncRecord[]): void {
   applyLibrary(rows);
 }
 
+export function reapplyDeviceRecords(): void {
+  applyPulled(deviceRecords());
+}
+
 function liveRows(rows: SyncRecord[]): SyncRecord[] {
   const have: { [id: string]: SyncRecord } = {};
   const all = deviceRecords();
@@ -156,3 +160,5 @@ torrents.subscribe(() => {
   if (rows.length) applyLibrary(rows);
   applying = false;
 });
+
+onLibraryRefresh(reapplyDeviceRecords);
