@@ -237,6 +237,7 @@ describe('TorrServer update opens a pull request', () => {
   it('commits the pin, both changelogs and the OMP beta bump', () => {
     expect(push).toContain('torrserver.version android/app/src/main/res/raw/torrserver.json CHANGELOG.md CHANGELOG.en.md');
     expect(push).toContain('package.json package-lock.json');
+    expect(push).toContain('SECURITY.md');
     expect(apply).toContain('node scripts/omp-release-bump.mjs');
   });
 

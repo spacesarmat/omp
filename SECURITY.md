@@ -2,12 +2,12 @@
 
 ## Поддерживаемые версии
 
-Поддерживаются только два выпуска:
+Поддерживается последний стабильный релиз. Более новая бета поддерживается вместе с ним. Более ранние релизы и предыдущие беты не поддерживаются. Когда выходит новый стабильный релиз или более новая бета, поддержка переходит на них. Актуальные теги: https://github.com/spacesarmat/omp/releases
 
-- последний стабильный релиз, сейчас [v0.30.0](https://github.com/spacesarmat/omp/releases/tag/v0.30.0)
-- текущая бета, сейчас [v0.30.1-beta.3](https://github.com/spacesarmat/omp/releases/tag/v0.30.1-beta.3)
-
-Более ранние релизы и предыдущие беты не поддерживаются. Когда выходит новый стабильный релиз или более новая бета, поддержка переходит на них.
+<!-- versions:start -->
+- последний стабильный релиз, сейчас [v0.30.2](https://github.com/spacesarmat/omp/releases/tag/v0.30.2)
+- текущей беты нет
+<!-- versions:end -->
 
 ## Куда писать
 
@@ -23,7 +23,12 @@ https://github.com/spacesarmat/omp/security/advisories/new
 
 ## English
 
-Supported releases are the latest stable (currently v0.30.0) and the current beta (currently v0.30.1-beta.3). Older releases are not supported. Support moves on when a newer stable or beta tag is published.
+The latest stable release is supported. A newer beta is supported with it. Older releases are not supported. Support moves on when a newer stable or beta tag is published. Current tags: https://github.com/spacesarmat/omp/releases
+
+<!-- versions:start -->
+- latest stable release, currently [v0.30.2](https://github.com/spacesarmat/omp/releases/tag/v0.30.2)
+- there is no current beta
+<!-- versions:end -->
 
 Report a vulnerability through GitHub private vulnerability reporting:
 

@@ -107,7 +107,7 @@ jobs:
             desktop/src-tauri/src/platform.rs desktop/src-tauri/src/download/tests.rs desktop/src/platform/native.ts \
             package.json package-lock.json desktop/package.json desktop/package-lock.json \
             desktop/src-tauri/tauri.conf.json desktop/src-tauri/Cargo.toml desktop/src-tauri/Cargo.lock \
-            webos/appinfo.json
+            webos/appinfo.json SECURITY.md
           git commit -m "chore: TorrServer $LATEST"
           # the branch belongs to this workflow; a leftover from a closed pull request is replaced with a fresh one on main
           git push --force origin "HEAD:refs/heads/$BRANCH"
@@ -119,6 +119,7 @@ jobs:
           - тот же выпуск для Windows (desktop/src-tauri/src/platform.rs)
           - строка в CHANGELOG переносится из «Не выпущено» в следующую бету OMP
           - версия OMP поднимается на следующую бету, после зелёного CI PR вливается и выпускается релиз
+          - SECURITY.md в этом PR указывает эту бету и последний стабильный тег
           - перед PR бинарник TorrServer-android-arm64 скачан и проверен по sha256
 
           Изменения upstream:

@@ -1,0 +1,53 @@
+name: Предложение / Feature request
+description: Предложить изменение или новую возможность / Suggest a change or a new feature
+title: "Feature: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Напишите, чего не хватает и зачем это нужно.
+        Say what is missing and why it is needed.
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Что предлагаете / What do you propose
+      description: Что должно появиться или измениться / What should appear or change
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Какую проблему решает / What problem it solves
+      description: Что сейчас неудобно или невозможно / What is awkward or impossible today
+    validations:
+      required: true
+  - type: dropdown
+    id: devices
+    attributes:
+      label: На каких устройствах / Which devices
+      description: Можно выбрать несколько / You can select more than one
+      multiple: true
+      options:
+        - LG webOS TV
+        - Android TV
+        - Android телефон или планшет / Android phone or tablet
+        - iOS
+        - Windows/ПК / Windows/PC
+        - Другое / Other
+    validations:
+      required: false
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Альтернативы / Alternatives
+      description: Что уже пробовали или какие другие варианты видите / What you already tried, or other options you see
+    validations:
+      required: false
+  - type: textarea
+    id: examples
+    attributes:
+      label: Скриншоты и примеры / Screenshots and examples
+      description: Необязательно. Файлы можно перетащить в это поле / Optional. You can drag files into this field
+    validations:
+      required: false

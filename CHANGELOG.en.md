@@ -4,6 +4,11 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## Unreleased
+
+- [tech] GitHub issues open through forms: bug, feature request, question. Blank issues are off. The link list has the site, email, the Telegram channel and the group
+- [tech] SECURITY.md takes supported versions from the latest stable tag and a newer beta. When the beta is older than the stable tag, the file says there is no current beta. A release PR updates the lines: a beta through omp-release-bump (by hand and in the TorrServer and 2160 Player workflows), a stable release through omp-release-stable. The workflows do not push this file to main
+
 ## 0.30.2
 
 - [tv] Embedded subtitles are read directly from MKV when TorrServer has no ffprobe. Tracks appear in the TV menu and in the phone remote. Large MKV clusters no longer leave an endless loading notice without text. Compressed PGS is inflated and keeps the correct timing
