@@ -160,7 +160,7 @@ import { CROWD_CACHE_TTL_MS, crowdDeviceKey } from './seedCrowd.mjs';
 import { createPlaybackStore } from './db/pg/playbackSql.mjs';
 import { parseProgressBody, parseProgressQuery } from './playbackProgress.mjs';
 import { createSyncStore, maySync, parseSyncBody, syncAudience } from './deviceSync.mjs';
-import { createSyncV2Store, parseSyncV2Body } from './deviceSyncV2.mjs';
+import { createSyncV2Store, legacyMutationId, parseSyncV2Body } from './deviceSyncV2.mjs';
 import { createCacheRepo } from './db/pg/cacheNodesSql.mjs';
 import { cacheEnabled } from './cacheNodes.mjs';
 import { isCachePath, routeCache } from './cacheHttp.mjs';
@@ -3542,9 +3542,19 @@ export function createApp(file, fetchImpl, opts) {
         const stamped = [];
         for (let i = 0; i < parsed.records.length; i++) {
           const row = parsed.records[i];
-          stamped.push({ ...row, deviceId: device || row.deviceId });
+          const stampedRow = { ...row, deviceId: device || row.deviceId };
+          stamped.push({ ...stampedRow, mutationId: legacyMutationId(stampedRow) });
         }
-        await syncDb.push(accountId, stamped);
+        if (syncV2Db) {
+          try {
+            await syncV2Db.mutate(accountId, device, stamped, Date.now());
+          } catch (error) {
+            if (error && error.code === 'mutation_expired') return json(res, 409, { error: 'mutation_expired' });
+            throw error;
+          }
+        } else {
+          await syncDb.push(accountId, stamped);
+        }
         if (syncDb.seen) await syncDb.seen(accountId, device, Date.now());
         const records = await syncDb.pull(accountId, parsed.since);
         let nextSeq = parsed.since;
@@ -3567,7 +3577,13 @@ export function createApp(file, fetchImpl, opts) {
         const body = await readBody(req);
         const parsed = parseSyncV2Body(body);
         if (parsed.error) return json(res, 400, { error: parsed.error });
-        const ack = await syncV2Db.mutate(accountId, device, parsed.records, Date.now());
+        let ack;
+        try {
+          ack = await syncV2Db.mutate(accountId, device, parsed.records, Date.now());
+        } catch (error) {
+          if (error && error.code === 'mutation_expired') return json(res, 409, { error: 'mutation_expired' });
+          throw error;
+        }
         if (syncDb.seen) await syncDb.seen(accountId, device, Date.now());
         const records = await syncV2Db.pull(accountId, parsed.since);
         let nextRevision = parsed.since;

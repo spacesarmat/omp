@@ -11,6 +11,10 @@ export function parseSyncV2Body(raw) {
   return parseSyncBody(raw);
 }
 
+export function legacyMutationId(row) {
+  return `v1:${row.deviceId}:${row.id}:${row.updatedAt}`;
+}
+
 function expiredMutation() {
   const error = new Error('mutation_expired');
   error.code = 'mutation_expired';
