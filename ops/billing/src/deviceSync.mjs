@@ -21,7 +21,7 @@ function cleanRecord(row) {
   const body = row.body && typeof row.body === 'object' && !Array.isArray(row.body) ? row.body : {};
   const text = JSON.stringify(body);
   if (text.length > 8000) return null;
-  return {
+  const record = {
     id,
     kind,
     key: String(row.key || '').slice(0, 180),
@@ -30,6 +30,8 @@ function cleanRecord(row) {
     deviceId: String(row.deviceId || '').slice(0, 80),
     deleted: row.deleted === true,
   };
+  if (row.mutationId !== undefined) record.mutationId = String(row.mutationId || '').trim().slice(0, 100);
+  return record;
 }
 
 export function parseSyncBody(raw) {
