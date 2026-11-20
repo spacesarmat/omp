@@ -4,6 +4,7 @@ export interface MkvSubTrack {
   number: number;
   codecId: string;
   codecPrivate: Uint8Array;
+  language?: string;
 }
 
 export interface MkvPacket {
@@ -68,10 +69,10 @@ export function takeElements(buf: Uint8Array, scale: number): { packets: MkvPack
     if (!el) break;
     if (el.unknown) break;
     const end = i + el.header + el.size;
-    if (end > buf.length) break;
+    if (end > buf.length && el.id !== 0x1f43b675) break;
     if (el.id === 0x1f43b675) {
       clusterTc = 0;
-      i += el.header;
+      i = el.data;
       consumed = i;
       continue;
     }
@@ -136,11 +137,13 @@ function trackEntry(buf: Uint8Array, start: number, end: number): MkvSubTrack | 
   let number = 0;
   let type = 0;
   let codecId = '';
+  let language = '';
   let priv = EMPTY;
   walk(buf, start, end, (id, data, stop) => {
     if (id === 0xd7) number = uint(buf, data, stop);
     else if (id === 0x83) type = uint(buf, data, stop);
     else if (id === 0x86) codecId = latin1(buf, data, stop);
+    else if (id === 0x22b59c || id === 0x22b59d) language = latin1(buf, data, stop);
     else if (id === 0x63a2) {
       const slice = buf.subarray(data, stop);
       const copy = new Uint8Array(slice.length);
@@ -150,7 +153,7 @@ function trackEntry(buf: Uint8Array, start: number, end: number): MkvSubTrack | 
     return false;
   });
   if (type !== 0x11 || !number) return null;
-  return { number: number, codecId: codecId, codecPrivate: priv };
+  return { number: number, codecId: codecId, codecPrivate: priv, language: language || undefined };
 }
 
 function parseCues(buf: Uint8Array, scale: number, segmentStart: number, tailOffset: number): MkvCue[] {

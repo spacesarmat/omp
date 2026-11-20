@@ -137,6 +137,15 @@ describe('embedded text from a tiny MKV', () => {
     expect(packets.map((p) => p.start)).toEqual([0, 1]);
     expect(utf8(packets[1].data)).toBe('B');
   });
+
+  it('reads a complete text block when the cluster continues past the chunk', () => {
+    const block = concat([new Uint8Array([0x81, 0x00, 0x00, 0x00]), new TextEncoder().encode('Hello')]);
+    const payload = concat([el(0xe7, new Uint8Array([0])), el(0xa3, block)]);
+    const partial = concat([idOf(0x1f43b675), sizeOf(payload.length + 10), payload]);
+    const packets = parseCluster(partial, 1000000);
+    expect(packets.length).toBe(1);
+    expect(utf8(packets[0].data)).toBe('Hello');
+  });
 });
 
 describe('fitted picture', () => {
@@ -232,6 +241,30 @@ describe('probeReliable', () => {
     const r = await probeReliable(c, 'h', 0, 'film.mkv', 20 * 1024 * 1024);
     expect(r && r.streams[0].codec_type).toBe('audio');
   });
+
+  it('lists embedded text when the server has no ffprobe', async () => {
+    const file = tinySrt('Hello');
+    const c = {
+      preload: async () => undefined,
+      preloadTail: async () => undefined,
+      probe: async () => null,
+      fetchRange: async (_h: string, _i: number, _n: string, start: number, end: number) => file.subarray(start, end + 1),
+    };
+    const r = await probeReliable(c, 'h', 1, 'film.mkv', file.length);
+    expect(r && r.streams.map((s) => ({ type: s.codec_type, codec: s.codec_name }))).toEqual([{ type: 'subtitle', codec: 'subrip' }]);
+  });
+
+  it('keeps the language of a PGS track found without ffprobe', async () => {
+    const file = tinySrt('', 'S_HDMV/PGS', 'spa');
+    const c = {
+      preload: async () => undefined,
+      preloadTail: async () => undefined,
+      probe: async () => null,
+      fetchRange: async (_h: string, _i: number, _n: string, start: number, end: number) => file.subarray(start, end + 1),
+    };
+    const r = await probeReliable(c, 'h', 1, 'film.mkv', file.length);
+    expect(r && r.streams[0]).toMatchObject({ codec_type: 'subtitle', codec_name: 'hdmv_pgs_subtitle', tags: { language: 'spa' } });
+  });
 });
 
 function seg(type: number, payload: Uint8Array): Uint8Array {
@@ -324,14 +357,15 @@ function textCluster(tc: number, text: string): Uint8Array {
   return el(0x1f43b675, concat([el(0xe7, tcBytes), el(0xa3, block)]));
 }
 
-function tinySrt(text: string): Uint8Array {
+function tinySrt(text: string, codecId = 'S_TEXT/UTF8', language = ''): Uint8Array {
   const bytes = new TextEncoder().encode(text);
   const block = concat([new Uint8Array([0x81, 0x00, 0x00, 0x00]), bytes]);
   const clusterPayload = concat([el(0xe7, new Uint8Array([0])), el(0xa3, block)]);
   const track = el(0xae, concat([
     el(0xd7, new Uint8Array([1])),
     el(0x83, new Uint8Array([0x11])),
-    el(0x86, new TextEncoder().encode('S_TEXT/UTF8')),
+    el(0x86, new TextEncoder().encode(codecId)),
+    ...(language ? [el(0x22b59c, new TextEncoder().encode(language))] : []),
   ]));
   const info = el(0x1549a966, el(0x2ad7b1, u24(1000000)));
   const tracks = el(0x1654ae6b, track);
