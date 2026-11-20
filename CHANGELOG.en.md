@@ -7,6 +7,7 @@ The English translation covers the latest versions only; the full history (in Ru
 ## Unreleased
 
 - [tech] GitHub issues open through forms: bug, feature request, question. Blank issues are off. The link list has the site, email, the Telegram channel and the group
+- [tech] SECURITY.md takes supported versions from the latest stable tag and a newer beta. When the beta is older than the stable tag, the file says there is no current beta. A release PR updates the lines: a beta through omp-release-bump (by hand and in the TorrServer and 2160 Player workflows), a stable release through omp-release-stable. The workflows do not push this file to main
 
 ## 0.30.2
 

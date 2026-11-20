@@ -1,6 +1,28 @@
 // Next OMP beta and moving «Не выпущено» under that version.
 // 0.30.1-beta.5 -> 0.30.1-beta.6. A stable version starts the next patch beta: 0.30.1 -> 0.30.2-beta.1.
 
+/** Stable x.y.z of a beta, or the same string when it is already stable. */
+export function stableVersion(version) {
+  const raw = String(version).trim();
+  const beta = /^(\d+\.\d+\.\d+)-beta\.\d+$/.exec(raw);
+  if (beta) return beta[1];
+  if (/^\d+\.\d+\.\d+$/.test(raw)) return raw;
+  throw new Error(`Bad version: ${version}`);
+}
+
+/**
+ * Renames a released heading ## <from> to ## <to>.
+ * Same version is left untouched. Refuses a second heading with <to>.
+ */
+export function renameReleaseHeading(text, from, to) {
+  if (from === to) return text;
+  const esc = (v) => String(v).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const fromRe = new RegExp(`^## ${esc(from)}[ \\t]*\\r?$`, 'm');
+  if (!fromRe.test(text)) throw new Error(`no heading ${from}`);
+  if (new RegExp(`^## ${esc(to)}[ \\t]*\\r?$`, 'm').test(text)) throw new Error(`version ${to} already present`);
+  return text.replace(fromRe, `## ${to}`);
+}
+
 export function nextBeta(version) {
   const raw = String(version).trim();
   const beta = /^(\d+)\.(\d+)\.(\d+)-beta\.(\d+)$/.exec(raw);
