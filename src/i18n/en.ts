@@ -111,6 +111,7 @@ export const en: EnDict<typeof ru> = {
     reportSend: 'Send',
     reportPlaceholder: 'What happened?',
     find: 'Search settings',
+
     findEmpty: 'Nothing found',
     syncTitle: 'Sync',
     syncLast: 'Last: {when}',
@@ -510,6 +511,10 @@ export const en: EnDict<typeof ru> = {
     rowEnded: 'ended',
     toEpisodes: 'episodes',
     watchedOf: 'Watched {have} of {n}',
+
+    resumeAt: 'Continue: episode {n}, {time}',
+
+    jumpEpisode: 'Episode number',
     markSeason: 'Mark season as watched',
     noNewEpisodes: 'No new episodes',
     nextAir: 'Next episode on {date}',
@@ -2102,6 +2107,8 @@ export const en: EnDict<typeof ru> = {
       skipSumIntro: 'intro {state}',
       skipSumCredits: 'credits {state}',
       watchQuality: 'Watch the quality',
+
+      watchQualityHint: 'we will tell you if a better release shows up',
       deleteTorrent: 'Delete the torrent',
       renamed: 'Renamed',
       deleteAsk: 'Delete the torrent “{title}”?',
@@ -2139,6 +2146,7 @@ export const en: EnDict<typeof ru> = {
     },
     better: {
       find: 'Find in better quality',
+      what: 'We look for a better release and offer to replace yours. The current one stays until you agree.',
       searching: 'Searching…',
       have: 'You have: {quality}',
       unknown: 'quality not stated',
@@ -2940,6 +2948,10 @@ export const en: EnDict<typeof ru> = {
     next: 'Next: {title}',
     playNext: 'Play',
     nextCard: 'Next episode',
+    opening: 'Opening',
+    ending: 'Ending',
+    prevShort: 'Prev',
+    nextShort: 'Next',
     watchNext: 'Watch',
     skipIntro: 'Skip the intro',
     skipChapter: 'Skip chapter',

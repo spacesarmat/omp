@@ -70,7 +70,7 @@ export function nextCardTitle(raw: string, tmdbName = ''): string {
 }
 
 /**
- * «1 серия · Спокойная жизнь». The season is added only when the release has more than one
+ * «Серия 1 · Спокойная жизнь». The season is added only when the release has more than one
  * (`withSeason`), so a single-season pack stays short. A code that is not SxxEyy is kept as written.
  */
 
@@ -79,12 +79,12 @@ export function episodeLine(code: string, name: string, withSeason = false): str
   return [human || code, realEpisodeName(name)].filter(Boolean).join(' · ');
 }
 
-/** «1 серия», or «2 сезон · 1 серия» when the season is needed. '' when `code` is not SxxEyy. */
+/** «Серия 1», or «2 сезон · Серия 1» when the season is needed. '' when `code` is not SxxEyy. */
 export function humanEpisodeCode(code: string, withSeason: boolean): string {
   const m = /^S(\d+)E(\d+)$/i.exec((code || '').trim());
   if (!m) return '';
   const episode = String(parseInt(m[2], 10));
-  const head = t('library.episodeNamed', { n: episode });
+  const head = t('library.episode', { n: episode });
   if (!withSeason) return head;
   return t('library.seasonNamed', { n: String(parseInt(m[1], 10)) }) + ' · ' + head;
 }
@@ -219,13 +219,13 @@ export function useNextEpisodeTitle(s: PlayerState | null): string {
       alive = false;
     };
   }, [key]);
-  if (!s || !s.next) return '';
+  if (!s) return '';
   const code = path ? episodeLabel(path) : '';
   if (code) {
     const known = tmdb.key === key ? tmdb.name : '';
     return episodeLine(code, known, tor ? spansSeasons(filesOfTorrent(tor)) : false);
   }
-  return nextCardTitle(s.next.title);
+  return s.next ? nextCardTitle(s.next.title) : '';
 }
 
 export function usePlayingNames(s: PlayerState | null): { title: string; sub: string } {

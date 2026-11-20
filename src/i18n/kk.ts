@@ -111,6 +111,7 @@ export const kk: EnDict<typeof ru> = {
     reportSend: "Жіберу",
     reportPlaceholder: "Не болды?",
     find: "Параметрлер бойынша іздеу",
+
     findEmpty: "Ештеңе табылған жоқ",
     syncTitle: 'Синхрондау',
     syncLast: 'Соңғы: {when}',
@@ -528,6 +529,10 @@ export const kk: EnDict<typeof ru> = {
     rowEnded: "аяқталды",
     toEpisodes: "серияға",
     watchedOf: "{have} қаралған {n}-тен",
+
+    resumeAt: "Жалғастыру: {n} серия, {time}",
+
+    jumpEpisode: "Серия нөмірі",
     markSeason: "Маусымды көрдім деп белгілеңіз",
     noNewEpisodes: "Жаңа эпизодтар жоқ",
     nextAir: "Келесі эпизод {date} шығады.",
@@ -2186,6 +2191,8 @@ export const kk: EnDict<typeof ru> = {
       skipSumIntro: "сурет экраны {state}",
       skipSumCredits: "Авторлар {state}",
       watchQuality: "Сапаны бақылау",
+
+      watchQualityHint: "жақсырақ тарату шықса, хабарлаймыз",
       deleteTorrent: "Таратылымды жою",
       renamed: "Атауы өзгертілді",
       deleteAsk: "«{title}» хабарламасын жою ма?",
@@ -2223,6 +2230,7 @@ export const kk: EnDict<typeof ru> = {
     },
     better: {
       find: "Ең жақсы сапаны тауып алыңыз",
+      what: "Сіздікінен жақсы тарату іздейміз және ауыстыруды ұсынамыз. Қазіргісі сіз келіскенше қалады.",
       searching: "Мен іздеп жүрмін…",
       have: "Сізде бар: {quality}",
       unknown: "сапасы көрсетілмеген",
@@ -3049,6 +3057,10 @@ export const kk: EnDict<typeof ru> = {
     next: "Келесі: {title}",
     playNext: "Қосу",
     nextCard: "Келесі эпизод",
+    opening: "Опенинг",
+    ending: "Эндинг",
+    prevShort: "Алдыңғы",
+    nextShort: "Келесі",
     watchNext: "Көру",
     skipIntro: "Кіріспеден өт",
     skipChapter: "Осы тарауды өткізіп жіберіңіз",

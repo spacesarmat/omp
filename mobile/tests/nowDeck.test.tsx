@@ -179,7 +179,7 @@ describe('NowPlaying swipes', () => {
     swipe(card(), [200, 500], [200, 100]);
     expect(pane()).toBe('episodes');
     const rows = Array.from(el.querySelectorAll('.m-now-ep-title')).map((n) => n.textContent);
-    expect(rows).toEqual(['1 серия', '2 серия']);
+    expect(rows).toEqual(['Серия 1', 'Серия 2']);
     swipe(el.querySelectorAll('.m-now-ep')[1], [300, 200], [40, 210]);
     await act(async () => {
       for (let i = 0; i < 30; i++) await Promise.resolve();
@@ -213,7 +213,7 @@ describe('NowPlaying swipes', () => {
     }
     expect(season).toHaveBeenCalledTimes(1);
     const rows = Array.from(el.querySelectorAll('.m-now-ep-title')).map((n) => n.textContent);
-    expect(rows).toEqual(['1 серия · Ледяной прибой', '2 серия']);
+    expect(rows).toEqual(['Серия 1 · Ледяной прибой', 'Серия 2']);
   });
 
   it('episode names do not leak when the release changes', async () => {
@@ -230,11 +230,11 @@ describe('NowPlaying swipes', () => {
         for (let i = 0; i < 20; i++) await Promise.resolve();
       });
     }
-    expect(el.querySelector('.m-now-ep-title')!.textContent).toBe('1 серия · Ледяной прибой');
+    expect(el.querySelector('.m-now-ep-title')!.textContent).toBe('Серия 1 · Ледяной прибой');
     const first = torrents.value[0];
     torrents.value = [first, { ...first, hash: 'h2', title: 'Другой сериал S01', file_stats: [{ id: 3, path: 'Other.Show.S01E01.mkv', length: 1000 }] }];
     nowPlaying.value = { ...nowPlaying.value!, hash: 'h2', file: 3, title: 'Другой сериал', subtitle: 'S01E01' };
     render(<NowPlaying />, el);
-    expect(el.querySelector('.m-now-ep-title')!.textContent).toBe('1 серия');
+    expect(el.querySelector('.m-now-ep-title')!.textContent).toBe('Серия 1');
   });
 });

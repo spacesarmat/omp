@@ -421,8 +421,12 @@ export function EpisodeRows({
                   <span class="m-bar-fill" style={{ width: pct + '%' }} />
                 </span>
               </span>
-              <span class="m-muted m-small">{fmtSize(f.length)}</span>
-              {ratios[i] >= 0.9 && <span class="m-ep-watched">{t('library.watchedDone')}</span>}
+              <span class="m-muted m-small m-ep-size">{fmtSize(f.length).replace(/ /g, '\u00A0')}</span>
+              {ratios[i] >= 0.9 && (
+                <svg class="m-ep-check" width="18" height="18" viewBox="0 0 24 24" aria-label={t('library.watchedDone')}>
+                  <path d={CHECK} fill="none" stroke="currentColor" stroke-width="2.4" />
+                </svg>
+              )}
             </button>
           );
         }
@@ -433,7 +437,7 @@ export function EpisodeRows({
         const dur = ep && ep.runtime > 0 ? fmtDuration(ep.runtime).replace(/ /g, '\u00A0') : '';
         const size = fmtSize(f.length).replace(/ /g, '\u00A0');
         return (
-          <button type="button" class="m-ep m-ep-named" key={f.id} data-current={i === current ? '1' : undefined} onClick={() => setSheet(f)}>
+          <button type="button" class={'m-ep m-ep-named' + (ratios[i] >= 0.9 ? ' is-watched' : '')} key={f.id} data-current={i === current ? '1' : undefined} onClick={() => setSheet(f)}>
             <span class="m-ep-text">
               <span class="m-ep-name">{name}</span>
               <span class="m-ep-meta">
@@ -444,7 +448,11 @@ export function EpisodeRows({
                 <span class="m-bar-fill" style={{ width: pct + '%' }} />
               </span>
             </span>
-            {ratios[i] >= 0.9 && <span class="m-ep-watched">{t('library.watchedDone')}</span>}
+            {ratios[i] >= 0.9 && (
+              <svg class="m-ep-check" width="18" height="18" viewBox="0 0 24 24" aria-label={t('library.watchedDone')}>
+                <path d={CHECK} fill="none" stroke="currentColor" stroke-width="2.4" />
+              </svg>
+            )}
           </button>
         );
       })}
@@ -992,13 +1000,19 @@ export function Torrent({ hash }: { hash: string }) {
             )}
             {film && !series && (
               <div class="m-skip-row" data-block="watch-quality">
-                <span class="m-skip-text">{t('torrent.screen.watchQuality')}</span>
+                <span class="m-skip-text">
+                  {t('torrent.screen.watchQuality')}
+                  <span class="m-muted m-small">{t('torrent.screen.watchQualityHint')}</span>
+                </span>
                 <SkipSwitch on={watchQuality !== false} label={t('torrent.screen.watchQuality')} onToggle={toggleWatchQuality} />
               </div>
             )}
             {film && !series && upgrade && (
               <button type="button" class="m-skip-row m-skip-open" data-block="find-better" aria-haspopup="dialog" onClick={() => setBetterOpen(true)}>
-                <span class="m-skip-text">{t('torrent.better.find')}</span>
+                <span class="m-skip-text">
+                  {t('torrent.better.find')}
+                  <span class="m-muted m-small">{t('torrent.better.what')}</span>
+                </span>
                 <Icon d={CHEVRON} size={20} />
               </button>
             )}
@@ -1017,13 +1031,19 @@ export function Torrent({ hash }: { hash: string }) {
             )}
             {film && (
               <div class="m-skip-row" data-block="watch-quality">
-                <span class="m-skip-text">{t('torrent.screen.watchQuality')}</span>
+                <span class="m-skip-text">
+                  {t('torrent.screen.watchQuality')}
+                  <span class="m-muted m-small">{t('torrent.screen.watchQualityHint')}</span>
+                </span>
                 <SkipSwitch on={watchQuality !== false} label={t('torrent.screen.watchQuality')} onToggle={toggleWatchQuality} />
               </div>
             )}
             {upgrade && (
               <button type="button" class="m-skip-row m-skip-open" data-block="find-better" aria-haspopup="dialog" onClick={() => setBetterOpen(true)}>
-                <span class="m-skip-text">{t('torrent.better.find')}</span>
+                <span class="m-skip-text">
+                  {t('torrent.better.find')}
+                  <span class="m-muted m-small">{t('torrent.better.what')}</span>
+                </span>
                 <Icon d={CHEVRON} size={20} />
               </button>
             )}

@@ -38,7 +38,54 @@ export function chapterList(probe: FfprobeResult | null): Chapter[] {
     out.push({ start, end, title, kind });
   }
   out.sort((a, b) => a.start - b.start);
+  markPositionalIntro(out);
   return out;
+}
+
+/**
+ * Chapters the phone already has (a start and a title, no end): the end is the next chapter, or the file length.
+ * The same intro and ending rules as `chapterList`.
+ */
+export function chaptersFromPoints(points: { t: number; title: string }[], duration: number): Chapter[] {
+  const out: Chapter[] = [];
+  for (let i = 0; i < points.length; i++) {
+    const start = points[i].t;
+    const finite = isFinite(start);
+    let end = finite && duration > start ? duration : finite ? start : 0;
+    if (finite) {
+      for (let j = i + 1; j < points.length; j++) {
+        if (isFinite(points[j].t) && points[j].t > start) {
+          end = points[j].t;
+          break;
+        }
+      }
+    }
+    const title = points[i].title || '';
+    const long = end - (finite ? start : 0) > 5;
+    const kind = long && INTRO_RE.test(title) ? 'intro' : long && CREDITS_RE.test(title) ? 'credits' : null;
+    out.push({ start: finite ? start : 0, end, title, kind });
+  }
+  markPositionalIntro(out);
+  return out;
+}
+
+/**
+ * A short chapter just after a shorter one, near the start, is an opening even when the file only numbers it
+ * («Chapter 02» 0:31-2:01). A lone chapter in the middle is left alone.
+ */
+function markPositionalIntro(list: Chapter[]): void {
+  for (let i = 0; i < list.length; i++) if (list[i].kind === 'intro') return;
+  for (let i = 1; i < list.length; i++) {
+    const c = list[i];
+    if (c.kind) continue;
+    const dur = c.end - c.start;
+    const prev = list[i - 1].end - list[i - 1].start;
+    if (dur < 60 || dur > 130) continue;
+    if (c.start < 20 || c.start > 150) continue;
+    if (prev > 50) continue;
+    c.kind = 'intro';
+    return;
+  }
 }
 
 /** ffprobe sometimes stores the start time as the only title (`00:12:03`, `1:02:03.000`). That is not a name. */
@@ -70,7 +117,8 @@ export function skipSegments(
 ): { intro?: { start: number; end: number }; credits?: { start: number } } {
   const list = chapterList(probe);
   const out: { intro?: { start: number; end: number }; credits?: { start: number } } = {};
-  const intro = list.filter((c) => c.kind === 'intro')[0];
+  // a named opening wins; a guessed one (a short chapter near the start) must not hide a mark the viewer saved
+  const intro = list.filter((c) => c.kind === 'intro' && titleMarkKind(c.title) === 'intro')[0];
   const credits = list.filter((c) => c.kind === 'credits')[0];
   if (intro) out.intro = { start: intro.start, end: intro.end };
   else if (prefs && prefs.mi) out.intro = { start: prefs.mi[0], end: prefs.mi[1] };

@@ -44,7 +44,10 @@ export function seasonEpisodeModels(files: SeasonEpFile[], season: number, tmdb:
   const covered: number[] = [];
   const rows: SeasonEpModel[] = [];
   files.forEach((f) => {
-    const parsed = fileEpisodes(f.path);
+    const direct = fileEpisodes(f.path);
+    const normalized = stripExt(baseName(f.path)).replace(/_/g, ' ') + '.mkv';
+    const alt = direct && direct.episodes.length ? null : fileEpisodes(normalized);
+    const parsed = direct && direct.episodes.length ? direct : alt;
     if (!parsed || !parsed.episodes.length) {
       rows.push({
         key: 'u' + f.id,
@@ -90,6 +93,25 @@ export function seasonEpisodeModels(files: SeasonEpFile[], season: number, tmdb:
   });
   rows.sort((a, b) => (a.numbers.length ? a.numbers[0] : 1e9) - (b.numbers.length ? b.numbers[0] : 1e9));
   return rows;
+}
+
+/** The episode numbers on one page of rows: «101-150». A page of files with no number still gets a label, from its place in the list. */
+export function episodePageLabel(rows: { numbers: number[] }[], start: number, size = 50): string {
+  const page = rows.slice(start, start + size);
+  let first = 0;
+  let last = 0;
+  page.forEach((r) => {
+    r.numbers.forEach((n) => {
+      if (!first || n < first) first = n;
+      if (n > last) last = n;
+    });
+  });
+  if (!first) {
+    if (!page.length) return '';
+    first = start + 1;
+    last = start + page.length;
+  }
+  return first === last ? String(first) : first + '-' + last;
 }
 
 /** Watched episodes (a finished combined file counts each episode it holds) and the season total. */
