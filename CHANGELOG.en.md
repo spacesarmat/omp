@@ -4,7 +4,7 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
-## Unreleased
+## 0.30.2-beta.1
 
 - [tv] Embedded subtitles stay in the menu when the TV reports only some of them. PGS is drawn over the video. SRT and ASS are read from the file when the TV does not show them itself. An image track this TV cannot draw (VobSub) is labeled in the list
 - [phone] PGS and VobSub stay in the subtitle list even when the decoder did not mark them as supported. The name shows the format
