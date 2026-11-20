@@ -34,7 +34,7 @@ function localInfo(handle: ServerHandle, installed: boolean): LocalServerInfo {
     supported: true,
     running: handle.status === 'ready',
     binary: installed ? 'ready' : 'missing',
-    pinVersion: 'MatriX.150',
+    pinVersion: 'MatriX.151',
     ip: '127.0.0.1',
     error: handle.error,
   };

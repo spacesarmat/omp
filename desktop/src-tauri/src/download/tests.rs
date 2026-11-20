@@ -139,16 +139,16 @@ fn windows_asset_matches_the_official_release_pin() {
 
     assert_eq!(asset.target, TargetPlatform::WindowsX64);
     assert_eq!(asset.id, "torrserver");
-    assert_eq!(asset.version, "MatriX.150");
+    assert_eq!(asset.version, "MatriX.151");
     assert_eq!(
         asset.url,
-        "https://github.com/YouROK/TorrServer/releases/download/MatriX.150/TorrServer-windows-amd64.exe"
+        "https://github.com/YouROK/TorrServer/releases/download/MatriX.151/TorrServer-windows-amd64.exe"
     );
     assert_eq!(
         asset.sha256,
-        "3a96b97a24d86a90c0712a6ec47d4ed52edc7eabac1bce6a0d9bbc8fd30de5bb"
+        "2d6b898268a03eec4d675471a9f39ebea20464c89b3a62fe1195a5bae04f1116"
     );
-    assert_eq!(asset.max_bytes, 63_884_288);
+    assert_eq!(asset.max_bytes, 63_932_928);
 }
 
 #[test]

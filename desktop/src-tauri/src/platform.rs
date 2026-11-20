@@ -66,10 +66,10 @@ pub fn asset_for(target: TargetPlatform) -> Result<BinaryAsset, DownloadError> {
         TargetPlatform::WindowsX64 => Ok(BinaryAsset {
             target,
             id: "torrserver".to_string(),
-            version: "MatriX.150".to_string(),
-            url: "https://github.com/YouROK/TorrServer/releases/download/MatriX.150/TorrServer-windows-amd64.exe".to_string(),
-            sha256: "3a96b97a24d86a90c0712a6ec47d4ed52edc7eabac1bce6a0d9bbc8fd30de5bb".to_string(),
-            max_bytes: 63_884_288,
+            version: "MatriX.151".to_string(),
+            url: "https://github.com/YouROK/TorrServer/releases/download/MatriX.151/TorrServer-windows-amd64.exe".to_string(),
+            sha256: "2d6b898268a03eec4d675471a9f39ebea20464c89b3a62fe1195a5bae04f1116".to_string(),
+            max_bytes: 63_932_928,
         }),
         TargetPlatform::MacOsX64 => Ok(BinaryAsset {
             target,
