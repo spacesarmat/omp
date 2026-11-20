@@ -199,6 +199,25 @@ describe('probeReliable', () => {
     expect(probes).toBe(1);
   });
 
+  it('keeps chapters found on a retry that still has no subtitles', async () => {
+    let probes = 0;
+    const c = {
+      preload: async () => undefined,
+      preloadTail: async () => undefined,
+      probe: async () => {
+        probes++;
+        if (probes === 1) return { streams: [{ index: 1, codec_type: 'audio', codec_name: 'aac' }] };
+        return {
+          streams: [{ index: 1, codec_type: 'audio', codec_name: 'aac' }],
+          chapters: [{ start_time: '0', end_time: '90', tags: { title: 'Opening' } }],
+        };
+      },
+    };
+    const r = await probeReliable(c, 'h', 0, 'film.mkv', 20 * 1024 * 1024);
+    expect(r && r.streams[0].codec_type).toBe('audio');
+    expect(r && r.chapters && r.chapters[0].tags && r.chapters[0].tags.title).toBe('Opening');
+  });
+
   it('keeps the first audio list when the retry comes back empty', async () => {
     let probes = 0;
     const c = {

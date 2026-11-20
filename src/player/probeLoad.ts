@@ -62,7 +62,12 @@ export function adoptProbe(current: FfprobeResult | null, incoming: FfprobeResul
   if (!current) return incoming;
   const streams = mergeStreams(current.streams, incoming.streams);
   const base = hasSubtitleStreams(incoming) ? incoming : current;
-  return { ...base, streams: streams };
+  const curChapters = current.chapters;
+  const nextChapters = incoming.chapters;
+  const chapters = nextChapters && nextChapters.length && (!curChapters || nextChapters.length >= curChapters.length)
+    ? nextChapters
+    : curChapters;
+  return chapters ? { ...base, streams: streams, chapters: chapters } : { ...base, streams: streams };
 }
 
 export async function probeReliable(c: ProbeHost, hash: string, fileIndex: number, name: string, size: number): Promise<FfprobeResult | null> {
