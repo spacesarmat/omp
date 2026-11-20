@@ -34,7 +34,7 @@ export function lazyScreen(
       return (
         <div class="lazy-error" role="alert">
           <span>{t('common.openScreenFailed')}</span>
-          <button onClick={() => {
+          <button type="button" class="m-btn m-btn-secondary" onClick={() => {
             setScreen(null);
             setFailed(false);
             setAttempt((n) => n + 1);

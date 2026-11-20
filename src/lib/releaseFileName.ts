@@ -52,7 +52,9 @@ export function shortDeviceName(name: string): string {
   const oled = /\bOLED\d{2}[A-Z]\d/i.exec(rest);
   if (oled) {
     const model = oled[0].toUpperCase();
-    return brand ? brand[1] + ' ' + model : model;
+    const lead = /^([A-Za-z]+)\s+OLED/i.exec(rest);
+    const who = brand ? brand[1] : lead && lead[1].toLowerCase() !== 'webos' ? lead[1] : '';
+    return who ? who + ' ' + model : model;
   }
   const model = /\b[A-Z]{1,6}\d{2,}[A-Z0-9]*/.exec(rest);
   if (brand && model) return brand[1] + ' ' + model[0];

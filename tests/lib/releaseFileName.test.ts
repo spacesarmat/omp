@@ -65,6 +65,7 @@ describe('commonReleaseTail', () => {
 describe('shortDeviceName', () => {
   it('keeps the brand and the short OLED model', () => {
     expect(shortDeviceName('[LG] webOS TV OLED55C9PLA')).toBe('LG OLED55C9');
+    expect(shortDeviceName('LG OLED55C9PLA')).toBe('LG OLED55C9');
   });
 
   it('leaves a name that already is short', () => {

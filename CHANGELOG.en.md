@@ -4,6 +4,11 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## Unreleased
+
+- [phone] Buttons in the dark theme are no longer white: Sync now, Retry, Watch all, Cancel, and the screen-load retry. Earlier in the calendar is a plain header. Project page sits in the same row as Backup and the error log. Settings shows a short TV name: "LG OLED55C9 · webOS"
+- [tv] When the first look at a file sees audio but no subtitles, the player asks again once playback has started and sends that list to the phone right away
+
 ## 0.30.2-beta.2
 
 - [phone] Now on TV: a dark scrim and white text in the header, and a short TV name. Under the title, episode N and the TMDB name. Chapter controls are smaller than the previous and next episode buttons. Skip intro appears inside an opening, and the chapter list names an opening and an ending. The episode list drops raw file names, shows the shared release line once, a progress bar, and scrolls to the current episode. A next-episode card. While scrubbing, the chapter name sits next to the time

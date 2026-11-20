@@ -274,8 +274,9 @@ export function Advanced() {
           <span>{t('log.screenTitle')}</span>
           <Icon d={CHEVRON} size={20} />
         </button>
-        <button type="button" class="m-btn m-btn-secondary tm" data-code="P13.10" onClick={() => window.open(PROJECT_URL, '_system')}>
-          {t('settings.projectPage')}
+        <button type="button" class="m-set-row m-set-pick tm" data-code="P13.10" onClick={() => window.open(PROJECT_URL, '_system')}>
+          <span>{t('settings.projectPage')}</span>
+          <Icon d={CHEVRON} size={20} />
         </button>
         <button type="button" class="m-credits" onClick={() => window.open(TORRSERVER_SOURCE_URL, '_system')}>
           TorrServer © YouROK, GPL-3.0
