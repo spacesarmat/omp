@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { applyPulled } from '../../src/store/applyPulled';
+import { applyPulled, reapplyDeviceRecords } from '../../src/store/applyPulled';
 import { torrents } from '../../src/store/library';
 import { watchesNewEpisodes } from '../../src/lib/journal';
 import { getLocalProgress, reloadProgress, saveProgress } from '../../src/store/progress';
@@ -28,6 +28,14 @@ describe('applyPulled', () => {
     putDeviceRecords([row]);
     torrents.value = [];
     applyPulled([row]);
+    torrents.value = [{ hash: 'abc', title: 'Old', data: '{"omp":{"v":1,"h":[]}}' } as never];
+    expect(watchesNewEpisodes(torrents.value[0].data)).toBe(false);
+  });
+
+  it('reapplies persisted records after a cold start', () => {
+    putDeviceRecords([{ id: 'watch:abc', kind: 'watch', key: 'abc', body: { newEpisodes: false }, updatedAt: 20, deviceId: 'other' }]);
+    torrents.value = [];
+    reapplyDeviceRecords();
     torrents.value = [{ hash: 'abc', title: 'Old', data: '{"omp":{"v":1,"h":[]}}' } as never];
     expect(watchesNewEpisodes(torrents.value[0].data)).toBe(false);
   });

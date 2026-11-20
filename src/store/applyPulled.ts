@@ -132,6 +132,10 @@ export function applyPulled(rows: SyncRecord[]): void {
   applyLibrary(rows);
 }
 
+export function reapplyDeviceRecords(): void {
+  applyPulled(deviceRecords());
+}
+
 function liveRows(rows: SyncRecord[]): SyncRecord[] {
   const have: { [id: string]: SyncRecord } = {};
   const all = deviceRecords();
