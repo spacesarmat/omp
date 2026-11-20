@@ -30,6 +30,14 @@ describe('seasonEpisodeModels', () => {
     expect(rows[2].fileId).toBeNull();
   });
 
+  it('numbers an underscore release name instead of keeping the file name', () => {
+    const rows = seasonEpisodeModels([
+      { id: 6, path: 'Black_Clover_-_006_RUS_JP_ENG_Judas.mkv', length: 1 },
+    ], 0, []);
+    expect(rows[0].numbers).toEqual([6]);
+    expect(rows[0].title).toBe('6.');
+  });
+
   it('keeps a seasonless episode and a file the parser cannot number', () => {
     const rows = seasonEpisodeModels([
       { id: 1, path: 'Show.E01.mkv', length: 1 },

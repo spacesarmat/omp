@@ -27,6 +27,11 @@ describe('introChapter', () => {
     expect(introChapter(null, 1)).toBeNull();
     expect(introChapter({ streams: [] }, 1)).toBeNull();
   });
+  it('treats a short second chapter near the start as the opening', () => {
+    const p = probe([[0, 31, 'Chapter 01'], [31, 121, 'Chapter 02'], [121, 1400, 'Episode']]);
+    expect(introChapter(p, 40)).toEqual({ start: 31, end: 121 });
+    expect(introChapter(p, 10)).toBeNull();
+  });
 });
 
 describe('chapterList', () => {

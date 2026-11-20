@@ -16,7 +16,7 @@ export function miniTitle(names: { title: string; sub: string }): string {
   if (!names.sub) return names.title;
   const named = names.sub.split(' · ').slice(1).some((part) => {
     if (!realEpisodeName(part)) return false;
-    const numbered = /^(\d+)\s/.exec(part);
+    const numbered = /^(\d+)\s/.exec(part) || /\s(\d+)$/.exec(part);
     return !numbered || part !== humanEpisodeCode('S01E' + numbered[1], false);
   });
   return named ? names.sub : names.sub + ' · ' + names.title;

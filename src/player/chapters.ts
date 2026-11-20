@@ -38,7 +38,47 @@ export function chapterList(probe: FfprobeResult | null): Chapter[] {
     out.push({ start, end, title, kind });
   }
   out.sort((a, b) => a.start - b.start);
+  markPositionalIntro(out);
   return out;
+}
+
+/**
+ * Chapters the phone already has (a start and a title, no end): the end is the next chapter, or the file length.
+ * The same intro and ending rules as `chapterList`.
+ */
+export function chaptersFromPoints(points: { t: number; title: string }[], duration: number): Chapter[] {
+  const sorted = points.slice().filter((p) => isFinite(p.t)).sort((a, b) => a.t - b.t);
+  const out: Chapter[] = [];
+  for (let i = 0; i < sorted.length; i++) {
+    const start = sorted[i].t;
+    const next = i + 1 < sorted.length ? sorted[i + 1].t : duration;
+    const end = next > start ? next : start;
+    if (!(end > start)) continue;
+    const title = sorted[i].title || '';
+    const long = end - start > 5;
+    const kind = long && INTRO_RE.test(title) ? 'intro' : long && CREDITS_RE.test(title) ? 'credits' : null;
+    out.push({ start, end, title, kind });
+  }
+  markPositionalIntro(out);
+  return out;
+}
+
+/**
+ * A short chapter just after a shorter one, near the start, is an opening even when the file only numbers it
+ * («Chapter 02» 0:31-2:01). A lone chapter in the middle is left alone.
+ */
+function markPositionalIntro(list: Chapter[]): void {
+  for (let i = 1; i < list.length; i++) {
+    const c = list[i];
+    if (c.kind) continue;
+    const dur = c.end - c.start;
+    const prev = list[i - 1].end - list[i - 1].start;
+    if (dur < 60 || dur > 130) continue;
+    if (c.start < 20 || c.start > 150) continue;
+    if (prev > 50) continue;
+    c.kind = 'intro';
+    return;
+  }
 }
 
 /** ffprobe sometimes stores the start time as the only title (`00:12:03`, `1:02:03.000`). That is not a name. */

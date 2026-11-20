@@ -111,6 +111,7 @@ export const hy: EnDict<typeof ru> = {
     reportSend: "Ուղարկել",
     reportPlaceholder: "Ի՞նչ պատահեց?",
     find: "Փնտրել կարգավորումներով",
+
     findEmpty: "Չգտնվեց ոչինչ",
     syncTitle: 'Համաժամեցում',
     syncLast: 'Վերջինը՝ {when}',
@@ -513,6 +514,10 @@ export const hy: EnDict<typeof ru> = {
     rowEnded: "ավարտված",
     toEpisodes: "սերիային",
     watchedOf: "{have}-ից դիտվել է {n}",
+
+    resumeAt: "Continue: episode {n}, {time}",
+
+    jumpEpisode: "Episode number",
     markSeason: "Նշեք սեզոնը որպես դիտված",
     noNewEpisodes: "Նոր էպիզոդներ չկան",
     nextAir: "Հաջորդ էպիզոդը կթողարկվի {date}",
@@ -2171,6 +2176,8 @@ export const hy: EnDict<typeof ru> = {
       skipSumIntro: "Սփլեշ էկրան {state}",
       skipSumCredits: "Հեղինակային վարկեր {state}",
       watchQuality: "Հսկել որակը",
+
+      watchQualityHint: "we will tell you if a better release shows up",
       deleteTorrent: "Հեռացնել բաշխումը",
       renamed: "Նորանվանվել է",
       deleteAsk: "Հեռացնել «{title}» հեռարձակումը՞",
@@ -2208,6 +2215,7 @@ export const hy: EnDict<typeof ru> = {
     },
     better: {
       find: "Գտեք լավագույն որակով",
+      what: "We look for a better release and offer to replace yours. The current one stays until you agree.",
       searching: "Ես փնտրում եմ…",
       have: "Դուք ունեք՝ {quality}",
       unknown: "Որակը չի նշվել",
@@ -3034,6 +3042,10 @@ export const hy: EnDict<typeof ru> = {
     next: "Հաջորդը՝ {title}",
     playNext: "Միացնել",
     nextCard: "Հաջորդ էպիզոդ",
+    opening: "Opening",
+    ending: "Ending",
+    prevShort: "Prev",
+    nextShort: "Next",
     watchNext: "Դիտել",
     skipIntro: "Անտեսեք ներածությունը",
     skipChapter: "Անտեսել այս գլուխը",

@@ -111,6 +111,7 @@ export const tg: EnDict<typeof ru> = {
     reportSend: "Ирсол кунед",
     reportPlaceholder: "Чӣ рӯй дод?",
     find: "Ҷустуҷӯ бо танзимот",
+
     findEmpty: "Ҳеҷ чиз ёфт нашуд",
     syncTitle: 'Ҳамоҳангсозӣ',
     syncLast: 'Охирин: {when}',
@@ -513,6 +514,10 @@ export const tg: EnDict<typeof ru> = {
     rowEnded: "анҷомёфта",
     toEpisodes: "ба силсила",
     watchedOf: "{have} аз {n} тамошо шуд",
+
+    resumeAt: "Continue: episode {n}, {time}",
+
+    jumpEpisode: "Episode number",
     markSeason: "Мавсимро ҳамчун тамошошуда қайд кунед",
     noNewEpisodes: "Эпизодҳои нав вуҷуд надоранд",
     nextAir: "Эпизоди навбатӣ дар {date} нашр мешавад.",
@@ -2171,6 +2176,8 @@ export const tg: EnDict<typeof ru> = {
       skipSumIntro: "экрани обпошиш {state}",
       skipSumCredits: "Кредитҳо {state}",
       watchQuality: "Сифатро назорат кунед",
+
+      watchQualityHint: "we will tell you if a better release shows up",
       deleteTorrent: "Тақсимотро нест кунед",
       renamed: "Номи он иваз карда шуд",
       deleteAsk: "Пахши «{title}»-ро ҳазф кунед?",
@@ -2208,6 +2215,7 @@ export const tg: EnDict<typeof ru> = {
     },
     better: {
       find: "Бо беҳтарин сифат пайдо кунед",
+      what: "We look for a better release and offer to replace yours. The current one stays until you agree.",
       searching: "Ман меҷӯям…",
       have: "Шумо доред: {quality}",
       unknown: "Сифат муайян нашудааст",
@@ -3034,6 +3042,10 @@ export const tg: EnDict<typeof ru> = {
     next: "Баъдӣ: {title}",
     playNext: "Фаъол кунед",
     nextCard: "Эпизоди навбатӣ",
+    opening: "Opening",
+    ending: "Ending",
+    prevShort: "Prev",
+    nextShort: "Next",
     watchNext: "Бинед",
     skipIntro: "Муқаддимаро гузаред",
     skipChapter: "Ин бобро гузаред",

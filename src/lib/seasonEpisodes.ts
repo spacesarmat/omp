@@ -2,6 +2,7 @@
 import { t } from '../i18n';
 import { fileEpisodes } from './categoryCheck';
 import { baseName, stripExt } from './episodes';
+import { parseReleaseFile } from './releaseFileName';
 
 export interface SeasonEpFile {
   id: number;
@@ -44,7 +45,13 @@ export function seasonEpisodeModels(files: SeasonEpFile[], season: number, tmdb:
   const covered: number[] = [];
   const rows: SeasonEpModel[] = [];
   files.forEach((f) => {
-    const parsed = fileEpisodes(f.path);
+    const direct = fileEpisodes(f.path);
+    const alt = direct && direct.episodes.length ? null : parseReleaseFile(f.path);
+    const parsed = direct && direct.episodes.length
+      ? direct
+      : alt && alt.episode !== null
+        ? { season: alt.season, episodes: [alt.episode] }
+        : null;
     if (!parsed || !parsed.episodes.length) {
       rows.push({
         key: 'u' + f.id,

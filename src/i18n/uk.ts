@@ -104,6 +104,7 @@ export const uk: typeof ru = {
     reportSend: "Надіслати",
     reportPlaceholder: "Що сталося?",
     find: "Пошук у налаштуваннях",
+
     findEmpty: "Нічого не знайдено",
     syncTitle: 'Синхронізація',
     syncLast: 'Остання: {when}',
@@ -488,6 +489,10 @@ export const uk: typeof ru = {
     rowEnded: "завершено",
     toEpisodes: "до серій",
     watchedOf: "Переглянуто {have} з {n}",
+
+    resumeAt: "Продовжити: серія {n}, {time}",
+
+    jumpEpisode: "Номер серії",
     markSeason: "Позначити сезон переглянутим",
     noNewEpisodes: "Нових серій немає",
     nextAir: "Наступна серія вийде {date}",
@@ -2056,6 +2061,8 @@ export const uk: typeof ru = {
       skipSumIntro: "заставка {state}",
       skipSumCredits: "титри {state}",
       watchQuality: "Стежити за якістю",
+
+      watchQualityHint: "повідомимо, якщо зʼявиться краща роздача",
       deleteTorrent: "Видалити роздачу",
       renamed: "Перейменовано",
       deleteAsk: "Видалити роздачу «{title}»?",
@@ -2093,6 +2100,7 @@ export const uk: typeof ru = {
     },
     better: {
       find: "Знайти в найкращій якості",
+      what: "Шукаємо кращу роздачу і пропонуємо заміну. Поточна лишається, поки ви не погодитесь.",
       searching: "Шукаю…",
       have: "У вас: {quality}",
       unknown: "якість не вказано",
@@ -2904,6 +2912,10 @@ export const uk: typeof ru = {
     next: "Далі: {title}",
     playNext: "Увімкнути",
     nextCard: "Наступна серія",
+    opening: "Опенінг",
+    ending: "Ендінг",
+    prevShort: "Попер.",
+    nextShort: "Наст.",
     watchNext: "Дивитися",
     skipIntro: "Пропустити заставку",
     skipChapter: "Пропустити розділ",

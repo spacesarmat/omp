@@ -111,6 +111,7 @@ export const az: EnDict<typeof ru> = {
     reportSend: "Göndər",
     reportPlaceholder: "Nə baş verdi?",
     find: "Tənzimləmələrə görə axtarış",
+
     findEmpty: "Heç nə tapılmadı",
     syncTitle: 'Sinxronizasiya',
     syncLast: 'Sonuncu: {when}',
@@ -513,6 +514,10 @@ export const az: EnDict<typeof ru> = {
     rowEnded: "tamamlandı",
     toEpisodes: "seriyaya",
     watchedOf: "{have} {n}-dən izlənilib",
+
+    resumeAt: "Continue: episode {n}, {time}",
+
+    jumpEpisode: "Episode number",
     markSeason: "Mövsümü izlənmiş kimi işarələyin",
     noNewEpisodes: "Yeni epizodlar yoxdur",
     nextAir: "Növbəti epizod {date} tarixində yayımlanacaq.",
@@ -2171,6 +2176,8 @@ export const az: EnDict<typeof ru> = {
       skipSumIntro: "Splash ekranı {state}",
       skipSumCredits: "Kreditlər {state}",
       watchQuality: "Keyfiyyəti izləyin",
+
+      watchQualityHint: "we will tell you if a better release shows up",
       deleteTorrent: "Paylamanı sil",
       renamed: "Yenidən adlandırıldı",
       deleteAsk: "'{title}' yayımını silin?",
@@ -2208,6 +2215,7 @@ export const az: EnDict<typeof ru> = {
     },
     better: {
       find: "Ən yüksək keyfiyyətdə tapın",
+      what: "We look for a better release and offer to replace yours. The current one stays until you agree.",
       searching: "Mən axtarıram…",
       have: "Sizdə var: {quality}",
       unknown: "Keyfiyyət göstərilməyib",
@@ -3034,6 +3042,10 @@ export const az: EnDict<typeof ru> = {
     next: "Növbəti: {title}",
     playNext: "Yandırın",
     nextCard: "Növbəti bölüm",
+    opening: "Opening",
+    ending: "Ending",
+    prevShort: "Prev",
+    nextShort: "Next",
     watchNext: "Bax",
     skipIntro: "Girişi keç",
     skipChapter: "Bu fəsli keç",

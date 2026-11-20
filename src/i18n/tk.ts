@@ -111,6 +111,7 @@ export const tk: EnDict<typeof ru> = {
     reportSend: "Göndermek",
     reportPlaceholder: "Näme boldy?",
     find: "Gurluşlar boýunça gözläň",
+
     findEmpty: "Hiç zat tapylmady",
     syncTitle: 'Sinhronizasiýa',
     syncLast: 'Soňky: {when}',
@@ -513,6 +514,10 @@ export const tk: EnDict<typeof ru> = {
     rowEnded: "Täze tapgyra geçdi",
     toEpisodes: "seriýa boýunça",
     watchedOf: "{have} {n}-dan görüldi",
+
+    resumeAt: "Continue: episode {n}, {time}",
+
+    jumpEpisode: "Episode number",
     markSeason: "Möwsümi görüldi diýip belläň",
     noNewEpisodes: "Täze bölümler ýok",
     nextAir: "Indiki bölüm {date}de çykarylar.",
@@ -2171,6 +2176,8 @@ export const tk: EnDict<typeof ru> = {
       skipSumIntro: "Splash ekrany {state}",
       skipSumCredits: "Kreditler {state}",
       watchQuality: "Monitoryň hilini",
+
+      watchQualityHint: "we will tell you if a better release shows up",
       deleteTorrent: "Paýlamany pozuň",
       renamed: "Täze atlandyryldy",
       deleteAsk: "{title}' ýaýlymyny pozmak?",
@@ -2208,6 +2215,7 @@ export const tk: EnDict<typeof ru> = {
     },
     better: {
       find: "Iň ýokary hili tapyň",
+      what: "We look for a better release and offer to replace yours. The current one stays until you agree.",
       searching: "Men gözleýärin…",
       have: "Sizde bar: {quality}",
       unknown: "Sypat kesgitlenmändir",
@@ -3034,6 +3042,10 @@ export const tk: EnDict<typeof ru> = {
     next: "Indiki: {title}",
     playNext: "Ýak",
     nextCard: "Indiki bölüm",
+    opening: "Opening",
+    ending: "Ending",
+    prevShort: "Prev",
+    nextShort: "Next",
     watchNext: "Gör",
     skipIntro: "Girişi geç",
     skipChapter: "Bu bapy geç",

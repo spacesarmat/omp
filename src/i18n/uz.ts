@@ -111,6 +111,7 @@ export const uz: EnDict<typeof ru> = {
     reportSend: "Yuborish",
     reportPlaceholder: "Nima bo'ldi?",
     find: "Sozlamalar bo'yicha qidirish",
+
     findEmpty: "Hech narsa topilmadi",
     syncTitle: 'Sinxronlash',
     syncLast: 'Oxirgi: {when}',
@@ -513,6 +514,10 @@ export const uz: EnDict<typeof ru> = {
     rowEnded: "Tugallangan",
     toEpisodes: "seriyaga",
     watchedOf: "{have} tomosha qilingan {n} ichidan",
+
+    resumeAt: "Continue: episode {n}, {time}",
+
+    jumpEpisode: "Episode number",
     markSeason: "Mavsumni tomosha qilingan deb belgilang",
     noNewEpisodes: "Yangi epizodlar yo'q",
     nextAir: "Keyingi epizod {date}da chiqariladi.",
@@ -2171,6 +2176,8 @@ export const uz: EnDict<typeof ru> = {
       skipSumIntro: "Splash ekrani {state}",
       skipSumCredits: "Kreditlar {state}",
       watchQuality: "Monitor sifatini",
+
+      watchQualityHint: "we will tell you if a better release shows up",
       deleteTorrent: "Tarqatishni o'chirish",
       renamed: "Nomi o'zgartirildi",
       deleteAsk: "{title}' efirini o'chirib tashlaymizmi?",
@@ -2208,6 +2215,7 @@ export const uz: EnDict<typeof ru> = {
     },
     better: {
       find: "Eng yaxshi sifatni toping",
+      what: "We look for a better release and offer to replace yours. The current one stays until you agree.",
       searching: "Men izlayapman…",
       have: "Sizda: {quality}",
       unknown: "sifat ko'rsatilmagan",
@@ -3034,6 +3042,10 @@ export const uz: EnDict<typeof ru> = {
     next: "Keyingi: {title}",
     playNext: "Yoq",
     nextCard: "Keyingi epizod",
+    opening: "Opening",
+    ending: "Ending",
+    prevShort: "Prev",
+    nextShort: "Next",
     watchNext: "Tomosha qiling",
     skipIntro: "Kirishni o'tkazib yuboring",
     skipChapter: "Ushbu bobni o'tkazib yuboring",

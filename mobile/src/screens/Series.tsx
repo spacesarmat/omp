@@ -783,7 +783,6 @@ function Body({ group, card }: { group: SeriesGroup; card: CatalogCard | null })
           {error && <LaunchError message={error} class="m-hint-warn" />}
           {main && files.length > 0 && (
             <>
-            <div class="m-section">{files.length > 1 ? t('torrent.screen.episodesHead') : t('torrent.screen.filesHead')}</div>
             <SeasonEpisodes
               hash={main.hash}
               files={files}

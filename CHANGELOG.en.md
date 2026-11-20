@@ -4,6 +4,11 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## Unreleased
+
+- [phone] Now on TV: a dark scrim and white text in the header, and a short TV name. Under the title, episode N and the TMDB name. Chapter controls are smaller than the previous and next episode buttons. Skip intro appears inside an opening, and the chapter list names an opening and an ending. The episode list drops raw file names, shows the shared release line once, a progress bar, and scrolls to the current episode. A next-episode card. While scrubbing, the chapter name sits next to the time
+- [phone] A series page lists episode N or the TMDB title, with the release tail once above the list. The number sits next to the text, and the size stays on one line. A check replaces the green watched label. Continue shows the episode and the time. All episodes sits to the right of the heading. A long list has ranges and a jump to a number. Watch quality and Find in better quality have a short hint
+
 ## 0.30.1
 
 - [tech] Watch history, progress, chosen audio, skip settings, a manual TMDB match, renames and monitoring flags stay on the device and work without TorrServer. The first launch copies them from the server once. Subscribers sync them through billing. An admin switch chooses subscribers only or everyone, and subscribers only is the default. Without a subscription the data stays on the device and sync stops

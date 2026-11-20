@@ -104,6 +104,7 @@ export const be: typeof ru = {
     reportSend: "Даслаць",
     reportPlaceholder: "Што здарылася?",
     find: "Пошук па наладах",
+
     findEmpty: "Нічога не знойдзена",
     syncTitle: 'Сінхранізацыя',
     syncLast: 'Апошняя: {when}',
@@ -488,6 +489,10 @@ export const be: typeof ru = {
     rowEnded: "завершаны",
     toEpisodes: "да серый",
     watchedOf: "Прагледжана {have} з {n}",
+
+    resumeAt: "Працягнуць: серыя {n}, {time}",
+
+    jumpEpisode: "Нумар серыі",
     markSeason: "Адзначыць сезон прагледжаным",
     noNewEpisodes: "Новых серый няма",
     nextAir: "Наступная серыя выйдзе {date}",
@@ -2056,6 +2061,8 @@ export const be: typeof ru = {
       skipSumIntro: "застаўка {state}",
       skipSumCredits: "тытры {state}",
       watchQuality: "Сачыць за якасцю",
+
+      watchQualityHint: "паведамім, калі зʼявіцца лепшая раздача",
       deleteTorrent: "Выдаліць раздачу",
       renamed: "Перайменавана",
       deleteAsk: "Выдаліць раздачу «{title}»?",
@@ -2093,6 +2100,7 @@ export const be: typeof ru = {
     },
     better: {
       find: "Знайсці ў лепшай якасці",
+      what: "Шукаем лепшую раздачу і прапануем замену. Бягучая застаецца, пакуль вы не пагодзіцеся.",
       searching: "Шукаю…",
       have: "У вас: {quality}",
       unknown: "якасць не пазначана",
@@ -2904,6 +2912,10 @@ export const be: typeof ru = {
     next: "Далей: {title}",
     playNext: "Уключыць",
     nextCard: "Наступная серыя",
+    opening: "Апенінг",
+    ending: "Эндынг",
+    prevShort: "Папяр.",
+    nextShort: "Наст.",
     watchNext: "Глядзець",
     skipIntro: "Прапусціць застаўку",
     skipChapter: "Прапусціць раздзел",

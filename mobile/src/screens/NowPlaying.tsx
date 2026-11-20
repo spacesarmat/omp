@@ -8,7 +8,8 @@ import { activeTv } from '../tv/tvStore';
 import { applyAutoSkip, nowPlaying, lastSeen, linkStatus, launching, sendCmd } from '../tv/playerLink';
 import { volume as tvVolume } from '../tv/tvClient';
 import { formatDuration } from '../../../src/lib/format';
-import { chapterIndexAt, chapterStepIndex, namedChapterTitle, titleMarkKind, type Chapter } from '../../../src/player/chapters';
+import { chapterIndexAt, chapterStepIndex, chaptersFromPoints, namedChapterTitle, type Chapter } from '../../../src/player/chapters';
+import { shortDeviceName } from '../../../src/lib/releaseFileName';
 import { NowPoster } from '../ui/NowPoster';
 import { useNextEpisodeTitle, usePlayingNames, usePlayingPoster } from '../lib/playingNames';
 import { usePortraitLock } from '../lib/usePortraitLock';
@@ -21,10 +22,6 @@ const HOLD_MS = 1500;
 const HOLD_NEAR_S = 3;
 const SKIP_KEY = 'tsp.nowSkipMarks';
 const CHEVRON = 'M9 6l6 6-6 6';
-
-function episodeLine(subtitle: string): boolean {
-  return /s\d+\s*e\d+/i.test(subtitle) || /(?:^|[^a-z0-9])e\d+/i.test(subtitle) || /сери/i.test(subtitle) || /episode/i.test(subtitle);
-}
 
 function skipMarksOn(): boolean {
   return loadJson<unknown>(SKIP_KEY, false, (v) => v === true) === true;
@@ -91,7 +88,7 @@ export function NowPlaying({ volume = tvVolume }: { volume?: (dir: 'up' | 'down'
         {status === 'stale' ? (
           <span class="m-now-tv warn">{t('remote.mini.noAnswer')}</span>
         ) : (
-          tv && <span class="m-now-tv">{tv.name}</span>
+          tv && <span class="m-now-tv">{shortDeviceName(tv.name)}</span>
         )}
       </div>
       <button type="button" class="m-icon-btn" aria-label={t('nav.remote')} onClick={() => navigate({ name: 'remote' })}>
@@ -135,17 +132,24 @@ export function NowPlaying({ volume = tvVolume }: { volume?: (dir: 'up' | 'down'
   const shown = drag ?? (holding ? held!.t : s.time);
   const max = Math.max(1, s.duration);
   const pct = Math.max(0, Math.min(100, (shown / max) * 100));
-  const list: Chapter[] = (s.chapters || []).map((c) => ({ start: c.t, end: c.t, title: c.title, kind: null }));
+  const list: Chapter[] = chaptersFromPoints(s.chapters || [], s.duration);
   const local = chapterIndexAt(list, shown);
   const cur = drag !== null || holding || s.chapter === undefined ? local : s.chapter;
-  const chapterName = (i: number) => namedChapterTitle(list[i].title) || t('player.chapterN', { n: i + 1 });
-  let introEnd = -1;
-  for (let i = 0; i < list.length; i++) {
-    if (titleMarkKind(list[i].title) !== 'intro') continue;
-    introEnd = i + 1 < list.length ? list[i + 1].start : s.duration;
-    break;
-  }
-  const showNext = !!(s.next && episodeLine(s.subtitle || ''));
+  const chapterName = (i: number) => {
+    const row = list[i];
+    if (!row) return '';
+    if (row.kind === 'intro') return t('now.opening');
+    if (row.kind === 'credits') return t('now.ending');
+    return namedChapterTitle(row.title) || t('player.chapterN', { n: i + 1 });
+  };
+  const chapterExtra = (i: number) => {
+    const row = list[i];
+    if (!row || !row.kind) return '';
+    const own = namedChapterTitle(row.title);
+    return own && own !== chapterName(i) ? own : '';
+  };
+  const introRow = cur >= 0 ? list[cur] : null;
+  const inOpening = !!(introRow && introRow.kind === 'intro' && shown >= introRow.start && shown < introRow.end - 1);
   const chapterLabelAria = (i: number, start: number) => t('now.chapterAria', { name: chapterName(i), time: formatDuration(start) });
   const stepChapter = (dir: 1 | -1) => {
     const i = chapterStepIndex(list, shown, dir);
@@ -212,7 +216,10 @@ export function NowPlaying({ volume = tvVolume }: { volume?: (dir: 'up' | 'down'
                   />
                 </div>
                 <div class="m-now-times">
-                  <span>{formatDuration(shown)}</span>
+                  <span>
+                    {formatDuration(shown)}
+                    {drag !== null && cur >= 0 ? ' · ' + chapterName(cur) : ''}
+                  </span>
                   <span>{left}</span>
                 </div>
               </div>
@@ -257,7 +264,8 @@ export function NowPlaying({ volume = tvVolume }: { volume?: (dir: 'up' | 'down'
                     <span class="m-now-chnum">
                       {cur >= 0 ? t('now.chapterOf', { n: cur + 1, total: list.length }) : t('now.chaptersN', { n: list.length })}
                     </span>
-                    {cur >= 0 && namedChapterTitle(list[cur].title) !== '' && chapterName(cur)}
+                    {cur >= 0 && (list[cur].kind || namedChapterTitle(list[cur].title)) ? chapterName(cur) : null}
+                    {cur >= 0 && chapterExtra(cur) ? <span class="m-now-chsub">{chapterExtra(cur)}</span> : null}
                     <Icon d={CHEVRON} size={18} />
                   </button>
                   <button
@@ -272,7 +280,7 @@ export function NowPlaying({ volume = tvVolume }: { volume?: (dir: 'up' | 'down'
                 </div>
               )}
               <div class="m-now-controls">
-                <Skip label={t('now.prevEpisode')} text="" d={ICONS.prev} disabled={off} onClick={() => sendCmd({ type: 'prev' })} />
+                <Skip label={t('now.prevEpisode')} text={t('now.prevShort')} d={ICONS.prev} disabled={off} onClick={() => sendCmd({ type: 'prev' })} />
                 <Skip
                   label={t('remote.mini.back10')}
                   text="10"
@@ -298,7 +306,7 @@ export function NowPlaying({ volume = tvVolume }: { volume?: (dir: 'up' | 'down'
                 />
                 <Skip
                   label={t('now.nextEpisode')}
-                  text=""
+                  text={t('now.nextShort')}
                   d={ICONS.next}
                   disabled={off || !s.next}
                   onClick={() => sendCmd({ type: 'next' })}
@@ -319,19 +327,19 @@ export function NowPlaying({ volume = tvVolume }: { volume?: (dir: 'up' | 'down'
                   </button>
                 </div>
               </div>
-              {introEnd > shown && (
-                <button type="button" class="m-btn m-btn-secondary" data-now-skip-intro disabled={off} onClick={() => sendCmd({ type: 'seek', t: introEnd })}>
+              {inOpening && introRow && (
+                <button type="button" class="m-btn m-btn-secondary" data-now-skip-intro disabled={off} onClick={() => sendCmd({ type: 'seek', t: introRow.end })}>
                   {t('now.skipIntro')}
                 </button>
               )}
-              {showNext && s.next && (
+              {(s.next || nextTitle) && (
                 <div class="m-now-next" data-now-next>
                   {poster ? <img src={poster} alt="" width={54} height={80} /> : <span class="m-now-next-frame" />}
                   <span class="m-now-next-text">
                     <span class="m-small m-muted">{t('now.nextCard')}</span>
                     <span>{nextTitle}</span>
                   </span>
-                  <button type="button" class="m-btn m-btn-primary" data-now-watch disabled={off} onClick={() => sendCmd({ type: 'next' })}>
+                  <button type="button" class="m-btn m-btn-primary" data-now-watch disabled={off || !s.next} onClick={() => sendCmd({ type: 'next' })}>
                     {t('now.watchNext')}
                   </button>
                 </div>
@@ -359,7 +367,7 @@ export function NowPlaying({ volume = tvVolume }: { volume?: (dir: 'up' | 'down'
                 }}
               >
                 <span class="m-now-chtime">{formatDuration(c.start)}</span>
-                <span class="m-now-chname">{chapterName(i)}</span>
+                <span class="m-now-chname">{chapterName(i)}{chapterExtra(i) ? <span class="m-now-chsub"> · {chapterExtra(i)}</span> : null}</span>
               </button>
             ))}
           </div>

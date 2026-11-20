@@ -9,6 +9,8 @@ import { baseName, episodeLabel, parseEpisode, playableFiles, stripExt } from '.
 import { getLocalProgress } from '../../../src/store/progress';
 import { torrents } from '../../../src/store/library';
 import { episodeLine, libraryTorrent, readableFileLabel } from '../lib/playingNames';
+import { commonReleaseTail, parseReleaseFile } from '../../../src/lib/releaseFileName';
+import { sharedProgress } from '../lib/sharedProgress';
 import { realEpisodeName } from '../../../src/lib/episodeNames';
 import { displayBadge, parseReleaseInfo } from '../../../src/lib/releaseInfo';
 import { useTmdbEpisodes } from '../../../src/lib/useTmdbEpisodes';
@@ -59,14 +61,19 @@ function ordered(files: TorrentFile[]): TorrentFile[] {
   });
 }
 
-function EpisodeRow({ file, tmdbName, on, onPlay, withSeason }: { file: TorrentFile; tmdbName: string; on: boolean; onPlay: (file: TorrentFile) => void; withSeason: boolean }) {
+function EpisodeRow({ file, hash, tmdbName, on, onPlay, withSeason }: { file: TorrentFile; hash: string; tmdbName: string; on: boolean; onPlay: (file: TorrentFile) => void; withSeason: boolean }) {
   const [slide, setSlide] = useState(0);
   const ref = useRef<HTMLDivElement>(null);
   const playRef = useRef(onPlay);
   playRef.current = onPlay;
   const code = episodeLabel(file.path);
+  const parsed = parseReleaseFile(file.path);
   const name = stripExt(baseName(file.path));
-  const label = code ? episodeLine(code, tmdbName, withSeason) : readableFileLabel(name);
+  const label = code
+    ? episodeLine(code, tmdbName, withSeason)
+    : parsed.episode !== null
+      ? [t('library.episode', { n: parsed.episode }), tmdbName].filter(Boolean).join(' · ')
+      : readableFileLabel(name);
   const quality = displayBadge(parseReleaseInfo(file.path).resolution || '');
   useEffect(() => {
     const node = ref.current;
@@ -133,7 +140,13 @@ function EpisodeRow({ file, tmdbName, on, onPlay, withSeason }: { file: TorrentF
         <span class="m-now-ep-chev left" aria-hidden="true">
           <Icon d={ICONS.collapse} size={14} />
         </span>
-        <span class="m-now-ep-title">{label}</span>
+        <span class="m-now-ep-title">
+          {label}
+          <span class="m-bar-track thin"><span class="m-bar-fill" style={{ width: Math.round((sharedProgress(hash, file.id).watched ? 1 : sharedProgress(hash, file.id).ratio) * 100) + '%' }} /></span>
+        </span>
+        {sharedProgress(hash, file.id).watched || sharedProgress(hash, file.id).ratio >= 0.9 ? (
+          <span class="m-now-ep-done" aria-label={t('library.watchedDone')}>✓</span>
+        ) : null}
         {quality ? <span class="m-now-ep-q">{quality}</span> : null}
         <span class="m-now-ep-chev right" aria-hidden="true">
           <Icon d={ICONS.collapse} size={14} />
@@ -149,9 +162,16 @@ function Episodes({ hash, fileId, onPlay }: { hash: string; fileId: number; onPl
   const files = tor ? ordered(playableFiles(filesOf(tor))) : [];
   const seasons = files.map((f) => parseEpisode(f.path).season).filter((n, i, a): n is number => n !== null && a.indexOf(n) === i);
   const tmdb = useTmdbEpisodes(tor, seasons, !!tor && seasons.length > 0, true);
+  const tail = commonReleaseTail(files.map((f) => f.path));
+  const listRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const row = listRef.current ? listRef.current.querySelector('.m-now-ep.on') : null;
+    if (row && (row as HTMLElement).scrollIntoView) (row as HTMLElement).scrollIntoView({ block: 'center' });
+  }, [hash, fileId, files.length]);
   return (
-    <div class="m-now-eps">
+    <div class="m-now-eps" ref={listRef}>
       <h2>{t('torrent.screen.episodesHead')}</h2>
+      {tail ? <p class="m-small m-muted m-now-ep-tail">{tail}</p> : null}
       {!tor ? (
         <p class="m-small m-muted">{t('now.noRelease')}</p>
       ) : !files.length ? (
@@ -167,7 +187,7 @@ function Episodes({ hash, fileId, onPlay }: { hash: string; fileId: number; onPl
             const season = pe.season !== null ? tmdb.eps[pe.season] : undefined;
             const episode = pe.episode !== null && season ? season[pe.episode] : undefined;
             const tmdbName = episode ? realEpisodeName(episode.title) : '';
-            return <EpisodeRow key={f.id} file={f} tmdbName={tmdbName} on={f.id === fileId} onPlay={onPlay} withSeason={seasons.length > 1} />;
+            return <EpisodeRow key={f.id} file={f} hash={hash} tmdbName={tmdbName} on={f.id === fileId} onPlay={onPlay} withSeason={seasons.length > 1} />;
           })}
         </>
       )}
