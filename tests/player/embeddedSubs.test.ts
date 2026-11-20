@@ -3,7 +3,7 @@ import { subtitleKind } from '../../src/lib/subCodec';
 import { PgsDecoder, rle } from '../../src/lib/pgs';
 import { LiveSubs, cuesFromPlaylist, textCues, type RangeSource } from '../../src/player/liveSubs';
 import { probeReliable, probeTail } from '../../src/player/probeLoad';
-import { mkvSeconds, parseCluster, type MkvPacket } from '../../src/lib/mkvSubs';
+import { mkvSeconds, parseCluster, takeElements, type MkvPacket } from '../../src/lib/mkvSubs';
 import { fittedPicture } from '../../src/player/pictureFit';
 
 describe('subtitleKind', () => {
@@ -143,6 +143,26 @@ describe('embedded text from a tiny MKV', () => {
     const payload = concat([el(0xe7, new Uint8Array([0])), el(0xa3, block)]);
     const partial = concat([idOf(0x1f43b675), sizeOf(payload.length + 10), payload]);
     const packets = parseCluster(partial, 1000000);
+    expect(packets.length).toBe(1);
+    expect(utf8(packets[0].data)).toBe('Hello');
+  });
+
+  it('keeps the cluster timestamp when reading its continuation', () => {
+    const stamp = el(0xe7, u24(1000));
+    const partial = concat([idOf(0x1f43b675), sizeOf(stamp.length + 10), stamp]);
+    const first = takeElements(partial, 1000000) as any;
+    const block = concat([new Uint8Array([0x81, 0x00, 0x00, 0x00]), new TextEncoder().encode('Hello')]);
+    const next = takeElements(el(0xa3, block), 1000000, first.clusterTc);
+    expect(next.packets.length).toBe(1);
+    expect(next.packets[0].start).toBe(1);
+  });
+
+  it('inflates a zlib-compressed Matroska subtitle block', async () => {
+    const { deflateSync } = await import('node:zlib');
+    const packed = new Uint8Array(deflateSync(new TextEncoder().encode('Hello')));
+    const block = concat([new Uint8Array([0x81, 0x00, 0x00, 0x00]), packed]);
+    const cluster = el(0x1f43b675, concat([el(0xe7, new Uint8Array([0])), el(0xa3, block)]));
+    const packets = parseCluster(cluster, 1000000);
     expect(packets.length).toBe(1);
     expect(utf8(packets[0].data)).toBe('Hello');
   });

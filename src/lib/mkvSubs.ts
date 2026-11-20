@@ -1,3 +1,5 @@
+import { unzlibSync } from 'fflate';
+
 /** Enough of Matroska to pull one subtitle track. Reads the head, the cue index, and one cluster at a time. */
 
 export interface MkvSubTrack {
@@ -59,10 +61,10 @@ export function parseCluster(buf: Uint8Array, scale: number): MkvPacket[] {
   return takeElements(buf, scale).packets;
 }
 
-export function takeElements(buf: Uint8Array, scale: number): { packets: MkvPacket[]; bytes: number } {
+export function takeElements(buf: Uint8Array, scale: number, inheritedTc = 0): { packets: MkvPacket[]; bytes: number; clusterTc: number } {
   const out: MkvPacket[] = [];
   let i = 0;
-  let clusterTc = 0;
+  let clusterTc = inheritedTc;
   let consumed = 0;
   while (i + 2 <= buf.length) {
     const el = peekElement(buf, i);
@@ -82,7 +84,7 @@ export function takeElements(buf: Uint8Array, scale: number): { packets: MkvPack
     i = end;
     consumed = i;
   }
-  return { packets: out, bytes: consumed };
+  return { packets: out, bytes: consumed, clusterTc: clusterTc };
 }
 
 export interface EbmlPeek {
@@ -195,7 +197,7 @@ function pushBlock(block: Uint8Array, clusterTc: number, scale: number, duration
   if (((flags >> 1) & 3) !== 0) return;
   const start = mkvSeconds(clusterTc + tc, scale);
   const dur = duration ? mkvSeconds(duration, scale) : 0;
-  out.push({ track: tr.v, start: start, duration: dur, data: copyBytes(block.subarray(tcAt + 3)) });
+  out.push({ track: tr.v, start: start, duration: dur, data: subtitleData(block.subarray(tcAt + 3)) });
 }
 
 function pushGroup(group: Uint8Array, clusterTc: number, scale: number, out: MkvPacket[]): void {
@@ -209,7 +211,10 @@ function pushGroup(group: Uint8Array, clusterTc: number, scale: number, out: Mkv
   if (block) pushBlock(block, clusterTc, scale, dur, out);
 }
 
-function copyBytes(src: Uint8Array): Uint8Array {
+function subtitleData(src: Uint8Array): Uint8Array {
+  if (src.length > 2 && (src[0] & 15) === 8 && ((src[0] << 8) | src[1]) % 31 === 0) {
+    try { return unzlibSync(src); } catch (e) { /* not a zlib block */ }
+  }
   const out = new Uint8Array(src.length);
   out.set(src);
   return out;
