@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { applyPulled, reapplyDeviceRecords } from '../../src/store/applyPulled';
-import { torrents } from '../../src/store/library';
+import { torrents, refreshTorrents } from '../../src/store/library';
 import { watchesNewEpisodes } from '../../src/lib/journal';
 import { getLocalProgress, reloadProgress, saveProgress } from '../../src/store/progress';
 import { putDeviceRecords, resetDeviceDb } from '../../src/store/deviceDb';
@@ -38,6 +38,21 @@ describe('applyPulled', () => {
     reapplyDeviceRecords();
     torrents.value = [{ hash: 'abc', title: 'Old', data: '{"omp":{"v":1,"h":[]}}' } as never];
     expect(watchesNewEpisodes(torrents.value[0].data)).toBe(false);
+  });
+
+  it('rebuilds synced changes after a library refresh', async () => {
+    putDeviceRecords([{ id: 'watch:abc', kind: 'watch', key: 'abc', body: { newEpisodes: false }, updatedAt: 20, deviceId: 'other' }]);
+    torrents.value = [{ hash: 'abc', title: 'Old', data: '{"omp":{"v":1,"h":[]}}' } as never];
+    reapplyDeviceRecords();
+    expect(watchesNewEpisodes(torrents.value[0].data)).toBe(false);
+    await refreshTorrents({ list: () => Promise.resolve([{ hash: 'abc', title: 'Old', data: '{"omp":{"v":1,"h":[]}}' } as never]) });
+    expect(watchesNewEpisodes(torrents.value[0].data)).toBe(false);
+  });
+
+  it('preserves the open flag when replaying progress after restart', () => {
+    saveProgress('abc', 1, 95, 100, true);
+    reapplyDeviceRecords();
+    expect(getLocalProgress('abc', 1)!.open).toBe(true);
   });
 
   it('keeps a newer local journal entry over a queued older one', () => {

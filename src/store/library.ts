@@ -140,7 +140,10 @@ export function refreshTorrents(c: { list(): Promise<Torrent[]> } & Partial<Titl
         const wc = c as CategoryWriteClient;
         void checkCategories({ setCategory: (tor, cat) => w(wc, tor.hash, cat) }, sorted);
       }
-      return sorted;
+      return import('./applyPulled').then((m) => {
+        m.reapplyDeviceRecords();
+        return sorted;
+      });
     },
     (e) => {
       if (my === gen) inflight = null;

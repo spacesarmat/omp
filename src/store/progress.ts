@@ -85,7 +85,9 @@ export function applySyncedProgress(rows: { key: string; body: { [k: string]: un
     const duration = typeof row.body.duration === 'number' ? row.body.duration : 0;
     const prev = local[row.key];
     if (prev && prev.updated > row.updatedAt) continue;
-    local[row.key] = { time, duration, updated: row.updatedAt };
+    const next: Progress = { time, duration, updated: row.updatedAt };
+    if (row.body.open === true) next.open = true;
+    local[row.key] = next;
     changed = true;
   }
   if (!changed) return;
