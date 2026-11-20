@@ -859,6 +859,49 @@ CREATE TABLE device_sync_seen (
 ALTER TABLE playback_progress ADD COLUMN writer_seq bigint NOT NULL DEFAULT 0;
 `,
   },
+  {
+    version: '022_device_sync_v2',
+    sql: `
+-- Per-account commit-safe revisions, append-only changes and durable mutation results.
+CREATE TABLE device_sync_counters (
+  account_id text PRIMARY KEY,
+  next_revision bigint NOT NULL
+);
+CREATE TABLE device_sync_changes (
+  account_id text NOT NULL,
+  revision bigint NOT NULL,
+  record_id text NOT NULL,
+  kind text NOT NULL,
+  rec_key text NOT NULL DEFAULT '',
+  body jsonb NOT NULL DEFAULT '{}',
+  updated_at bigint NOT NULL,
+  device_id text NOT NULL DEFAULT '',
+  deleted boolean NOT NULL DEFAULT false,
+  mutation_id text NOT NULL,
+  created_at bigint NOT NULL,
+  PRIMARY KEY (account_id, revision)
+);
+CREATE INDEX device_sync_changes_mutation ON device_sync_changes (account_id, mutation_id);
+CREATE TABLE device_sync_mutations (
+  account_id text NOT NULL,
+  mutation_id text NOT NULL,
+  revision bigint NOT NULL,
+  result jsonb NOT NULL,
+  created_at bigint NOT NULL,
+  expires_at bigint NOT NULL,
+  PRIMARY KEY (account_id, mutation_id)
+);
+INSERT INTO device_sync_changes (account_id, revision, record_id, kind, rec_key, body, updated_at, device_id, deleted, mutation_id, created_at)
+SELECT account_id,
+  row_number() OVER (PARTITION BY account_id ORDER BY seq, record_id),
+  record_id, kind, rec_key, body, updated_at, device_id, deleted,
+  'migration:' || record_id,
+  (extract(epoch from now()) * 1000)::bigint
+FROM device_sync;
+INSERT INTO device_sync_counters (account_id, next_revision)
+SELECT account_id, max(revision) + 1 FROM device_sync_changes GROUP BY account_id;
+`,
+  },
 ];
 
 /** Apply pending migrations. Safe to run from several processes: they wait on the lock. */
