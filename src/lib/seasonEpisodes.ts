@@ -95,6 +95,21 @@ export function seasonEpisodeModels(files: SeasonEpFile[], season: number, tmdb:
   return rows;
 }
 
+/** The episode numbers on one page of rows: «101-150», or one number when the page holds a single episode. '' when none are numbered. */
+export function episodePageLabel(rows: { numbers: number[] }[], start: number, size = 50): string {
+  const page = rows.slice(start, start + size);
+  let first = 0;
+  let last = 0;
+  page.forEach((r) => {
+    r.numbers.forEach((n) => {
+      if (!first || n < first) first = n;
+      if (n > last) last = n;
+    });
+  });
+  if (!first) return '';
+  return first === last ? String(first) : first + '-' + last;
+}
+
 /** Watched episodes (a finished combined file counts each episode it holds) and the season total. */
 export function watchedCount(rows: SeasonEpModel[], ratio: (fileId: number) => number): { have: number; total: number } {
   let have = 0;

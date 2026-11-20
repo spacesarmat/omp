@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { seasonEpisodeModels, watchedCount } from '../../src/lib/seasonEpisodes';
+import { episodePageLabel, seasonEpisodeModels, watchedCount } from '../../src/lib/seasonEpisodes';
 
 const files = [
   { id: 1, path: 'Show/S01E01-E02.mkv', length: 10 },
@@ -54,6 +54,14 @@ describe('seasonEpisodeModels', () => {
     expect(rows.map((r) => r.fileId)).toEqual([1, 2]);
     expect(rows[0].numbers).toEqual([1]);
     expect(rows[1].title).toBe('interview');
+  });
+
+  it('labels a page by its episode numbers, not by the row count', () => {
+    const rows = [];
+    for (let n = 101; n <= 160; n++) rows.push({ numbers: [n] });
+    expect(episodePageLabel(rows, 0)).toBe('101-150');
+    expect(episodePageLabel(rows, 50)).toBe('151-160');
+    expect(episodePageLabel([{ numbers: [7, 8] }], 0)).toBe('7-8');
   });
 
   it('counts a watched combined file as every episode it holds', () => {

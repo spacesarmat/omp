@@ -4,7 +4,7 @@ import { fmtDuration, fmtSize, t } from '../../../../src/i18n';
 import { formatDuration } from '../../../../src/lib/format';
 import { markWatched, saveProgress } from '../../../../src/store/progress';
 import { sharedProgress } from '../../lib/sharedProgress';
-import { seasonEpisodeModels, watchedCount, type SeasonEpTitle } from '../../../../src/lib/seasonEpisodes';
+import { episodePageLabel, seasonEpisodeModels, watchedCount, type SeasonEpTitle } from '../../../../src/lib/seasonEpisodes';
 import { commonReleaseTail } from '../../../../src/lib/releaseFileName';
 import { parseReleaseInfo } from '../../../../src/lib/releaseInfo';
 import type { TorrentFile } from '../../../../src/lib/episodes';
@@ -109,7 +109,7 @@ export function SeasonEpisodes({
           <div class="m-chips" role="group">
             {ranges.map((n) => (
               <button key={n} type="button" class={'m-chip' + (rangeAt === n ? ' on' : '')} aria-pressed={rangeAt === n} onClick={() => setRangeAt(n)}>
-                {(n + 1) + '-' + Math.min(rows.length, n + 50)}
+                {episodePageLabel(rows, n)}
               </button>
             ))}
           </div>
