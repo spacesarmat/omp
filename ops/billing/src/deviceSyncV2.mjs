@@ -36,9 +36,14 @@ function changeRecord(row) {
 }
 
 export function createSyncV2Store(store) {
+  const listeners = new Set();
   return {
+    onChanges(listener) {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
     async mutate(accountId, deviceId, records, now, options = {}) {
-      return store.withClient(async (query) => {
+      const committed = await store.withClient(async (query) => {
         const locked = await query(
           'INSERT INTO device_sync_counters (account_id, next_revision) VALUES ($1, 1)' +
             ' ON CONFLICT (account_id) DO UPDATE SET next_revision = device_sync_counters.next_revision' +
@@ -48,6 +53,7 @@ export function createSyncV2Store(store) {
         let nextRevision = Number(locked.rows[0].next_revision);
         const initialRevision = nextRevision;
         const ack = [];
+        const changes = [];
         for (let i = 0; i < records.length; i++) {
           const row = { ...records[i], deviceId: deviceId || records[i].deviceId };
           const existing = await query(
@@ -76,11 +82,23 @@ export function createSyncV2Store(store) {
             [accountId, row.id],
           );
           const winner = current.rows[0];
+          const change = {
+            id: row.id,
+            kind: winner.kind,
+            key: winner.rec_key || '',
+            body: winner.body && typeof winner.body === 'object' ? winner.body : {},
+            updatedAt: Number(winner.updated_at) || 0,
+            deviceId: winner.device_id || '',
+            deleted: winner.deleted === true,
+            mutationId: row.mutationId,
+            revision,
+          };
+          changes.push(change);
           await query(
             'INSERT INTO device_sync_changes' +
               ' (account_id, revision, record_id, kind, rec_key, body, updated_at, device_id, deleted, mutation_id, created_at)' +
               ' VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, $10, $11)',
-            [accountId, revision, row.id, winner.kind, winner.rec_key || '', JSON.stringify(winner.body || {}), winner.updated_at, winner.device_id || '', winner.deleted === true, row.mutationId, now],
+            [accountId, revision, row.id, change.kind, change.key, JSON.stringify(change.body), change.updatedAt, change.deviceId, change.deleted, row.mutationId, now],
           );
           const result = { recordId: row.id, mutationId: row.mutationId, revision };
           ack.push(result);
@@ -93,8 +111,18 @@ export function createSyncV2Store(store) {
         if (nextRevision !== initialRevision) {
           await query('UPDATE device_sync_counters SET next_revision = $2 WHERE account_id = $1', [accountId, nextRevision]);
         }
-        return ack;
+        return { ack, changes };
       });
+      if (committed.changes.length) {
+        for (const listener of [...listeners]) {
+          try {
+            listener(accountId, committed.changes);
+          } catch (e) {
+            /* a committed mutation must keep its ack when a listener fails */
+          }
+        }
+      }
+      return committed.ack;
     },
     async pull(accountId, since, limit = 500) {
       const res = await store.query(
