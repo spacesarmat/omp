@@ -4,7 +4,7 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
-## Unreleased
+## 0.30.2-beta.3
 
 - [phone] Buttons in the dark theme are no longer white: Sync now, Retry, Watch all, Cancel, and the screen-load retry. Earlier in the calendar is a plain header. Project page sits in the same row as Backup and the error log. Settings shows a short TV name: "LG OLED55C9 · webOS"
 - [tv] When the first look at a file sees audio but no subtitles, the player asks again once playback has started and sends that list to the phone right away
