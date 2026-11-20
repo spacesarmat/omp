@@ -2,8 +2,9 @@
 
 <!-- Markers [phone] [tv] [lg] [atv] [tech]: see docs/changelog-markers.md. [tech] bullets are technical or admin-only and never reach users. -->
 
-## Не выпущено
+## 0.30.3-beta.1
 
+- Встроенный TorrServer обновлён до MatriX.151
 - [tech] Обращения на GitHub открываются по формам: ошибка, предложение, вопрос. Пустые issues выключены. В списке ссылок сайт, почта, Telegram-канал и группа
 - [tech] SECURITY.md берёт поддерживаемые версии из последнего стабильного тега и более новой беты. Если бета старше стабильной, в файле написано, что текущей беты нет. Строки обновляет релизный PR: бета через omp-release-bump (вручную и в workflow TorrServer и 2160 Player), стабильный релиз через omp-release-stable. Workflow не пушит этот файл в main
 
