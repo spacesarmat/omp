@@ -37,6 +37,8 @@ export interface HttpOptions {
 export interface SourceHttp {
   get(url: string, opts?: HttpOptions): Promise<HttpResponse>;
   post(url: string, form: { [key: string]: string }, opts?: HttpOptions): Promise<HttpResponse>;
+  /** JSON body. Optional so older fakes keep working; the Android client sends sync this way. */
+  postJson?(url: string, body: string, opts?: HttpOptions): Promise<HttpResponse>;
   /** Forgets the cookies of the site of `url` (logout). */
   clearCookies(url: string): Promise<void>;
 }

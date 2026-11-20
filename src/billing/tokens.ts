@@ -11,6 +11,7 @@ import {
   deviceId,
   emitBillingChange,
   isLegacySession,
+  rememberLegacySync,
   saveBillingSession,
   saveSeenAccount,
   sessionKey,
@@ -317,7 +318,10 @@ export function savePair(
       if (stored.stale || gen !== keystoreGen) return null;
       if (current && !current()) return dropCancelledWrite(ctx, id);
       if (current && billingSession() && billingSession()!.id !== id) return null;
-      if (prev && !prev.id && prev.token) rekeyBillingAccess(prev.token, id);
+      if (prev && !prev.id && prev.token) {
+        rekeyBillingAccess(prev.token, id);
+        rememberLegacySync(prev.token.slice(0, 16), id);
+      }
       const row: BillingSession = {
         token: '',
         paidUntil: typeof pair.paidUntil === 'number' ? pair.paidUntil : prev ? prev.paidUntil : 0,

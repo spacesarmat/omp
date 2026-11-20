@@ -21,8 +21,9 @@ import { openWhatsNew } from '../../../src/store/whatsNew';
 import { openOnboarding } from '../../../src/onboarding/gate';
 import { resetHints } from '../../../src/onboarding/hints';
 import { loadMonitorSettings } from '../../../src/monitor/settings';
-import { lastSyncAt, setSyncEnabled, syncEnabled } from '../../../src/store/deviceDb';
-import { runDeviceSync } from '../../../src/billing/deviceSyncClient';
+import { lastSyncAt, lastSyncError, setSyncEnabled, syncEnabled } from '../../../src/store/deviceDb';
+import { fetchSyncDevices, runDeviceSync, type SyncDeviceRow } from '../../../src/billing/deviceSyncClient';
+import { syncAgo } from '../../../src/billing/syncAgo';
 import { hoursText } from '../monitor/text';
 import { activeMethods, openDonate } from '../donate';
 import { Sheet } from '../ui/Sheet';
@@ -395,43 +396,128 @@ function PhoneServerRow() {
   );
 }
 
+function syncWhen(at: number, now: number): string {
+  const ago = syncAgo(at, now);
+  if (ago.kind === 'never') return t('settings.syncNever');
+  if (ago.kind === 'just') return t('settings.syncJust');
+  if (ago.kind === 'min') return t('settings.syncAgoMin', { n: String(ago.n) });
+  if (ago.kind === 'hour') return t('settings.syncAgoHour', { n: String(ago.n) });
+  return t('settings.syncAgoDay', { n: String(ago.n) });
+}
+
+function syncReason(code: string): string {
+  if (code === 'offline') return t('settings.syncOffline');
+  if (code === 'denied') return t('settings.syncDenied');
+  return t('settings.syncError');
+}
+
 function SyncRow() {
   const [tick, setTick] = useState(0);
   const [busy, setBusy] = useState(false);
+  const [allowed, setAllowed] = useState<boolean | null>(null);
+  const [open, setOpen] = useState(false);
+  const [devices, setDevices] = useState<SyncDeviceRow[]>([]);
+  const [now, setNow] = useState(() => Date.now());
   void tick;
   const on = syncEnabled();
+  const err = lastSyncError();
   const at = lastSyncAt();
-  const when = at ? new Date(at).toLocaleString() : t('settings.syncNever');
+  const blocked = allowed === false;
   useEffect(() => {
-    runDeviceSync().then(() => setTick((n) => n + 1), () => setTick((n) => n + 1));
+    const id = window.setInterval(() => setNow(Date.now()), 30000);
+    return () => window.clearInterval(id);
   }, []);
+  useEffect(() => {
+    let alive = true;
+    function load() {
+      fetchBillingAccount(phoneSourceContext()).then(
+        (account) => {
+          if (!alive) return;
+          setAllowed(account && account.sync ? account.sync.allowed : null);
+        },
+        () => {
+          if (alive) setAllowed(null);
+        },
+      );
+    }
+    load();
+    const off = onBillingChange(load);
+    function onShow() {
+      if (document.visibilityState === 'visible') load();
+    }
+    document.addEventListener('visibilitychange', onShow);
+    return () => {
+      alive = false;
+      off();
+      document.removeEventListener('visibilitychange', onShow);
+    };
+  }, []);
+  function go() {
+    if (blocked) return;
+    setBusy(true);
+    runDeviceSync().then(() => {
+      setBusy(false);
+      setNow(Date.now());
+      setTick((n) => n + 1);
+    }, () => setBusy(false));
+  }
+  useEffect(() => {
+    if (!blocked) go();
+  }, [blocked]);
+  function showDevices() {
+    setOpen(true);
+    fetchSyncDevices().then((rows) => setDevices(rows), () => setDevices([]));
+  }
+  const status = blocked
+    ? t('settings.syncNeedSub')
+    : !on
+      ? t('settings.syncLocal')
+      : err
+        ? t('settings.syncFail', { reason: syncReason(err) })
+        : t('settings.syncLast', { when: syncWhen(at, now) });
   return (
-    <div class="m-set-row" data-row="sync">
-      <div class="m-set-text">
-        <span>{t('settings.syncTitle')}</span>
-        <span class="m-muted m-small">{on ? t('settings.syncLast', { when }) : t('settings.syncLocal')}</span>
-      </div>
-      <button
-        type="button"
-        role="switch"
-        aria-checked={on}
-        aria-label={t('settings.syncTitle')}
-        class={'m-switch' + (on ? ' on' : '')}
-        disabled={busy}
-        onClick={() => {
-          const next = !on;
-          setSyncEnabled(next);
-          setTick((n) => n + 1);
-          if (!next) return;
-          setBusy(true);
-          runDeviceSync().then(() => {
-            setBusy(false);
+    <div data-row="sync">
+      <div class="m-set-row">
+        <div class="m-set-text">
+          <span>{t('settings.syncTitle')}</span>
+          <span class={err && on && !blocked ? 'm-error' : 'm-muted m-small'}>{status}</span>
+          <button type="button" class="m-link" onClick={showDevices}>{t('settings.syncAbout')}</button>
+        </div>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={on && !blocked}
+          aria-label={t('settings.syncTitle')}
+          class={'m-switch' + (on && !blocked ? ' on' : '')}
+          disabled={busy || blocked}
+          onClick={() => {
+            if (blocked) return;
+            const next = !on;
+            setSyncEnabled(next);
             setTick((n) => n + 1);
-          }, () => setBusy(false));
-        }}
-      >
-        <span class="m-switch-knob" />
-      </button>
+            if (next) go();
+          }}
+        >
+          <span class="m-switch-knob" />
+        </button>
+      </div>
+      {on && !blocked && (
+        <div class="m-set-row">
+          <button type="button" class="m-btn" disabled={busy} onClick={go}>{t('settings.syncNow')}</button>
+          {err ? <button type="button" class="m-btn" disabled={busy} onClick={go}>{t('settings.syncRetry')}</button> : null}
+        </div>
+      )}
+      {open && (
+        <div class="m-set-row">
+          <div class="m-set-text">
+            <span>{t('settings.syncDevicesTitle')}</span>
+            {devices.length === 0 ? <span class="m-muted m-small">{t('settings.syncNoDevices')}</span> : null}
+            {devices.map((d) => (
+              <span class="m-muted m-small" key={d.id}>{d.self ? t('settings.syncThis') : (d.name || d.id.slice(0, 8))}</span>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

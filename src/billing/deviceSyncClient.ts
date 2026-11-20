@@ -1,14 +1,22 @@
 // Push and pull remembered rows. A refused sync (no subscription) leaves the local copy as it is.
 import { BILLING_ORIGIN } from './config';
-import { billingSession, deviceId, onBillingChange } from './session';
-import { ackSent, markSynced, noteSyncAccount, onDeviceWrite, putDeviceRecords, setSyncCursor, syncCursor, syncEnabled, unsentRecords } from '../store/deviceDb';
+import { billingSession, deviceId, legacySyncLink, onBillingChange } from './session';
+import { withDeviceToken } from './tokens';
+import { ackSent, markSyncError, markSynced, noteSyncAccount, onDeviceWrite, putDeviceRecords, setSyncCursor, syncCursor, syncEnabled, unsentRecords } from '../store/deviceDb';
 import { applyPulled } from '../store/applyPulled';
 import type { SyncRecord } from '../store/syncMerge';
+import type { SourceContext } from '../sources/types';
 
 const BATCH = 200;
 let timer = 0;
 let syncing = false;
 let again = false;
+let contextOf: () => SourceContext | null = () => null;
+
+/** Android passes the same source context the rest of billing uses. A browser keeps window.fetch. */
+export function setSyncContext(fn: (() => SourceContext | null) | null): void {
+  contextOf = fn || (() => null);
+}
 
 export function scheduleDeviceSync(): void {
   if (!syncEnabled() || timer) return;
@@ -20,7 +28,33 @@ export function scheduleDeviceSync(): void {
   }, 1500) as unknown as number;
 }
 
-function post(access: string, since: number, records: SyncRecord[]): Promise<{ status: number; data: { ok?: boolean; records?: SyncRecord[]; nextSeq?: number; error?: string } }> {
+function parseAnswer(status: number, text: string): { status: number; data: { ok?: boolean; records?: SyncRecord[]; nextSeq?: number; error?: string } } {
+  let data: { ok?: boolean; records?: SyncRecord[]; nextSeq?: number; error?: string } = {};
+  try {
+    const parsed = JSON.parse(text || '{}');
+    if (parsed && typeof parsed === 'object') data = parsed;
+  } catch (e) {
+    data = {};
+  }
+  return { status: status, data: data };
+}
+
+function post(owner: string, since: number, records: SyncRecord[]): Promise<{ status: number; data: { ok?: boolean; records?: SyncRecord[]; nextSeq?: number; error?: string; switched?: boolean } }> {
+  const body = JSON.stringify({ since: since, records: records });
+  const ctx = contextOf();
+  if (ctx && ctx.http.postJson) {
+    const send = ctx.http.postJson;
+    return withDeviceToken(ctx, (headers) => {
+      if (accountNow() !== owner) return Promise.resolve({ status: 409, url: '', text: '{"switched":true}' });
+      return send(BILLING_ORIGIN + '/v1/sync', JSON.stringify({ since: since, records: records }), { headers: headers, timeoutMs: 20000 });
+    }).then(
+      (res) => parseAnswer(res.status, res.text),
+      () => ({ status: 0, data: {} }),
+    );
+  }
+  const session = billingSession();
+  const access = session && (session.access || session.token);
+  if (!access || accountNow() !== owner) return Promise.resolve({ status: 409, data: { switched: true } });
   return fetch(BILLING_ORIGIN + '/v1/sync', {
     method: 'POST',
     headers: {
@@ -28,7 +62,7 @@ function post(access: string, since: number, records: SyncRecord[]): Promise<{ s
       authorization: 'Bearer ' + access,
       'x-device-id': deviceId(),
     },
-    body: JSON.stringify({ since: since, records: records }),
+    body: body,
   }).then(
     (res) => res.json().then((data) => ({ status: res.status, data: data || {} })),
     () => ({ status: 0, data: {} }),
@@ -39,16 +73,32 @@ function accountNow(): string {
   const session = billingSession();
   const access = session && (session.access || session.token);
   if (!access) return '';
+  const link = legacySyncLink();
+  if (link && session && session.id === link.to) return link.from;
   return session && session.id ? session.id : access.slice(0, 16);
 }
 
-function pump(access: string, owner: string, since: number, pending: SyncRecord[]): Promise<string> {
+function sameAccount(owner: string): boolean {
+  return accountNow() === owner;
+}
+
+function pump(owner: string, since: number, pending: SyncRecord[]): Promise<string> {
   const chunk = pending.slice(0, BATCH);
   const rest = pending.slice(BATCH);
-  return post(access, since, chunk).then((ans) => {
-    if (accountNow() !== owner) return 'switched';
-    if (ans.status === 403) return 'subscribers';
-    if (ans.status !== 200 || !ans.data.ok) return 'error';
+  return post(owner, since, chunk).then((ans) => {
+    if (!sameAccount(owner) || ans.data.switched) return 'switched';
+    if (ans.status === 0) {
+      markSyncError('offline');
+      return 'error';
+    }
+    if (ans.status === 403) {
+      markSyncError('denied');
+      return 'subscribers';
+    }
+    if (ans.status !== 200 || !ans.data.ok) {
+      markSyncError('error');
+      return 'error';
+    }
     const incoming = ans.data.records || [];
     if (incoming.length) {
       const merged = putDeviceRecords(incoming, true);
@@ -64,8 +114,8 @@ function pump(access: string, owner: string, since: number, pending: SyncRecord[
     const next = typeof ans.data.nextSeq === 'number' ? ans.data.nextSeq : since;
     setSyncCursor(next);
     markSynced(Date.now());
-    if (rest.length) return pump(access, owner, next, rest);
-    if (incoming.length >= 500) return pump(access, owner, next, []);
+    if (rest.length) return pump(owner, next, rest);
+    if (incoming.length >= 500) return pump(owner, next, []);
     return 'ok';
   });
 }
@@ -95,18 +145,60 @@ export function runDeviceSync(): Promise<string> {
   seenAccount = owner;
   const epoch = noteSyncAccount(owner);
   const pending = unsentRecords(epoch);
-  return pump(access, owner, syncCursor(), pending).then(
+  return pump(owner, syncCursor(), pending).then(
     (status) => finish(status),
     () => finish('error'),
   );
 }
 
 let seenAccount = accountNow();
+let seenAccess = '';
 onBillingChange(() => {
+  const session = billingSession();
+  const access = session && (session.access || session.token) ? session.access || session.token : '';
   const id = accountNow();
-  if (id === seenAccount) return;
+  const changed = id !== seenAccount || access !== seenAccess;
   seenAccount = id;
-  if (id) scheduleDeviceSync();
+  seenAccess = access;
+  if (changed && id) scheduleDeviceSync();
 });
 
 onDeviceWrite(scheduleDeviceSync);
+
+export interface SyncDeviceRow {
+  id: string;
+  name: string;
+  lastAt: number;
+  self: boolean;
+}
+
+/** Devices that have synced this account. Empty when the call cannot be made. */
+export function fetchSyncDevices(): Promise<SyncDeviceRow[]> {
+  const read = (status: number, text: string): SyncDeviceRow[] => {
+    if (status !== 200) return [];
+    let data: { devices?: SyncDeviceRow[] } = {};
+    try {
+      const parsed = JSON.parse(text || '{}');
+      if (parsed && typeof parsed === 'object') data = parsed;
+    } catch (e) {
+      return [];
+    }
+    return Array.isArray(data.devices) ? data.devices : [];
+  };
+  const ctx = contextOf();
+  if (ctx) {
+    return withDeviceToken(ctx, (headers) => ctx.http.get(BILLING_ORIGIN + '/v1/sync/devices', { headers: headers, timeoutMs: 12000 })).then(
+      (res) => read(res.status, res.text),
+      () => [],
+    );
+  }
+  const session = billingSession();
+  const access = session && (session.access || session.token);
+  if (!access) return Promise.resolve([]);
+  return fetch(BILLING_ORIGIN + '/v1/sync/devices', {
+    headers: { authorization: 'Bearer ' + access, 'x-device-id': deviceId() },
+  }).then(
+    (res) => res.text().then((text) => read(res.status, text)),
+    () => [],
+  );
+}
