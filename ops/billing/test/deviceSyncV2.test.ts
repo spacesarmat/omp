@@ -227,4 +227,35 @@ describe('sync v2 mutations', () => {
     expect(pulled.data.records).toHaveLength(2);
     expect(pulled.data.records[1]).toMatchObject({ id: newer.id, revision: 2, body: { time: 80 } });
   });
+
+  it('publishes committed winning changes once and supports unsubscribe', async () => {
+    const file = await testStore();
+    const db = createSyncV2Store(file);
+    const events: unknown[] = [];
+    db.onChanges(() => {
+      throw new Error('listener failed');
+    });
+    const unsubscribe = db.onChanges((accountId: string, changes: unknown) => events.push([accountId, changes]));
+    const first = await db.mutate('acc-events', 'device-a', [row], 1000);
+    expect(first).toEqual([{ recordId: row.id, mutationId: row.mutationId, revision: 1 }]);
+    expect(events).toEqual([['acc-events', [{ ...row, revision: 1 }]]]);
+    expect(await db.mutate('acc-events', 'device-a', [{ ...row, body: { time: 999 } }], 1100)).toEqual(first);
+    expect(events).toHaveLength(1);
+    unsubscribe();
+    await db.mutate('acc-events', 'device-a', [{ ...row, id: 'progress:abc:2', mutationId: 'after-unsubscribe' }], 1200);
+    expect(events).toHaveLength(1);
+  });
+
+  it('does not publish changes when an expired retry rolls back the batch', async () => {
+    const file = await testStore();
+    const db = createSyncV2Store(file);
+    const events: unknown[] = [];
+    db.onChanges((accountId: string, changes: unknown) => events.push([accountId, changes]));
+    await db.mutate('acc-event-rollback', 'device-a', [row], 1000);
+    await file.query("UPDATE device_sync_mutations SET expires_at = 0 WHERE account_id = 'acc-event-rollback' AND mutation_id = $1", [row.mutationId]);
+    const fresh = { ...row, id: 'progress:abc:2', mutationId: 'rolled-back' };
+    await expect(db.mutate('acc-event-rollback', 'device-a', [fresh, row], 2000)).rejects.toMatchObject({ code: 'mutation_expired' });
+    expect(events).toHaveLength(1);
+    expect(await db.pull('acc-event-rollback', 0)).toHaveLength(1);
+  });
 });
