@@ -1,3 +1,5 @@
+export function stableVersion(version: string): string;
+export function renameReleaseHeading(text: string, from: string, to: string): string;
 export function nextBeta(version: string): string;
 export function webosVersion(version: string): string;
 export function promoteUnreleased(text: string, version: string, english?: boolean): string;
