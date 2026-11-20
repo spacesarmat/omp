@@ -88,4 +88,30 @@ describe('decodeText', () => {
     const bytes = new Uint8Array([0xcf, 0xf0, 0xe8, 0xe2, 0xe5, 0xf2]);
     expect(decodeText(bytes.buffer)).toBe('Привет');
   });
+  it('decodes a UTF-16LE BOM', () => {
+    const bytes = utf16('Привет', true);
+    const buf = bytes.buffer as ArrayBuffer;
+    expect(decodeText(buf)).toBe('Привет');
+    expect(decodeText(buf).charCodeAt(0)).not.toBe(0xfeff);
+  });
+  it('decodes a UTF-16BE BOM', () => {
+    const bytes = utf16('Привет', false);
+    const buf = bytes.buffer as ArrayBuffer;
+    expect(decodeText(buf)).toBe('Привет');
+    expect(decodeText(buf).charCodeAt(0)).not.toBe(0xfeff);
+  });
 });
+
+function utf16(text: string, le: boolean): Uint8Array {
+  const out = new Uint8Array(2 + text.length * 2);
+  out[0] = le ? 0xff : 0xfe;
+  out[1] = le ? 0xfe : 0xff;
+  for (let i = 0; i < text.length; i++) {
+    const c = text.charCodeAt(i);
+    const lo = c & 0xff;
+    const hi = c >> 8;
+    out[2 + i * 2] = le ? lo : hi;
+    out[3 + i * 2] = le ? hi : lo;
+  }
+  return out;
+}

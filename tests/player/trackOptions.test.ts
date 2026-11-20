@@ -32,6 +32,8 @@ describe('trackOptions', () => {
       { label: 'EN · SUBRIP', value: 'e0' },
       { label: 'rus (файл)', value: 'x0' },
     ]);
+    expect(emb[0].codec).toBe('subrip');
+    expect(emb[0].stream).toBe(3);
   });
   it('picks default subtitle', () => {
     const emb = embeddedSubOptions(probe, null);
@@ -68,7 +70,24 @@ describe('trackOptions', () => {
   it('aligns subtitle counts: probe has 1, video.textTracks empty → use probe', () => {
     const video = { textTracks: [] as any } as unknown as HTMLVideoElement;
     expect(embeddedSubOptions(probe, video)).toEqual([
-      { label: 'EN · SUBRIP', language: 'en', isDefault: false },
+      { label: 'EN · SUBRIP', language: 'en', isDefault: false, codec: 'subrip', stream: 3 },
     ]);
+  });
+  it('keeps PGS when the player only lists the text tracks', () => {
+    const video = { textTracks: [{ kind: 'subtitles', language: 'es', label: 'ES' }, { kind: 'subtitles', language: 'en', label: 'EN' }, { kind: 'subtitles', language: 'es', label: 'ES2' }] } as unknown as HTMLVideoElement;
+    const both: FfprobeResult = {
+      streams: [
+        { index: 0, codec_type: 'video', codec_name: 'hevc' },
+        { index: 1, codec_type: 'subtitle', codec_name: 'subrip', tags: { language: 'spa' } },
+        { index: 2, codec_type: 'subtitle', codec_name: 'subrip', tags: { language: 'eng' } },
+        { index: 3, codec_type: 'subtitle', codec_name: 'subrip', tags: { language: 'spa' } },
+        { index: 4, codec_type: 'subtitle', codec_name: 'hdmv_pgs_subtitle', tags: { language: 'spa' } },
+        { index: 5, codec_type: 'subtitle', codec_name: 'dvd_subtitle', tags: { language: 'eng' } },
+      ],
+    };
+    const list = embeddedSubOptions(both, video);
+    expect(list.map((t) => t.codec)).toEqual(['subrip', 'subrip', 'subrip', 'hdmv_pgs_subtitle', 'dvd_subtitle']);
+    expect(list[4].label.indexOf('картинка') >= 0).toBe(true);
+    expect(list[3].label.indexOf('картинка') >= 0).toBe(false);
   });
 });

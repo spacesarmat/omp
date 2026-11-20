@@ -70,7 +70,7 @@ object TrackOptions {
 
     fun subLabel(t: EngineTrack, n: Int): String {
         val parts = ArrayList<String>()
-        for (p in listOf(language(t.language), t.label.orEmpty())) if (p.isNotEmpty() && p !in parts) parts.add(p)
+        for (p in listOf(language(t.language), t.label.orEmpty(), t.codec)) if (p.isNotEmpty() && p !in parts) parts.add(p)
         return if (parts.isEmpty()) I18n.s("player.subTrack", "n" to n.toString()) else parts.joinToString(" · ")
     }
 

@@ -2504,6 +2504,8 @@ export const kk: EnDict<typeof ru> = {
     introSkipped: "Ашылу тізбегі өткізілді",
     creditsSkipped: "Субтитрлер алынып тасталды",
     subLoadFailed: "Субтитрлерді жүктеу мүмкін болмады: {error}",
+    subLoading: 'Субтитрлер жүктелуде',
+    imageSub: 'сурет, теледидар салмайды',
     byDefault: "әдепкі бойынша",
     audioRow: "Аудио: {v}",
     subsRow: "Субтитрлер: {v}",

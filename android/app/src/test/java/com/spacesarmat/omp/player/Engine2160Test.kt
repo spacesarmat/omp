@@ -38,6 +38,11 @@ class Engine2160Test {
         assertEquals("DTS", Engine2160.codecName(MimeTypes.AUDIO_DTS_HD))
         assertEquals("DTS", Engine2160.codecName(MimeTypes.AUDIO_DTS_UHD_P2))
         assertEquals("TrueHD", Engine2160.codecName(MimeTypes.AUDIO_TRUEHD))
+        assertEquals("PGS", Engine2160.codecName(MimeTypes.APPLICATION_PGS))
+        assertEquals("VOBSUB", Engine2160.codecName(MimeTypes.APPLICATION_VOBSUB))
+        assertEquals(true, Engine2160.keepTrackGroup(androidx.media3.common.C.TRACK_TYPE_TEXT, false))
+        assertEquals(false, Engine2160.keepTrackGroup(androidx.media3.common.C.TRACK_TYPE_AUDIO, false))
+        assertEquals(true, Engine2160.keepTrackGroup(androidx.media3.common.C.TRACK_TYPE_AUDIO, true))
         // Blu-ray LPCM through 2160's M2TS extractor
         assertEquals("PCM", Engine2160.codecName(MimeTypes.AUDIO_RAW))
         assertEquals("", Engine2160.codecName(null))

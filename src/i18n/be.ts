@@ -2389,6 +2389,8 @@ export const be: typeof ru = {
     introSkipped: "Застаўка прапушчана",
     creditsSkipped: "Тытры прапушчаны",
     subLoadFailed: "Не ўдалося загрузіць субтытры: {error}",
+    subLoading: 'Загрузка субтытраў',
+    imageSub: 'малюнак, тэлевізар не малюе',
     byDefault: "прадвызначана",
     audioRow: "Аўдыя: {v}",
     subsRow: "Субтытры: {v}",

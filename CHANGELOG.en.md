@@ -8,6 +8,8 @@ The English translation covers the latest versions only; the full history (in Ru
 
 - [phone] Now on TV: a dark scrim and white text in the header, and a short TV name. Under the title, episode N and the TMDB name. Chapter controls are smaller than the previous and next episode buttons. Skip intro appears inside an opening, and the chapter list names an opening and an ending. The episode list drops raw file names, shows the shared release line once, a progress bar, and scrolls to the current episode. A next-episode card. While scrubbing, the chapter name sits next to the time
 - [phone] A series page lists episode N or the TMDB title, with the release tail once above the list. The number sits next to the text, and the size stays on one line. A check replaces the green watched label. Continue shows the episode and the time. All episodes sits to the right of the heading. A long list has ranges and a jump to a number. Watch quality and Find in better quality have a short hint
+- [tv] Embedded subtitles stay in the menu when the TV reports only some of them. PGS is drawn over the video. SRT and ASS are read from the file when the TV does not show them itself. An image track this TV cannot draw (VobSub) is labeled in the list. UTF-16 subtitles open. Arabic and Hebrew run right to left
+- [phone] PGS and VobSub stay in the subtitle list even when the decoder did not mark them as supported. The name shows the format
 
 ## 0.30.2-beta.1
 

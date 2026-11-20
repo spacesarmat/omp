@@ -2389,6 +2389,8 @@ export const ro: typeof ru = {
     introSkipped: "Ecranul de întâmpinare a fost omis",
     creditsSkipped: "Subtitrările au fost omise",
     subLoadFailed: "Nu s-au putut încărca subtitrările: {error}",
+    subLoading: 'Se încarcă subtitrările',
+    imageSub: 'imagine, televizorul nu o desenează',
     byDefault: "implicit",
     audioRow: "Audio: {v}",
     subsRow: "Subtitrări: {v}",

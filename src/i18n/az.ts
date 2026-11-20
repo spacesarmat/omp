@@ -2504,6 +2504,8 @@ export const az: EnDict<typeof ru> = {
     introSkipped: "Açılış ardıcıllığı atlanıb",
     creditsSkipped: "Alt yazılar kəsilib",
     subLoadFailed: "Alt yazıları yükləmək mümkün olmadı: {error}",
+    subLoading: 'Alt yazılar yüklənir',
+    imageSub: 'şəkil, televizor çəkmir',
     byDefault: "Standart olaraq",
     audioRow: "Audio: {v}",
     subsRow: "Alt yazılar: {v}",

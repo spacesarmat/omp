@@ -12,14 +12,16 @@ import { communityVoiceFor } from '../viewer/communityRank';
 import { watchBuffer, watchClose, watchFrame, watchOpen } from '../viewer/watchReport';
 import { seriesTracksFor, rememberSeriesTracks } from '../store/seriesTracks';
 import { parseSubtitles, decodeText, Cue } from '../lib/subtitles';
-import { selectAudioTrack, selectTextTrack } from '../platform/webosMedia';
+import { selectAudioTrack, selectTextTrack, textTrackList } from '../platform/webosMedia';
 import type { PlayItem } from '../player/types';
 import { SeekAccumulator } from '../player/seek';
 import { tapZone, TapDetector, SeekStreak } from '../player/pointerTaps';
 import type { TapZone } from '../player/pointerTaps';
 import { Icon } from '../ui/icons';
 import type { IconName } from '../ui/icons';
-import { audioOptions, embeddedSubOptions, subtitleMenu, defaultAudioIndex } from '../player/trackOptions';
+import { audioOptions, embeddedSubOptions, subtitleMenu, defaultAudioIndex, type TrackOption } from '../player/trackOptions';
+import { probeReliable } from '../player/probeLoad';
+import { gstLoader, LiveSubs } from '../player/liveSubs';
 import { ExternalDubLink } from '../player/externalDubSync';
 import {
   dubStreamUrl, episodeExternalAudio, filesForHash, mergeWebosAudio, webosAudioIndex, webosSeriesAudioPatch,
@@ -36,7 +38,9 @@ import { fallbackAction, fallbackDue } from '../viewer/fallback';
 import { nextAlternate, requestAutoplay, stashResume } from '../viewer/alternates';
 import { progressIdentity } from '../viewer/progressSync';
 import { noteLinkSpeed } from '../viewer/linkSpeed';
-import { episodeLabel } from '../lib/episodes';
+import { baseName, episodeLabel } from '../lib/episodes';
+import { subtitleKind } from '../lib/subCodec';
+import type { PgsBitmap } from '../lib/pgs';
 import { torrents } from '../store/library';
 import { openAnotherRelease } from '../player/anotherRelease';
 import { replaceRoute } from '../ui/nav';
@@ -51,7 +55,7 @@ import { seasonVisit, type SeasonVisit } from '../player/seasonQueue';
 import { useCacheStats } from '../player/useCacheStats';
 import { infoPanel, bufferedAhead } from '../player/infoPanel';
 import { Controls } from '../player/Controls';
-import { InfoOverlay, BufferingOverlay, SubtitleOverlay, NextBanner, SkipBanner, UndoBanner, PlayerError } from '../player/Overlays';
+import { InfoOverlay, BufferingOverlay, SubtitleOverlay, BitmapSubtitle, NextBanner, SkipBanner, UndoBanner, PlayerError } from '../player/Overlays';
 import { usePlayerHeading, itemHeading } from '../player/heading';
 import { tvGlyphs } from '../ui/tvText';
 import type { Cmd } from '../phone/protocol';
@@ -105,6 +109,9 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from, seasonNe
   const [fileTick, setFileTick] = useState(0);
   const [subChoice, setSubChoice] = useState('off');
   const [cues, setCues] = useState<Cue[] | null>(null);
+  const [frame, setFrame] = useState<PgsBitmap | null>(null);
+  const [subNote, setSubNote] = useState('');
+  const liveRef = useRef<LiveSubs | null>(null);
   const [skippedIntro, setSkippedIntro] = useState<number | null>(null);
   const [subOffset, setSubOffset] = useState(0);
   const [prefs, setPrefs] = useState<SkipPrefs>({ i: false, c: false });
@@ -396,6 +403,12 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from, seasonNe
     subReq.current++;
     setProbe(null);
     setCues(null);
+    setFrame(null);
+    setSubNote('');
+    if (liveRef.current) {
+      liveRef.current.close();
+      liveRef.current = null;
+    }
     setSubOffset(0);
     setSkippedIntro(null);
     setStarted(false);
@@ -429,7 +442,16 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from, seasonNe
       setReadyFor(index);
     });
     if (c && item.hash && item.fileIndex !== undefined) {
-      c.probe(item.hash, item.fileIndex).then((p) => { if (!cancelled) { setProbe(p); setProbed(true); } });
+      const files = filesForHash(c, item.hash);
+      let fileName = 'file';
+      let fileSize = 0;
+      for (let fi = 0; fi < files.length; fi++) {
+        if (files[fi].id === item.fileIndex) {
+          fileName = baseName(files[fi].path);
+          fileSize = files[fi].length;
+        }
+      }
+      probeReliable(c, item.hash, item.fileIndex, fileName, fileSize).then((p) => { if (!cancelled) { setProbe(p); setProbed(true); } });
     } else {
       setProbed(true);
     }
@@ -543,6 +565,69 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from, seasonNe
     showControls();
   };
 
+  const stopLive = () => {
+    if (liveRef.current) liveRef.current.close();
+    liveRef.current = null;
+    setFrame(null);
+    setSubNote('');
+  };
+
+  const showLive = (live: LiveSubs) => {
+    setCues((prev) => {
+      const next = live.cues.length ? live.cues : null;
+      return prev === next ? prev : next;
+    });
+    setFrame((prev) => {
+      const next = live.bitmap;
+      if (!next) return null;
+      if (prev && prev.start === next.start && prev.x === next.x && prev.y === next.y && prev.w === next.w && prev.h === next.h) return prev;
+      return next;
+    });
+    if (live.cues.length || live.bitmap) setSubNote('');
+  };
+
+  const startLive = (ordinal: number, kind: 'text' | 'pgs') => {
+    stopLive();
+    if (!c || !item.hash || item.fileIndex === undefined) return;
+    const files = filesForHash(c, item.hash);
+    let path = '';
+    let size = 0;
+    for (let fi = 0; fi < files.length; fi++) {
+      if (files[fi].id === item.fileIndex) {
+        path = files[fi].path;
+        size = files[fi].length;
+      }
+    }
+    if (!(size > 0)) return;
+    const hash = item.hash;
+    const fileIndex = item.fileIndex;
+    const name = baseName(path);
+    const live = new LiveSubs({
+      size: size,
+      read: (start, end) => c.fetchRange(hash, fileIndex, name, start, end),
+    }, ordinal, kind, kind === 'text' ? gstLoader((url, ms) => c.fetchText(url, ms), c.baseUrl, hash, ordinal) : null);
+    liveRef.current = live;
+    setSubNote(t('tvPlayer.subLoading'));
+    const token = subReq.current;
+    live.init().then(() => {
+      if (liveRef.current !== live || subReq.current !== token) return false;
+      if (live.failed) {
+        setSubNote('');
+        toast(t('tvPlayer.subLoadFailed', { error: 'MKV' }), 'error');
+        return false;
+      }
+      return live.poll(posRef.current.time - subOffset).then(() => true);
+    }).then((ok) => {
+      if (!ok || liveRef.current !== live || subReq.current !== token || live.failed) return;
+      showLive(live);
+      if (!live.cues.length && !live.bitmap) setSubNote(t('tvPlayer.subLoading'));
+    }, () => {
+      if (liveRef.current !== live) return;
+      setSubNote('');
+      toast(t('tvPlayer.subLoadFailed', { error: 'MKV' }), 'error');
+    });
+  };
+
   const applySubChoice = (choice: string) => {
     const v = videoRef.current;
     if (!v) return;
@@ -551,15 +636,37 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from, seasonNe
     setCues(null);
     if (choice === 'off') {
       selectTextTrack(v, -1);
+      stopLive();
       return;
     }
     const token = ++subReq.current;
     const n = +choice.slice(1);
     if (choice.charAt(0) === 'e') {
+      const tracks = embeddedSubOptions(probeRef.current, v);
+      const tr: TrackOption | undefined = tracks[n];
+      const kind = tr ? subtitleKind(tr.codec || '') : 'other';
+      const nativeCount = textTrackList(v).length;
+      if (kind === 'text' && nativeCount > 0 && nativeCount === tracks.length) {
+        stopLive();
+        selectTextTrack(v, n);
+        return;
+      }
+      selectTextTrack(v, -1);
+      if (kind === 'image') {
+        stopLive();
+        setSubNote(t('tvPlayer.imageSub'));
+        return;
+      }
+      if (kind === 'text' || kind === 'pgs') {
+        startLive(n, kind);
+        return;
+      }
+      stopLive();
       selectTextTrack(v, n);
       return;
     }
     selectTextTrack(v, -1);
+    stopLive();
     const sub = (item.subtitles || [])[n];
     if (!sub || !c) return;
     c.fetchBytes(sub.url).then(
@@ -567,6 +674,17 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from, seasonNe
       (e) => { if (subReq.current === token) toast(t('tvPlayer.subLoadFailed', { error: errorMessage(e) }), 'error'); },
     );
   };
+
+  useEffect(() => {
+    const live = liveRef.current;
+    if (!live || live.failed) return undefined;
+    let dead = false;
+    live.poll(vs.time - subOffset).then(() => {
+      if (dead || liveRef.current !== live) return;
+      showLive(live);
+    }, () => undefined);
+    return () => { dead = true; };
+  }, [vs.time, subOffset]);
 
   // a choice by hand: for this torrent (locally) and for the whole series («Озвучка», the journal on TorrServer)
   const chooseAudio = (v: HTMLVideoElement, audio: WebosAudioOption[], i: number) => {
@@ -916,6 +1034,8 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from, seasonNe
       <video key={index + ':' + reloadKey} ref={videoRef} src={ready ? src : undefined} autoplay onLoadedMetadata={onMeta} />
       <audio ref={audioRef} preload="auto" />
       <SubtitleOverlay cues={cues} time={vs.time} offset={subOffset} raised={controls} />
+      <BitmapSubtitle frame={frame} raised={controls} />
+      {subNote ? <div class="sub-note">{subNote}</div> : null}
       {flash && <div class={'tap-flash tap-' + flash.side}>{flash.icon ? <Icon name={flash.icon} size={88} /> : flash.text}</div>}
       {ready && !showFail && !deadNow && (!vs.played || vs.buffering || vs.errorCode !== null || dubBuffering) && (
         <BufferingOverlay cache={cache} waiting={!vs.played || vs.errorCode !== null} />

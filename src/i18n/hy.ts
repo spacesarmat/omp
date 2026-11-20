@@ -2504,6 +2504,8 @@ export const hy: EnDict<typeof ru> = {
     introSkipped: "Բացման հաջորդականությունը բաց թողնվեց",
     creditsSkipped: "Երկխոսությունները հանվել են",
     subLoadFailed: "Չհաջողվեց բեռնել ենթագրերը: {error}",
+    subLoading: 'Ենթագրերը բեռնվում են',
+    imageSub: 'նկար, հեռուստացույցը չի ցուցադրում',
     byDefault: "ստանդարտով",
     audioRow: "Օդիո: {v}",
     subsRow: "Սուբտիտրներ: {v}",

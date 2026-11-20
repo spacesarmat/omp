@@ -41,6 +41,8 @@ export function guessLangFromName(name: string): string {
 
 export interface TrackInfo {
   index: number;
+  /** ffprobe stream index, the same order Matroska lists subtitle tracks. */
+  stream: number;
   kind: 'audio' | 'subtitle';
   codec: string;
   language: string;
@@ -61,6 +63,7 @@ export function tracksFromProbe(probe: FfprobeResult | null): TrackInfo[] {
     const disp = s.disposition || {};
     out.push({
       index: counters[kind]++,
+      stream: typeof s.index === 'number' ? s.index : out.length,
       kind,
       codec: s.codec_name || '',
       language: normalizeLang(tags.language),

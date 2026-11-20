@@ -1,4 +1,7 @@
+import { useEffect, useRef } from 'preact/hooks';
 import { t, t as tr } from '../i18n';
+import type { PgsBitmap } from '../lib/pgs';
+import { fittedPicture } from './pictureFit';
 import type { CacheState, FfprobeResult } from '../api/types';
 import { cueAt, Cue } from '../lib/subtitles';
 import { formatSpeed } from '../lib/format';
@@ -65,6 +68,53 @@ export function BufferingOverlay(p: { cache: CacheState | null; waiting?: boolea
   );
 }
 
+/** One PGS bitmap in the video's own pixel grid, placed on the fitted picture rather than the black bars. */
+export function BitmapSubtitle(p: { frame: PgsBitmap | null; raised: boolean }) {
+  const ref = useRef<HTMLCanvasElement>(null);
+  const size = settings.value.subSize;
+  useEffect(() => {
+    const canvas = ref.current;
+    if (!canvas) return;
+    const parent = canvas.parentElement;
+    const video = parent ? parent.querySelector('video') : null;
+    const boxW = parent ? parent.clientWidth : 0;
+    const boxH = parent ? parent.clientHeight : 0;
+    const mediaW = video && video.videoWidth ? video.videoWidth : 0;
+    const mediaH = video && video.videoHeight ? video.videoHeight : 0;
+    const fit = fittedPicture(boxW, boxH, mediaW, mediaH);
+    canvas.style.left = fit.left + 'px';
+    canvas.style.top = fit.top + 'px';
+    canvas.style.width = fit.width + 'px';
+    canvas.style.height = fit.height + 'px';
+    let ctx: CanvasRenderingContext2D | null = null;
+    try { ctx = canvas.getContext('2d'); } catch (e) { return; }
+    if (!ctx) return;
+    const frame = p.frame;
+    const vw = frame && frame.videoW > 0 ? frame.videoW : 1920;
+    const vh = frame && frame.videoH > 0 ? frame.videoH : 1080;
+    if (canvas.width !== vw) canvas.width = vw;
+    if (canvas.height !== vh) canvas.height = vh;
+    ctx.clearRect(0, 0, vw, vh);
+    if (!frame || !frame.rgba.length || !frame.w || !frame.h) return;
+    const scale = size === 'small' ? 0.85 : size === 'large' ? 1.2 : 1;
+    const tmp = document.createElement('canvas');
+    tmp.width = frame.w;
+    tmp.height = frame.h;
+    let tctx: CanvasRenderingContext2D | null = null;
+    try { tctx = tmp.getContext('2d'); } catch (e) { return; }
+    if (!tctx) return;
+    const img = tctx.createImageData(frame.w, frame.h);
+    img.data.set(frame.rgba);
+    tctx.putImageData(img, 0, 0);
+    const w = Math.max(1, Math.round(frame.w * scale));
+    const h = Math.max(1, Math.round(frame.h * scale));
+    const x = frame.x - Math.round((w - frame.w) / 2);
+    const y = frame.y - Math.round((h - frame.h) / 2);
+    ctx.drawImage(tmp, x, y, w, h);
+  }, [p.frame, size]);
+  return <canvas ref={ref} class={'sub-bitmap' + (p.raised ? ' raised' : '')} />;
+}
+
 export function SubtitleOverlay(p: { cues: Cue[] | null; time: number; raised: boolean; offset: number }) {
   const s = settings.value;
   if (!p.cues) return null;
@@ -72,8 +122,8 @@ export function SubtitleOverlay(p: { cues: Cue[] | null; time: number; raised: b
   if (!text) return null;
   const cls = 'subtitles sub-' + s.subSize + ' sub-' + s.subColor + (s.subBackground ? ' sub-bg' : ' sub-nobg') + (p.raised ? ' raised' : '');
   return (
-    <div class={cls}>
-      <span>{text}</span>
+    <div class={cls} dir="auto">
+      <span dir="auto">{text}</span>
     </div>
   );
 }

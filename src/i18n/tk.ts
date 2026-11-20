@@ -2504,6 +2504,8 @@ export const tk: EnDict<typeof ru> = {
     introSkipped: "Açylma sekansi geçildi",
     creditsSkipped: "Alt ýazgylary aýryldy",
     subLoadFailed: "Alt ýazgylary ýüklemek mümkin däl: {error}",
+    subLoading: 'Alt ýazgy ýüklenýär',
+    imageSub: 'surat, telewizor çekmeýär',
     byDefault: "Öňünden bellenen ýagdaýda",
     audioRow: "Audio: {v}",
     subsRow: "Ýazgylar: {v}",
