@@ -1,6 +1,7 @@
 import { t } from '../i18n';
 import type { FfprobeResult } from '../api/types';
 import { tracksFromProbe, describeTrack, normalizeLang, findLang, guessLangFromName } from '../lib/tracks';
+import { subtitleKind } from '../lib/subCodec';
 import { audioTrackList, textTrackList } from '../platform/webosMedia';
 import type { ExternalSub } from './types';
 
@@ -12,14 +13,24 @@ export interface TrackOption {
   title?: string;
   /** Audio channels (ffprobe), for the «Озвучка» row of the series screen; absent when unknown. */
   channels?: number;
+  /** ffprobe codec name. Subtitles only. */
+  codec?: string;
+  /** ffprobe stream index. Subtitles only. */
+  stream?: number;
 }
 
 function fromProbe(probe: FfprobeResult | null, kind: 'audio' | 'subtitle'): TrackOption[] {
   return tracksFromProbe(probe)
     .filter((t) => t.kind === kind)
-    .map((t) => {
-      const o: TrackOption = { label: describeTrack(t), language: t.language, isDefault: t.isDefault, title: t.title || undefined };
-      if (t.channels) o.channels = t.channels;
+    .map((tr) => {
+      let label = describeTrack(tr);
+      if (kind === 'subtitle' && subtitleKind(tr.codec) === 'image') label = label + ' · ' + t('tvPlayer.imageSub');
+      const o: TrackOption = { label: label, language: tr.language, isDefault: tr.isDefault, title: tr.title || undefined };
+      if (tr.channels) o.channels = tr.channels;
+      if (kind === 'subtitle') {
+        o.codec = tr.codec;
+        o.stream = tr.stream;
+      }
       return o;
     });
 }
@@ -47,17 +58,13 @@ export function audioOptions(probe: FfprobeResult | null, video: HTMLVideoElemen
   return video ? fromVideo(audioTrackList(video)) : [];
 }
 
+/**
+ * Embedded subtitles. ffprobe wins whenever it listed any: the TV and the phone player only report tracks they
+ * can decode themselves, so a shorter HTML list used to drop PGS and leave the SRT tracks.
+ */
 export function embeddedSubOptions(probe: FfprobeResult | null, video: HTMLVideoElement | null): TrackOption[] {
   const p = fromProbe(probe, 'subtitle');
-  if (p.length) {
-    if (video) {
-      const v = textTrackList(video);
-      if (v.length > 0 && v.length !== p.length) {
-        return fromVideo(v);
-      }
-    }
-    return p;
-  }
+  if (p.length) return p;
   return video ? fromVideo(textTrackList(video)) : [];
 }
 

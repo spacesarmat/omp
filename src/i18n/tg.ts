@@ -2496,6 +2496,8 @@ export const tg: EnDict<typeof ru> = {
     introSkipped: "Қисми ибтидоӣ гузаронида шуд",
     creditsSkipped: "Субтитрҳо хориҷ шуданд",
     subLoadFailed: "Намуд гирифтани субтитрҳо ғайриимкон аст: {error}",
+    subLoading: 'Боркунии субтитр',
+    imageSub: 'расм, телевизор кашида наметавонад',
     byDefault: "аз рӯи пешфарз",
     audioRow: "Аудио: {v}",
     subsRow: "Зернависҳо: {v}",

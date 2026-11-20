@@ -1,4 +1,6 @@
+import { useEffect, useRef } from 'preact/hooks';
 import { t, t as tr } from '../i18n';
+import type { PgsBitmap } from '../lib/pgs';
 import type { CacheState, FfprobeResult } from '../api/types';
 import { cueAt, Cue } from '../lib/subtitles';
 import { formatSpeed } from '../lib/format';
@@ -63,6 +65,42 @@ export function BufferingOverlay(p: { cache: CacheState | null; waiting?: boolea
       <Spinner text={bufferStatusText(!!p.waiting, tor)} />
     </div>
   );
+}
+
+/** One PGS bitmap in the video's own pixel grid, stretched with the picture. */
+export function BitmapSubtitle(p: { frame: PgsBitmap | null; raised: boolean }) {
+  const ref = useRef<HTMLCanvasElement>(null);
+  const size = settings.value.subSize;
+  useEffect(() => {
+    const canvas = ref.current;
+    if (!canvas) return;
+    let ctx: CanvasRenderingContext2D | null = null;
+    try { ctx = canvas.getContext('2d'); } catch (e) { return; }
+    if (!ctx) return;
+    const frame = p.frame;
+    const vw = frame && frame.videoW > 0 ? frame.videoW : 1920;
+    const vh = frame && frame.videoH > 0 ? frame.videoH : 1080;
+    if (canvas.width !== vw) canvas.width = vw;
+    if (canvas.height !== vh) canvas.height = vh;
+    ctx.clearRect(0, 0, vw, vh);
+    if (!frame || !frame.rgba.length || !frame.w || !frame.h) return;
+    const scale = size === 'small' ? 0.85 : size === 'large' ? 1.2 : 1;
+    const tmp = document.createElement('canvas');
+    tmp.width = frame.w;
+    tmp.height = frame.h;
+    let tctx: CanvasRenderingContext2D | null = null;
+    try { tctx = tmp.getContext('2d'); } catch (e) { return; }
+    if (!tctx) return;
+    const img = tctx.createImageData(frame.w, frame.h);
+    img.data.set(frame.rgba);
+    tctx.putImageData(img, 0, 0);
+    const w = Math.max(1, Math.round(frame.w * scale));
+    const h = Math.max(1, Math.round(frame.h * scale));
+    const x = frame.x - Math.round((w - frame.w) / 2);
+    const y = frame.y - Math.round((h - frame.h) / 2);
+    ctx.drawImage(tmp, x, y, w, h);
+  }, [p.frame, size]);
+  return <canvas ref={ref} class={'sub-bitmap' + (p.raised ? ' raised' : '')} />;
 }
 
 export function SubtitleOverlay(p: { cues: Cue[] | null; time: number; raised: boolean; offset: number }) {

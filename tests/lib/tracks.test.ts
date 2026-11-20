@@ -36,9 +36,9 @@ describe('tracksFromProbe', () => {
   it('extracts audio and subtitle tracks with per-kind index', () => {
     const t = tracksFromProbe(probe);
     expect(t).toEqual([
-      { index: 0, kind: 'audio', codec: 'ac3', language: 'ru', title: 'Дубляж', channels: 6, isDefault: true, forced: false },
-      { index: 1, kind: 'audio', codec: 'eac3', language: 'en', title: '', channels: 8, isDefault: false, forced: false },
-      { index: 0, kind: 'subtitle', codec: 'subrip', language: 'ru', title: 'Forced', channels: undefined, isDefault: false, forced: true },
+      { index: 0, stream: 1, kind: 'audio', codec: 'ac3', language: 'ru', title: 'Дубляж', channels: 6, isDefault: true, forced: false },
+      { index: 1, stream: 2, kind: 'audio', codec: 'eac3', language: 'en', title: '', channels: 8, isDefault: false, forced: false },
+      { index: 0, stream: 3, kind: 'subtitle', codec: 'subrip', language: 'ru', title: 'Forced', channels: undefined, isDefault: false, forced: true },
     ]);
     expect(tracksFromProbe(null)).toEqual([]);
   });

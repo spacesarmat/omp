@@ -2496,6 +2496,8 @@ export const ka: EnDict<typeof ru> = {
     introSkipped: "საწყისი სცენა გამოტოვდა",
     creditsSkipped: "სათაურები გამოტოვებულია",
     subLoadFailed: "სათაურების ჩატვირთვა შეუძლებელია: {error}",
+    subLoading: 'სუბტიტრები იტვირთება',
+    imageSub: 'სურათი, ტელევიზორი არ ხატავს',
     byDefault: "ნაგულისხმევად",
     audioRow: "აუდიო: {v}",
     subsRow: "სათაურები: {v}",

@@ -2414,6 +2414,8 @@ export const en: EnDict<typeof ru> = {
     introSkipped: 'Intro skipped',
     creditsSkipped: 'Credits skipped',
     subLoadFailed: 'Could not load the subtitles: {error}',
+    subLoading: 'Loading subtitles',
+    imageSub: 'picture, this TV cannot draw it',
     byDefault: 'default',
     audioRow: 'Audio: {v}',
     subsRow: 'Subtitles: {v}',

@@ -256,6 +256,7 @@ class PlayerSessionTest {
     fun trackLabelsFallBack() {
         assertEquals("Дорожка 2", TrackOptions.audioLabel(EngineTrack("a", "und", null), 2))
         assertEquals("Субтитры 3", TrackOptions.subLabel(EngineTrack("s", null, ""), 3))
+        assertEquals("ES · PGS", TrackOptions.subLabel(EngineTrack("s", "es", null, codec = "PGS"), 1))
         assertEquals("Русский", TrackOptions.audioLabel(EngineTrack("a", "ru", "Русский"), 1))
         assertEquals("3 кан.", TrackOptions.channels(3))
         assertEquals("", TrackOptions.channels(0))

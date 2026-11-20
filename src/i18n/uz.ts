@@ -2496,6 +2496,8 @@ export const uz: EnDict<typeof ru> = {
     introSkipped: "Kirish ketma-ketligi o'tkazib yuborildi",
     creditsSkipped: "Subtitellar olib tashlandi",
     subLoadFailed: "Subtitellarni yuklab bo'lmadi: {error}",
+    subLoading: 'Subtitrlar yuklanmoqda',
+    imageSub: 'rasm, televizor chizmaydi',
     byDefault: "o'rnatilgan holda",
     audioRow: "Audio: {v}",
     subsRow: "Subtitlar: {v}",

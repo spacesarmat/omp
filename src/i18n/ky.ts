@@ -2496,6 +2496,8 @@ export const ky: EnDict<typeof ru> = {
     introSkipped: "Баштапкы кадрлар өткөрүлүп жиберилди",
     creditsSkipped: "Субтитрлер четтетилди",
     subLoadFailed: "Субтитрлерди жүктөө мүмкүн болбоду: {error}",
+    subLoading: 'Субтитрлер жүктөлүүдө',
+    imageSub: 'сүрөт, телевизор тартпайт',
     byDefault: "алдын ала",
     audioRow: "Аудио: {v}",
     subsRow: "Субтитрлер: {v}",

@@ -299,7 +299,7 @@ class Engine2160(private val context: Context) : PlayerEngine {
         val p = player ?: return emptyList()
         val out = ArrayList<EngineTrack>()
         p.currentTracks.groups.forEachIndexed { n, g ->
-            if (g.type == type && g.isSupported) {
+            if (g.type == type && keepTrackGroup(type, g.isSupported)) {
                 val f = g.getTrackFormat(0)
                 out.add(trackOf("g$n", externalIndex(f.id, externalHashes), f.language, f.label, f.sampleMimeType, f.channelCount, g.isSelected))
             }
@@ -482,6 +482,15 @@ class Engine2160(private val context: Context) : PlayerEngine {
             else -> ""
         }
 
+        /**
+         * Text groups stay in the menu even when this build cannot decode them (PGS, VobSub).
+         * Audio still needs a decoder, otherwise the row would not play.
+         */
+        fun keepTrackGroup(type: Int, supported: Boolean): Boolean {
+            if (type == C.TRACK_TYPE_TEXT) return true
+            return supported
+        }
+
         fun codecName(mime: String?): String = when (mime) {
             MimeTypes.AUDIO_AC3 -> "AC3"
             MimeTypes.AUDIO_E_AC3, MimeTypes.AUDIO_E_AC3_JOC -> "E-AC3"
@@ -494,6 +503,9 @@ class Engine2160(private val context: Context) : PlayerEngine {
             MimeTypes.AUDIO_FLAC -> "FLAC"
             MimeTypes.AUDIO_VORBIS -> "Vorbis"
             MimeTypes.AUDIO_RAW -> "PCM"
+            MimeTypes.APPLICATION_PGS -> "PGS"
+            MimeTypes.APPLICATION_VOBSUB -> "VOBSUB"
+            MimeTypes.APPLICATION_DVBSUBS -> "DVB"
             else -> ""
         }
 

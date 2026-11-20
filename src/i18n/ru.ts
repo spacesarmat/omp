@@ -2460,6 +2460,8 @@ export const ru = {
     introSkipped: 'Заставка пропущена',
     creditsSkipped: 'Титры пропущены',
     subLoadFailed: 'Не удалось загрузить субтитры: {error}',
+    subLoading: 'Загрузка субтитров',
+    imageSub: 'картинка, телевизор не рисует',
     byDefault: 'по умолчанию',
     audioRow: 'Аудио: {v}',
     subsRow: 'Субтитры: {v}',

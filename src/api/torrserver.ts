@@ -285,14 +285,14 @@ export class TorrServerClient {
    * Pulls a byte range of the file into TorrServer's cache (the MKV index at the end).
    * Never rejects. `signal` aborts it.
    */
-  preloadTail(hash: string, fileIndex: number, name: string, start: number, end: number, signal?: AbortSignal): Promise<void> {
+  preloadTail(hash: string, fileIndex: number, name: string, start: number, end: number, signal?: AbortSignal, timeoutMs = 30000): Promise<void> {
     if (!(end >= start)) return Promise.resolve();
     const path = '/stream/' + encodeURIComponent(name || 'file') + '?link=' + hash + '&index=' + fileIndex + '&play';
     if (signal && this.via(this.baseUrl + path)) return Promise.resolve();
     return this.call<ArrayBuffer>(path, {
       method: 'GET',
       responseType: 'arraybuffer',
-      timeoutMs: 30000,
+      timeoutMs: timeoutMs,
       quiet: true,
       maxBytes: end - start + 1024,
       headers: { Range: 'bytes=' + start + '-' + end },
@@ -300,6 +300,23 @@ export class TorrServerClient {
     }).then(
       () => undefined,
       () => undefined,
+    );
+  }
+
+  /** One byte range of a torrent file. Null on failure. Used to read an MKV head, cue index or one cluster. */
+  fetchRange(hash: string, fileIndex: number, name: string, start: number, end: number): Promise<Uint8Array | null> {
+    if (!(end >= start)) return Promise.resolve(null);
+    const path = '/stream/' + encodeURIComponent(name || 'file') + '?link=' + hash + '&index=' + fileIndex + '&play';
+    return this.call<ArrayBuffer>(path, {
+      method: 'GET',
+      responseType: 'arraybuffer',
+      timeoutMs: 20000,
+      quiet: true,
+      maxBytes: end - start + 1024,
+      headers: { Range: 'bytes=' + start + '-' + end },
+    }).then(
+      (buf) => (buf && buf.byteLength ? new Uint8Array(buf) : null),
+      () => null,
     );
   }
 
@@ -335,7 +352,7 @@ export class TorrServerClient {
   }
 
   probe(hash: string, fileIndex: number): Promise<FfprobeResult | null> {
-    return this.call<FfprobeResult | null>('/ffp/' + hash + '/' + fileIndex, { timeoutMs: 30000, quiet: true }).then(
+    return this.call<FfprobeResult | null>('/ffp/' + hash + '/' + fileIndex, { timeoutMs: 90000, quiet: true }).then(
       (r) => (r && r.streams ? r : null),
       () => null,
     );

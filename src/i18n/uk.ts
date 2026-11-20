@@ -2381,6 +2381,8 @@ export const uk: typeof ru = {
     introSkipped: "Заставку пропущено",
     creditsSkipped: "Титри пропущено",
     subLoadFailed: "Не вдалося завантажити субтитри: {error}",
+    subLoading: 'Завантаження субтитрів',
+    imageSub: 'зображення, телевізор не малює',
     byDefault: "за замовчуванням",
     audioRow: "Аудіо: {v}",
     subsRow: "Субтитри: {v}",
