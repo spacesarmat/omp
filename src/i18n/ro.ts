@@ -104,6 +104,7 @@ export const ro: typeof ru = {
     reportSend: "Trimite",
     reportPlaceholder: "Ce s-a întâmplat?",
     find: "Căutare după setări",
+
     findEmpty: "Nu s-a găsit nimic",
     syncTitle: 'Sincronizare',
     syncLast: 'Ultima: {when}',
@@ -503,6 +504,10 @@ export const ro: typeof ru = {
     rowEnded: "finalizat",
     toEpisodes: "la seriale",
     watchedOf: "S-au vizualizat {have} din {n}",
+
+    resumeAt: "Continuă: episodul {n}, {time}",
+
+    jumpEpisode: "Numărul episodului",
     markSeason: "A marca sezonul ca fiind vizionat",
     noNewEpisodes: "Nu există episoade noi",
     nextAir: "Următorul episod va fi difuzat {date}",
@@ -2071,6 +2076,8 @@ export const ro: typeof ru = {
       skipSumIntro: "imagine de fundal {state}",
       skipSumCredits: "generic {state}",
       watchQuality: "A monitoriza calitatea",
+
+      watchQualityHint: "te anunțăm dacă apare o versiune mai bună",
       deleteTorrent: "Șterge distribuirea",
       renamed: "A fost redenumit",
       deleteAsk: "Doriți să ștergeți distribuția „{title}”?",
@@ -2108,6 +2115,7 @@ export const ro: typeof ru = {
     },
     better: {
       find: "Găsește în cea mai bună calitate",
+      what: "Căutăm o versiune mai bună și propunem înlocuirea. Cea de acum rămâne până ești de acord.",
       searching: "Caut…",
       have: "Aveți: {quality}",
       unknown: "calitatea nu este specificată",
@@ -2921,6 +2929,10 @@ export const ro: typeof ru = {
     next: "Mai jos: {title}",
     playNext: "Activați",
     nextCard: "Următorul episod",
+    opening: "Genericul",
+    ending: "Finalul",
+    prevShort: "Prec.",
+    nextShort: "Urm.",
     watchNext: "Vizualizați",
     skipIntro: "Sari peste ecranul de întâmpinare",
     skipChapter: "Sari peste capitol",

@@ -113,6 +113,7 @@ export const ru = {
     reportSend: 'Отправить',
     reportPlaceholder: 'Что случилось?',
     find: 'Поиск по настройкам',
+
     findEmpty: 'Ничего не найдено',
     syncTitle: 'Синхронизация',
     syncLast: 'Последняя: {when}',
@@ -518,6 +519,10 @@ export const ru = {
     rowEnded: 'завершён',
     toEpisodes: 'к сериям',
     watchedOf: 'Просмотрено {have} из {n}',
+
+    resumeAt: 'Продолжить: серия {n}, {time}',
+
+    jumpEpisode: 'Номер серии',
     markSeason: 'Отметить сезон просмотренным',
     noNewEpisodes: 'Новых серий нет',
     nextAir: 'Следующая серия выйдет {date}',
@@ -2148,6 +2153,8 @@ export const ru = {
       skipSumIntro: 'заставка {state}',
       skipSumCredits: 'титры {state}',
       watchQuality: 'Следить за качеством',
+
+      watchQualityHint: 'сообщим, если появится раздача лучше',
       deleteTorrent: 'Удалить раздачу',
       renamed: 'Переименовано',
       deleteAsk: 'Удалить раздачу «{title}»?',
@@ -2185,6 +2192,7 @@ export const ru = {
     },
     better: {
       find: 'Найти в лучшем качестве',
+      what: 'Ищем раздачу лучше вашей и предлагаем заменить. Текущая остаётся, пока вы не согласитесь.',
       searching: 'Ищу…',
       have: 'У вас: {quality}',
       unknown: 'качество не указано',
@@ -2993,6 +3001,10 @@ export const ru = {
     next: 'Дальше: {title}',
     playNext: 'Включить',
     nextCard: 'Следующая серия',
+    opening: 'Опенинг',
+    ending: 'Эндинг',
+    prevShort: 'Пред.',
+    nextShort: 'След.',
     watchNext: 'Смотреть',
     skipIntro: 'Пропустить заставку',
     skipChapter: 'Пропустить главу',

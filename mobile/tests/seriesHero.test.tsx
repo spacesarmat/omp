@@ -147,7 +147,7 @@ describe('series screen with TMDB', () => {
     expect(el.querySelector('[data-season-more]')!.textContent).toBe('Ещё · Сезон 2');
     const names = Array.from(el.querySelectorAll('.m-ep-name')).map((n) => (n.textContent || '').trim());
     expect(names[0]).toBe('Пилот');
-    expect(names[1]).toBe('');
+    expect(names[1]).toBe('Серия 2');
     expect(el.querySelector('[data-where="phone"], .m-to-eps')).toBeTruthy();
     act(() => (el.querySelector('.m-sh-season-about .m-btn-text') as HTMLElement).click());
     expect(el.querySelector('.m-sh-season-overview')!.textContent).toBe('О сезоне 2');

@@ -87,32 +87,51 @@ function moreEpisodes(first: number, tail: string): number[] {
  * null when none or when it cannot be read for sure (a range over two seasons, a fractional episode «12.5»).
  */
 export function fileEpisodes(path: string): { season: number | null; episodes: number[] } | null {
-  const name = baseName(path);
   if (isFractionalEpisode(path)) return null;
+  const cut = fileEpisodeCut(baseName(path), parseEpisode(path));
+  return cut ? { season: cut.season, episodes: cut.episodes } : null;
+}
+
+/**
+ * The same read as `fileEpisodes`, plus where the marker ends in `name`.
+ * `end` is the index just after the whole marker (`S01E05E06`, `1x02`, `- 001-002`), so the release tail starts there.
+ */
+export function fileEpisodeCut(
+  name: string,
+  parsed: { season: number | null; episode: number | null } | null,
+): { season: number | null; episodes: number[]; end: number } | null {
   let m = CROSS_SEASON.exec(name);
   if (m && +m[1] !== +m[2]) return null;
   m = SE_RANGE.exec(name);
   if (m) {
     const eps = span(+m[2], +m[3]);
-    return eps ? { season: +m[1], episodes: eps } : null;
+    return eps ? { season: +m[1], episodes: eps, end: m.index + m[0].length } : null;
   }
   m = SE_MULTI.exec(name);
-  if (m) return { season: +m[1], episodes: moreEpisodes(+m[2], m[3]) };
+  if (m) return { season: +m[1], episodes: moreEpisodes(+m[2], m[3]), end: m.index + m[0].length };
   m = E_MULTI.exec(name);
-  if (m) return { season: parseEpisode(path).season, episodes: moreEpisodes(+m[1], m[2]) };
+  if (m) return { season: parsed ? parsed.season : null, episodes: moreEpisodes(+m[1], m[2]), end: m.index + m[0].length };
   const ranges = [E_RANGE, WORD_RANGE, WORD_FIRST_RANGE, BRACKET_RANGE];
   for (let i = 0; i < ranges.length; i++) {
     m = ranges[i].exec(name);
     if (!m) continue;
     const eps = span(+m[1], +m[2]);
-    if (eps) return { season: parseEpisode(path).season, episodes: eps };
+    if (eps) return { season: parsed ? parsed.season : null, episodes: eps, end: m.index + m[0].length };
   }
-  const e = parseEpisode(path);
-  if (e.episode !== null) return { season: e.season, episodes: [e.episode] };
+  const sx = /s(\d{1,2})[ ._-]?e(\d{1,3})/i.exec(name);
+  if (sx && parsed && parsed.episode !== null) return { season: parsed.season, episodes: [parsed.episode], end: sx.index + sx[0].length };
+  const nx = /(?:^|[^\d])(\d{1,2})x(\d{2,3})(?![0-9])/i.exec(name);
+  if (nx && parsed && parsed.episode !== null) return { season: parsed.season, episodes: [parsed.episode], end: nx.index + nx[0].length };
+  // «E03», «Episode 3», a leading number in a season folder: ahead of «[01]» and «- 05», same as fileEpisodes used to
+  const named = /(?:^|[ ._-])(?:ep?|episode|серия)[ ._-]?(\d{1,3})(?![0-9])/i.exec(name);
+  if (named && parsed && parsed.episode !== null) return { season: parsed.season, episodes: [parsed.episode], end: named.index + named[0].length };
+  const leading = /^(\d{1,3})(?![0-9])/.exec(name);
+  if (leading && parsed && parsed.episode !== null && parsed.season !== null) return { season: parsed.season, episodes: [parsed.episode], end: leading.index + leading[0].length };
   m = WORD_ONE.exec(name);
-  if (m) return { season: null, episodes: [+m[1]] };
+  if (m) return { season: null, episodes: [+m[1]], end: m.index + m[0].length };
   m = BRACKET_NUM.exec(name) || DASH_NUM.exec(name);
-  if (m && NOT_EPISODE.indexOf(+m[1]) < 0) return { season: null, episodes: [+m[1]] };
+  if (m && NOT_EPISODE.indexOf(+m[1]) < 0) return { season: null, episodes: [+m[1]], end: m.index + m[0].length };
+  if (parsed && parsed.episode !== null) return { season: parsed.season, episodes: [parsed.episode], end: name.length };
   return null;
 }
 

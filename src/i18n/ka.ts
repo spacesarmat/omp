@@ -111,6 +111,7 @@ export const ka: EnDict<typeof ru> = {
     reportSend: "გაგზავნა",
     reportPlaceholder: "რა მოხდა?",
     find: "ძიება პარამეტრებით",
+
     findEmpty: "არაფერი იპოვეს",
     syncTitle: 'სინქრონიზაცია',
     syncLast: 'ბოლო: {when}',
@@ -528,6 +529,10 @@ export const ka: EnDict<typeof ru> = {
     rowEnded: "დასრულებულია",
     toEpisodes: "სერიისკენ",
     watchedOf: "{have}-დან ნანახი {n}",
+
+    resumeAt: "გაგრძელება: სერია {n}, {time}",
+
+    jumpEpisode: "სერიის ნომერი",
     markSeason: "ნიშნეთ სეზონი, როგორც ნანახი",
     noNewEpisodes: "ახალი ეპიზოდები არ არის",
     nextAir: "შემდეგი ეპიზოდი გამოვა {date}",
@@ -2186,6 +2191,8 @@ export const ka: EnDict<typeof ru> = {
       skipSumIntro: "წყლის ნიშანი {state}",
       skipSumCredits: "ავტორი {state}",
       watchQuality: "ხარისხის მონიტორინგი",
+
+      watchQualityHint: "შეგატყობინებთ, თუ უკეთესი რელიზი გამოჩნდება",
       deleteTorrent: "განაწილების წაშლა",
       renamed: "გადარქმეული",
       deleteAsk: "შევაჩეროთ \"{title}\"-ის\" ტრანსლაცია?",
@@ -2223,6 +2230,7 @@ export const ka: EnDict<typeof ru> = {
     },
     better: {
       find: "იპოვეთ საუკეთესო ხარისხით",
+      what: "ვეძებთ უკეთეს რელიზს და გთავაზობთ ჩანაცვლებას. მიმდინარე რჩება, სანამ არ დათანხმდებით.",
       searching: "ვეძებ...",
       have: "თქვენ გაქვთ: {quality}",
       unknown: "ხარისხი არ არის მითითებული",
@@ -3051,6 +3059,10 @@ export const ka: EnDict<typeof ru> = {
     next: "შემდეგი: {title}",
     playNext: "ჩართე",
     nextCard: "შემდეგი ეპიზოდი",
+    opening: "გახსნა",
+    ending: "დასასრული",
+    prevShort: "წინა",
+    nextShort: "შემდ",
     watchNext: "უყურე",
     skipIntro: "გამოტოვება შესავლის",
     skipChapter: "გადატანა ამ თავის",

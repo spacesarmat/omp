@@ -111,6 +111,7 @@ export const tk: EnDict<typeof ru> = {
     reportSend: "Göndermek",
     reportPlaceholder: "Näme boldy?",
     find: "Gurluşlar boýunça gözläň",
+
     findEmpty: "Hiç zat tapylmady",
     syncTitle: 'Sinhronizasiýa',
     syncLast: 'Soňky: {when}',
@@ -528,6 +529,10 @@ export const tk: EnDict<typeof ru> = {
     rowEnded: "Täze tapgyra geçdi",
     toEpisodes: "seriýa boýunça",
     watchedOf: "{have} {n}-dan görüldi",
+
+    resumeAt: "Dowam et: seriýa {n}, {time}",
+
+    jumpEpisode: "Seriýa belgisi",
     markSeason: "Möwsümi görüldi diýip belläň",
     noNewEpisodes: "Täze bölümler ýok",
     nextAir: "Indiki bölüm {date}de çykarylar.",
@@ -2186,6 +2191,8 @@ export const tk: EnDict<typeof ru> = {
       skipSumIntro: "Splash ekrany {state}",
       skipSumCredits: "Kreditler {state}",
       watchQuality: "Monitoryň hilini",
+
+      watchQualityHint: "has gowy paýlaşyk çyksa, habar bereris",
       deleteTorrent: "Paýlamany pozuň",
       renamed: "Täze atlandyryldy",
       deleteAsk: "{title}' ýaýlymyny pozmak?",
@@ -2223,6 +2230,7 @@ export const tk: EnDict<typeof ru> = {
     },
     better: {
       find: "Iň ýokary hili tapyň",
+      what: "Siziňkiden gowy paýlaşyk gözleýäris we çalşyrmagy teklip edýäris. Häzirki siz razy bolýança galýar.",
       searching: "Men gözleýärin…",
       have: "Sizde bar: {quality}",
       unknown: "Sypat kesgitlenmändir",
@@ -3051,6 +3059,10 @@ export const tk: EnDict<typeof ru> = {
     next: "Indiki: {title}",
     playNext: "Ýak",
     nextCard: "Indiki bölüm",
+    opening: "Açylyş",
+    ending: "Soňy",
+    prevShort: "Öňki",
+    nextShort: "Indiki",
     watchNext: "Gör",
     skipIntro: "Girişi geç",
     skipChapter: "Bu bapy geç",

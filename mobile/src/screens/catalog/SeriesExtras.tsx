@@ -95,7 +95,10 @@ export function SeriesExtras({ tor, files }: { tor: Torrent; files: TorrentFile[
         )}
         {film && (
           <div class="m-skip-row" data-block="watch-quality">
-            <span class="m-skip-text">{t('torrent.screen.watchQuality')}</span>
+            <span class="m-skip-text">
+              {t('torrent.screen.watchQuality')}
+              <span class="m-muted m-small">{t('torrent.screen.watchQualityHint')}</span>
+            </span>
             <Switch
               on={watchQuality === true}
               disabled={watchQuality === null}

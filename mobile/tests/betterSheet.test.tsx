@@ -315,7 +315,8 @@ describe('«Найти в лучшем качестве» in English', () => {
     const en: T = { ...film, title: 'North Wind (2026) WEB-DL 1080p' } as T;
     found = () => Promise.resolve([row({ Title: 'North Wind (2026) 2160p Remux', Size: '40 GB' })]);
     await mountTorrent(en);
-    expect(el.querySelector('[data-block="find-better"]')!.textContent).toBe('Find in better quality');
+    expect(el.querySelector('[data-block="find-better"]')!.textContent).toContain('Find in better quality');
+    expect(el.querySelector('[data-block="find-better"]')!.textContent).toContain('better release');
     await openBetter();
     const dialog = el.querySelector('[role=dialog]')!;
     expect(dialog.textContent).toContain('You have: 1080p WEB-DL');
