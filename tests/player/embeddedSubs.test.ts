@@ -182,7 +182,7 @@ describe('probeReliable', () => {
     };
     const r = await probeReliable(c, 'h', 0, 'film.mkv', 20 * 1024 * 1024);
     expect(probes).toBe(2);
-    expect(r && r.streams.some((s) => s.codec_type === 'subtitle')).toBe(true);
+    expect(r && r.streams.map((s) => s.codec_type + ':' + s.index)).toEqual(['video:0', 'audio:1', 'subtitle:2']);
   });
 
   it('does not retry when the first probe already listed a subtitle stream', async () => {

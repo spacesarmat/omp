@@ -103,7 +103,7 @@ describe('settings search', () => {
     vi.spyOn(tvUpdate, 'tvOmpVersions').mockResolvedValue({ installed: '1', latest: '1' });
     const el = mount();
     const row = el.querySelector('[data-row="tv"]')!;
-    expect(row.textContent).toContain('LG OLED55C9PLA · webOS');
+    expect(row.textContent).toContain('LG OLED55C9 · webOS');
     expect(row.querySelector('[data-tv-dot]')).toBeTruthy();
     act(() => (row as HTMLButtonElement).click());
     expect(currentRoute.value.name).toBe('tv');

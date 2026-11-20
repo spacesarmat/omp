@@ -36,17 +36,33 @@ export function hasSubtitleStreams(r: FfprobeResult | null): boolean {
   return false;
 }
 
-/** Prefer a result that has subtitles. Otherwise keep the one with more streams. */
+/** Union of two stream lists by ffprobe index. A later stream fills gaps and does not drop an earlier one. */
+function mergeStreams(current: FfprobeResult['streams'], incoming: FfprobeResult['streams']): FfprobeResult['streams'] {
+  const byIndex: { [n: number]: FfprobeResult['streams'][number] } = {};
+  const order: number[] = [];
+  const take = (list: FfprobeResult['streams'] | undefined) => {
+    if (!list) return;
+    for (let i = 0; i < list.length; i++) {
+      const stream = list[i];
+      const key = stream.index;
+      if (byIndex[key] === undefined) order.push(key);
+      byIndex[key] = byIndex[key] ? { ...byIndex[key], ...stream } : stream;
+    }
+  };
+  take(current);
+  take(incoming);
+  const out: FfprobeResult['streams'] = [];
+  for (let i = 0; i < order.length; i++) out.push(byIndex[order[i]]);
+  return out;
+}
+
+/** Keep every stream already seen, and add any the retry found (subtitles included). */
 export function adoptProbe(current: FfprobeResult | null, incoming: FfprobeResult | null): FfprobeResult | null {
   if (!incoming) return current;
   if (!current) return incoming;
-  const curSubs = hasSubtitleStreams(current);
-  const nextSubs = hasSubtitleStreams(incoming);
-  if (nextSubs && !curSubs) return incoming;
-  if (curSubs && !nextSubs) return current;
-  const curN = current.streams ? current.streams.length : 0;
-  const nextN = incoming.streams ? incoming.streams.length : 0;
-  return nextN >= curN ? incoming : current;
+  const streams = mergeStreams(current.streams, incoming.streams);
+  const base = hasSubtitleStreams(incoming) ? incoming : current;
+  return { ...base, streams: streams };
 }
 
 export async function probeReliable(c: ProbeHost, hash: string, fileIndex: number, name: string, size: number): Promise<FfprobeResult | null> {
