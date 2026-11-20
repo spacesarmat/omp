@@ -4,7 +4,7 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
-## Unreleased
+## 0.30.2
 
 - [tv] Embedded subtitles are read directly from MKV when TorrServer has no ffprobe. Tracks appear in the TV menu and in the phone remote. Large MKV clusters no longer leave an endless loading notice without text. Compressed PGS is inflated and keeps the correct timing
 
