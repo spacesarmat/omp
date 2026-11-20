@@ -2,7 +2,7 @@
 
 <!-- Markers [phone] [tv] [lg] [atv] [tech]: see docs/changelog-markers.md. [tech] bullets are technical or admin-only and never reach users. -->
 
-## Не выпущено
+## 0.30.2
 
 - [tv] Встроенные субтитры читаются прямо из MKV, когда на TorrServer нет ffprobe. Дорожки появляются в меню телевизора и в пульте на телефоне. Большие фрагменты MKV больше не оставляют бесконечную загрузку без текста. Сжатые PGS распаковываются и сохраняют правильное время
 

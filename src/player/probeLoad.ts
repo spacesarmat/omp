@@ -112,6 +112,6 @@ export async function probeReliable(c: ProbeHost, hash: string, fileIndex: numbe
   if (hasSubtitleStreams(first)) return first;
   await warmForProbe(c, hash, fileIndex, name, size);
   const probed = adoptProbe(first, await c.probe(hash, fileIndex));
-  if (hasSubtitleStreams(probed)) return probed;
-  return adoptProbe(probed, await probeMkvSubs(c, hash, fileIndex, name, size));
+  if (probed) return probed;
+  return probeMkvSubs(c, hash, fileIndex, name, size);
 }

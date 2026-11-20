@@ -272,6 +272,19 @@ describe('probeReliable', () => {
     expect(r && r.streams[0].codec_type).toBe('audio');
   });
 
+  it('does not read MKV when the server returned a valid track list', async () => {
+    let ranges = 0;
+    const c = {
+      preload: async () => undefined,
+      preloadTail: async () => undefined,
+      probe: async () => ({ streams: [{ index: 0, codec_type: 'audio', codec_name: 'aac' }] }),
+      fetchRange: async () => { ranges++; return null; },
+    };
+    const r = await probeReliable(c, 'h', 0, 'film.mkv', 20 * 1024 * 1024);
+    expect(r && r.streams[0].codec_type).toBe('audio');
+    expect(ranges).toBe(0);
+  });
+
   it('lists embedded text when the server has no ffprobe', async () => {
     const file = tinySrt('Hello');
     const c = {
