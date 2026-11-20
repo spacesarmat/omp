@@ -1,4 +1,4 @@
-import type { FfprobeResult } from '../api/types';
+import type { FfprobeResult, FfprobeStream } from '../api/types';
 import { isMkvName, MKV_TAIL_BYTES } from '../viewer/prebuffer';
 
 const EDGE = 4 * 1024 * 1024;
@@ -37,16 +37,17 @@ export function hasSubtitleStreams(r: FfprobeResult | null): boolean {
 }
 
 /** Union of two stream lists by ffprobe index. A later stream fills gaps and does not drop an earlier one. */
-function mergeStreams(current: FfprobeResult['streams'], incoming: FfprobeResult['streams']): FfprobeResult['streams'] {
-  const byIndex: { [n: number]: FfprobeResult['streams'][number] } = {};
+function mergeStreams(current: FfprobeStream[] | undefined, incoming: FfprobeStream[] | undefined): FfprobeStream[] {
+  const byIndex: { [n: number]: FfprobeStream } = {};
   const order: number[] = [];
-  const take = (list: FfprobeResult['streams'] | undefined) => {
+  const take = (list: FfprobeStream[] | undefined) => {
     if (!list) return;
     for (let i = 0; i < list.length; i++) {
-      const stream = list[i];
+      const stream: FfprobeStream = list[i];
       const key = stream.index;
-      if (byIndex[key] === undefined) order.push(key);
-      byIndex[key] = byIndex[key] ? { ...byIndex[key], ...stream } : stream;
+      const prev: FfprobeStream | undefined = byIndex[key];
+      if (prev === undefined) order.push(key);
+      byIndex[key] = prev ? { ...prev, ...stream } : stream;
     }
   };
   take(current);
