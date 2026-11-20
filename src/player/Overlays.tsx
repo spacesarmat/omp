@@ -122,8 +122,8 @@ export function SubtitleOverlay(p: { cues: Cue[] | null; time: number; raised: b
   if (!text) return null;
   const cls = 'subtitles sub-' + s.subSize + ' sub-' + s.subColor + (s.subBackground ? ' sub-bg' : ' sub-nobg') + (p.raised ? ' raised' : '');
   return (
-    <div class={cls}>
-      <span>{text}</span>
+    <div class={cls} dir="auto">
+      <span dir="auto">{text}</span>
     </div>
   );
 }

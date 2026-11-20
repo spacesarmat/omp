@@ -83,8 +83,19 @@ export function cueAt(cues: Cue[], t: number): string {
 }
 
 export function decodeText(buf: ArrayBuffer): string {
+  const bytes = new Uint8Array(buf);
+  if (bytes.length >= 2 && bytes[0] === 0xff && bytes[1] === 0xfe) {
+    return new TextDecoder('utf-16le').decode(buf).replace(/^\uFEFF/, '');
+  }
+  if (bytes.length >= 2 && bytes[0] === 0xfe && bytes[1] === 0xff) {
+    try {
+      return new TextDecoder('utf-16be').decode(buf).replace(/^\uFEFF/, '');
+    } catch (e) {
+      // older TV WebKit may not know utf-16be
+    }
+  }
   try {
-    return new TextDecoder('utf-8', { fatal: true }).decode(buf).replace(/^﻿/, '');
+    return new TextDecoder('utf-8', { fatal: true }).decode(buf).replace(/^\uFEFF/, '');
   } catch (e) {
     return new TextDecoder('windows-1251').decode(buf);
   }
