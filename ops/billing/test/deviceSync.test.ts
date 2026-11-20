@@ -115,6 +115,11 @@ describe('POST /v1/sync', () => {
     const rows = saved.data.records as { id: string; body: { time: number } }[];
     expect(rows.some((r) => r.id === 'progress:abc:1' && r.body.time === 40)).toBe(true);
 
+    const listed = await call(app, 'GET', '/v1/sync/devices', { headers: headersA });
+    expect(listed.status).toBe(200);
+    const devices = listed.data.devices as { id: string; self: boolean }[];
+    expect(devices.some((d) => d.self && d.id === DEV_A)).toBe(true);
+
     const older = await call(app, 'POST', '/v1/sync', {
       headers: headersA,
       json: {

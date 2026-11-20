@@ -18,10 +18,12 @@ interface Bag {
   syncEpoch: number;
   /** updatedAt last accepted by the server, so the same row is not uploaded again. */
   sent: { [id: string]: number };
+  /** Last failed sync: offline, denied, error. Empty after a success. */
+  lastError: string;
 }
 
 function empty(): Bag {
-  return { records: {}, migrated: false, syncOn: true, lastSync: 0, lastSeq: 0, accountId: '', syncEpoch: 0, sent: {} };
+  return { records: {}, migrated: false, syncOn: true, lastSync: 0, lastSeq: 0, accountId: '', syncEpoch: 0, sent: {}, lastError: '' };
 }
 
 function read(): Bag {
@@ -36,6 +38,7 @@ function read(): Bag {
     accountId: typeof raw.accountId === 'string' ? raw.accountId : '',
     syncEpoch: typeof raw.syncEpoch === 'number' ? raw.syncEpoch : 0,
     sent: sentOf(raw.sent),
+    lastError: typeof raw.lastError === 'string' ? raw.lastError : '',
   };
 }
 
@@ -130,6 +133,17 @@ export function lastSyncAt(): number {
 export function markSynced(at: number): void {
   const bag = read();
   bag.lastSync = at;
+  bag.lastError = '';
+  write(bag, true);
+}
+
+export function lastSyncError(): string {
+  return read().lastError;
+}
+
+export function markSyncError(code: string): void {
+  const bag = read();
+  bag.lastError = code;
   write(bag, true);
 }
 

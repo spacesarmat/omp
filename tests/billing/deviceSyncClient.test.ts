@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { emitBillingChange, saveBillingSession } from '../../src/billing/session';
-import { runDeviceSync } from '../../src/billing/deviceSyncClient';
+import { runDeviceSync, setSyncContext } from '../../src/billing/deviceSyncClient';
 import { deviceRecords, putDeviceRecords, resetDeviceDb } from '../../src/store/deviceDb';
 
 function ok(nextSeq: number) {
@@ -17,6 +17,7 @@ afterEach(() => {
   vi.clearAllTimers();
   vi.useRealTimers();
   vi.unstubAllGlobals();
+  setSyncContext(null);
   saveBillingSession(null);
   resetDeviceDb();
 });
@@ -66,5 +67,26 @@ describe('runDeviceSync', () => {
     emitBillingChange();
     await vi.advanceTimersByTimeAsync(1600);
     expect(later).toHaveBeenCalled();
+  });
+
+  it('uses the device http client instead of window.fetch', async () => {
+    const bodies: string[] = [];
+    setSyncContext(() => ({
+      http: {
+        get: () => Promise.resolve({ status: 0, url: '', text: '' }),
+        post: () => Promise.resolve({ status: 0, url: '', text: '' }),
+        postJson: (_url: string, body: string) => {
+          bodies.push(body);
+          return Promise.resolve({ status: 200, url: '', text: '{"ok":true,"records":[],"nextSeq":3}' });
+        },
+        clearCookies: () => Promise.resolve(),
+      },
+      client: null,
+    }));
+    const fetched = vi.fn(() => Promise.reject(new Error('fetch')));
+    vi.stubGlobal('fetch', fetched);
+    expect(await runDeviceSync()).toBe('ok');
+    expect(bodies.length).toBe(1);
+    expect(fetched).not.toHaveBeenCalled();
   });
 });

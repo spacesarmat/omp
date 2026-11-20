@@ -4,6 +4,10 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## Unreleased
+
+- [phone] Account sync shows how long ago the last exchange was ("2 min ago"), an error in red with Retry, and a Sync now button. The description opens the devices on this account. When the server does not allow sync, the switch is off and says it is available with a subscription. Sync uses the same device token as the other billing calls
+
 ## 0.30.1
 
 - [tech] Watch history, progress, chosen audio, skip settings, a manual TMDB match, renames and monitoring flags stay on the device and work without TorrServer. The first launch copies them from the server once. Subscribers sync them through billing. An admin switch chooses subscribers only or everyone, and subscribers only is the default. Without a subscription the data stays on the device and sync stops

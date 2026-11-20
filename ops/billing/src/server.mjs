@@ -3482,6 +3482,44 @@ export function createApp(file, fetchImpl, opts) {
         await playback.save(accountId, { ...parsed, deviceId: device }, Date.now());
         return json(res, 200, { ok: true });
       }
+      if (req.method === 'GET' && path === '/v1/sync/devices') {
+        const device = String(req.headers['x-device-id'] || '');
+        const token = bearer(req);
+        if (!token) return json(res, 401, { error: 'bad_token' });
+        if (!syncDb || !syncDb.devices) return json(res, 503, { error: 'unavailable' });
+        const state = await store.read();
+        const caller = await deviceCaller(state, token, device, Date.now());
+        if (!caller || caller.error) return json(res, 401, { error: (caller && caller.error) || 'bad_token' });
+        const sub = state.subscriptions.find((s) => s.id === caller.code.subscriptionId);
+        const accountId = sub && sub.accountId ? String(sub.accountId) : '';
+        if (!accountId) return json(res, 404, { error: 'not_linked' });
+        const view = subscriptionView(state, accountId, Date.now());
+        if (!maySync(state.settings, !!(view && view.active))) return json(res, 403, { error: 'subscribers_only' });
+        const rows = await syncDb.devices(accountId);
+        const names = {};
+        const subs = state.subscriptions.filter((s) => s.accountId === accountId);
+        for (let i = 0; i < subs.length; i++) {
+          try {
+            const list = await store.registry.listDevices(subs[i].id);
+            for (let j = 0; j < list.length; j++) {
+              const row = list[j];
+              if (row && row.device_id) names[row.device_id] = String(row.name || '');
+            }
+          } catch (e) {
+            /* a missing name does not hide the device */
+          }
+        }
+        const devices = [];
+        for (let i = 0; i < rows.length; i++) {
+          devices.push({
+            id: rows[i].id,
+            name: names[rows[i].id] || '',
+            lastAt: rows[i].lastAt,
+            self: rows[i].id === device,
+          });
+        }
+        return json(res, 200, { ok: true, devices: devices });
+      }
       if (req.method === 'POST' && path === '/v1/sync') {
         const device = String(req.headers['x-device-id'] || '');
         const token = bearer(req);

@@ -100,5 +100,12 @@ export function createSyncStore(query) {
         );
       }
     },
+    async devices(accountId) {
+      const res = await query(
+        'SELECT device_id, MAX(updated_at) AS last_at FROM device_sync WHERE account_id = $1 GROUP BY device_id ORDER BY last_at DESC LIMIT 40',
+        [accountId],
+      );
+      return res.rows.map((r) => ({ id: r.device_id || '', lastAt: Number(r.last_at) || 0 }));
+    },
   };
 }

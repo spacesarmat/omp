@@ -51,6 +51,8 @@ interface MeBody {
   /** Paid donation on this account. Omitted by a server from before donations. */
   supporter?: boolean;
   bill?: { priceRub?: number; feeRub?: number; totalRub?: number; autoRenew?: boolean; payments?: { at?: number; amount?: string; currency?: string; title?: string }[] };
+  /** Omitted by a server from before device sync. Missing means the app must not guess. */
+  sync?: { audience?: string; allowed?: boolean };
 }
 
 interface ErrorBody {
@@ -83,6 +85,12 @@ function billOf(body: MeBody): BillingAccount['bill'] {
     autoRenew: row.autoRenew === true,
     payments,
   };
+}
+
+function syncOf(body: MeBody): BillingAccount['sync'] {
+  const row = body.sync;
+  if (!row || typeof row !== 'object' || typeof row.allowed !== 'boolean') return undefined;
+  return { audience: row.audience === 'all' ? 'all' : 'subscribers', allowed: row.allowed };
 }
 
 function referralOf(body: MeBody): BillingAccount['referral'] {
@@ -408,6 +416,7 @@ export function fetchBillingAccount(ctx: SourceContext): Promise<BillingAccount 
           referral: referralOf(body),
           supporter: body.supporter === true,
           bill: billOf(body),
+          sync: syncOf(body),
         };
       }
       // After «Отключить» this run must not look signed in again off a device the server still knows.
@@ -453,6 +462,7 @@ export function fetchBillingAccount(ctx: SourceContext): Promise<BillingAccount 
         referral: referralOf(body),
         supporter: body.supporter === true,
         bill: billOf(body),
+        sync: syncOf(body),
       };
     },
     (e) => {
