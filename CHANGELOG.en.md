@@ -7,6 +7,7 @@ The English translation covers the latest versions only; the full history (in Ru
 ## Unreleased
 
 - [phone] Sync reliably reapplies library changes after a restart and no longer moves Continue back when an older network response arrives after a newer one
+- [tech] Billing: migration 022 adds revisions, a change log and idempotent mutation ids. POST /v2/sync accepts and returns changes, while the old /v1/sync keeps its response and writes through the shared mutation service. Clients still use /v1; WebSocket and presence are not part of this stage
 
 ## 0.30.3-beta.1
 
