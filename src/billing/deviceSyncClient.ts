@@ -1,7 +1,7 @@
 // Push and pull remembered rows. A refused sync (no subscription) leaves the local copy as it is.
 import { BILLING_ORIGIN } from './config';
-import { billingSession, deviceId, onBillingChange } from './session';
-import { withDeviceToken, legacySyncLink } from './tokens';
+import { billingSession, deviceId, legacySyncLink, onBillingChange } from './session';
+import { withDeviceToken } from './tokens';
 import { ackSent, markSyncError, markSynced, noteSyncAccount, onDeviceWrite, putDeviceRecords, setSyncCursor, syncCursor, syncEnabled, unsentRecords } from '../store/deviceDb';
 import { applyPulled } from '../store/applyPulled';
 import type { SyncRecord } from '../store/syncMerge';

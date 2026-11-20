@@ -5,6 +5,8 @@ export const SESSION_KEY = 'tsp.billingSession';
 const PENDING_CODE_KEY = 'tsp.billingPendingCode';
 const NOTICE_KEY = 'tsp.billingNotice';
 const ACCOUNT_KEY = 'tsp.billingAccountSeen';
+/** Old sync key -> new binding id, for one legacy token upgrade. */
+const LEGACY_SYNC_KEY = 'tsp.billingLegacySync';
 
 /**
  * This phone's binding to a subscription code. Since PR-5 it holds the short-lived access token; the
@@ -100,11 +102,33 @@ export function setBillingNotice(notice: BillingNotice): void {
   saveJson(NOTICE_KEY, notice);
 }
 
+function validLegacySync(v: unknown): v is { from: string; to: string } {
+  if (!v || typeof v !== 'object') return false;
+  const row = v as { from?: unknown; to?: unknown };
+  return typeof row.from === 'string' && row.from.length > 0 && row.from.length <= 64
+    && typeof row.to === 'string' && /^[a-f0-9]{32}$/.test(row.to);
+}
+
+/**
+ * Same login after a legacy token upgrade. Kept on disk: a restart before the first
+ * successful sync must still treat the new id as that login, or unsent history is hidden.
+ */
+export function legacySyncLink(): { from: string; to: string } | null {
+  return loadJson(LEGACY_SYNC_KEY, null, validLegacySync);
+}
+
+export function rememberLegacySync(from: string, to: string): void {
+  saveJson(LEGACY_SYNC_KEY, { from: from, to: to });
+}
+
 export function saveBillingSession(row: BillingSession | null): void {
   if (!row) {
     saveJson(SESSION_KEY, null);
+    saveJson(LEGACY_SYNC_KEY, null);
     return;
   }
+  const link = legacySyncLink();
+  if (link && row.id && row.id !== link.to) saveJson(LEGACY_SYNC_KEY, null);
   saveJson(SESSION_KEY, row);
 }
 

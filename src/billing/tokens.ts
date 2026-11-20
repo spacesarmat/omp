@@ -11,6 +11,7 @@ import {
   deviceId,
   emitBillingChange,
   isLegacySession,
+  rememberLegacySync,
   saveBillingSession,
   saveSeenAccount,
   sessionKey,
@@ -137,13 +138,6 @@ function newId(): string {
   let out = '';
   for (let i = 0; i < bytes.length; i++) out += ('0' + bytes[i].toString(16)).slice(-2);
   return out;
-}
-
-/** Set when a legacy token is upgraded to a device id for the same login. A new code does not set this. */
-let legacySyncFrom: { from: string; to: string } | null = null;
-
-export function legacySyncLink(): { from: string; to: string } | null {
-  return legacySyncFrom;
 }
 
 /** An error this module made (its text is meant for the user as is); anything else is «сервер не отвечает». */
@@ -324,8 +318,10 @@ export function savePair(
       if (stored.stale || gen !== keystoreGen) return null;
       if (current && !current()) return dropCancelledWrite(ctx, id);
       if (current && billingSession() && billingSession()!.id !== id) return null;
-      if (prev && !prev.id && prev.token) rekeyBillingAccess(prev.token, id);
-      if (prev && !prev.id && prev.token) legacySyncFrom = { from: prev.token.slice(0, 16), to: id };
+      if (prev && !prev.id && prev.token) {
+        rekeyBillingAccess(prev.token, id);
+        rememberLegacySync(prev.token.slice(0, 16), id);
+      }
       const row: BillingSession = {
         token: '',
         paidUntil: typeof pair.paidUntil === 'number' ? pair.paidUntil : prev ? prev.paidUntil : 0,
