@@ -1,0 +1,112 @@
+name: Ошибка / Bug report
+description: Сообщить об ошибке в OMP / Report a bug in OMP
+title: "Bug: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Опишите, что сломалось. Чем точнее шаги, тем быстрее это можно повторить.
+        Describe what broke. Clear steps make it possible to repeat.
+  - type: dropdown
+    id: device
+    attributes:
+      label: Устройство / Device
+      description: Где это случилось / Where it happened
+      options:
+        - LG webOS TV
+        - Android TV
+        - Android телефон или планшет / Android phone or tablet
+        - iOS
+        - Windows/ПК / Windows/PC
+        - Другое / Other
+    validations:
+      required: true
+  - type: input
+    id: device_model
+    attributes:
+      label: Модель устройства и версия ОС / Device model and OS version
+      description: Например, LG OLED55C9, webOS 5. Или Samsung Galaxy S21, Android 14 / For example, LG OLED55C9, webOS 5. Or Samsung Galaxy S21, Android 14
+      placeholder: LG OLED55C9, webOS 5
+    validations:
+      required: false
+  - type: input
+    id: omp_version
+    attributes:
+      label: Версия OMP / OMP version
+      description: |
+        Телефон: Настройки, раздел «Приложение», строка «Версия».
+        Телевизор: Настройки, строка «OMP - Open Movie Player» с номером версии.
+        Phone: Settings, App, Version.
+        TV: Settings, the "OMP - Open Movie Player" line with the version number.
+      placeholder: 0.30.2
+    validations:
+      required: true
+  - type: input
+    id: torrserver_version
+    attributes:
+      label: Версия TorrServer / TorrServer version
+      description: |
+        Телефон: Настройки, «Сервер на телефоне», версия под статусом.
+        Свой сервер: версия в веб-интерфейсе TorrServer.
+        Phone: Settings, "Server on the phone", the version under the status.
+        Your own server: the version in the TorrServer web page.
+      placeholder: MatriX.150
+    validations:
+      required: false
+  - type: dropdown
+    id: torrserver_source
+    attributes:
+      label: Источник TorrServer / TorrServer source
+      description: Откуда берётся TorrServer / Where TorrServer runs
+      options:
+        - Встроенный / Built-in
+        - Свой / My own
+    validations:
+      required: false
+  - type: textarea
+    id: steps
+    attributes:
+      label: Шаги воспроизведения / Steps to reproduce
+      description: Что нажать по порядку / What to press, in order
+      placeholder: |
+        1.
+        2.
+        3.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Ожидаемое / Expected
+      description: Что должно было произойти / What should have happened
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Фактическое / Actual
+      description: Что произошло вместо этого / What happened instead
+    validations:
+      required: true
+  - type: input
+    id: torrent
+    attributes:
+      label: Ссылка или название раздачи / Torrent link or title
+      description: Необязательно. Не присылайте содержимое файлов, только название или ссылку / Optional. Do not send file contents, only a title or a link
+    validations:
+      required: false
+  - type: textarea
+    id: logs
+    attributes:
+      label: Логи и скриншоты / Logs and screenshots
+      description: Необязательно. Файлы можно перетащить в это поле / Optional. You can drag files into this field
+    validations:
+      required: false
+  - type: checkboxes
+    id: latest_check
+    attributes:
+      label: Проверка версии / Version check
+      options:
+        - label: Я проверил на последней версии или бете / I checked the latest release or beta
+          required: true

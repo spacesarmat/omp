@@ -1,0 +1,14 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Сайт / Website
+    url: https://omp-player.online
+    about: Страница OMP, загрузки и справка / OMP page, downloads and help
+  - name: Почта поддержки / Support email
+    url: mailto:ompplayerandroid@gmail.com
+    about: Письмо в поддержку / Email support
+  - name: Telegram-канал / Telegram channel
+    url: https://t.me/ompplyaer
+    about: Новости и выпуски. Ссылка из репозитория / News and releases. Link from the repository
+  - name: Telegram-группа / Telegram group
+    url: https://t.me/ompgplayerroup
+    about: Чат проекта. Ссылка из репозитория / Project chat. Link from the repository

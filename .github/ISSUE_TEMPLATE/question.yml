@@ -1,0 +1,38 @@
+name: Вопрос / Question
+description: Короткий вопрос по OMP / A short question about OMP
+title: "Question: "
+labels: ["question"]
+body:
+  - type: dropdown
+    id: device
+    attributes:
+      label: Устройство / Device
+      description: Где вы смотрите / Where you watch
+      options:
+        - LG webOS TV
+        - Android TV
+        - Android телефон или планшет / Android phone or tablet
+        - iOS
+        - Windows/ПК / Windows/PC
+        - Другое / Other
+    validations:
+      required: true
+  - type: input
+    id: omp_version
+    attributes:
+      label: Версия OMP / OMP version
+      description: |
+        Телефон: Настройки, раздел «Приложение», строка «Версия».
+        Телевизор: Настройки, строка «OMP - Open Movie Player» с номером версии.
+        Phone: Settings, App, Version.
+        TV: Settings, the "OMP - Open Movie Player" line with the version number.
+      placeholder: 0.30.2
+    validations:
+      required: true
+  - type: textarea
+    id: question
+    attributes:
+      label: Вопрос / Question
+      description: Сам вопрос, коротко / The question, briefly
+    validations:
+      required: true
