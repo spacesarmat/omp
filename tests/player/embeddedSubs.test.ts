@@ -166,6 +166,16 @@ describe('embedded text from a tiny MKV', () => {
     expect(packets.length).toBe(1);
     expect(utf8(packets[0].data)).toBe('Hello');
   });
+
+  it('rejects a compressed block above the expansion limit', async () => {
+    const { deflateSync } = await import('node:zlib');
+    const packed = new Uint8Array(deflateSync(new Uint8Array(17 * 1024 * 1024)));
+    const block = concat([new Uint8Array([0x81, 0x00, 0x00, 0x00]), packed]);
+    const cluster = el(0x1f43b675, concat([el(0xe7, new Uint8Array([0])), el(0xa3, block)]));
+    const packets = parseCluster(cluster, 1000000);
+    expect(packets.length).toBe(1);
+    expect(packets[0].data.length).toBe(0);
+  });
 });
 
 describe('fitted picture', () => {
@@ -359,7 +369,15 @@ function idOf(id: number): Uint8Array {
 }
 
 function sizeOf(n: number): Uint8Array {
-  return new Uint8Array([0x80 | n]);
+  let width = 1;
+  while (width < 8 && n >= Math.pow(2, 7 * width)) width++;
+  const out = new Uint8Array(width);
+  out[0] = 1 << (8 - width);
+  for (let i = width - 1; i >= 0; i--) {
+    out[i] |= n & 0xff;
+    n = Math.floor(n / 256);
+  }
+  return out;
 }
 
 function u24(n: number): Uint8Array {

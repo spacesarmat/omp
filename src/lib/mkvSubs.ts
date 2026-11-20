@@ -211,9 +211,17 @@ function pushGroup(group: Uint8Array, clusterTc: number, scale: number, out: Mkv
   if (block) pushBlock(block, clusterTc, scale, dur, out);
 }
 
+const MAX_SUBTITLE_BYTES = 16 * 1024 * 1024;
+
 function subtitleData(src: Uint8Array): Uint8Array {
   if (src.length > 2 && (src[0] & 15) === 8 && ((src[0] << 8) | src[1]) % 31 === 0) {
-    try { return unzlibSync(src); } catch (e) { /* not a zlib block */ }
+    try {
+      const unpacked = unzlibSync(src, { out: new Uint8Array(MAX_SUBTITLE_BYTES + 1) });
+      if (unpacked.length > MAX_SUBTITLE_BYTES) return EMPTY;
+      const exact = new Uint8Array(unpacked.length);
+      exact.set(unpacked);
+      return exact;
+    } catch (e) { /* not a zlib block */ }
   }
   const out = new Uint8Array(src.length);
   out.set(src);
