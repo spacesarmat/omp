@@ -30,6 +30,7 @@ export class LiveSubs {
   private seen: { [pos: number]: boolean } = {};
   /** Next file offset when a cluster is larger than one read. */
   private rest: { [pos: number]: number } = {};
+  private clusterTc: { [pos: number]: number } = {};
   private closed = false;
   private busy = false;
   private fromGst = false;
@@ -98,7 +99,7 @@ export class LiveSubs {
     const buf = end >= pos ? await this.src.read(pos, end) : null;
     this.busy = false;
     if (this.closed || !buf) return;
-    const step = takeElements(buf, this.head.scale);
+    const step = takeElements(buf, this.head.scale, this.clusterTc[cue.cluster] || 0);
     // A block bigger than this chunk still has a header here: skip its body without buffering it.
     let advance = step.bytes;
     if (advance <= 0) {
@@ -106,6 +107,7 @@ export class LiveSubs {
       if (!el || el.unknown || el.size < 0) {
         this.seen[cue.cluster] = true;
         delete this.rest[cue.cluster];
+        delete this.clusterTc[cue.cluster];
         this.publish(time);
         return;
       }
@@ -121,8 +123,10 @@ export class LiveSubs {
     if (nextPos > hard) {
       this.seen[cue.cluster] = true;
       delete this.rest[cue.cluster];
+      delete this.clusterTc[cue.cluster];
     } else {
       this.rest[cue.cluster] = nextPos;
+      this.clusterTc[cue.cluster] = step.clusterTc;
     }
     this.trim(time);
     this.publish(time);

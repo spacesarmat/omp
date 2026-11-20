@@ -4,6 +4,10 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## Unreleased
+
+- [tv] Embedded subtitles are read directly from MKV when TorrServer has no ffprobe. Tracks appear in the TV menu and in the phone remote. Large MKV clusters no longer leave an endless loading notice without text. Compressed PGS is inflated and keeps the correct timing
+
 ## 0.30.2-beta.3
 
 - [phone] Buttons in the dark theme are no longer white: Sync now, Retry, Watch all, Cancel, and the screen-load retry. Earlier in the calendar is a plain header. Project page sits in the same row as Backup and the error log. Settings shows a short TV name: "LG OLED55C9 · webOS"

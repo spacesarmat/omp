@@ -1,9 +1,12 @@
+import { unzlibSync } from 'fflate';
+
 /** Enough of Matroska to pull one subtitle track. Reads the head, the cue index, and one cluster at a time. */
 
 export interface MkvSubTrack {
   number: number;
   codecId: string;
   codecPrivate: Uint8Array;
+  language?: string;
 }
 
 export interface MkvPacket {
@@ -58,20 +61,20 @@ export function parseCluster(buf: Uint8Array, scale: number): MkvPacket[] {
   return takeElements(buf, scale).packets;
 }
 
-export function takeElements(buf: Uint8Array, scale: number): { packets: MkvPacket[]; bytes: number } {
+export function takeElements(buf: Uint8Array, scale: number, inheritedTc = 0): { packets: MkvPacket[]; bytes: number; clusterTc: number } {
   const out: MkvPacket[] = [];
   let i = 0;
-  let clusterTc = 0;
+  let clusterTc = inheritedTc;
   let consumed = 0;
   while (i + 2 <= buf.length) {
     const el = peekElement(buf, i);
     if (!el) break;
     if (el.unknown) break;
     const end = i + el.header + el.size;
-    if (end > buf.length) break;
+    if (end > buf.length && el.id !== 0x1f43b675) break;
     if (el.id === 0x1f43b675) {
       clusterTc = 0;
-      i += el.header;
+      i = el.data;
       consumed = i;
       continue;
     }
@@ -81,7 +84,7 @@ export function takeElements(buf: Uint8Array, scale: number): { packets: MkvPack
     i = end;
     consumed = i;
   }
-  return { packets: out, bytes: consumed };
+  return { packets: out, bytes: consumed, clusterTc: clusterTc };
 }
 
 export interface EbmlPeek {
@@ -136,11 +139,13 @@ function trackEntry(buf: Uint8Array, start: number, end: number): MkvSubTrack | 
   let number = 0;
   let type = 0;
   let codecId = '';
+  let language = '';
   let priv = EMPTY;
   walk(buf, start, end, (id, data, stop) => {
     if (id === 0xd7) number = uint(buf, data, stop);
     else if (id === 0x83) type = uint(buf, data, stop);
     else if (id === 0x86) codecId = latin1(buf, data, stop);
+    else if (id === 0x22b59c || id === 0x22b59d) language = latin1(buf, data, stop);
     else if (id === 0x63a2) {
       const slice = buf.subarray(data, stop);
       const copy = new Uint8Array(slice.length);
@@ -150,7 +155,7 @@ function trackEntry(buf: Uint8Array, start: number, end: number): MkvSubTrack | 
     return false;
   });
   if (type !== 0x11 || !number) return null;
-  return { number: number, codecId: codecId, codecPrivate: priv };
+  return { number: number, codecId: codecId, codecPrivate: priv, language: language || undefined };
 }
 
 function parseCues(buf: Uint8Array, scale: number, segmentStart: number, tailOffset: number): MkvCue[] {
@@ -192,7 +197,7 @@ function pushBlock(block: Uint8Array, clusterTc: number, scale: number, duration
   if (((flags >> 1) & 3) !== 0) return;
   const start = mkvSeconds(clusterTc + tc, scale);
   const dur = duration ? mkvSeconds(duration, scale) : 0;
-  out.push({ track: tr.v, start: start, duration: dur, data: copyBytes(block.subarray(tcAt + 3)) });
+  out.push({ track: tr.v, start: start, duration: dur, data: subtitleData(block.subarray(tcAt + 3)) });
 }
 
 function pushGroup(group: Uint8Array, clusterTc: number, scale: number, out: MkvPacket[]): void {
@@ -206,7 +211,18 @@ function pushGroup(group: Uint8Array, clusterTc: number, scale: number, out: Mkv
   if (block) pushBlock(block, clusterTc, scale, dur, out);
 }
 
-function copyBytes(src: Uint8Array): Uint8Array {
+const MAX_SUBTITLE_BYTES = 16 * 1024 * 1024;
+
+function subtitleData(src: Uint8Array): Uint8Array {
+  if (src.length > 2 && (src[0] & 15) === 8 && ((src[0] << 8) | src[1]) % 31 === 0) {
+    try {
+      const unpacked = unzlibSync(src, { out: new Uint8Array(MAX_SUBTITLE_BYTES + 1) });
+      if (unpacked.length > MAX_SUBTITLE_BYTES) return EMPTY;
+      const exact = new Uint8Array(unpacked.length);
+      exact.set(unpacked);
+      return exact;
+    } catch (e) { /* not a zlib block */ }
+  }
   const out = new Uint8Array(src.length);
   out.set(src);
   return out;

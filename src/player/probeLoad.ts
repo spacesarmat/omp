@@ -1,4 +1,5 @@
 import type { FfprobeResult, FfprobeStream } from '../api/types';
+import { parseMkvHead } from '../lib/mkvSubs';
 import { isMkvName, MKV_TAIL_BYTES } from '../viewer/prebuffer';
 
 const EDGE = 4 * 1024 * 1024;
@@ -8,6 +9,7 @@ export interface ProbeHost {
   preload(hash: string, fileIndex: number, name: string): Promise<void>;
   preloadTail(hash: string, fileIndex: number, name: string, start: number, end: number, signal?: AbortSignal, timeoutMs?: number): Promise<void>;
   probe(hash: string, fileIndex: number): Promise<FfprobeResult | null>;
+  fetchRange?(hash: string, fileIndex: number, name: string, start: number, end: number): Promise<Uint8Array | null>;
 }
 
 /** Bytes of the MKV tail to pull before ffprobe. Cues sit at the end; the track list sits at the start. */
@@ -27,6 +29,7 @@ export async function warmForProbe(c: ProbeHost, hash: string, fileIndex: number
 /**
  * One ffprobe, then a single retry after the start and the MKV tail are in the server cache.
  * A cold multi-gigabyte file often answers before those bytes exist; the second call sees them.
+ * Without server-side ffprobe, the MKV head still supplies its subtitle tracks.
  */
 /** True when ffprobe listed at least one subtitle stream. Video-only is not enough: the track list may still be cold. */
 export function hasSubtitleStreams(r: FfprobeResult | null): boolean {
@@ -71,10 +74,44 @@ export function adoptProbe(current: FfprobeResult | null, incoming: FfprobeResul
   return chapters ? { ...base, streams: streams, chapters: chapters } : { ...base, streams: streams };
 }
 
+function mkvCodec(id: string): string {
+  const c = id.toUpperCase();
+  if (c === 'S_TEXT/UTF8' || c === 'S_TEXT/ASCII') return 'subrip';
+  if (c === 'S_TEXT/ASS') return 'ass';
+  if (c === 'S_TEXT/SSA') return 'ssa';
+  if (c === 'S_TEXT/WEBVTT') return 'webvtt';
+  if (c === 'S_HDMV/PGS') return 'hdmv_pgs_subtitle';
+  if (c === 'S_VOBSUB') return 'dvd_subtitle';
+  if (c === 'S_DVBSUB') return 'dvb_subtitle';
+  return '';
+}
+
+/** Track discovery without TorrServer's optional ffprobe binary. The same cached MKV edges feed LiveSubs later. */
+async function probeMkvSubs(c: ProbeHost, hash: string, fileIndex: number, name: string, size: number): Promise<FfprobeResult | null> {
+  if (!c.fetchRange || !isMkvName(name) || !(size > 32)) return null;
+  const tailStart = Math.max(0, size - Math.min(EDGE, size));
+  const head = await c.fetchRange(hash, fileIndex, name, 0, Math.min(EDGE, size) - 1);
+  const tail = await c.fetchRange(hash, fileIndex, name, tailStart, size - 1);
+  if (!head || !tail) return null;
+  const tracks = parseMkvHead(head, tail, tailStart).tracks;
+  if (!tracks.length) return null;
+  return {
+    streams: tracks.map((track, ordinal) => ({
+      // Synthetic ids cannot overwrite audio/video already found by the server.
+      index: -1 - ordinal,
+      codec_type: 'subtitle',
+      codec_name: mkvCodec(track.codecId),
+      ...(track.language ? { tags: { language: track.language } } : {}),
+    })),
+  };
+}
+
 export async function probeReliable(c: ProbeHost, hash: string, fileIndex: number, name: string, size: number): Promise<FfprobeResult | null> {
   await warmForProbe(c, hash, fileIndex, name, size);
   const first = await c.probe(hash, fileIndex);
   if (hasSubtitleStreams(first)) return first;
   await warmForProbe(c, hash, fileIndex, name, size);
-  return adoptProbe(first, await c.probe(hash, fileIndex));
+  const probed = adoptProbe(first, await c.probe(hash, fileIndex));
+  if (hasSubtitleStreams(probed)) return probed;
+  return adoptProbe(probed, await probeMkvSubs(c, hash, fileIndex, name, size));
 }
