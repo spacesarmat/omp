@@ -88,6 +88,12 @@ describe('skipSegments', () => {
     const onlyIntro = probe([[0, 90, 'Intro']]);
     expect(skipSegments(onlyIntro, { i: false, c: false, mi: [5, 6], mc: 60 }, 600)).toEqual({ intro: { start: 0, end: 90 }, credits: { start: 540 } });
   });
+  it('a guessed opening does not override a saved intro mark', () => {
+    const guessed = probe([[0, 30, 'Chapter 01'], [30, 120, 'Chapter 02'], [120, 1500, 'Episode']]);
+    const prefs = { i: true, c: false, mi: [150, 240] as [number, number] };
+    expect(chapterList(guessed).some((c) => c.kind === 'intro' && c.start === 30)).toBe(true);
+    expect(skipSegments(guessed, prefs, 1600).intro).toEqual({ start: 150, end: 240 });
+  });
   it('nothing known: empty', () => {
     expect(skipSegments(null, null, 600)).toEqual({});
     expect(skipSegments(null, { i: true, c: true }, 600)).toEqual({});

@@ -117,7 +117,8 @@ export function skipSegments(
 ): { intro?: { start: number; end: number }; credits?: { start: number } } {
   const list = chapterList(probe);
   const out: { intro?: { start: number; end: number }; credits?: { start: number } } = {};
-  const intro = list.filter((c) => c.kind === 'intro')[0];
+  // a named opening wins; a guessed one (a short chapter near the start) must not hide a mark the viewer saved
+  const intro = list.filter((c) => c.kind === 'intro' && titleMarkKind(c.title) === 'intro')[0];
   const credits = list.filter((c) => c.kind === 'credits')[0];
   if (intro) out.intro = { start: intro.start, end: intro.end };
   else if (prefs && prefs.mi) out.intro = { start: prefs.mi[0], end: prefs.mi[1] };
