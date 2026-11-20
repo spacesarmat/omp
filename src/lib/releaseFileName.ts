@@ -1,7 +1,7 @@
 // A release file name as a person reads it: the episode number, and the shared release tail
 // («RUS JP ENG Judas BDrip HEVC 10bit»). Underscores and «- 006» count, the same as SxxEyy.
 import { baseName, stripExt } from './episodes';
-import { fileEpisodeCut } from './categoryCheck';
+import { fileEpisodeCut, isFractionalEpisode } from './categoryCheck';
 import { parseEpisode } from './episodes';
 
 export interface ReleaseFileName {
@@ -17,8 +17,9 @@ function normalized(path: string): string {
 
 /** Episode number and the release tail of one file. A name with no episode has a null episode and an empty tail. */
 export function parseReleaseFile(path: string): ReleaseFileName {
+  if (isFractionalEpisode(path)) return { season: null, episode: null, tail: '' };
   const text = normalized(path);
-  const cut = fileEpisodeCut(text, parseEpisode(text));
+  const cut = fileEpisodeCut(text, parseEpisode(path));
   if (!cut || !cut.episodes.length) return { season: null, episode: null, tail: '' };
   const tail = text.slice(cut.end).replace(/[._]+/g, ' ').replace(/^[\s\-[\]]+/, '').replace(/\s+/g, ' ').trim();
   return { season: cut.season, episode: cut.episodes[0], tail };

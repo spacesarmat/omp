@@ -31,6 +31,15 @@ describe('parseReleaseFile', () => {
     });
   });
 
+  it('keeps E03 in a season folder ahead of a bracketed number', () => {
+    expect(parseReleaseFile('Season 2/Show E03 [01].mkv')).toMatchObject({ season: 2, episode: 3 });
+    expect(parseReleaseFile('Season 2/Show E03 1080p.mkv').tail).toBe('1080p');
+  });
+
+  it('does not treat a fractional episode as a release tail', () => {
+    expect(parseReleaseFile('Show.S01E12.5.mkv')).toEqual({ season: null, episode: null, tail: '' });
+  });
+
   it('has no episode for a film name', () => {
     expect(parseReleaseFile('Dune.2021.2160p.mkv')).toEqual({ season: null, episode: null, tail: '' });
   });

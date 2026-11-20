@@ -122,6 +122,11 @@ export function fileEpisodeCut(
   if (sx && parsed && parsed.episode !== null) return { season: parsed.season, episodes: [parsed.episode], end: sx.index + sx[0].length };
   const nx = /(?:^|[^\d])(\d{1,2})x(\d{2,3})(?![0-9])/i.exec(name);
   if (nx && parsed && parsed.episode !== null) return { season: parsed.season, episodes: [parsed.episode], end: nx.index + nx[0].length };
+  // «E03», «Episode 3», a leading number in a season folder: ahead of «[01]» and «- 05», same as fileEpisodes used to
+  const named = /(?:^|[ ._-])(?:ep?|episode|серия)[ ._-]?(\d{1,3})(?![0-9])/i.exec(name);
+  if (named && parsed && parsed.episode !== null) return { season: parsed.season, episodes: [parsed.episode], end: named.index + named[0].length };
+  const leading = /^(\d{1,3})(?![0-9])/.exec(name);
+  if (leading && parsed && parsed.episode !== null && parsed.season !== null) return { season: parsed.season, episodes: [parsed.episode], end: leading.index + leading[0].length };
   m = WORD_ONE.exec(name);
   if (m) return { season: null, episodes: [+m[1]], end: m.index + m[0].length };
   m = BRACKET_NUM.exec(name) || DASH_NUM.exec(name);
