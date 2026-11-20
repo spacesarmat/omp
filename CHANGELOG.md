@@ -2,6 +2,10 @@
 
 <!-- Markers [phone] [tv] [lg] [atv] [tech]: see docs/changelog-markers.md. [tech] bullets are technical or admin-only and never reach users. -->
 
+## Не выпущено
+
+- [phone] Синхронизация надежнее сохраняет изменения библиотеки после перезапуска и не откатывает позицию «Продолжить», если старый ответ сети пришел позже нового
+
 ## 0.30.3-beta.1
 
 - Встроенный TorrServer обновлён до MatriX.151

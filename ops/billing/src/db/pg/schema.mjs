@@ -852,6 +852,13 @@ CREATE TABLE device_sync_seen (
 );
 `,
   },
+  {
+    version: '021_playback_progress_writer_seq',
+    sql: `
+-- Monotonic writer sequence protects same-device progress from delayed HTTP responses.
+ALTER TABLE playback_progress ADD COLUMN writer_seq bigint NOT NULL DEFAULT 0;
+`,
+  },
 ];
 
 /** Apply pending migrations. Safe to run from several processes: they wait on the lock. */

@@ -37,11 +37,15 @@ export async function loadProgress(query, accountId, titleKey, episodeKey) {
 
 export async function saveProgress(query, accountId, row, now) {
   await query(
-    'INSERT INTO playback_progress (account_id, title_key, episode_key, position_sec, duration_sec, title, label, device_id, updated_at)' +
-      ' VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)' +
+    'INSERT INTO playback_progress (account_id, title_key, episode_key, position_sec, duration_sec, title, label, device_id, updated_at, writer_seq)' +
+      ' VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)' +
       ' ON CONFLICT (account_id, title_key, episode_key) DO UPDATE SET' +
       ' position_sec = EXCLUDED.position_sec, duration_sec = EXCLUDED.duration_sec,' +
-      ' title = EXCLUDED.title, label = EXCLUDED.label, device_id = EXCLUDED.device_id, updated_at = EXCLUDED.updated_at',
+      ' title = EXCLUDED.title, label = EXCLUDED.label, device_id = EXCLUDED.device_id, updated_at = EXCLUDED.updated_at,' +
+      ' writer_seq = EXCLUDED.writer_seq' +
+      ' WHERE playback_progress.device_id <> EXCLUDED.device_id' +
+      ' OR playback_progress.writer_seq = 0 OR EXCLUDED.writer_seq = 0' +
+      ' OR playback_progress.writer_seq < EXCLUDED.writer_seq',
     [
       accountId,
       row.titleKey,
@@ -52,6 +56,7 @@ export async function saveProgress(query, accountId, row, now) {
       String(row.label || '').slice(0, 80),
       String(row.deviceId || '').slice(0, 80),
       now,
+      num(row.writerSeq),
     ],
   );
   await query(
