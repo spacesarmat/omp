@@ -187,4 +187,44 @@ describe('sync v2 mutations', () => {
     expect(pulled.data.records).toHaveLength(1);
     expect(pulled.data.nextRevision).toBe(1);
   });
+
+  it('logs the winning snapshot when an older mutation loses LWW', async () => {
+    const file = await testStore();
+    const db = createSyncV2Store(file);
+    await db.mutate('acc-lww', 'device-a', [{ ...row, body: { time: 200 }, updatedAt: 200, mutationId: 'newer' }], 1000);
+    const olderAck = await db.mutate('acc-lww', 'device-b', [{ ...row, body: { time: 100 }, updatedAt: 100, mutationId: 'older' }], 1100);
+    expect(olderAck).toEqual([{ recordId: row.id, mutationId: 'older', revision: 2 }]);
+    const changes = await db.pull('acc-lww', 0);
+    expect(changes).toHaveLength(2);
+    expect(changes[1]).toMatchObject({
+      id: row.id,
+      revision: 2,
+      mutationId: 'older',
+      body: { time: 200 },
+      updatedAt: 200,
+      deviceId: 'device-a',
+    });
+  });
+
+  it('acks an expired legacy retry and continues with newer records', async () => {
+    const { file, app, headers } = await httpApp();
+    const legacy = { ...row, mutationId: undefined };
+    const saved = await call(app, '/v1/sync', { headers, json: { since: 0, records: [legacy] } });
+    expect(saved.status).toBe(200);
+    await file.query("UPDATE device_sync_mutations SET expires_at = 0 WHERE account_id = 'acc-v2-http'");
+    const newer = { ...row, id: 'progress:abc:2', key: 'abc:2', body: { time: 80 }, updatedAt: 200, mutationId: undefined };
+    const retried = await call(app, '/v1/sync', {
+      headers,
+      json: { since: 1, records: [{ ...legacy, body: { time: 999 } }, newer] },
+    });
+    expect(retried.status).toBe(200);
+    const snapshot = await file.query("SELECT record_id, body FROM device_sync WHERE account_id = 'acc-v2-http' ORDER BY record_id");
+    expect(snapshot.rows).toEqual([
+      { record_id: row.id, body: { time: 40 } },
+      { record_id: newer.id, body: { time: 80 } },
+    ]);
+    const pulled = await call(app, '/v2/sync', { headers, json: { since: 0, records: [] } });
+    expect(pulled.data.records).toHaveLength(2);
+    expect(pulled.data.records[1]).toMatchObject({ id: newer.id, revision: 2, body: { time: 80 } });
+  });
 });
