@@ -1,28 +1,26 @@
 {
-  "version": "0.30.2-beta.3",
-  "ipkUrl": "https://github.com/spacesarmat/omp/releases/download/v0.30.2-beta.3/OMP-0.30.2-beta.3.apk",
-  "ipkHash": "d398b2f5154c2c1f437073f9848cf76179ef9580fbc82109c2e778617331fba0",
-  "ipkSize": 98386084,
+  "version": "0.30.2",
+  "ipkUrl": "https://github.com/spacesarmat/omp/releases/download/v0.30.2/OMP-0.30.2.apk",
+  "ipkHash": "79243c54f301d1e0f2236ce3c505d329653646c4fed1c4da5209d13a43e07a75",
+  "ipkSize": 98381524,
   "apks": {
     "arm64": {
-      "url": "https://github.com/spacesarmat/omp/releases/download/v0.30.2-beta.3/OMP-0.30.2-beta.3-arm64.apk",
-      "sha256": "0d50e60cb635241562b1a4200943613e951c03b7e2f7cb2fa6c6c4b0df8d0b33",
-      "size": 63837822
+      "url": "https://github.com/spacesarmat/omp/releases/download/v0.30.2/OMP-0.30.2-arm64.apk",
+      "sha256": "60891269a4907a69210b08a1203de9b726145ecb9dea2399527eaa89fa299d3d",
+      "size": 63833262
     },
     "armv7": {
-      "url": "https://github.com/spacesarmat/omp/releases/download/v0.30.2-beta.3/OMP-0.30.2-beta.3-armv7.apk",
-      "sha256": "8393e28a921963772c02379a3a79c749c9bc716a59fc033500de58e96779c80d",
-      "size": 59656846
+      "url": "https://github.com/spacesarmat/omp/releases/download/v0.30.2/OMP-0.30.2-armv7.apk",
+      "sha256": "1f2e7321a6758f16793ea547e98d589f7a3b35cf7b900ec729fc1e7ff5e588e7",
+      "size": 59652286
     }
   },
   "notes": [
-    "Если первый разбор файла видит звук, но не субтитры, плеер спрашивает дорожки ещё раз, когда воспроизведение уже идёт, и сразу отдаёт список на телефон"
+    "Встроенные субтитры читаются прямо из MKV, когда на TorrServer нет ffprobe. Дорожки появляются в меню телевизора и в пульте на телефоне. Большие фрагменты MKV больше не оставляют бесконечную загрузку без текста. Сжатые PGS распаковываются и сохраняют правильное время"
   ],
   "notesTv": [
-    "Если первый разбор файла видит звук, но не субтитры, плеер спрашивает дорожки ещё раз, когда воспроизведение уже идёт, и сразу отдаёт список на телефон"
+    "Встроенные субтитры читаются прямо из MKV, когда на TorrServer нет ffprobe. Дорожки появляются в меню телевизора и в пульте на телефоне. Большие фрагменты MKV больше не оставляют бесконечную загрузку без текста. Сжатые PGS распаковываются и сохраняют правильное время"
   ],
-  "notesPhone": [
-    "Кнопки в тёмной теме больше не белые: «Синхронизировать сейчас», «Повторить», «Смотреть все», «Отмена» и повтор загрузки экрана. «Ранее» в календаре - обычный заголовок. «Страница проекта» стоит в одном ряду с резервной копией и журналом. В настройках имя телевизора короткое: «LG OLED55C9 · webOS»"
-  ],
-  "releaseUrl": "https://github.com/spacesarmat/omp/releases/tag/v0.30.2-beta.3"
+  "notesPhone": [],
+  "releaseUrl": "https://github.com/spacesarmat/omp/releases/tag/v0.30.2"
 }
