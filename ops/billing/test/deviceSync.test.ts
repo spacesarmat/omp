@@ -120,6 +120,7 @@ describe('POST /v1/sync', () => {
     const devices = listed.data.devices as { id: string; self: boolean }[];
     expect(devices.some((d) => d.self && d.id === DEV_A)).toBe(true);
 
+    const tokenB = await tokenFor(app, file, 'acc-sync', DEV_B);
     const pulled = await call(app, 'POST', '/v1/sync', {
       headers: { authorization: 'Bearer ' + tokenB, 'x-device-id': DEV_B },
       json: { since: 0, records: [] },
@@ -140,7 +141,6 @@ describe('POST /v1/sync', () => {
     const kept = (older.data.records as { body: { time: number } }[]).filter((r) => r.body && r.body.time)[0];
     expect(kept.body.time).toBe(40);
 
-    const tokenB = await tokenFor(app, file, 'acc-sync', DEV_B);
     const other = await call(app, 'POST', '/v1/sync', {
       headers: { authorization: 'Bearer ' + tokenB, 'x-device-id': DEV_B },
       json: { since: 0, records: [] },

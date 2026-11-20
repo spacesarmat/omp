@@ -1,7 +1,7 @@
 // Push and pull remembered rows. A refused sync (no subscription) leaves the local copy as it is.
 import { BILLING_ORIGIN } from './config';
 import { billingSession, deviceId, onBillingChange } from './session';
-import { withDeviceToken } from './tokens';
+import { withDeviceToken, legacySyncLink } from './tokens';
 import { ackSent, markSyncError, markSynced, noteSyncAccount, onDeviceWrite, putDeviceRecords, setSyncCursor, syncCursor, syncEnabled, unsentRecords } from '../store/deviceDb';
 import { applyPulled } from '../store/applyPulled';
 import type { SyncRecord } from '../store/syncMerge';
@@ -73,14 +73,20 @@ function accountNow(): string {
   const session = billingSession();
   const access = session && (session.access || session.token);
   if (!access) return '';
+  const link = legacySyncLink();
+  if (link && session && session.id === link.to) return link.from;
   return session && session.id ? session.id : access.slice(0, 16);
+}
+
+function sameAccount(owner: string): boolean {
+  return accountNow() === owner;
 }
 
 function pump(owner: string, since: number, pending: SyncRecord[]): Promise<string> {
   const chunk = pending.slice(0, BATCH);
   const rest = pending.slice(BATCH);
   return post(owner, since, chunk).then((ans) => {
-    if (accountNow() !== owner || ans.data.switched) return 'switched';
+    if (!sameAccount(owner) || ans.data.switched) return 'switched';
     if (ans.status === 0) {
       markSyncError('offline');
       return 'error';
