@@ -115,6 +115,22 @@ describe('POST /v1/sync', () => {
     const rows = saved.data.records as { id: string; body: { time: number } }[];
     expect(rows.some((r) => r.id === 'progress:abc:1' && r.body.time === 40)).toBe(true);
 
+    const listed = await call(app, 'GET', '/v1/sync/devices', { headers: headersA });
+    expect(listed.status).toBe(200);
+    const devices = listed.data.devices as { id: string; self: boolean }[];
+    expect(devices.some((d) => d.self && d.id === DEV_A)).toBe(true);
+
+    const tokenB = await tokenFor(app, file, 'acc-sync', DEV_B);
+    const pulled = await call(app, 'POST', '/v1/sync', {
+      headers: { authorization: 'Bearer ' + tokenB, 'x-device-id': DEV_B },
+      json: { since: 0, records: [] },
+    });
+    expect(pulled.status).toBe(200);
+    const both = await call(app, 'GET', '/v1/sync/devices', { headers: headersA });
+    const ids = (both.data.devices as { id: string }[]).map((d) => d.id);
+    expect(ids).toContain(DEV_A);
+    expect(ids).toContain(DEV_B);
+
     const older = await call(app, 'POST', '/v1/sync', {
       headers: headersA,
       json: {
@@ -125,7 +141,6 @@ describe('POST /v1/sync', () => {
     const kept = (older.data.records as { body: { time: number } }[]).filter((r) => r.body && r.body.time)[0];
     expect(kept.body.time).toBe(40);
 
-    const tokenB = await tokenFor(app, file, 'acc-sync', DEV_B);
     const other = await call(app, 'POST', '/v1/sync', {
       headers: { authorization: 'Bearer ' + tokenB, 'x-device-id': DEV_B },
       json: { since: 0, records: [] },

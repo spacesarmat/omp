@@ -3,7 +3,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { BILLING_ORIGIN } from '../../src/billing/config';
 import { ompSubscribed, saveBillingAccess } from '../../src/billing/entitlement';
-import { billingNotice, billingSession, deviceId, saveBillingSession, setBillingNotice } from '../../src/billing/session';
+import { billingNotice, billingSession, deviceId, legacySyncLink, saveBillingSession, setBillingNotice } from '../../src/billing/session';
 import {
   allowBillingRefresh,
   REFRESH_SECRET,
@@ -382,6 +382,8 @@ describe('device tokens on the phone', () => {
     const s = billingSession()!;
     expect(s.token).toBe('');
     expect(s.access).toBe('a1.n1');
+    expect(legacySyncLink()).toEqual({ from: 'legacy-1'.slice(0, 16), to: s.id });
+    expect(JSON.parse(localStorage.getItem('tsp.billingLegacySync') || 'null')).toEqual(legacySyncLink());
     expect(site.secrets[REFRESH_SECRET]).toBe('r1.n1');
     expect(ompSubscribed()).toBe(true);
     await fetchBillingAccount(site.ctx);

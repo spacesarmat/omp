@@ -204,6 +204,7 @@ export const NOT_BACKED_UP: string[] = [
   'tsp.billingAccess', // OMP subscription state from /v1/me (the monitoring cap), per session
   'tsp.billingPendingCode', // paid Jackett: code from omp:// deep link, per device
   'tsp.billingOrigin', // paid Jackett: last public/LAN origin of apps before the LAN fallback was removed; never copied
+  'tsp.billingLegacySync', // same login after a legacy token upgrade: this binding only, never copied
 ];
 
 function readRaw(key: string): unknown {

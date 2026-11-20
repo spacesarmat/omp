@@ -92,6 +92,16 @@ export function createSourceHttp(
   return {
     get: (url, opts) => send(withOptions({ url, method: 'GET' }, opts, flare), opts),
     post: (url, form, opts) => send(withOptions({ url, method: 'POST', form }, opts, flare), opts),
+    postJson: (url, body, opts) => {
+      const headers: { [name: string]: string } = { 'content-type': 'application/json' };
+      const extra = opts && opts.headers;
+      if (extra) {
+        const keys = Object.keys(extra);
+        for (let i = 0; i < keys.length; i++) headers[keys[i]] = extra[keys[i]];
+      }
+      const next = opts ? { headers: headers, timeoutMs: opts.timeoutMs, formCharset: opts.formCharset, responseCharset: opts.responseCharset, cloudflare: opts.cloudflare, siteName: opts.siteName } : { headers: headers };
+      return send(withOptions({ url, method: 'POST', body }, next, flare), next);
+    },
     clearCookies(url) {
       if (!clearCookies) return Promise.resolve();
       return clearCookies(url).then(() => undefined);
