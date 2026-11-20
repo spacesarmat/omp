@@ -610,15 +610,15 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from, seasonNe
     setSubNote(t('tvPlayer.subLoading'));
     const token = subReq.current;
     live.init().then(() => {
-      if (liveRef.current !== live || subReq.current !== token) return;
+      if (liveRef.current !== live || subReq.current !== token) return false;
       if (live.failed) {
         setSubNote('');
         toast(t('tvPlayer.subLoadFailed', { error: 'MKV' }), 'error');
-        return;
+        return false;
       }
-      return live.poll(posRef.current.time - subOffset);
-    }).then(() => {
-      if (liveRef.current !== live || subReq.current !== token) return;
+      return live.poll(posRef.current.time - subOffset).then(() => true);
+    }).then((ok) => {
+      if (!ok || liveRef.current !== live || subReq.current !== token || live.failed) return;
       showLive(live);
       if (!live.cues.length && !live.bitmap) setSubNote(t('tvPlayer.subLoading'));
     }, () => {

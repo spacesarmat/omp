@@ -3,7 +3,8 @@ import { subtitleKind } from '../../src/lib/subCodec';
 import { PgsDecoder, rle } from '../../src/lib/pgs';
 import { LiveSubs, cuesFromPlaylist, textCues, type RangeSource } from '../../src/player/liveSubs';
 import { probeReliable, probeTail } from '../../src/player/probeLoad';
-import type { MkvPacket } from '../../src/lib/mkvSubs';
+import { mkvSeconds, parseCluster, type MkvPacket } from '../../src/lib/mkvSubs';
+import { fittedPicture } from '../../src/player/pictureFit';
 
 describe('subtitleKind', () => {
   it('keeps text, PGS and other image codecs apart', () => {
@@ -36,6 +37,34 @@ describe('PGS', () => {
     expect(bmp && Array.from(bmp.rgba.slice(0, 4))).toEqual([255, 255, 255, 255]);
   });
 
+  it('joins a continuation at byte 4 and rejects a huge declared size', () => {
+    const dec = new PgsDecoder();
+    const first = new Uint8Array(12);
+    first[1] = 1;
+    first[3] = 0x80;
+    first[8] = 2;
+    first[10] = 1;
+    first[11] = 0x01;
+    const next = new Uint8Array([0, 1, 0, 0x40, 0x01, 0x00, 0x00]);
+    dec.feed(0, concat([
+      seg(0x14, concat([new Uint8Array([0, 0]), new Uint8Array([1, 235, 128, 128, 255])])),
+      seg(0x16, pcs(32, 16, 1, 0, 0)),
+      seg(0x15, first),
+      seg(0x15, next),
+      seg(0x80, new Uint8Array(0)),
+    ]));
+    const bmp = dec.bitmapAt(0);
+    expect(bmp && bmp.w).toBe(2);
+    expect(bmp && Array.from(bmp.rgba.slice(0, 4))).toEqual([255, 255, 255, 255]);
+    const huge = new PgsDecoder();
+    huge.feed(0, concat([
+      seg(0x16, pcs(8, 8, 1, 0, 0)),
+      seg(0x15, ods(1, 65535, 65535, new Uint8Array([1]))),
+      seg(0x80, new Uint8Array(0)),
+    ]));
+    expect(huge.bitmapAt(0)).toBeNull();
+  });
+
   it('a composition with no objects clears the picture', () => {
     const dec = new PgsDecoder();
     dec.feed(0, concat([
@@ -66,17 +95,32 @@ describe('embedded text from a tiny MKV', () => {
     expect(cues && cues[0].start).toBe(1);
   });
 
-  it('turns ASS packets into cues with the codec header', () => {
-    const header = new TextEncoder().encode('[Events]\nFormat: Start, End, Text\n');
+  it('reads Matroska ASS fields and the block time, not a Dialogue line', () => {
+    const header = new TextEncoder().encode('[Events]\nFormat: ReadOrder, Layer, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n');
     const packets: MkvPacket[] = [{
       track: 1,
-      start: 1,
-      duration: 1,
-      data: new TextEncoder().encode('Dialogue: 0:00:01.00,0:00:02.00,Line'),
+      start: 1.5,
+      duration: 2,
+      data: new TextEncoder().encode('0,0,Default,,0,0,0,,Hello, there'),
     }];
     const cues = textCues(packets, 'S_TEXT/ASS', header);
     expect(cues.length).toBe(1);
-    expect(cues[0].text).toBe('Line');
+    expect(cues[0].text).toBe('Hello, there');
+    expect(cues[0].start).toBe(1.5);
+    expect(cues[0].end).toBe(3.5);
+  });
+
+  it('keeps subtitles from every cluster and converts timecodes to seconds', () => {
+    expect(mkvSeconds(1000, 1000000)).toBe(1);
+    const packets = parseCluster(concat([textCluster(0, 'A'), textCluster(1000, 'B')]), 1000000);
+    expect(packets.map((p) => p.start)).toEqual([0, 1]);
+    expect(utf8(packets[1].data)).toBe('B');
+  });
+});
+
+describe('fitted picture', () => {
+  it('centers a narrower frame inside the player box', () => {
+    expect(fittedPicture(1920, 1080, 1440, 1080)).toEqual({ left: 240, top: 0, width: 1440, height: 1080 });
   });
 });
 
@@ -196,6 +240,17 @@ function sizeOf(n: number): Uint8Array {
 
 function u24(n: number): Uint8Array {
   return new Uint8Array([(n >> 16) & 0xff, (n >> 8) & 0xff, n & 0xff]);
+}
+
+function utf8(u: Uint8Array): string {
+  return new TextDecoder().decode(u);
+}
+
+function textCluster(tc: number, text: string): Uint8Array {
+  const bytes = new TextEncoder().encode(text);
+  const tcBytes = tc < 256 ? new Uint8Array([tc]) : new Uint8Array([(tc >> 8) & 0xff, tc & 0xff]);
+  const block = concat([new Uint8Array([0x81, 0x00, 0x00, 0x00]), bytes]);
+  return el(0x1f43b675, concat([el(0xe7, tcBytes), el(0xa3, block)]));
 }
 
 function tinySrt(text: string): Uint8Array {

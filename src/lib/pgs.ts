@@ -43,6 +43,7 @@ export class PgsDecoder {
   private visible = false;
   private pending: Uint8Array = EMPTY;
   private pendingId = -1;
+  private indexBytes = 0;
 
   reset(): void {
     this.pal = new Uint8Array(256 * 4);
@@ -51,6 +52,7 @@ export class PgsDecoder {
     this.visible = false;
     this.pending = EMPTY;
     this.pendingId = -1;
+    this.indexBytes = 0;
   }
 
   /** `start` is seconds. `data` is one or more PGS segments (type, u16 length, payload). */
@@ -103,23 +105,35 @@ export class PgsDecoder {
     const seq = p[3];
     const first = (seq & 0x80) !== 0;
     const last = (seq & 0x40) !== 0;
-    let raw = p.subarray(7);
+    // First segment: id, version, sequence, 3-byte length, width, height, then pixels (11 bytes).
+    // A continuation has only id, version and sequence (4 bytes) before the pixels.
+    const raw = p.subarray(first ? 11 : 4);
     if (first) {
       if (p.length < 11) return;
+      const w = (p[7] << 8) | p[8];
+      const h = (p[9] << 8) | p[10];
+      if (!(w > 0) || !(h > 0) || w * h > PGS_MAX_PIXELS) {
+        this.pending = EMPTY;
+        this.pendingId = -1;
+        return;
+      }
       this.pendingId = id;
-      this.pending = p.subarray(11);
-      this.objs[id] = { w: (p[7] << 8) | p[8], h: (p[9] << 8) | p[10], indices: EMPTY };
-      raw = this.pending;
-    } else if (this.pendingId === id && this.pending.length) {
+      this.pending = raw;
+      this.objs[id] = { w: w, h: h, indices: EMPTY };
+    } else if (this.pendingId === id) {
       const joined = new Uint8Array(this.pending.length + raw.length);
       joined.set(this.pending, 0);
       joined.set(raw, this.pending.length);
       this.pending = joined;
-      raw = joined;
     }
     if (!last || !this.objs[id]) return;
     const o = this.objs[id];
-    o.indices = rle(raw, o.w, o.h);
+    const indices = rle(this.pending, o.w, o.h);
+    const nextBytes = this.indexBytes - o.indices.length + indices.length;
+    if (indices.length && nextBytes <= PGS_MAX_PIXELS) {
+      this.indexBytes = nextBytes;
+      o.indices = indices;
+    }
     this.pending = EMPTY;
     this.pendingId = -1;
   }
@@ -132,6 +146,7 @@ export class PgsDecoder {
     if (state === 0x80) {
       this.objs = {};
       this.pending = EMPTY;
+      this.indexBytes = 0;
     }
     const n = p[10];
     const list: CompObj[] = [];
@@ -252,8 +267,12 @@ function clamp(n: number): number {
   return n;
 }
 
-/** PGS RLE to palette indices, row by row. */
+/** One decoded object. A 4K frame is the ceiling; a declared 65535 square is rejected before allocation. */
+export const PGS_MAX_PIXELS = 3840 * 2160;
+
+/** PGS RLE to palette indices, row by row. Empty when the declared size is not a real subtitle. */
 export function rle(src: Uint8Array, w: number, h: number): Uint8Array {
+  if (!(w > 0) || !(h > 0) || w * h > PGS_MAX_PIXELS) return new Uint8Array(0);
   const out = new Uint8Array(w * h);
   let i = 0;
   let x = 0;

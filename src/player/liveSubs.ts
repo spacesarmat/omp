@@ -1,10 +1,10 @@
 import { decodeText, parseAss, parseSubtitles, type Cue } from '../lib/subtitles';
-import { parseCluster, parseMkvHead, type MkvCue, type MkvHead, type MkvPacket, type MkvSubTrack } from '../lib/mkvSubs';
+import { parseMkvHead, peekElement, takeElements, type MkvCue, type MkvHead, type MkvPacket, type MkvSubTrack } from '../lib/mkvSubs';
 import { PgsDecoder, type PgsBitmap } from '../lib/pgs';
 
 const HEAD = 4 * 1024 * 1024;
 const TAIL = 4 * 1024 * 1024;
-const CLUSTER_CAP = 8 * 1024 * 1024;
+const CHUNK = 1024 * 1024;
 const PACKET_CAP = 16 * 1024 * 1024;
 
 export interface RangeSource {
@@ -25,8 +25,11 @@ export class LiveSubs {
   private head: MkvHead | null = null;
   private track: MkvSubTrack | null = null;
   private packets: MkvPacket[] = [];
+  private packetFrom: number[] = [];
   private packetBytes = 0;
   private seen: { [pos: number]: boolean } = {};
+  /** Next file offset when a cluster is larger than one read. */
+  private rest: { [pos: number]: number } = {};
   private closed = false;
   private busy = false;
   private fromGst = false;
@@ -89,18 +92,37 @@ export class LiveSubs {
     }
     this.busy = true;
     const next = nextCluster(this.head.cues, cue.cluster);
-    let end = cue.cluster + CLUSTER_CAP - 1;
-    if (next > cue.cluster && next - 1 < end) end = next - 1;
-    if (end > this.src.size - 1) end = this.src.size - 1;
-    const buf = end >= cue.cluster ? await this.src.read(cue.cluster, end) : null;
+    const hard = next > cue.cluster ? next - 1 : this.src.size - 1;
+    let pos = this.rest[cue.cluster] !== undefined ? this.rest[cue.cluster] : cue.cluster;
+    const end = Math.min(hard, pos + CHUNK - 1);
+    const buf = end >= pos ? await this.src.read(pos, end) : null;
     this.busy = false;
     if (this.closed || !buf) return;
-    this.seen[cue.cluster] = true;
-    const all = parseCluster(buf, this.head.scale);
-    for (let i = 0; i < all.length; i++) {
-      if (all[i].track !== this.track.number) continue;
-      this.packets.push(all[i]);
-      this.packetBytes += all[i].data.length;
+    const step = takeElements(buf, this.head.scale);
+    // A block bigger than this chunk still has a header here: skip its body without buffering it.
+    let advance = step.bytes;
+    if (advance <= 0) {
+      const el = peekElement(buf, 0);
+      if (!el || el.unknown || el.size < 0) {
+        this.seen[cue.cluster] = true;
+        delete this.rest[cue.cluster];
+        this.publish(time);
+        return;
+      }
+      advance = el.header + el.size;
+    }
+    for (let i = 0; i < step.packets.length; i++) {
+      if (step.packets[i].track !== this.track.number) continue;
+      this.packets.push(step.packets[i]);
+      this.packetFrom.push(cue.cluster);
+      this.packetBytes += step.packets[i].data.length;
+    }
+    const nextPos = pos + advance;
+    if (nextPos > hard) {
+      this.seen[cue.cluster] = true;
+      delete this.rest[cue.cluster];
+    } else {
+      this.rest[cue.cluster] = nextPos;
     }
     this.trim(time);
     this.publish(time);
@@ -119,12 +141,19 @@ export class LiveSubs {
       }
       return;
     }
-    if (this.bitmap && time >= this.bitmap.start && time < this.bitmap.end && this.painted === this.packets.length) return;
-    const dec = new PgsDecoder();
-    for (let i = 0; i < this.packets.length; i++) {
-      if (this.packets[i].start <= time + 0.05) dec.feed(this.packets[i].start, this.packets[i].data);
+    const ordered = this.packets.slice().sort((a, b) => a.start - b.start);
+    let nextEvent = 1e9;
+    for (let i = 0; i < ordered.length; i++) {
+      if (ordered[i].start > time && ordered[i].start < nextEvent) nextEvent = ordered[i].start;
     }
-    this.bitmap = dec.bitmapAt(time);
+    if (this.bitmap && time >= this.bitmap.start && time < this.bitmap.end && time < nextEvent && this.painted === this.packets.length) return;
+    const dec = new PgsDecoder();
+    for (let i = 0; i < ordered.length; i++) {
+      if (ordered[i].start <= time + 0.001) dec.feed(ordered[i].start, ordered[i].data);
+    }
+    const frame = dec.bitmapAt(time);
+    if (frame && nextEvent < frame.end) frame.end = nextEvent;
+    this.bitmap = frame;
     this.painted = this.packets.length;
   }
 
@@ -132,13 +161,23 @@ export class LiveSubs {
     if (this.packetBytes <= PACKET_CAP) return;
     const keep = time - 180;
     const next: MkvPacket[] = [];
+    const from: number[] = [];
+    const still: { [pos: number]: boolean } = {};
     let bytes = 0;
     for (let i = 0; i < this.packets.length; i++) {
       if (this.packets[i].start < keep) continue;
       next.push(this.packets[i]);
+      from.push(this.packetFrom[i]);
+      still[this.packetFrom[i]] = true;
       bytes += this.packets[i].data.length;
     }
+    if (bytes >= this.packetBytes) return;
+    for (let i = 0; i < this.packetFrom.length; i++) {
+      const c = this.packetFrom[i];
+      if (!still[c]) delete this.seen[c];
+    }
     this.packets = next;
+    this.packetFrom = from;
     this.packetBytes = bytes;
   }
 }
@@ -160,13 +199,42 @@ function nextCluster(cues: MkvCue[], cluster: number): number {
   return next;
 }
 
+/** Matroska ASS/SSA packets are the event fields, not a full Dialogue line. Times come from the block. */
+function assCues(packets: MkvPacket[], priv: Uint8Array): Cue[] {
+  const out: Cue[] = [];
+  const header = utf8(priv);
+  for (let i = 0; i < packets.length; i++) {
+    const raw = utf8(packets[i].data).replace(/^\uFEFF/, '').trim();
+    if (!raw) continue;
+    let text = '';
+    if (raw.indexOf('Dialogue:') === 0) {
+      const parsed = parseAss(header + '\n' + raw);
+      text = parsed.length ? parsed[0].text : '';
+    } else text = assFieldText(raw);
+    if (!text) continue;
+    const end = packets[i].duration > 0 ? packets[i].start + packets[i].duration : packets[i].start + 4;
+    out.push({ start: packets[i].start, end: end, text: text });
+  }
+  out.sort((a, b) => a.start - b.start);
+  return out;
+}
+
+/** Text is the 9th comma-separated field (ReadOrder through Effect). Commas inside the text stay. */
+function assFieldText(line: string): string {
+  let commas = 0;
+  for (let i = 0; i < line.length; i++) {
+    if (line.charAt(i) !== ',') continue;
+    commas++;
+    if (commas === 8) {
+      return line.slice(i + 1).replace(/\{[^}]*\}/g, '').replace(/\\[Nn]/g, '\n').replace(/\\h/g, ' ').trim();
+    }
+  }
+  return '';
+}
+
 export function textCues(packets: MkvPacket[], codecId: string, priv: Uint8Array): Cue[] {
   const id = (codecId || '').toUpperCase();
-  if (id.indexOf('ASS') >= 0 || id.indexOf('SSA') >= 0) {
-    let body = utf8(priv);
-    for (let i = 0; i < packets.length; i++) body += '\n' + utf8(packets[i].data);
-    return parseAss(body);
-  }
+  if (id.indexOf('ASS') >= 0 || id.indexOf('SSA') >= 0) return assCues(packets, priv);
   const out: Cue[] = [];
   for (let i = 0; i < packets.length; i++) {
     const p = packets[i];

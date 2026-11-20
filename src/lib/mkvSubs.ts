@@ -31,42 +31,76 @@ export interface MkvHead {
 
 const EMPTY = new Uint8Array(0);
 
-export function parseMkvHead(head: Uint8Array, tail: Uint8Array, tailOffset: number): MkvHead {
-  const found = walkTop(head);
-  const cues = parseCues(tail, found.scale, found.segmentStart, tailOffset);
-  cues.sort((a, b) => a.time - b.time);
-  return { tracks: found.tracks, cues: cues, segmentStart: found.segmentStart, scale: found.scale };
+/** Matroska TimestampScale is in nanoseconds. Default 1e6 means timecodes are milliseconds. */
+export function mkvSeconds(timecode: number, scale: number): number {
+  return (timecode * (scale || 1000000)) / 1000000000;
 }
 
-export function parseCluster(buf: Uint8Array, scale: number): MkvPacket[] {
-  const out: MkvPacket[] = [];
-  let start = 0;
-  const id = readId(buf, 0);
-  if (id && id.v === 0x1f43b675) start = id.data;
-  else {
-    const at = findId(buf, 0x1f43b675);
-    if (at < 0) return out;
-    const hit = readId(buf, at);
-    if (!hit) return out;
-    start = hit.data;
+export function parseMkvHead(head: Uint8Array, tail: Uint8Array, tailOffset: number): MkvHead {
+  const found = walkTop(head);
+  const cues = parseCues(head, found.scale, found.segmentStart, 0).concat(parseCues(tail, found.scale, found.segmentStart, tailOffset));
+  const seen: { [k: number]: boolean } = {};
+  const uniq: MkvCue[] = [];
+  for (let i = 0; i < cues.length; i++) {
+    if (seen[cues[i].cluster]) continue;
+    seen[cues[i].cluster] = true;
+    uniq.push(cues[i]);
   }
+  uniq.sort((a, b) => a.time - b.time);
+  return { tracks: found.tracks, cues: uniq, segmentStart: found.segmentStart, scale: found.scale };
+}
+
+/**
+ * Every cluster in the buffer. A cue range often covers more than one cluster, and only the first used to be read.
+ * Returns how many leading bytes formed complete elements, so a short read can resume without a cut block.
+ */
+export function parseCluster(buf: Uint8Array, scale: number): MkvPacket[] {
+  return takeElements(buf, scale).packets;
+}
+
+export function takeElements(buf: Uint8Array, scale: number): { packets: MkvPacket[]; bytes: number } {
+  const out: MkvPacket[] = [];
+  let i = 0;
   let clusterTc = 0;
-  walk(buf, start, buf.length, (eid, data, end) => {
-    if (eid === 0xe7) clusterTc = uint(buf, data, end);
-    else if (eid === 0xa3) pushBlock(buf.subarray(data, end), clusterTc, scale, 0, out);
-    else if (eid === 0xa0) {
-      let block: Uint8Array | null = null;
-      let dur = 0;
-      walk(buf, data, end, (cid, cdata, cend) => {
-        if (cid === 0xa1) block = buf.subarray(cdata, cend);
-        else if (cid === 0x9b) dur = uint(buf, cdata, cend);
-        return false;
-      });
-      if (block) pushBlock(block, clusterTc, scale, dur, out);
+  let consumed = 0;
+  while (i + 2 <= buf.length) {
+    const el = peekElement(buf, i);
+    if (!el) break;
+    if (el.unknown) break;
+    const end = i + el.header + el.size;
+    if (end > buf.length) break;
+    if (el.id === 0x1f43b675) {
+      clusterTc = 0;
+      i += el.header;
+      consumed = i;
+      continue;
     }
-    return false;
-  });
-  return out;
+    if (el.id === 0xe7) clusterTc = uint(buf, el.data, end);
+    else if (el.id === 0xa3) pushBlock(buf.subarray(el.data, end), clusterTc, scale, 0, out);
+    else if (el.id === 0xa0) pushGroup(buf.subarray(el.data, end), clusterTc, scale, out);
+    i = end;
+    consumed = i;
+  }
+  return { packets: out, bytes: consumed };
+}
+
+export interface EbmlPeek {
+  id: number;
+  header: number;
+  data: number;
+  size: number;
+  unknown: boolean;
+}
+
+/** Element header only. `size` is the payload length; it is not clamped to the buffer. */
+export function peekElement(b: Uint8Array, i: number): EbmlPeek | null {
+  const id = vint(b, i, false);
+  if (!id) return null;
+  const sz = vint(b, i + id.n, true);
+  if (!sz) return null;
+  const data = i + id.n + sz.n;
+  const unknown = allFf(b, i + id.n, sz.n);
+  return { id: id.v, header: id.n + sz.n, data: data, size: unknown ? -1 : sz.v, unknown: unknown };
 }
 
 function walkTop(buf: Uint8Array): { tracks: MkvSubTrack[]; scale: number; segmentStart: number } {
@@ -139,7 +173,7 @@ function parseCues(buf: Uint8Array, scale: number, segmentStart: number, tailOff
       }
       return false;
     });
-    if (cluster >= 0) out.push({ time: (time * scale) / 1000000, cluster: segmentStart + cluster });
+    if (cluster >= 0) out.push({ time: mkvSeconds(time, scale), cluster: segmentStart + cluster });
     return false;
   });
   // tailOffset is unused when cues carry segment-relative positions; kept so a caller can pass the slice origin
@@ -156,9 +190,26 @@ function pushBlock(block: Uint8Array, clusterTc: number, scale: number, duration
   if (tc & 0x8000) tc -= 0x10000;
   const flags = block[tcAt + 2];
   if (((flags >> 1) & 3) !== 0) return;
-  const start = ((clusterTc + tc) * scale) / 1000000;
-  const dur = duration ? (duration * scale) / 1000000 : 0;
-  out.push({ track: tr.v, start: start, duration: dur, data: block.subarray(tcAt + 3) });
+  const start = mkvSeconds(clusterTc + tc, scale);
+  const dur = duration ? mkvSeconds(duration, scale) : 0;
+  out.push({ track: tr.v, start: start, duration: dur, data: copyBytes(block.subarray(tcAt + 3)) });
+}
+
+function pushGroup(group: Uint8Array, clusterTc: number, scale: number, out: MkvPacket[]): void {
+  let block: Uint8Array | null = null;
+  let dur = 0;
+  walk(group, 0, group.length, (cid, cdata, cend) => {
+    if (cid === 0xa1) block = group.subarray(cdata, cend);
+    else if (cid === 0x9b) dur = uint(group, cdata, cend);
+    return false;
+  });
+  if (block) pushBlock(block, clusterTc, scale, dur, out);
+}
+
+function copyBytes(src: Uint8Array): Uint8Array {
+  const out = new Uint8Array(src.length);
+  out.set(src);
+  return out;
 }
 
 interface El {

@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'preact/hooks';
 import { t, t as tr } from '../i18n';
 import type { PgsBitmap } from '../lib/pgs';
+import { fittedPicture } from './pictureFit';
 import type { CacheState, FfprobeResult } from '../api/types';
 import { cueAt, Cue } from '../lib/subtitles';
 import { formatSpeed } from '../lib/format';
@@ -67,13 +68,24 @@ export function BufferingOverlay(p: { cache: CacheState | null; waiting?: boolea
   );
 }
 
-/** One PGS bitmap in the video's own pixel grid, stretched with the picture. */
+/** One PGS bitmap in the video's own pixel grid, placed on the fitted picture rather than the black bars. */
 export function BitmapSubtitle(p: { frame: PgsBitmap | null; raised: boolean }) {
   const ref = useRef<HTMLCanvasElement>(null);
   const size = settings.value.subSize;
   useEffect(() => {
     const canvas = ref.current;
     if (!canvas) return;
+    const parent = canvas.parentElement;
+    const video = parent ? parent.querySelector('video') : null;
+    const boxW = parent ? parent.clientWidth : 0;
+    const boxH = parent ? parent.clientHeight : 0;
+    const mediaW = video && video.videoWidth ? video.videoWidth : 0;
+    const mediaH = video && video.videoHeight ? video.videoHeight : 0;
+    const fit = fittedPicture(boxW, boxH, mediaW, mediaH);
+    canvas.style.left = fit.left + 'px';
+    canvas.style.top = fit.top + 'px';
+    canvas.style.width = fit.width + 'px';
+    canvas.style.height = fit.height + 'px';
     let ctx: CanvasRenderingContext2D | null = null;
     try { ctx = canvas.getContext('2d'); } catch (e) { return; }
     if (!ctx) return;
