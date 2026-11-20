@@ -429,17 +429,27 @@ function SyncRow() {
   }, []);
   useEffect(() => {
     let alive = true;
-    fetchBillingAccount(phoneSourceContext()).then(
-      (account) => {
-        if (!alive) return;
-        setAllowed(account && account.sync ? account.sync.allowed : null);
-      },
-      () => {
-        if (alive) setAllowed(null);
-      },
-    );
+    function load() {
+      fetchBillingAccount(phoneSourceContext()).then(
+        (account) => {
+          if (!alive) return;
+          setAllowed(account && account.sync ? account.sync.allowed : null);
+        },
+        () => {
+          if (alive) setAllowed(null);
+        },
+      );
+    }
+    load();
+    const off = onBillingChange(load);
+    function onShow() {
+      if (document.visibilityState === 'visible') load();
+    }
+    document.addEventListener('visibilitychange', onShow);
     return () => {
       alive = false;
+      off();
+      document.removeEventListener('visibilitychange', onShow);
     };
   }, []);
   function go() {

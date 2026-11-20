@@ -3543,6 +3543,7 @@ export function createApp(file, fetchImpl, opts) {
           stamped.push({ ...row, deviceId: device || row.deviceId });
         }
         await syncDb.push(accountId, stamped);
+        if (syncDb.seen) await syncDb.seen(accountId, device, Date.now());
         const records = await syncDb.pull(accountId, parsed.since);
         let nextSeq = parsed.since;
         for (let i = 0; i < records.length; i++) if (records[i].seq > nextSeq) nextSeq = records[i].seq;

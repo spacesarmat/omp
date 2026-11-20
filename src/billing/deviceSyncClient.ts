@@ -39,18 +39,22 @@ function parseAnswer(status: number, text: string): { status: number; data: { ok
   return { status: status, data: data };
 }
 
-function post(since: number, records: SyncRecord[]): Promise<{ status: number; data: { ok?: boolean; records?: SyncRecord[]; nextSeq?: number; error?: string } }> {
+function post(owner: string, since: number, records: SyncRecord[]): Promise<{ status: number; data: { ok?: boolean; records?: SyncRecord[]; nextSeq?: number; error?: string; switched?: boolean } }> {
   const body = JSON.stringify({ since: since, records: records });
   const ctx = contextOf();
   if (ctx && ctx.http.postJson) {
-    return withDeviceToken(ctx, (headers) => ctx.http.postJson!(BILLING_ORIGIN + '/v1/sync', body, { headers: headers, timeoutMs: 20000 })).then(
+    const send = ctx.http.postJson;
+    return withDeviceToken(ctx, (headers) => {
+      if (accountNow() !== owner) return Promise.resolve({ status: 409, url: '', text: '{"switched":true}' });
+      return send(BILLING_ORIGIN + '/v1/sync', JSON.stringify({ since: since, records: records }), { headers: headers, timeoutMs: 20000 });
+    }).then(
       (res) => parseAnswer(res.status, res.text),
       () => ({ status: 0, data: {} }),
     );
   }
   const session = billingSession();
   const access = session && (session.access || session.token);
-  if (!access) return Promise.resolve({ status: 0, data: {} });
+  if (!access || accountNow() !== owner) return Promise.resolve({ status: 409, data: { switched: true } });
   return fetch(BILLING_ORIGIN + '/v1/sync', {
     method: 'POST',
     headers: {
@@ -75,8 +79,8 @@ function accountNow(): string {
 function pump(owner: string, since: number, pending: SyncRecord[]): Promise<string> {
   const chunk = pending.slice(0, BATCH);
   const rest = pending.slice(BATCH);
-  return post(since, chunk).then((ans) => {
-    if (accountNow() !== owner) return 'switched';
+  return post(owner, since, chunk).then((ans) => {
+    if (accountNow() !== owner || ans.data.switched) return 'switched';
     if (ans.status === 0) {
       markSyncError('offline');
       return 'error';

@@ -839,6 +839,19 @@ CREATE TABLE device_sync (
 CREATE INDEX device_sync_seq ON device_sync (account_id, seq);
 `,
   },
+  {
+    version: '020_device_sync_seen',
+    sql: `
+-- One row per device that completed a sync, even when it uploaded nothing.
+-- device_sync.device_id is the author of a saved row and changes when another device wins.
+CREATE TABLE device_sync_seen (
+  account_id text NOT NULL,
+  device_id text NOT NULL,
+  seen_at bigint NOT NULL,
+  PRIMARY KEY (account_id, device_id)
+);
+`,
+  },
 ];
 
 /** Apply pending migrations. Safe to run from several processes: they wait on the lock. */

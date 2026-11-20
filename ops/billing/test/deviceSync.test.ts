@@ -120,6 +120,16 @@ describe('POST /v1/sync', () => {
     const devices = listed.data.devices as { id: string; self: boolean }[];
     expect(devices.some((d) => d.self && d.id === DEV_A)).toBe(true);
 
+    const pulled = await call(app, 'POST', '/v1/sync', {
+      headers: { authorization: 'Bearer ' + tokenB, 'x-device-id': DEV_B },
+      json: { since: 0, records: [] },
+    });
+    expect(pulled.status).toBe(200);
+    const both = await call(app, 'GET', '/v1/sync/devices', { headers: headersA });
+    const ids = (both.data.devices as { id: string }[]).map((d) => d.id);
+    expect(ids).toContain(DEV_A);
+    expect(ids).toContain(DEV_B);
+
     const older = await call(app, 'POST', '/v1/sync', {
       headers: headersA,
       json: {

@@ -102,10 +102,19 @@ export function createSyncStore(query) {
     },
     async devices(accountId) {
       const res = await query(
-        'SELECT device_id, MAX(updated_at) AS last_at FROM device_sync WHERE account_id = $1 GROUP BY device_id ORDER BY last_at DESC LIMIT 40',
+        'SELECT device_id, seen_at FROM device_sync_seen WHERE account_id = $1 ORDER BY seen_at DESC LIMIT 40',
         [accountId],
       );
-      return res.rows.map((r) => ({ id: r.device_id || '', lastAt: Number(r.last_at) || 0 }));
+      return res.rows.map((r) => ({ id: r.device_id || '', lastAt: Number(r.seen_at) || 0 }));
+    },
+    async seen(accountId, deviceId, at) {
+      const id = String(deviceId || '');
+      if (!id) return;
+      await query(
+        'INSERT INTO device_sync_seen (account_id, device_id, seen_at) VALUES ($1, $2, $3)' +
+          ' ON CONFLICT (account_id, device_id) DO UPDATE SET seen_at = EXCLUDED.seen_at',
+        [accountId, id, at],
+      );
     },
   };
 }

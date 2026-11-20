@@ -89,4 +89,24 @@ describe('runDeviceSync', () => {
     expect(bodies.length).toBe(1);
     expect(fetched).not.toHaveBeenCalled();
   });
+
+  it('does not upload saved rows after the account changes during the send', async () => {
+    let sent = 0;
+    setSyncContext(() => ({
+      http: {
+        get: () => Promise.resolve({ status: 0, url: '', text: '' }),
+        post: () => Promise.resolve({ status: 0, url: '', text: '' }),
+        postJson: () => {
+          sent += 1;
+          return Promise.resolve({ status: 200, url: '', text: '{"ok":true,"records":[],"nextSeq":1}' });
+        },
+        clearCookies: () => Promise.resolve(),
+      },
+      client: null,
+    }));
+    const pending = runDeviceSync();
+    saveBillingSession({ token: 'tok2', paidUntil: Date.now() + 60000, id: 'acc-2' });
+    expect(await pending).toBe('switched');
+    expect(sent).toBe(0);
+  });
 });
