@@ -63,6 +63,27 @@ describe('PGS', () => {
       seg(0x80, new Uint8Array(0)),
     ]));
     expect(huge.bitmapAt(0)).toBeNull();
+    const again = new PgsDecoder();
+    const line = concat([
+      seg(0x14, concat([new Uint8Array([0, 0]), new Uint8Array([1, 235, 128, 128, 255])])),
+      seg(0x16, pcs(32, 16, 1, 0, 0)),
+      seg(0x15, ods(1, 1, 1, new Uint8Array([0x01, 0x00, 0x00]))),
+      seg(0x80, new Uint8Array(0)),
+    ]);
+    for (let n = 0; n < 4; n++) again.feed(n, line);
+    const kept = again.bitmapAt(3);
+    expect(kept && kept.w).toBe(1);
+    const flood = new PgsDecoder();
+    const mid = new Uint8Array([0, 1, 0, 0x00, 0x01]);
+    const parts = [
+      seg(0x16, pcs(8, 8, 1, 0, 0)),
+      seg(0x15, first),
+    ];
+    for (let n = 0; n < 40; n++) parts.push(seg(0x15, mid));
+    parts.push(seg(0x15, next));
+    parts.push(seg(0x80, new Uint8Array(0)));
+    flood.feed(0, concat(parts));
+    expect(flood.bitmapAt(0)).toBeNull();
   });
 
   it('a composition with no objects clears the picture', () => {
