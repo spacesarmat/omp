@@ -62,6 +62,10 @@ describe('seasonEpisodeModels', () => {
     expect(episodePageLabel(rows, 0)).toBe('101-150');
     expect(episodePageLabel(rows, 50)).toBe('151-160');
     expect(episodePageLabel([{ numbers: [7, 8] }], 0)).toBe('7-8');
+    const bonus = [];
+    for (let n = 1; n <= 50; n++) bonus.push({ numbers: [n] });
+    bonus.push({ numbers: [] });
+    expect(episodePageLabel(bonus, 50)).toBe('51');
   });
 
   it('counts a watched combined file as every episode it holds', () => {

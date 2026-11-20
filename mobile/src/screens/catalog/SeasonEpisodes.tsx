@@ -107,11 +107,14 @@ export function SeasonEpisodes({
       {ranges.length > 1 && !showAll && (
         <div class="m-eps-jump">
           <div class="m-chips" role="group">
-            {ranges.map((n) => (
-              <button key={n} type="button" class={'m-chip' + (rangeAt === n ? ' on' : '')} aria-pressed={rangeAt === n} onClick={() => setRangeAt(n)}>
-                {episodePageLabel(rows, n)}
-              </button>
-            ))}
+            {ranges.map((n) => {
+              const label = episodePageLabel(rows, n);
+              return (
+                <button key={n} type="button" class={'m-chip' + (rangeAt === n ? ' on' : '')} aria-pressed={rangeAt === n} aria-label={label} onClick={() => setRangeAt(n)}>
+                  {label}
+                </button>
+              );
+            })}
           </div>
           <form class="m-eps-jump-form" onSubmit={(e) => {
             e.preventDefault();

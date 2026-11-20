@@ -95,7 +95,7 @@ export function seasonEpisodeModels(files: SeasonEpFile[], season: number, tmdb:
   return rows;
 }
 
-/** The episode numbers on one page of rows: «101-150», or one number when the page holds a single episode. '' when none are numbered. */
+/** The episode numbers on one page of rows: «101-150». A page of files with no number still gets a label, from its place in the list. */
 export function episodePageLabel(rows: { numbers: number[] }[], start: number, size = 50): string {
   const page = rows.slice(start, start + size);
   let first = 0;
@@ -106,7 +106,11 @@ export function episodePageLabel(rows: { numbers: number[] }[], start: number, s
       if (n > last) last = n;
     });
   });
-  if (!first) return '';
+  if (!first) {
+    if (!page.length) return '';
+    first = start + 1;
+    last = start + page.length;
+  }
   return first === last ? String(first) : first + '-' + last;
 }
 
