@@ -18,6 +18,11 @@ describe('parseReleaseFile', () => {
     });
   });
 
+  it('keeps the tail after a whole multi-episode marker', () => {
+    expect(parseReleaseFile('Show.S01E05E06.1080p.mkv').tail).toBe('1080p');
+    expect(parseReleaseFile('Show.1x02.1080p.mkv')).toEqual({ season: 1, episode: 2, tail: '1080p' });
+  });
+
   it('reads SxxEyy and leaves the quality as the tail', () => {
     expect(parseReleaseFile('Show/Show.S02E03.1080p.WEB-DL.mkv')).toEqual({
       season: 2,

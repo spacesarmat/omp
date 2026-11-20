@@ -30,6 +30,14 @@ describe('seasonEpisodeModels', () => {
     expect(rows[2].fileId).toBeNull();
   });
 
+  it('keeps every episode of an underscore range in one row', () => {
+    const rows = seasonEpisodeModels([
+      { id: 1, path: 'Show_-_001-002_1080p.mkv', length: 1 },
+    ], 0, [{ episode: 2, title: 'Вторая', runtime: 20 }]);
+    expect(rows[0].numbers).toEqual([1, 2]);
+    expect(rows.filter((r) => r.missing)).toEqual([]);
+  });
+
   it('numbers an underscore release name instead of keeping the file name', () => {
     const rows = seasonEpisodeModels([
       { id: 6, path: 'Black_Clover_-_006_RUS_JP_ENG_Judas.mkv', length: 1 },

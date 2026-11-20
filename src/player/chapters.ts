@@ -47,17 +47,23 @@ export function chapterList(probe: FfprobeResult | null): Chapter[] {
  * The same intro and ending rules as `chapterList`.
  */
 export function chaptersFromPoints(points: { t: number; title: string }[], duration: number): Chapter[] {
-  const sorted = points.slice().filter((p) => isFinite(p.t)).sort((a, b) => a.t - b.t);
   const out: Chapter[] = [];
-  for (let i = 0; i < sorted.length; i++) {
-    const start = sorted[i].t;
-    const next = i + 1 < sorted.length ? sorted[i + 1].t : duration;
-    const end = next > start ? next : start;
-    if (!(end > start)) continue;
-    const title = sorted[i].title || '';
-    const long = end - start > 5;
+  for (let i = 0; i < points.length; i++) {
+    const start = points[i].t;
+    const finite = isFinite(start);
+    let end = finite && duration > start ? duration : finite ? start : 0;
+    if (finite) {
+      for (let j = i + 1; j < points.length; j++) {
+        if (isFinite(points[j].t) && points[j].t > start) {
+          end = points[j].t;
+          break;
+        }
+      }
+    }
+    const title = points[i].title || '';
+    const long = end - (finite ? start : 0) > 5;
     const kind = long && INTRO_RE.test(title) ? 'intro' : long && CREDITS_RE.test(title) ? 'credits' : null;
-    out.push({ start, end, title, kind });
+    out.push({ start: finite ? start : 0, end, title, kind });
   }
   markPositionalIntro(out);
   return out;
@@ -68,6 +74,7 @@ export function chaptersFromPoints(points: { t: number; title: string }[], durat
  * («Chapter 02» 0:31-2:01). A lone chapter in the middle is left alone.
  */
 function markPositionalIntro(list: Chapter[]): void {
+  for (let i = 0; i < list.length; i++) if (list[i].kind === 'intro') return;
   for (let i = 1; i < list.length; i++) {
     const c = list[i];
     if (c.kind) continue;

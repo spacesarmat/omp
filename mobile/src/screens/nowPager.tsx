@@ -165,8 +165,12 @@ function Episodes({ hash, fileId, onPlay }: { hash: string; fileId: number; onPl
   const tail = commonReleaseTail(files.map((f) => f.path));
   const listRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    const row = listRef.current ? listRef.current.querySelector('.m-now-ep.on') : null;
-    if (row && (row as HTMLElement).scrollIntoView) (row as HTMLElement).scrollIntoView({ block: 'center' });
+    const root = listRef.current;
+    const row = root ? (root.querySelector('.m-now-ep.on') as HTMLElement | null) : null;
+    const pane = root ? (root.closest('.m-now-pane') as HTMLElement | null) : null;
+    if (!row || !pane) return;
+    const delta = row.getBoundingClientRect().top - pane.getBoundingClientRect().top;
+    pane.scrollTop = Math.max(0, pane.scrollTop + delta - pane.clientHeight / 2 + row.clientHeight / 2);
   }, [hash, fileId, files.length]);
   return (
     <div class="m-now-eps" ref={listRef}>

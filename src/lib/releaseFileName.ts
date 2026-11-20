@@ -1,7 +1,8 @@
 // A release file name as a person reads it: the episode number, and the shared release tail
 // («RUS JP ENG Judas BDrip HEVC 10bit»). Underscores and «- 006» count, the same as SxxEyy.
 import { baseName, stripExt } from './episodes';
-import { fileEpisodes } from './categoryCheck';
+import { fileEpisodeCut } from './categoryCheck';
+import { parseEpisode } from './episodes';
 
 export interface ReleaseFileName {
   season: number | null;
@@ -17,18 +18,10 @@ function normalized(path: string): string {
 /** Episode number and the release tail of one file. A name with no episode has a null episode and an empty tail. */
 export function parseReleaseFile(path: string): ReleaseFileName {
   const text = normalized(path);
-  const parsed = fileEpisodes(text + '.mkv');
-  const episode = parsed && parsed.episodes.length ? parsed.episodes[0] : null;
-  const season = parsed ? parsed.season : null;
-  if (episode === null) return { season: null, episode: null, tail: '' };
-  const marker = season !== null
-    ? new RegExp('s0*' + season + '[\\s.]*e0*' + episode + '(?![0-9])', 'i')
-    : new RegExp('(?:^|\\s-\\s|\\[|\\s)0*' + episode + '(?![0-9])');
-  const m = marker.exec(text);
-  const tail = m
-    ? text.slice(m.index + m[0].length).replace(/[._]+/g, ' ').replace(/^[\s\-[\]]+/, '').replace(/\s+/g, ' ').trim()
-    : '';
-  return { season, episode, tail };
+  const cut = fileEpisodeCut(text, parseEpisode(text));
+  if (!cut || !cut.episodes.length) return { season: null, episode: null, tail: '' };
+  const tail = text.slice(cut.end).replace(/[._]+/g, ' ').replace(/^[\s\-[\]]+/, '').replace(/\s+/g, ' ').trim();
+  return { season: cut.season, episode: cut.episodes[0], tail };
 }
 
 /** The release tail every file shares. '' when the files do not agree, so a mixed list stays quiet. */

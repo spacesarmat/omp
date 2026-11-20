@@ -1,5 +1,5 @@
 // The season's episode list on the phone: a number on the left, no fold button, missing episodes stay visible.
-import { useState } from 'preact/hooks';
+import { useEffect, useState } from 'preact/hooks';
 import { fmtDuration, fmtSize, t } from '../../../../src/i18n';
 import { formatDuration } from '../../../../src/lib/format';
 import { markWatched, saveProgress } from '../../../../src/store/progress';
@@ -42,6 +42,12 @@ export function SeasonEpisodes({
   const [showAll, setShowAll] = useState(rows.length <= 50);
   const [jump, setJump] = useState('');
   const [rangeAt, setRangeAt] = useState(0);
+  const listKey = hash + ':' + season + ':' + files.length + ':' + (files[0] ? files[0].id : 0);
+  useEffect(() => {
+    setRangeAt(0);
+    setShowAll(files.length <= 50);
+    setJump('');
+  }, [listKey]);
   let highlight = -1;
   rows.forEach((r, i) => {
     if (highlight >= 0 || r.missing || r.fileId === null) return;

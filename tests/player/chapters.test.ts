@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { chapterLabel, introChapter, chapterList, namedChapterTitle, skipSegments, chapterIndexAt, chapterTarget, chapterStepIndex, inIntro, introSkipTarget, applyMark, SKIP_TOAST_MS, PREV_CHAPTER_WINDOW } from '../../src/player/chapters';
+import { chapterLabel, introChapter, chapterList, chaptersFromPoints, namedChapterTitle, skipSegments, chapterIndexAt, chapterTarget, chapterStepIndex, inIntro, introSkipTarget, applyMark, SKIP_TOAST_MS, PREV_CHAPTER_WINDOW } from '../../src/player/chapters';
 import type { FfprobeResult } from '../../src/api/types';
 
 const probe = (titles: [number, number, string][]): FfprobeResult => ({
@@ -26,6 +26,17 @@ describe('introChapter', () => {
   it('handles missing data', () => {
     expect(introChapter(null, 1)).toBeNull();
     expect(introChapter({ streams: [] }, 1)).toBeNull();
+  });
+  it('keeps a phone chapter that shares its start, so the TV index still fits', () => {
+    const list = chaptersFromPoints([{ t: 0, title: 'A' }, { t: 0, title: 'B' }, { t: 90, title: 'C' }], 200);
+    expect(list).toHaveLength(3);
+    expect(list[2].title).toBe('C');
+    expect(list[2].start).toBe(90);
+  });
+  it('does not guess an opening when the file already names one', () => {
+    const p = probe([[0, 30, 'Cold'], [30, 120, 'Recap'], [120, 210, 'Opening']]);
+    const kinds = chapterList(p).map((c) => c.kind);
+    expect(kinds).toEqual([null, null, 'intro']);
   });
   it('treats a short second chapter near the start as the opening', () => {
     const p = probe([[0, 31, 'Chapter 01'], [31, 121, 'Chapter 02'], [121, 1400, 'Episode']]);
