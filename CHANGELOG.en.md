@@ -4,7 +4,7 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
-## Unreleased
+## 0.30.2-beta.1
 
 - [phone] Account sync shows how long ago the last exchange was ("2 min ago"), an error in red with Retry, and a Sync now button. The description opens the devices on this account. When the server does not allow sync, the switch is off and says it is available with a subscription. Sync uses the same device token as the other billing calls
 - [tech] Billing remembers a device after a successful exchange in device_sync_seen (migration 020), even when it uploaded nothing. GET /v1/sync/devices reads that table. POST /v1/sync stays the same. A new billing image is required
