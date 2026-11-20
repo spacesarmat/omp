@@ -160,7 +160,7 @@ function CollectionBlock({ id, name }: { id: number; name: string }) {
           </button>
         ))}
       </div>
-      <button type="button" class="m-btn" onClick={() => navigate({ name: 'add', query: name, run: true })}>{t('titleCard.watchAll')}</button>
+      <button type="button" class="m-btn m-btn-secondary" onClick={() => navigate({ name: 'add', query: name, run: true })}>{t('titleCard.watchAll')}</button>
     </section>
   );
 }

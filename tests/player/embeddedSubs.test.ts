@@ -169,18 +169,49 @@ describe('probeReliable', () => {
     expect(r && r.streams[0].codec_name).toBe('hdmv_pgs_subtitle');
   });
 
-  it('does not retry when the first probe listed streams', async () => {
+  it('retries when the first probe has streams but no subtitles, and keeps the richer list', async () => {
     let probes = 0;
     const c = {
       preload: async () => undefined,
       preloadTail: async () => undefined,
       probe: async () => {
         probes++;
-        return { streams: [{ index: 0, codec_type: 'video', codec_name: 'hevc' }] };
+        if (probes === 1) return { streams: [{ index: 0, codec_type: 'video', codec_name: 'hevc' }, { index: 1, codec_type: 'audio', codec_name: 'aac' }] };
+        return { streams: [{ index: 0, codec_type: 'video', codec_name: 'hevc' }, { index: 2, codec_type: 'subtitle', codec_name: 'subrip' }] };
+      },
+    };
+    const r = await probeReliable(c, 'h', 0, 'film.mkv', 20 * 1024 * 1024);
+    expect(probes).toBe(2);
+    expect(r && r.streams.some((s) => s.codec_type === 'subtitle')).toBe(true);
+  });
+
+  it('does not retry when the first probe already listed a subtitle stream', async () => {
+    let probes = 0;
+    const c = {
+      preload: async () => undefined,
+      preloadTail: async () => undefined,
+      probe: async () => {
+        probes++;
+        return { streams: [{ index: 0, codec_type: 'video', codec_name: 'hevc' }, { index: 1, codec_type: 'subtitle', codec_name: 'ass' }] };
       },
     };
     await probeReliable(c, 'h', 0, 'film.mkv', 20 * 1024 * 1024);
     expect(probes).toBe(1);
+  });
+
+  it('keeps the first audio list when the retry comes back empty', async () => {
+    let probes = 0;
+    const c = {
+      preload: async () => undefined,
+      preloadTail: async () => undefined,
+      probe: async () => {
+        probes++;
+        if (probes === 1) return { streams: [{ index: 0, codec_type: 'audio', codec_name: 'aac' }] };
+        return null;
+      },
+    };
+    const r = await probeReliable(c, 'h', 0, 'film.mkv', 20 * 1024 * 1024);
+    expect(r && r.streams[0].codec_type).toBe('audio');
   });
 });
 

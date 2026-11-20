@@ -20,7 +20,7 @@ import type { TapZone } from '../player/pointerTaps';
 import { Icon } from '../ui/icons';
 import type { IconName } from '../ui/icons';
 import { audioOptions, embeddedSubOptions, subtitleMenu, defaultAudioIndex, type TrackOption } from '../player/trackOptions';
-import { probeReliable } from '../player/probeLoad';
+import { adoptProbe, hasSubtitleStreams, probeReliable } from '../player/probeLoad';
 import { gstLoader, LiveSubs } from '../player/liveSubs';
 import { ExternalDubLink } from '../player/externalDubSync';
 import {
@@ -458,6 +458,35 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from, seasonNe
     return () => { cancelled = true; };
   }, [index]);
 
+  // A cold MKV can list audio before the subtitle atoms are cached. One more probe after playback starts.
+  useEffect(() => {
+    if (!c || !started || !probed || !item.hash || item.fileIndex === undefined) return;
+    if (hasSubtitleStreams(probeRef.current)) return;
+    let dead = false;
+    const hash = item.hash;
+    const fileIndex = item.fileIndex;
+    const timer = window.setTimeout(() => {
+      const files = filesForHash(c, hash);
+      let fileName = 'file';
+      let fileSize = 0;
+      for (let fi = 0; fi < files.length; fi++) {
+        if (files[fi].id === fileIndex) {
+          fileName = baseName(files[fi].path);
+          fileSize = files[fi].length;
+        }
+      }
+      probeReliable(c, hash, fileIndex, fileName, fileSize).then((p) => {
+        if (dead) return;
+        const next = adoptProbe(probeRef.current, p);
+        if (next !== probeRef.current) setProbe(next);
+      });
+    }, 4000);
+    return () => {
+      dead = true;
+      window.clearTimeout(timer);
+    };
+  }, [index, started, probed]);
+
   // a release opened before its file list arrived: one fetch, then the dub rows can show
   useEffect(() => {
     if (!c || !item || !item.hash || item.fileIndex === undefined) return;
@@ -891,7 +920,7 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from, seasonNe
     snapshot: () => bridgeImpl.current.snapshot(),
     exec: (c) => bridgeImpl.current.exec(c),
   }), []);
-  useEffect(() => { postSoon(); }, [index, vs.paused]);
+  useEffect(() => { postSoon(); }, [index, vs.paused, probe]);
 
   const undoSkip = () => {
     if (!undo) return;

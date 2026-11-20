@@ -16,6 +16,7 @@ import { updateFeedUrl, updateTitle } from '../../../src/lib/updateInfo';
 import { clampLabelPx, isBetaBuild, PHONE_LABEL_PX } from '../../../src/testmode/active';
 import { isBetaVersion, manualLatestHint } from '../../../src/lib/version';
 import { APP_VERSION } from '../../../src/version';
+import { shortDeviceName } from '../../../src/lib/releaseFileName';
 import { phoneChangelog } from '../lib/phoneChangelog';
 import { openWhatsNew } from '../../../src/store/whatsNew';
 import { openOnboarding } from '../../../src/onboarding/gate';
@@ -503,8 +504,8 @@ function SyncRow() {
       </div>
       {on && !blocked && (
         <div class="m-set-row">
-          <button type="button" class="m-btn" disabled={busy} onClick={go}>{t('settings.syncNow')}</button>
-          {err ? <button type="button" class="m-btn" disabled={busy} onClick={go}>{t('settings.syncRetry')}</button> : null}
+          <button type="button" class="m-btn m-btn-secondary" disabled={busy} onClick={go}>{t('settings.syncNow')}</button>
+          {err ? <button type="button" class="m-btn m-btn-secondary" disabled={busy} onClick={go}>{t('settings.syncRetry')}</button> : null}
         </div>
       )}
       {open && (
@@ -546,7 +547,7 @@ export function Settings() {
   const mode = wifi.enabled && !wifi.overrideId ? t('settings.watchFromModeAuto') : t('settings.watchFromModeAlways');
   const whereLine = (server ? where + ' · ' + reachText(reach) : where) + ' · ' + mode;
   const tvPlatform = tv ? (tv.kind === 'atv' ? 'Android TV' : 'webOS') : '';
-  const tvLine = tv ? tv.name + ' · ' + tvPlatform : t('settings.notChosen');
+  const tvLine = tv ? shortDeviceName(tv.name) + ' · ' + tvPlatform : t('settings.notChosen');
   const rowOn = (text: string) => settingsHit(query, text);
   const rows = {
     account: rowOn([t('settings.account'), t('common.signIn'), t('settings.signedIn'), t('settings.accountChecking'), t('settings.subscribedUntil', { date: '' })].join(' ')),

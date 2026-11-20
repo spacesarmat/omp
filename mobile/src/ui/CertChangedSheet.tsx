@@ -12,7 +12,7 @@ export function CertChangedSheet() {
       <button type="button" class="m-btn m-btn-primary" onClick={() => answerCertChange(true)}>
         {t('cert.trust')}
       </button>
-      <button type="button" class="m-btn" onClick={() => answerCertChange(false)}>
+      <button type="button" class="m-btn m-btn-secondary" onClick={() => answerCertChange(false)}>
         {t('common.cancel')}
       </button>
     </Sheet>

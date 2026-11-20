@@ -28,10 +28,31 @@ export async function warmForProbe(c: ProbeHost, hash: string, fileIndex: number
  * One ffprobe, then a single retry after the start and the MKV tail are in the server cache.
  * A cold multi-gigabyte file often answers before those bytes exist; the second call sees them.
  */
+/** True when ffprobe listed at least one subtitle stream. Video-only is not enough: the track list may still be cold. */
+export function hasSubtitleStreams(r: FfprobeResult | null): boolean {
+  const streams = r && r.streams;
+  if (!streams) return false;
+  for (let i = 0; i < streams.length; i++) if (streams[i].codec_type === 'subtitle') return true;
+  return false;
+}
+
+/** Prefer a result that has subtitles. Otherwise keep the one with more streams. */
+export function adoptProbe(current: FfprobeResult | null, incoming: FfprobeResult | null): FfprobeResult | null {
+  if (!incoming) return current;
+  if (!current) return incoming;
+  const curSubs = hasSubtitleStreams(current);
+  const nextSubs = hasSubtitleStreams(incoming);
+  if (nextSubs && !curSubs) return incoming;
+  if (curSubs && !nextSubs) return current;
+  const curN = current.streams ? current.streams.length : 0;
+  const nextN = incoming.streams ? incoming.streams.length : 0;
+  return nextN >= curN ? incoming : current;
+}
+
 export async function probeReliable(c: ProbeHost, hash: string, fileIndex: number, name: string, size: number): Promise<FfprobeResult | null> {
   await warmForProbe(c, hash, fileIndex, name, size);
   const first = await c.probe(hash, fileIndex);
-  if (first && first.streams && first.streams.length) return first;
+  if (hasSubtitleStreams(first)) return first;
   await warmForProbe(c, hash, fileIndex, name, size);
-  return c.probe(hash, fileIndex);
+  return adoptProbe(first, await c.probe(hash, fileIndex));
 }
