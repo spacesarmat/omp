@@ -47,15 +47,22 @@ async function tokenFor(app: (req: unknown, res: unknown) => Promise<void>, file
   return activated.data.accessToken as string;
 }
 
-async function setup() {
+async function setup(options: { readOnly?: boolean } = {}) {
   const file = await testStore();
-  const app = createApp(file, async () => ({ status: 200, headers: { get: () => null }, text: async () => '{}' }), {
+  let app = createApp(file, async () => ({ status: 200, headers: { get: () => null }, text: async () => '{}' }), {
     env: {},
     monitor: { health: () => null },
   });
   const tokenA = await tokenFor(app, file, 'acc-ws', DEV_A);
   const tokenB = await tokenFor(app, file, 'acc-ws', DEV_B);
   const tokenOther = await tokenFor(app, file, 'acc-other', DEV_OTHER);
+  if (options.readOnly) {
+    app = createApp(file, async () => ({ status: 200, headers: { get: () => null }, text: async () => '{}' }), {
+      env: {},
+      monitor: { health: () => null },
+      readOnly: true,
+    });
+  }
   const server = createServer(app);
   server.on('upgrade', (req, socket, head) => (app as any).syncUpgrade(req, socket, head));
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
@@ -162,5 +169,10 @@ describe('billing sync websocket', () => {
     const closed = client.closed();
     client.send({ type: 'auth', token: 'bad', deviceId: DEV_A });
     expect(await closed).toEqual({ code: 1008, reason: 'bad_token' });
+  });
+
+  it('refuses WebSocket upgrade in read-only mode', async () => {
+    const { connect } = await setup({ readOnly: true });
+    await expect(connect()).rejects.toThrow('503');
   });
 });

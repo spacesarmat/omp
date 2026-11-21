@@ -1616,7 +1616,7 @@ export function createApp(file, fetchImpl, opts) {
     if (!maySync(state.settings, !!(view && view.active))) return { status: 403, error: 'subscribers_only' };
     return { accountId };
   };
-  const syncSocket = syncDb && syncV2Db && typeof syncV2Db.onChanges === 'function' ? createSyncSocket({
+  const syncSocket = !readOnly && syncDb && syncV2Db && typeof syncV2Db.onChanges === 'function' ? createSyncSocket({
     authorize: async (token, device) => {
       const access = await authorizeSync(token, device);
       if (access.error) throw Object.assign(new Error(access.error), { code: access.error });

@@ -55,12 +55,36 @@ export function createSyncSocket(options) {
     });
   }
 
+  async function revalidate(client) {
+    try {
+      const { accountId } = await options.authorize(client.token, client.deviceId);
+      if (accountId !== client.accountId) throw new Error('bad_token');
+      return true;
+    } catch (error) {
+      client.ready = false;
+      closeClient(client, 1008, errorCode(error, 'bad_token').slice(0, 100));
+      return false;
+    }
+  }
+
   const unsubscribe = options.onChanges((accountId, changes) => {
     if (closed) return;
     for (const client of clients) {
-      if (!client.ready || client.accountId !== accountId) continue;
-      if (client.resuming) client.buffer.push(...changes);
-      else sendChanges(client, changes);
+      if (!client.ready || client.accountId !== accountId || client.ws.readyState !== WebSocket.OPEN) continue;
+      if (client.livePending >= 100) {
+        closeClient(client, 1013, 'live_queue_limit');
+        continue;
+      }
+      client.livePending++;
+      client.liveQueue = client.liveQueue.then(async () => {
+        if (!client.ready || client.ws.readyState !== WebSocket.OPEN) return;
+        if (!await revalidate(client)) return;
+        if (!client.ready || client.ws.readyState !== WebSocket.OPEN) return;
+        if (client.resuming) client.buffer.push(...changes);
+        else sendChanges(client, changes);
+      }).catch(() => {}).finally(() => {
+        client.livePending--;
+      });
     }
   });
 
@@ -82,6 +106,7 @@ export function createSyncSocket(options) {
       if (accountCount >= MAX_ACCOUNT_CONNECTIONS) return closeClient(client, 1008, 'too_many_accounts');
       client.accountId = accountId;
       client.deviceId = deviceId;
+      client.token = token;
       client.ready = true;
       clearTimeout(client.authTimer);
       Promise.resolve(options.seen(accountId, deviceId, now())).catch(() => {});
@@ -93,15 +118,27 @@ export function createSyncSocket(options) {
 
   async function resume(client, message) {
     if (client.resuming) return sendError(client, 'resume_pending');
-    const since = cursor(message.since);
+    let nextRevision = cursor(message.since);
     client.resuming = true;
     client.buffer = [];
     try {
-      const records = await options.pull(client.accountId, since, 500);
-      if (client.ws.readyState !== WebSocket.OPEN) return;
-      let nextRevision = since;
-      for (const record of records) if (record.revision > nextRevision) nextRevision = record.revision;
-      if (!send(client, { type: 'changes', records, nextRevision, serverTime: now() })) return;
+      while (true) {
+        if (!await revalidate(client)) return;
+        const records = await options.pull(client.accountId, nextRevision, 500);
+        if (client.ws.readyState !== WebSocket.OPEN) return;
+        let pageRevision = nextRevision;
+        for (const record of records) if (record.revision > pageRevision) pageRevision = record.revision;
+        const hasMore = records.length === 500;
+        const payload = { type: 'changes', records, nextRevision: pageRevision, serverTime: now() };
+        if (hasMore) payload.hasMore = true;
+        if (!send(client, payload)) return;
+        if (!hasMore) {
+          nextRevision = pageRevision;
+          break;
+        }
+        if (pageRevision <= nextRevision) throw new Error('resume_cursor');
+        nextRevision = pageRevision;
+      }
       const byRevision = new Map();
       for (const record of client.buffer) {
         if (record.revision > nextRevision && !byRevision.has(record.revision)) byRevision.set(record.revision, record);
@@ -123,6 +160,7 @@ export function createSyncSocket(options) {
     if (parsed.error) return sendError(client, parsed.error);
     try {
       const ack = await options.mutate(client.accountId, client.deviceId, parsed.records, now());
+      await client.liveQueue;
       send(client, { type: 'ack', ack, serverTime: now() });
     } catch (error) {
       sendError(client, errorCode(error, 'mutation_failed'));
@@ -130,6 +168,7 @@ export function createSyncSocket(options) {
   }
 
   async function handleMessage(client, data, isBinary) {
+    if (client.ws.readyState !== WebSocket.OPEN) return;
     if (isBinary) {
       if (client.ready) sendError(client, 'bad_message');
       else closeClient(client, 1008, 'bad_message');
@@ -150,6 +189,7 @@ export function createSyncSocket(options) {
     }
     if (message.type === 'auth') return authenticate(client, message);
     if (!client.ready) return closeClient(client, 1008, 'auth_required');
+    if (!await revalidate(client) || client.ws.readyState !== WebSocket.OPEN) return;
     if (message.type === 'resume') return resume(client, message);
     if (message.type === 'mutations') return mutations(client, message);
     if (message.type === 'ping') return send(client, { type: 'pong', serverTime: now() });
@@ -162,10 +202,14 @@ export function createSyncSocket(options) {
       ready: false,
       accountId: '',
       deviceId: '',
+      token: '',
       alive: true,
       resuming: false,
       buffer: [],
       queue: Promise.resolve(),
+      pending: 0,
+      liveQueue: Promise.resolve(),
+      livePending: 0,
       authTimer: null,
     };
     clients.add(client);
@@ -173,12 +217,21 @@ export function createSyncSocket(options) {
     if (client.authTimer.unref) client.authTimer.unref();
     ws.on('pong', () => { client.alive = true; });
     ws.on('message', (data, isBinary) => {
+      if (ws.readyState !== WebSocket.OPEN) return;
+      if (client.pending >= 20) {
+        closeClient(client, 1013, 'queue_limit');
+        return;
+      }
+      client.pending++;
       client.queue = client.queue.then(() => handleMessage(client, data, isBinary)).catch(() => {
         if (client.ready) sendError(client, 'bad_message');
+      }).finally(() => {
+        client.pending--;
       });
     });
     ws.on('error', () => {});
     ws.on('close', () => {
+      client.ready = false;
       clearTimeout(client.authTimer);
       clients.delete(client);
     });
@@ -193,6 +246,7 @@ export function createSyncSocket(options) {
       }
       client.alive = false;
       client.ws.ping();
+      void revalidate(client);
     }
   }, options.heartbeatMs || 25000);
   if (heartbeat.unref) heartbeat.unref();

@@ -104,7 +104,9 @@ async function start(options: Record<string, unknown> = {}) {
       },
     };
   }
-  return { connect, publish, records };
+  return { connect, publish, emit: (accountId: string, changes: Array<Record<string, unknown>>) => {
+    for (const listener of listeners) listener(accountId, changes);
+  }, records };
 }
 
 describe('sync websocket protocol', () => {
@@ -213,6 +215,64 @@ describe('sync websocket protocol', () => {
     const closed = client.closed();
     publish('account-a', [{ ...row, revision: 1 }]);
     expect(await closed).toEqual({ code: 1013, reason: 'backpressure' });
+  });
+
+  it('closes a revoked device before delivering live changes', async () => {
+    let allowed = true;
+    const { connect, emit } = await start({
+      authorize: async () => {
+        if (!allowed) throw Object.assign(new Error('bad_token'), { code: 'bad_token' });
+        return { accountId: 'account-a' };
+      },
+    });
+    const client = await connect();
+    await client.auth();
+    allowed = false;
+    const closed = client.closed();
+    emit('account-a', [{ ...row, revision: 1 }]);
+    expect(await closed).toEqual({ code: 1008, reason: 'bad_token' });
+  });
+
+  it('bounds queued incoming messages while a mutation is pending', async () => {
+    const gate = deferred();
+    const { connect } = await start({
+      mutate: async () => {
+        await gate.promise;
+        return [];
+      },
+    });
+    const client = await connect();
+    await client.auth();
+    const closed = client.closed();
+    for (let i = 0; i < 21; i++) client.send({ type: 'mutations', records: [{ ...row, mutationId: `mutation-${i}` }] });
+    gate.resolve([]);
+    expect(await closed).toEqual({ code: 1013, reason: 'queue_limit' });
+  });
+
+  it('drains every historical page before flushing buffered live changes', async () => {
+    const gate = deferred();
+    let source: Array<Record<string, unknown>> = [];
+    let first = true;
+    const { connect, records, emit } = await start({
+      pull: async (accountId: string, since: number, limit: number) => {
+        if (first) {
+          first = false;
+          await gate.promise;
+        }
+        return source.filter((record) => (record.revision as number) > since).slice(0, limit);
+      },
+    });
+    source = records;
+    for (let i = 1; i <= 600; i++) records.push({ ...row, id: `progress:${i}`, mutationId: `mutation-${i}`, revision: i });
+    const client = await connect();
+    await client.auth();
+    client.send({ type: 'resume', since: 0 });
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    emit('account-a', [{ ...row, id: 'progress:601', mutationId: 'mutation-601', revision: 601 }]);
+    gate.resolve([]);
+    expect((await client.next()).nextRevision).toBe(500);
+    expect((await client.next()).nextRevision).toBe(600);
+    expect((await client.next()).nextRevision).toBe(601);
   });
 
   it('terminates a client that does not answer heartbeat pings', async () => {
