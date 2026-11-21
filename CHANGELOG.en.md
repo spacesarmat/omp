@@ -4,7 +4,7 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
-## Unreleased
+## 0.30.3-beta.2
 
 - [phone] Sync reliably reapplies library changes after a restart and no longer moves Continue back when an older network response arrives after a newer one
 - [phone] The account shows what is playing on your other devices: title, episode, position and pause. Continue here opens the same file on the phone at the same position. Nothing switches automatically
