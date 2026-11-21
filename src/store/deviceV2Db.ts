@@ -104,7 +104,11 @@ async function localRows(tx: IDBTransaction, rows: SyncRecordV2[], accountId: st
     const row = baseRecord(input);
     if (!row.id || !row.kind || row.updatedAt <= 0) continue;
     const previous = await request(records.get(row.id)) as SyncRecord | undefined;
-    if (previous && newer(previous, row) === previous) continue;
+    const previousWins = previous && (
+      previous.updatedAt > row.updatedAt ||
+      (previous.updatedAt === row.updatedAt && previous.deviceId > row.deviceId)
+    );
+    if (previousWins) continue;
     if (skipExisting && existing.some((item) => item.accountId === accountId && sameEdit(item.row, row))) continue;
     for (const item of existing) {
       if (item.accountId === accountId && item.row.id === row.id && item.blocked) await request(outbox.delete(item.mutationId));
@@ -161,6 +165,10 @@ export function ackV2(acks: Array<{ mutationId: string; recordId: string; revisi
     const store = tx.objectStore(OUTBOX);
     for (const ack of acks) await request(store.delete(ack.mutationId));
   }).then(() => undefined);
+}
+
+export function dropV2Mutation(mutationId: string): Promise<void> {
+  return transaction([OUTBOX], 'readwrite', (tx) => request(tx.objectStore(OUTBOX).delete(mutationId))).then(() => undefined);
 }
 
 export function blockV2Mutation(mutationId: string, reason: string): Promise<void> {

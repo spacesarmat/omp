@@ -1,5 +1,6 @@
 // Push and pull remembered rows. A refused sync (no subscription) leaves the local copy as it is.
 import { BILLING_ORIGIN } from './config';
+import { runV2, setV2SyncContext, shouldUseV2 } from './deviceSyncV2Client';
 import { billingSession, deviceId, legacySyncLink, onBillingChange } from './session';
 import { withDeviceToken } from './tokens';
 import { ackSent, markSyncError, markSynced, noteSyncAccount, onDeviceWrite, putDeviceRecords, setSyncCursor, syncCursor, syncEnabled, unsentRecords } from '../store/deviceDb';
@@ -16,6 +17,7 @@ let contextOf: () => SourceContext | null = () => null;
 /** Android passes the same source context the rest of billing uses. A browser keeps window.fetch. */
 export function setSyncContext(fn: (() => SourceContext | null) | null): void {
   contextOf = fn || (() => null);
+  setV2SyncContext(fn);
 }
 
 export function scheduleDeviceSync(): void {
@@ -127,6 +129,21 @@ function finish(status: string): Promise<string> {
   return runDeviceSync();
 }
 
+function pumpSelected(owner: string, epoch: number, pending: SyncRecord[]): Promise<string> {
+  const v1 = () => pump(owner, syncCursor(), pending);
+  return shouldUseV2(owner, () => sameAccount(owner)).then((useV2) => {
+    if (!sameAccount(owner)) return 'switched';
+    if (!useV2) return v1();
+    return runV2(owner, epoch, () => sameAccount(owner)).then((status) => {
+      if (!sameAccount(owner)) return 'switched';
+      if (status === 'v1') return v1();
+      if (status === 'offline') return 'error';
+      if (status === 'denied') return 'subscribers';
+      return status;
+    });
+  }, v1);
+}
+
 export function runDeviceSync(): Promise<string> {
   if (!syncEnabled()) return Promise.resolve('off');
   const session = billingSession();
@@ -145,7 +162,7 @@ export function runDeviceSync(): Promise<string> {
   seenAccount = owner;
   const epoch = noteSyncAccount(owner);
   const pending = unsentRecords(epoch);
-  return pump(owner, syncCursor(), pending).then(
+  return pumpSelected(owner, epoch, pending).then(
     (status) => finish(status),
     () => finish('error'),
   );
