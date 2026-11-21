@@ -214,3 +214,31 @@ describe('sync websocket page ordering', () => {
     expect(revisions).toEqual([500, 600]);
   });
 });
+
+
+describe('sync websocket queue recovery', () => {
+  it('reconnects and accepts changes after a failed page', async () => {
+    revision = 7;
+    let calls = 0;
+    const accept = async (answer: any) => {
+      calls++;
+      if (calls === 1) throw new Error('indexeddb_failed');
+      revision = Math.max(revision, Number(answer.nextRevision) || 0);
+      return { blocked: 0, revision };
+    };
+    const client = make({ accept, reconnectMinMs: 10, reconnectMaxMs: 40, random: () => 0.5 });
+    client.start();
+    const first = FakeSocket.instances[0];
+    first.open();
+    await vi.waitFor(() => expect(first.sent.some((message) => message.type === 'auth')).toBe(true));
+    first.message({ type: 'ready' });
+    await vi.waitFor(() => expect(first.sent.some((message) => message.type === 'resume')).toBe(true));
+    first.message({ type: 'changes', records: [{ id: 'failed' }], nextRevision: 8 });
+    await vi.waitFor(() => expect(FakeSocket.instances.length).toBeGreaterThan(1));
+    const second = FakeSocket.instances[1];
+    const syncing = client.sync();
+    await handshake(second, 7);
+    expect(await syncing).toBe('ok');
+    expect(calls).toBe(2);
+  });
+});

@@ -127,7 +127,7 @@ export function createSyncSocketClient(options: Options): SyncSocketClient {
   }
 
   async function changed(message: any): Promise<void> {
-    if (!options.isOwner()) return;
+    if (!socket || socket.readyState !== 1 || !options.isOwner()) return;
     await options.accept({ records: Array.isArray(message.records) ? message.records : [], nextRevision: message.nextRevision }, []);
     if (message.hasMore) return;
     if (!resumed) {
@@ -165,8 +165,9 @@ export function createSyncSocketClient(options: Options): SyncSocketClient {
       return;
     }
     if (data.type === 'changes') {
-      changesQueue = changesQueue.then(() => changed(data));
-      void changesQueue.catch(() => socket && closed(socket));
+      changesQueue = changesQueue.then(() => changed(data)).catch(() => {
+        if (socket) closed(socket);
+      });
       return;
     }
     if (data.type === 'ack') {
