@@ -45,14 +45,16 @@ export function createSyncSocket(options) {
   }
 
   function sendChanges(client, records) {
-    if (!records.length) return;
-    const ordered = [...records].sort((a, b) => a.revision - b.revision);
-    send(client, {
+    const fresh = records.filter((record) => record.revision > client.lastRevision);
+    if (!fresh.length) return;
+    const ordered = [...fresh].sort((a, b) => a.revision - b.revision);
+    const nextRevision = ordered[ordered.length - 1].revision;
+    if (send(client, {
       type: 'changes',
       records: ordered,
-      nextRevision: ordered[ordered.length - 1].revision,
+      nextRevision,
       serverTime: now(),
-    });
+    })) client.lastRevision = nextRevision;
   }
 
   async function revalidate(client) {
@@ -132,6 +134,7 @@ export function createSyncSocket(options) {
         const payload = { type: 'changes', records, nextRevision: pageRevision, serverTime: now() };
         if (hasMore) payload.hasMore = true;
         if (!send(client, payload)) return;
+        client.lastRevision = pageRevision;
         if (!hasMore) {
           nextRevision = pageRevision;
           break;
@@ -203,6 +206,7 @@ export function createSyncSocket(options) {
       accountId: '',
       deviceId: '',
       token: '',
+      lastRevision: 0,
       alive: true,
       resuming: false,
       buffer: [],

@@ -244,9 +244,12 @@ describe('sync websocket protocol', () => {
     const client = await connect();
     await client.auth();
     const closed = client.closed();
-    for (let i = 0; i < 21; i++) client.send({ type: 'mutations', records: [{ ...row, mutationId: `mutation-${i}` }] });
-    gate.resolve([]);
-    expect(await closed).toEqual({ code: 1013, reason: 'queue_limit' });
+    try {
+      for (let i = 0; i < 21; i++) client.send({ type: 'mutations', records: [{ ...row, mutationId: `mutation-${i}` }] });
+      expect(await closed).toEqual({ code: 1013, reason: 'queue_limit' });
+    } finally {
+      gate.resolve([]);
+    }
   });
 
   it('drains every historical page before flushing buffered live changes', async () => {
@@ -273,6 +276,28 @@ describe('sync websocket protocol', () => {
     expect((await client.next()).nextRevision).toBe(500);
     expect((await client.next()).nextRevision).toBe(600);
     expect((await client.next()).nextRevision).toBe(601);
+  });
+
+  it('does not deliver an older live cursor after resume catches up', async () => {
+    const gate = deferred();
+    let calls = 0;
+    const { connect, records, emit } = await start({
+      authorize: async () => {
+        calls++;
+        if (calls === 2) await gate.promise;
+        return { accountId: 'account-a' };
+      },
+    });
+    for (let i = 1; i <= 3; i++) records.push({ ...row, id: `progress:${i}`, mutationId: `mutation-${i}`, revision: i });
+    const client = await connect();
+    await client.auth();
+    emit('account-a', [{ ...row, id: 'progress:2', mutationId: 'mutation-2', revision: 2 }]);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    client.send({ type: 'resume', since: 0 });
+    expect((await client.next()).nextRevision).toBe(3);
+    gate.resolve([]);
+    client.send({ type: 'ping' });
+    expect((await client.next()).type).toBe('pong');
   });
 
   it('terminates a client that does not answer heartbeat pings', async () => {
