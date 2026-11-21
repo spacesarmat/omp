@@ -39,6 +39,7 @@ export function parsePresenceInput(raw) {
 export function createPresenceStore(now = Date.now, ttlMs = 90000) {
   const accounts = new Map();
   const latest = new Map();
+  const latestIds = new Map();
   const cleared = new Map();
   const historyAt = new Map();
   const listeners = new Set();
@@ -72,12 +73,13 @@ export function createPresenceStore(now = Date.now, ttlMs = 90000) {
         if (at - stampedAt < historyTtl) continue;
         rows.delete(deviceId);
         if (latest.get(accountId)) latest.get(accountId).delete(deviceId);
+        if (latestIds.get(accountId)) latestIds.get(accountId).delete(deviceId);
         if (cleared.get(accountId)) cleared.get(accountId).delete(deviceId);
         removed++;
       }
       if (!rows.size) historyAt.delete(accountId);
     }
-    for (const root of [latest, cleared]) {
+    for (const root of [latest, latestIds, cleared]) {
       for (const [accountId, rows] of root) if (!rows.size) root.delete(accountId);
     }
     return removed;
@@ -126,10 +128,12 @@ export function createPresenceStore(now = Date.now, ttlMs = 90000) {
       const previous = rows.get(deviceId);
       const seen = mapFor(latest, accountId);
       const latestSeq = seen.get(deviceId) || 0;
-      if (parsed.sessionSeq < latestSeq || (!previous && latestSeq && parsed.sessionSeq === latestSeq)) return false;
+      const knownId = mapFor(latestIds, accountId).get(deviceId) || '';
+      if (parsed.sessionSeq < latestSeq || (!previous && latestSeq && parsed.sessionSeq === latestSeq && knownId !== parsed.sessionId)) return false;
       if (previous && (parsed.sessionSeq < previous.sessionSeq ||
         (parsed.sessionSeq === previous.sessionSeq && parsed.sessionId !== previous.sessionId))) return false;
       seen.set(deviceId, Math.max(latestSeq, parsed.sessionSeq));
+      mapFor(latestIds, accountId).set(deviceId, parsed.sessionId);
       const at = now();
       mapFor(historyAt, accountId).set(deviceId, at);
       rows.set(deviceId, { ...parsed, deviceId, updatedAt: at });

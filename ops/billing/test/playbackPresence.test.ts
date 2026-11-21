@@ -117,7 +117,8 @@ describe('playback presence store', () => {
     now += 90001;
     expect(store.list('account-a')).toEqual([]);
     expect(store.put('account-a', 'device-a', { ...input, sessionId: 'old', sessionSeq: 9 })).toBe(false);
-    expect(store.put('account-a', 'device-a', { ...input, sessionSeq: 10 })).toBe(false);
+    expect(store.put('account-a', 'device-a', { ...input, sessionId: 'other', sessionSeq: 10 })).toBe(false);
+    expect(store.put('account-a', 'device-a', { ...input, sessionSeq: 10 })).toBe(true);
   });
 
   it('sorts playing first, clears a device and isolates listener errors', () => {

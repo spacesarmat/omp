@@ -214,6 +214,7 @@ export function NativePlayerScreen({ queue, index, startAt, from, seasonNext }: 
         const dur = first.hash && first.fileIndex !== undefined ? (getLocalProgress(first.hash, first.fileIndex) || { duration: 0 }).duration : 0;
         // 2160 Player when installed (else the built-in one): the position it hands back is saved, then back
         p2160Package(plugin).then((pkg) => {
+          if (cancelled) return true;
           if (!pkg) return false;
           const io = skipIo(c);
           const prefs = io && first.hash ? io.load(first.hash).catch(() => null) : Promise.resolve(null);
