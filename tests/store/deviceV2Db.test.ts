@@ -97,3 +97,12 @@ describe('device V2 same-timestamp edits', () => {
     expect(outbox[1].row.body).toEqual({ time: 41 });
   });
 });
+
+
+describe('device V2 meta races', () => {
+  it('never lowers a stored revision', async () => {
+    await writeV2Meta('account-a', { revision: 10 });
+    await writeV2Meta('account-a', { revision: 5 });
+    expect(await readV2Meta('account-a')).toMatchObject({ revision: 10 });
+  });
+});

@@ -124,8 +124,10 @@ export function syncEnabled(): boolean {
 
 export function setSyncEnabled(on: boolean): void {
   const bag = read();
+  const changed = bag.syncOn !== on;
   bag.syncOn = on;
   write(bag, true);
+  if (changed) syncStateListener(on);
 }
 
 export function lastSyncAt(): number {
@@ -187,12 +189,18 @@ export function resetDeviceDb(): void {
 }
 
 let afterWrite: () => void = () => undefined;
+let syncStateListener: (on: boolean) => void = () => undefined;
 let hydrated = false;
 let writes = 0;
 
 /** The sync client registers here so a local write can upload without a import cycle. */
 export function onDeviceWrite(fn: () => void): void {
   afterWrite = fn;
+}
+
+export function onSyncStateChange(fn: (on: boolean) => void): () => void {
+  syncStateListener = fn;
+  return () => { syncStateListener = () => undefined; };
 }
 
 function mirrorIndexed(bag: Bag): void {

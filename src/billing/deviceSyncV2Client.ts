@@ -173,6 +173,7 @@ async function sendBatch(owner: string, since: number, rows: OutboxRow[], isOwne
   }
   if (ans.status === 409 && rows.length === 1) {
     await dropV2Mutation(rows[0].mutationId);
+    if (isOwner()) ackSent([rows[0].row]);
     markSyncError('expired');
     return { status: 'recovery', full: false };
   }
@@ -216,9 +217,15 @@ async function runV2Http(owner: string, epoch: number, isOwner: () => boolean): 
     if (!remaining && !result.full) break;
     if (result.full && nextMeta.revision <= meta.revision) return 'error';
   }
-  if (recovery) return 'error';
+  if (recovery) {
+    markSyncError('error');
+    return 'error';
+  }
   const blocked = (await readV2Outbox(owner)).some((row) => row.blocked);
-  if (blocked) return 'error';
+  if (blocked) {
+    markSyncError('error');
+    return 'error';
+  }
   markSynced(Date.now());
   return 'ok';
 }

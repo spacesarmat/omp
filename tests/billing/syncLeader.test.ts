@@ -58,12 +58,14 @@ describe('sync V2 leader', () => {
 
   it('takes over an expired or released lease', async () => {
     const a = make(() => {});
-    const b = make(() => {});
+    const runB = vi.fn();
+    const b = make(runB);
     a.start();
     b.start();
     a.stop();
     await vi.advanceTimersByTimeAsync(5000);
     expect(b.isLeader()).toBe(true);
+    await vi.waitFor(() => expect(runB).toHaveBeenCalledTimes(1));
   });
 
   it('uses storage events without BroadcastChannel', async () => {

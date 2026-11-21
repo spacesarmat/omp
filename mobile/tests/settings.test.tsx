@@ -1019,6 +1019,9 @@ describe('Sync V2 status', () => {
     expect(row.textContent).toContain('Offline, 3 изменения в очереди');
     act(() => updateSyncV2Status({ pending: 0, lastError: '', lastAt: Date.now() }));
     expect(row.textContent).toContain('Синхронизировано');
+    act(() => updateSyncV2Status({ blocked: 1, lastError: 'error' }));
+    expect(row.textContent).not.toContain('Синхронизировано');
+    expect(row.textContent).toContain('Не удалось');
     resetSyncV2Status();
   });
 });

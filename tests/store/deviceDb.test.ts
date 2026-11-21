@@ -29,3 +29,15 @@ describe('deviceDb V2 projection', () => {
     expect(deviceRecords()).toEqual([row]);
   });
 });
+
+
+describe('device V2 sync state notifications', () => {
+  it('notifies the transport when sync is disabled', async () => {
+    const { onSyncStateChange } = await import('../../src/store/deviceDb');
+    const seen = vi.fn();
+    const off = onSyncStateChange(seen);
+    setSyncEnabled(false);
+    expect(seen).toHaveBeenCalledWith(false);
+    off();
+  });
+});

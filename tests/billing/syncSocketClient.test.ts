@@ -184,3 +184,33 @@ describe('sync websocket connection failure', () => {
     expect(() => client.start()).not.toThrow();
   });
 });
+
+
+describe('sync websocket page ordering', () => {
+  it('accepts resume pages strictly in arrival order', async () => {
+    const revisions: number[] = [];
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    let calls = 0;
+    const accept = async (answer: any) => {
+      calls++;
+      revisions.push(answer.nextRevision);
+      if (calls === 1) await gate;
+      return { blocked: 0, revision: answer.nextRevision };
+    };
+    const client = make({ accept });
+    const syncing = client.sync();
+    const socket = FakeSocket.instances[0];
+    socket.open();
+    await vi.waitFor(() => expect(socket.sent.some((message) => message.type === 'auth')).toBe(true));
+    socket.message({ type: 'ready' });
+    await vi.waitFor(() => expect(socket.sent.some((message) => message.type === 'resume')).toBe(true));
+    socket.message({ type: 'changes', records: [{ id: 'page-1' }], nextRevision: 500, hasMore: true });
+    socket.message({ type: 'changes', records: [{ id: 'page-2' }], nextRevision: 600 });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(revisions).toEqual([500]);
+    release();
+    expect(await syncing).toBe('ok');
+    expect(revisions).toEqual([500, 600]);
+  });
+});

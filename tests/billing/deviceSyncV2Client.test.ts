@@ -120,6 +120,7 @@ describe('HTTP sync V2', () => {
     expect(await runV2('acc-1', 0, owner)).toBe('error');
     expect(sizes).toEqual([2, 1, 1]);
     expect(await readV2Outbox('acc-1')).toEqual([]);
+    expect(unsentRecords(0)).toEqual([]);
   });
 });
 

@@ -207,6 +207,7 @@ export function writeV2Meta(accountId: string, patch: { [key: string]: unknown }
     const key = 'account:' + accountId;
     const previous = await request(store.get(key)) || { key, accountId, revision: 0 };
     const next = { ...previous, ...patch, key, accountId };
+    if (typeof next.revision === 'number') next.revision = Math.max(previous.revision, next.revision);
     await request(store.put(next));
     return next;
   });

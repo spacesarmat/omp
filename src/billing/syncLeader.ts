@@ -71,7 +71,11 @@ export function createSyncLeader(options: { deviceId: string; run: () => unknown
   }
 
   function refresh(): void {
-    if (!leader) return acquire();
+    if (!leader) {
+      acquire();
+      if (leader) execute();
+      return;
+    }
     const current = readLease();
     if (!current || current.owner !== owner) {
       leader = false;

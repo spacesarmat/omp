@@ -80,6 +80,7 @@ export function createSyncSocketClient(options: Options): SyncSocketClient {
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   let connectTimer: ReturnType<typeof setTimeout> | null = null;
   let reconnectAttempt = 0;
+  let changesQueue: Promise<void> = Promise.resolve();
   let flight: {
     rows: OutboxRow[];
     resolve: (status: string) => void;
@@ -164,7 +165,8 @@ export function createSyncSocketClient(options: Options): SyncSocketClient {
       return;
     }
     if (data.type === 'changes') {
-      void changed(data).catch(() => socket && closed(socket));
+      changesQueue = changesQueue.then(() => changed(data));
+      void changesQueue.catch(() => socket && closed(socket));
       return;
     }
     if (data.type === 'ack') {

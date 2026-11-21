@@ -5,8 +5,8 @@ import { createSyncLeader, type SyncLeader } from './syncLeader';
 import { publishSyncV2Result, resetSyncV2Status, syncV2Status } from './syncV2Status';
 import { billingSession, deviceId, legacySyncLink, onBillingChange } from './session';
 import { withDeviceToken } from './tokens';
-import { ackSent, markSyncError, markSynced, noteSyncAccount, onDeviceWrite, putDeviceRecords, setSyncCursor, syncCursor, syncEnabled, unsentRecords } from '../store/deviceDb';
-import { applyPulled } from '../store/applyPulled';
+import { ackSent, markSyncError, markSynced, noteSyncAccount, onDeviceWrite, onSyncStateChange, putDeviceRecords, setSyncCursor, syncCursor, syncEnabled, unsentRecords } from '../store/deviceDb';
+import { applyPulled, reapplyDeviceRecords } from '../store/applyPulled';
 import type { SyncRecord } from '../store/syncMerge';
 import type { SourceContext } from '../sources/types';
 
@@ -150,7 +150,7 @@ function runV2Leader(owner: string, epoch: number): Promise<string> {
     let running: Promise<string> | null = null;
     v2RunOwned = () => {
       if (running) return running;
-      running = runV2(owner, epoch, () => sameAccount(owner) && !!v2Leader && v2Leader.isLeader()).finally(() => { running = null; });
+      running = runV2(owner, epoch, () => syncEnabled() && sameAccount(owner) && !!v2Leader && v2Leader.isLeader()).finally(() => { running = null; });
       return running;
     };
     v2LeaderOwner = owner;
@@ -158,6 +158,7 @@ function runV2Leader(owner: string, epoch: number): Promise<string> {
       deviceId: deviceId(),
       run: () => v2RunOwned ? v2RunOwned() : 'error',
       publish: (value) => {
+        if (v2Leader && !v2Leader.isLeader()) reapplyDeviceRecords();
         const status = typeof value === 'string' ? value : 'error';
         publishSyncV2Result(owner, status, syncV2Status().transport);
       },
@@ -242,6 +243,9 @@ onBillingChange(() => {
 });
 
 onDeviceWrite(scheduleDeviceSync);
+onSyncStateChange((on) => {
+  if (!on) stopV2Runtime();
+});
 if (typeof window !== 'undefined') window.addEventListener('pagehide', stopV2Socket);
 
 export interface SyncDeviceRow {

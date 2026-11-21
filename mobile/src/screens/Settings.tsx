@@ -482,13 +482,15 @@ function SyncRow() {
       ? t('settings.syncLocal')
       : v2.lastError === 'offline' && v2.pending > 0
         ? t('settings.syncOfflineQueue', { n: v2.pending })
-        : err
-          ? t('settings.syncFail', { reason: syncReason(err) })
-          : v2.pending > 0
-            ? t('settings.syncPending', { n: v2.pending })
-            : v2.transport && v2.lastAt
-              ? t('settings.syncSynchronized')
-              : t('settings.syncLast', { when: syncWhen(at, now) });
+        : (v2.blocked > 0 || v2.lastError === 'error')
+          ? t('settings.syncFail', { reason: syncReason('error') })
+          : err
+            ? t('settings.syncFail', { reason: syncReason(err) })
+            : v2.pending > 0
+              ? t('settings.syncPending', { n: v2.pending })
+              : v2.transport && v2.lastAt
+                ? t('settings.syncSynchronized')
+                : t('settings.syncLast', { when: syncWhen(at, now) });
   return (
     <div data-row="sync">
       <div class="m-set-row">
