@@ -301,6 +301,8 @@ Object stores:
 
 ### Этап 3. Realtime
 
+Серверная часть `/v2/sync/ws` использует тот же Node HTTP-процесс и mutation service, что и `/v1` и `/v2`. События рассылаются только после PostgreSQL commit, resume догружает все исторические страницы перед live-буфером. Доступ устройства перепроверяется для команд, heartbeat и live-доставки. Auth timeout 5 секунд, heartbeat 25 секунд, payload 8 КБ, входящая очередь 20 сообщений, лимиты 20 соединений на аккаунт и 5 на устройство. Read-only режим отклоняет Upgrade. Существующий Caddy `reverse_proxy` передает Upgrade без изменения конфигурации. Клиентский переход и presence пока не включены.
+
 - WebSocket и resume;
 - presence;
 - новый клиент под feature flag;

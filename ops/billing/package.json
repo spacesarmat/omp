@@ -12,7 +12,8 @@
   },
   "dependencies": {
     "nodemailer": "^10.5.0",
-    "pg": "8.23.1"
+    "pg": "8.23.1",
+    "ws": "8.23.0"
   },
   "devDependencies": {
     "@playwright/test": "^1.65.1"

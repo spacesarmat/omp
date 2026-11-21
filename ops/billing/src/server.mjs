@@ -161,6 +161,7 @@ import { createPlaybackStore } from './db/pg/playbackSql.mjs';
 import { parseProgressBody, parseProgressQuery } from './playbackProgress.mjs';
 import { createSyncStore, maySync, parseSyncBody, syncAudience } from './deviceSync.mjs';
 import { createSyncV2Store, legacyMutationId, parseSyncV2Body } from './deviceSyncV2.mjs';
+import { createSyncSocket } from './syncSocket.mjs';
 import { createCacheRepo } from './db/pg/cacheNodesSql.mjs';
 import { cacheEnabled } from './cacheNodes.mjs';
 import { isCachePath, routeCache } from './cacheHttp.mjs';
@@ -1603,6 +1604,31 @@ export function createApp(file, fetchImpl, opts) {
   const playback = (opts && opts.playback) || (typeof store.query === 'function' ? createPlaybackStore(store) : null);
   const syncDb = (opts && opts.syncDb) || (typeof store.query === 'function' ? createSyncStore(store.query.bind(store)) : null);
   const syncV2Db = (opts && opts.syncV2Db) || (typeof store.withClient === 'function' ? createSyncV2Store(store) : null);
+  const authorizeSync = async (token, device) => {
+    if (!token) return { status: 401, error: 'bad_token' };
+    const state = await store.read();
+    const caller = await deviceCaller(state, token, device, Date.now());
+    if (!caller || caller.error) return { status: 401, error: (caller && caller.error) || 'bad_token' };
+    const sub = state.subscriptions.find((s) => s.id === caller.code.subscriptionId);
+    const accountId = sub && sub.accountId ? String(sub.accountId) : '';
+    if (!accountId) return { status: 404, error: 'not_linked' };
+    const view = subscriptionView(state, accountId, Date.now());
+    if (!maySync(state.settings, !!(view && view.active))) return { status: 403, error: 'subscribers_only' };
+    return { accountId };
+  };
+  const syncSocket = !readOnly && syncDb && syncV2Db && typeof syncV2Db.onChanges === 'function' ? createSyncSocket({
+    authorize: async (token, device) => {
+      const access = await authorizeSync(token, device);
+      if (access.error) throw Object.assign(new Error(access.error), { code: access.error });
+      return { accountId: access.accountId };
+    },
+    seen: async (accountId, device, at) => {
+      if (syncDb.seen) await syncDb.seen(accountId, device, at);
+    },
+    pull: (accountId, since, limit) => syncV2Db.pull(accountId, since, limit),
+    mutate: (accountId, device, records, at) => syncV2Db.mutate(accountId, device, records, at),
+    onChanges: (listener) => syncV2Db.onChanges(listener),
+  }) : null;
   const progressRate = createRateLimit(40, 60 * 1000);
   // Crypto Pay invoices. Ten creates per device per 10 minutes.
   const cryptoPayRate = createRateLimit(10, 10 * 60 * 1000);
@@ -1784,7 +1810,7 @@ export function createApp(file, fetchImpl, opts) {
     };
   }
 
-  return async function handle(req, res) {
+  const app = async function handle(req, res) {
     const url = new URL(req.url || '/', 'http://127.0.0.1');
     const path = url.pathname;
     try {
@@ -3525,17 +3551,10 @@ export function createApp(file, fetchImpl, opts) {
       if (req.method === 'POST' && path === '/v1/sync') {
         const device = String(req.headers['x-device-id'] || '');
         const token = bearer(req);
-        if (!token) return json(res, 401, { error: 'bad_token' });
         if (!syncDb) return json(res, 503, { error: 'unavailable' });
-        const state = await store.read();
-        const caller = await deviceCaller(state, token, device, Date.now());
-        if (!caller || caller.error) return json(res, 401, { error: (caller && caller.error) || 'bad_token' });
-        const sub = state.subscriptions.find((s) => s.id === caller.code.subscriptionId);
-        const accountId = sub && sub.accountId ? String(sub.accountId) : '';
-        if (!accountId) return json(res, 404, { error: 'not_linked' });
-        const view = subscriptionView(state, accountId, Date.now());
-        const active = !!(view && view.active);
-        if (!maySync(state.settings, active)) return json(res, 403, { error: 'subscribers_only' });
+        const access = await authorizeSync(token, device);
+        if (access.error) return json(res, access.status, { error: access.error });
+        const accountId = access.accountId;
         const body = await readBody(req);
         const parsed = parseSyncBody(body);
         if (parsed.error) return json(res, 400, { error: parsed.error });
@@ -3559,16 +3578,10 @@ export function createApp(file, fetchImpl, opts) {
       if (req.method === 'POST' && path === '/v2/sync') {
         const device = String(req.headers['x-device-id'] || '');
         const token = bearer(req);
-        if (!token) return json(res, 401, { error: 'bad_token' });
         if (!syncDb || !syncV2Db) return json(res, 503, { error: 'unavailable' });
-        const state = await store.read();
-        const caller = await deviceCaller(state, token, device, Date.now());
-        if (!caller || caller.error) return json(res, 401, { error: (caller && caller.error) || 'bad_token' });
-        const sub = state.subscriptions.find((s) => s.id === caller.code.subscriptionId);
-        const accountId = sub && sub.accountId ? String(sub.accountId) : '';
-        if (!accountId) return json(res, 404, { error: 'not_linked' });
-        const view = subscriptionView(state, accountId, Date.now());
-        if (!maySync(state.settings, !!(view && view.active))) return json(res, 403, { error: 'subscribers_only' });
+        const access = await authorizeSync(token, device);
+        if (access.error) return json(res, access.status, { error: access.error });
+        const accountId = access.accountId;
         const body = await readBody(req);
         const parsed = parseSyncV2Body(body);
         if (parsed.error) return json(res, 400, { error: parsed.error });
@@ -4093,6 +4106,16 @@ export function createApp(file, fetchImpl, opts) {
       return json(res, 500, { error: 'down' });
     }
   };
+  app.syncUpgrade = (req, socket, head) => {
+    if (syncSocket) return syncSocket.handleUpgrade(req, socket, head);
+    const path = new URL(req.url || '/', 'http://127.0.0.1').pathname;
+    const status = path === '/v2/sync/ws' ? 503 : 404;
+    socket.end(`HTTP/1.1 ${status} ${status === 503 ? 'Service Unavailable' : 'Not Found'}\r\nConnection: close\r\n\r\n`);
+  };
+  app.syncClose = () => {
+    if (syncSocket) syncSocket.close();
+  };
+  return app;
 }
 
 export function listen(file, port, fetchImpl, opts) {
@@ -4100,6 +4123,8 @@ export function listen(file, port, fetchImpl, opts) {
   // must keep its counters between requests. State is still read from the store per request.
   const app = createApp(file, fetchImpl, opts);
   const server = createServer(app);
+  server.on('upgrade', app.syncUpgrade);
+  server.on('close', app.syncClose);
   // BILLING_HOST=127.0.0.1 for host+tunnel; 0.0.0.0 inside Docker (Caddy reaches it on the compose network)
   const host = (opts && opts.host) || process.env.BILLING_HOST || '0.0.0.0';
   // Load saved DHT counters before the first request, so a restart does not serve an empty chart.
