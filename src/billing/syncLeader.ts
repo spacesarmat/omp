@@ -52,7 +52,10 @@ export function createSyncLeader(options: { deviceId: string; run: () => unknown
         options.publish(status);
         post({ type: 'status', from: owner, value: status });
       },
-      () => options.publish('error'),
+      () => {
+        options.publish('error');
+        post({ type: 'status', from: owner, value: 'error' });
+      },
     );
   }
 

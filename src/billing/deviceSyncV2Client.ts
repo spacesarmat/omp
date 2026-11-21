@@ -1,8 +1,9 @@
 import { BILLING_ORIGIN } from './config';
 import { billingSession, deviceId, type BillingAccount } from './session';
 import { canUseV2 } from './syncV2Capabilities';
+import { createSyncSocketClient, type SyncSocketClient } from './syncSocketClient';
+import { publishSyncV2Result, refreshSyncV2Status, updateSyncV2Status } from './syncV2Status';
 import { withDeviceToken } from './tokens';
-import { fetchBillingAccount } from '../sources/ompJackett';
 import type { HttpOptions, SourceContext } from '../sources/types';
 import {
   ackSent, markSyncError, markSynced, putDeviceRecords, unsentRecords,
@@ -45,13 +46,38 @@ function browserContext(): SourceContext {
   };
 }
 
+function fetchSyncAccount(ctx: SourceContext): Promise<BillingAccount | null> {
+  return withDeviceToken(ctx, (headers) => ctx.http.get(BILLING_ORIGIN + '/v1/me', { headers, timeoutMs: 12000 })).then((res) => {
+    if (res.status !== 200) return null;
+    try {
+      const body = JSON.parse(res.text || '{}');
+      const sync = body.sync && typeof body.sync === 'object' && typeof body.sync.allowed === 'boolean'
+        ? {
+            audience: body.sync.audience === 'all' ? 'all' as const : 'subscribers' as const,
+            allowed: body.sync.allowed,
+            v2: body.sync.v2 !== false,
+          }
+        : undefined;
+      return {
+        telegramId: typeof body.telegramId === 'string' ? body.telegramId : '',
+        paidUntil: Number(body.paidUntil) || 0,
+        active: body.active === true,
+        deviceLimit: Number(body.deviceLimit) || 0,
+        sync,
+      };
+    } catch (e) {
+      return null;
+    }
+  });
+}
+
 export async function shouldUseV2(owner: string, isOwner: () => boolean): Promise<boolean> {
   if (!isOwner()) return false;
   const cached = accountCache.get(owner);
   let account = cached && Date.now() - cached.at < 60000 ? cached.account : undefined;
   if (account === undefined) {
     const ctx = contextOf && contextOf() || browserContext();
-    account = await fetchBillingAccount(ctx).catch(() => null);
+    account = await fetchSyncAccount(ctx).catch(() => null);
     if (!isOwner()) return false;
     accountCache.set(owner, { at: Date.now(), account });
   }
@@ -123,6 +149,7 @@ export async function acceptV2Page(owner: string, answer: V2Answer, sent: Outbox
   const previous = await readV2Meta(owner);
   const revision = Math.max(previous.revision, Number(answer.nextRevision) || 0);
   if (revision !== previous.revision) await writeV2Meta(owner, { revision });
+  await refreshSyncV2Status(owner);
   return { blocked, revision };
 }
 
@@ -162,7 +189,7 @@ async function sendBatch(owner: string, since: number, rows: OutboxRow[], isOwne
   return { status: accepted.blocked ? 'recovery' : 'ok', full: (ans.data.records || []).length >= 500 };
 }
 
-export async function runV2(owner: string, epoch: number, isOwner: () => boolean): Promise<string> {
+async function runV2Http(owner: string, epoch: number, isOwner: () => boolean): Promise<string> {
   await enqueueUnsent(unsentRecords(epoch), owner);
   let recovery = false;
   for (let page = 0; page < 100; page++) {
@@ -182,4 +209,61 @@ export async function runV2(owner: string, epoch: number, isOwner: () => boolean
   if (blocked) return 'error';
   markSynced(Date.now());
   return 'ok';
+}
+
+let socketClient: SyncSocketClient | null = null;
+let socketOwner = '';
+
+export function stopV2Socket(): void {
+  if (socketClient) socketClient.stop();
+  socketClient = null;
+  socketOwner = '';
+}
+
+export function isV2SocketReady(): boolean {
+  return !!socketClient && socketClient.isReady();
+}
+
+function socketFor(owner: string, epoch: number, isOwner: () => boolean): SyncSocketClient | null {
+  if (typeof WebSocket === 'undefined') return null;
+  if (socketClient && socketOwner === owner) return socketClient;
+  stopV2Socket();
+  socketOwner = owner;
+  socketClient = createSyncSocketClient({
+    owner,
+    deviceId: deviceId(),
+    token: accessToken,
+    isOwner,
+    readMeta: readV2Meta,
+    readOutbox: readV2Outbox,
+    accept: (answer, sent) => acceptV2Page(owner, answer, sent),
+    fallback: () => runV2Http(owner, epoch, isOwner),
+    block: blockV2Mutation,
+    socketFactory: (url) => new WebSocket(url) as any,
+    onStatus: (status) => {
+      if (status === 'http') updateSyncV2Status({ transport: 'http' });
+      else if (status === 'offline') updateSyncV2Status({ lastError: 'offline' });
+      else updateSyncV2Status({ transport: 'websocket', lastAt: Date.now(), lastError: '' });
+      void refreshSyncV2Status(owner).catch(() => undefined);
+    },
+  });
+  return socketClient;
+}
+
+export async function runV2(owner: string, epoch: number, isOwner: () => boolean): Promise<string> {
+  if (!isOwner()) return 'error';
+  const client = socketFor(owner, epoch, isOwner);
+  let status: string;
+  if (client && client.isReady()) {
+    await enqueueUnsent(unsentRecords(epoch), owner);
+    status = await client.sync();
+    if (status === 'ok') markSynced(Date.now());
+    else if (status !== 'offline' && status !== 'denied') markSyncError(status);
+  } else {
+    status = await runV2Http(owner, epoch, isOwner);
+    if (status === 'ok' && client && isOwner()) client.start();
+  }
+  const transport = status === 'v1' ? 'v1' : client && client.isReady() ? 'websocket' : 'http';
+  publishSyncV2Result(owner, status, transport);
+  return status;
 }

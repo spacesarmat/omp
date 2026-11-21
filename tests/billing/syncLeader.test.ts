@@ -79,3 +79,17 @@ describe('sync V2 leader', () => {
     await vi.waitFor(() => expect(runA).toHaveBeenCalledTimes(1));
   });
 });
+
+
+describe('sync leader errors', () => {
+  it('publishes a leader failure to followers', async () => {
+    const a = createSyncLeader({ deviceId: 'device-a', run: () => Promise.reject(new Error('offline')), publish: () => {} });
+    const seen = vi.fn();
+    const b = createSyncLeader({ deviceId: 'device-a', run: () => {}, publish: seen });
+    leaders.push(a, b);
+    a.start();
+    b.start();
+    b.request();
+    await vi.waitFor(() => expect(seen).toHaveBeenCalledWith('error'));
+  });
+});
