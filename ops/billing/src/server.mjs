@@ -162,6 +162,7 @@ import { parseProgressBody, parseProgressQuery } from './playbackProgress.mjs';
 import { createSyncStore, maySync, parseSyncBody, syncAudience } from './deviceSync.mjs';
 import { createSyncV2Store, legacyMutationId, parseSyncV2Body } from './deviceSyncV2.mjs';
 import { createSyncSocket } from './syncSocket.mjs';
+import { createPresenceStore, parsePresenceInput } from './playbackPresence.mjs';
 import { createCacheRepo } from './db/pg/cacheNodesSql.mjs';
 import { cacheEnabled } from './cacheNodes.mjs';
 import { isCachePath, routeCache } from './cacheHttp.mjs';
@@ -1604,6 +1605,7 @@ export function createApp(file, fetchImpl, opts) {
   const playback = (opts && opts.playback) || (typeof store.query === 'function' ? createPlaybackStore(store) : null);
   const syncDb = (opts && opts.syncDb) || (typeof store.query === 'function' ? createSyncStore(store.query.bind(store)) : null);
   const syncV2Db = (opts && opts.syncV2Db) || (typeof store.withClient === 'function' ? createSyncV2Store(store) : null);
+  const presenceDb = createPresenceStore();
   const authorizeSync = async (token, device) => {
     if (!token) return { status: 401, error: 'bad_token' };
     const state = await store.read();
@@ -1628,6 +1630,7 @@ export function createApp(file, fetchImpl, opts) {
     pull: (accountId, since, limit) => syncV2Db.pull(accountId, since, limit),
     mutate: (accountId, device, records, at) => syncV2Db.mutate(accountId, device, records, at),
     onChanges: (listener) => syncV2Db.onChanges(listener),
+    presence: presenceDb,
   }) : null;
   const progressRate = createRateLimit(40, 60 * 1000);
   // Crypto Pay invoices. Ten creates per device per 10 minutes.
@@ -3597,6 +3600,27 @@ export function createApp(file, fetchImpl, opts) {
         let nextRevision = parsed.since;
         for (let i = 0; i < records.length; i++) if (records[i].revision > nextRevision) nextRevision = records[i].revision;
         return json(res, 200, { ok: true, records, nextRevision, ack, serverTime: Date.now() });
+      }
+      if ((req.method === 'GET' || req.method === 'POST') && path === '/v2/sync/presence') {
+        const cors = browserReadCors(path);
+        for (const [name, value] of Object.entries(cors)) res.setHeader(name, value);
+        const device = String(req.headers['x-device-id'] || '');
+        const access = await authorizeSync(bearer(req), device);
+        if (access.error) return json(res, access.status, { error: access.error });
+        const accountId = access.accountId;
+        if (req.method === 'POST') {
+          if (readOnly) return json(res, 503, { error: 'read_only' });
+          const body = await readBody(req);
+          if (body.presence === null) {
+            if (!Number.isSafeInteger(body.sessionSeq) || body.sessionSeq <= 0) return json(res, 400, { error: 'bad_presence' });
+            presenceDb.clear(accountId, device, body.sessionSeq);
+          } else {
+            const parsed = parsePresenceInput(body.presence);
+            if (parsed.error) return json(res, 400, { error: parsed.error });
+            presenceDb.put(accountId, device, parsed);
+          }
+        }
+        return json(res, 200, { ok: true, presences: presenceDb.list(accountId), serverTime: Date.now() });
       }
       if (req.method === 'GET' && path === '/v1/dht-peers') {
         // Same device token as /v1/me. A paid subscription is not required: the button is on every release.

@@ -9,6 +9,7 @@ import { resetSettings, updateSettings } from '../../src/store/settings';
 import { saveProgress, reloadProgress, getLocalProgress } from '../../src/store/progress';
 import { attachPhone, detachPhone, setLinkTransport } from '../../src/phone/link';
 import type { PlayItem } from '../../src/player/types';
+import * as presenceClient from '../../src/billing/presenceClient';
 
 const recorded: { hash: string; entry: any }[] = [];
 vi.mock('../../src/store/journal', async (orig) => ({
@@ -82,6 +83,22 @@ afterEach(() => {
 });
 
 describe('NativePlayerScreen with 2160 Player', () => {
+  it('does not start presence when the package answer arrives after unmount', async () => {
+    updateSettings({ videoPlayer: 'p2160' });
+    const f = fakeCapacitor();
+    let resolvePackage!: (value: { package: string }) => void;
+    (f.plugin as any).player2160 = vi.fn(() => new Promise((resolve) => { resolvePackage = resolve; }));
+    const start = vi.spyOn(presenceClient, 'startPresenceReporting');
+    const host = mount(h(NativePlayerScreen, { queue, index: 0 }));
+    await until(() => (f.plugin as any).player2160.mock.calls.length === 1);
+    await unmount(host);
+    resolvePackage({ package: 'tv.p2160.player' });
+    await new Promise((resolve) => setTimeout(resolve, 80));
+    expect(start).not.toHaveBeenCalled();
+    start.mockRestore();
+    resetSettings();
+  });
+
   it('launches 2160 Player instead of the native session and goes back', async () => {
     updateSettings({ videoPlayer: 'p2160' });
     const f = fakeCapacitor();

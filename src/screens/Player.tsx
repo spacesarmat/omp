@@ -66,6 +66,9 @@ import { colorKeyCommand, colorKeyOverWindow, WEB_NIGHT_SOUND, type ColorKeyComm
 import { choose, dialogOpen, dismissDialog } from '../ui/dialog';
 import { toast } from '../ui/toast';
 import { setPlayerBridge, postSoon } from '../phone/link';
+import { startPresenceReporting } from '../billing/presenceClient';
+import { deviceName } from '../platform/deviceName';
+import { platformKind } from '../platform/env';
 import { buildSnapshot, liveTiming, runCmd } from '../player/phoneBridge';
 import { DonateCard, donateCardEnabled, donateMode } from '../player/DonateCard';
 import { journalSupportActive } from '../store/support';
@@ -920,6 +923,24 @@ export function PlayerScreen({ queue, index: startIndex, startAt, from, seasonNe
     snapshot: () => bridgeImpl.current.snapshot(),
     exec: (c) => bridgeImpl.current.exec(c),
   }), []);
+  useEffect(() => {
+    const stop = startPresenceReporting(() => {
+      const snapshot = bridgeImpl.current.snapshot();
+      if (!snapshot) return null;
+      return {
+        state: snapshot.paused ? 'paused' as const : 'playing' as const,
+        hash: snapshot.hash,
+        fileId: snapshot.file,
+        title: snapshot.subtitle || snapshot.title,
+        episode: '',
+        positionSec: snapshot.time,
+        durationSec: snapshot.duration,
+        deviceName: deviceName.value,
+        platform: platformKind() === 'androidtv' ? 'androidtv' as const : 'lg' as const,
+      };
+    }, 'tv-player');
+    return () => stop();
+  }, []);
   useEffect(() => { postSoon(); }, [index, vs.paused, probe]);
 
   const undoSkip = () => {

@@ -5,6 +5,7 @@ import { updateSettings } from '../../src/store/settings';
 import { getLocalProgress, reloadProgress } from '../../src/store/progress';
 import { tvNoOmp } from '../src/tv/tvClient';
 import { TorrServerClient } from '../../src/api/torrserver';
+import * as presenceClient from '../../src/billing/presenceClient';
 
 describe('watchOnTvParams', () => {
   it('builds the full launch params', () => {
@@ -159,6 +160,35 @@ describe('watchOnPhone', () => {
     // the journal gets where the player stopped (episode 3 at 10:00), not the start at 2:05
     await vi.waitFor(() => expect(a.recordWatch).toHaveBeenCalledTimes(1));
     expect(a.recordWatch.mock.calls[0][2]).toMatchObject({ f: 3, t: 600, d: 2400, src: 'phone' });
+    done();
+  });
+
+  it('reports embedded playback start and actual final position', async () => {
+    reset();
+    const a = mk();
+    setWatchActions(a);
+    const stop = vi.fn();
+    let source: () => presenceClient.PresenceReport | null = () => null;
+    vi.spyOn(presenceClient, 'startPresenceReporting').mockImplementation((next) => {
+      source = next;
+      return stop;
+    });
+    a.playEmbedded2160.mockResolvedValue({ returned: true, positionMs: 600000, durationMs: 2400000, url: 'http://h:8090/stream/Show.S01E03.mkv?link=abc&index=3&play' });
+    await watchOnPhone(c, tor as any, w(2, 125.7));
+    expect(source()).toMatchObject({ state: 'playing', fileId: 2, positionSec: 125 });
+    expect(stop).toHaveBeenCalledWith(expect.objectContaining({ state: 'paused', fileId: 3, episode: 'Show.S01E03.mkv', positionSec: 600, durationSec: 2400 }));
+    done();
+  });
+
+  it('clears embedded presence and rethrows a player failure', async () => {
+    reset();
+    const a = mk();
+    setWatchActions(a);
+    const stop = vi.fn();
+    vi.spyOn(presenceClient, 'startPresenceReporting').mockReturnValue(stop);
+    a.playEmbedded2160.mockRejectedValue(new Error('player failed'));
+    await expect(watchOnPhone(c, tor as any, w(2, 0))).rejects.toThrow('player failed');
+    expect(stop).toHaveBeenCalledWith(null);
     done();
   });
 
