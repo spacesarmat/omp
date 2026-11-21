@@ -89,7 +89,9 @@ function baseRecord(row: SyncRecordV2): SyncRecord {
 }
 
 function sameEdit(row: SyncRecordV2, other: SyncRecordV2): boolean {
-  return row.id === other.id && row.updatedAt === other.updatedAt && row.deviceId === other.deviceId;
+  return row.id === other.id && row.kind === other.kind && row.key === other.key
+    && row.updatedAt === other.updatedAt && row.deviceId === other.deviceId
+    && row.deleted === other.deleted && JSON.stringify(row.body) === JSON.stringify(other.body);
 }
 
 async function localRows(tx: IDBTransaction, rows: SyncRecordV2[], accountId: string, skipExisting: boolean): Promise<OutboxRow[]> {

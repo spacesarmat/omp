@@ -122,3 +122,42 @@ describe('HTTP sync V2', () => {
     expect(await readV2Outbox('acc-1')).toEqual([]);
   });
 });
+
+
+describe('HTTP V2 large batches and stale pages', () => {
+  it('splits a 413 batch and accepts the smaller records', async () => {
+    putDeviceRecords([
+      { ...row, body: { text: 'a'.repeat(140000) } },
+      { ...row, id: 'progress:abc:2', body: { text: 'b'.repeat(140000) } },
+    ]);
+    const sizes: number[] = [];
+    vi.stubGlobal('fetch', vi.fn((_url: string, init: { body: string }) => {
+      const body = JSON.parse(init.body);
+      sizes.push(body.records.length);
+      if (body.records.length > 1) return Promise.resolve(answer({}, 413));
+      return Promise.resolve(answer({
+        ok: true, records: [], nextRevision: 1,
+        ack: [{ recordId: body.records[0].id, mutationId: body.records[0].mutationId, revision: 1 }],
+      }));
+    }));
+    expect(await runV2('acc-1', 0, owner)).toBe('ok');
+    expect(sizes).toEqual([2, 1, 1]);
+    expect(await readV2Outbox('acc-1')).toEqual([]);
+  });
+
+  it('quarantines a single record that still exceeds the HTTP limit', async () => {
+    putDeviceRecords([{ ...row, body: { text: 'x'.repeat(300000) } }]);
+    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(answer({}, 413))));
+    expect(await runV2('acc-1', 0, owner)).toBe('error');
+    expect((await readV2Outbox('acc-1'))[0].blocked).toBe('too_large');
+  });
+
+  it('does not apply a page when its owner is already stale', async () => {
+    const { acceptV2Page } = await import('../../src/billing/deviceSyncV2Client');
+    const incoming = { ...row, id: 'progress:other:1', updatedAt: 200, deviceId: 'other' };
+    await acceptV2Page('acc-1', { ok: true, records: [incoming], nextRevision: 9, ack: [] }, [], () => false);
+    const { deviceRecords } = await import('../../src/store/deviceDb');
+    expect(deviceRecords().some((item) => item.id === incoming.id)).toBe(false);
+    expect(await readV2Meta('acc-1')).toMatchObject({ revision: 0 });
+  });
+});

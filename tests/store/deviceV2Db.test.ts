@@ -86,3 +86,14 @@ describe('device V2 IndexedDB', () => {
     expect(pending[0].blocked).toBeUndefined();
   });
 });
+
+
+describe('device V2 same-timestamp edits', () => {
+  it('keeps a different body as a separate unsent mutation', async () => {
+    await enqueueUnsent([row], 'account-a');
+    await enqueueUnsent([{ ...row, body: { time: 41 } }], 'account-a');
+    const outbox = await readV2Outbox('account-a');
+    expect(outbox).toHaveLength(2);
+    expect(outbox[1].row.body).toEqual({ time: 41 });
+  });
+});

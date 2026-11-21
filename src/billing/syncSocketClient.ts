@@ -31,7 +31,6 @@ interface Options {
   readOutbox: (owner: string) => Promise<OutboxRow[]>;
   accept: (answer: SocketAnswer, sent: OutboxRow[]) => Promise<{ blocked: number; revision: number }>;
   fallback: () => Promise<string>;
-  block?: (mutationId: string, reason: string) => Promise<void>;
   socketFactory: (url: string) => SocketLike;
   ackTimeoutMs?: number;
   reconnectMinMs?: number;
@@ -235,11 +234,7 @@ export function createSyncSocketClient(options: Options): SyncSocketClient {
     const pending = (await options.readOutbox(options.owner)).filter((row) => !row.blocked);
     let recovered = false;
     for (const chunk of chunkSocketMutations(pending)) {
-      if (bytes(chunk) > 7500) {
-        recovered = true;
-        if (options.block) await options.block(chunk[0].mutationId, 'too_large');
-        continue;
-      }
+      if (bytes(chunk) > 7500) throw new Error('socket_byte_limit');
       const status = await send(chunk);
       if (status !== 'ok') recovered = true;
     }

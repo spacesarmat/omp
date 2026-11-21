@@ -159,15 +159,13 @@ describe('sync websocket recovery edges', () => {
     expect(fallback).toHaveBeenCalledTimes(1);
   });
 
-  it('quarantines one mutation that cannot fit the byte limit', async () => {
-    const block = vi.fn(async () => undefined);
+  it('routes one mutation above the WS byte budget through HTTP', async () => {
     outbox = [{ ...mutation, row: { ...mutation.row, body: { text: 'x'.repeat(8000) } } }];
-    const client = make({ block });
+    const client = make();
     const syncing = client.sync();
     await handshake(FakeSocket.instances[0]);
-    expect(await syncing).toBe('error');
-    expect(block).toHaveBeenCalledWith(mutation.mutationId, 'too_large');
-    expect(fallback).not.toHaveBeenCalled();
+    expect(await syncing).toBe('ok');
+    expect(fallback).toHaveBeenCalledTimes(1);
   });
 });
 

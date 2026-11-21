@@ -120,7 +120,9 @@ function postV2(owner: string, since: number, records: SyncRecordV2[], isOwner: 
   );
 }
 
-export async function acceptV2Page(owner: string, answer: V2Answer, sent: OutboxRow[]): Promise<{ blocked: number; revision: number }> {
+export async function acceptV2Page(owner: string, answer: V2Answer, sent: OutboxRow[], isOwner: () => boolean = () => true): Promise<{ blocked: number; revision: number }> {
+  const previous = await readV2Meta(owner);
+  if (!isOwner()) return { blocked: 0, revision: previous.revision };
   const acks = Array.isArray(answer.ack) ? answer.ack : [];
   await ackV2(acks, sent.map((item) => item.row));
   const ackIds = new Set(acks.map((ack) => ack.mutationId));
@@ -133,22 +135,26 @@ export async function acceptV2Page(owner: string, answer: V2Answer, sent: Outbox
       blocked++;
     }
   }
+  if (!isOwner()) return { blocked, revision: previous.revision };
   if (ackedRows.length) ackSent(ackedRows);
   const incoming = Array.isArray(answer.records) ? answer.records : [];
   if (incoming.length) {
+    if (!isOwner()) return { blocked, revision: previous.revision };
     const merged = await mergeV2Pulled(incoming);
+    if (!isOwner()) return { blocked, revision: previous.revision };
     const stored = putDeviceRecords(incoming, true);
     const won: SyncRecord[] = [];
     for (const row of incoming) {
       const kept = stored.find((item) => item.id === row.id);
       if (kept && kept.updatedAt === row.updatedAt && kept.deviceId === row.deviceId) won.push(kept);
     }
-    if (won.length) applyPulled(won);
+    if (won.length && isOwner()) applyPulled(won);
     void merged;
   }
-  const previous = await readV2Meta(owner);
   const revision = Math.max(previous.revision, Number(answer.nextRevision) || 0);
+  if (!isOwner()) return { blocked, revision: previous.revision };
   if (revision !== previous.revision) await writeV2Meta(owner, { revision });
+  if (!isOwner()) return { blocked, revision: previous.revision };
   await refreshSyncV2Status(owner);
   return { blocked, revision };
 }
@@ -158,7 +164,7 @@ interface BatchResult { status: string; full: boolean }
 async function sendBatch(owner: string, since: number, rows: OutboxRow[], isOwner: () => boolean): Promise<BatchResult> {
   if (!isOwner()) return { status: 'error', full: false };
   const ans = await postV2(owner, since, rows.map((item) => item.row), isOwner);
-  if ((ans.status === 409 || ans.status === 400) && rows.length > 1) {
+  if ((ans.status === 409 || ans.status === 400 || ans.status === 413) && rows.length > 1) {
     const middle = Math.ceil(rows.length / 2);
     const left = await sendBatch(owner, since, rows.slice(0, middle), isOwner);
     if (left.status === 'offline' || left.status === 'v1' || left.status === 'denied' || left.status === 'error') return left;
@@ -175,6 +181,11 @@ async function sendBatch(owner: string, since: number, rows: OutboxRow[], isOwne
     markSyncError('error');
     return { status: 'recovery', full: false };
   }
+  if (ans.status === 413 && rows.length === 1) {
+    await blockV2Mutation(rows[0].mutationId, 'too_large');
+    markSyncError('error');
+    return { status: 'recovery', full: false };
+  }
   if (ans.status === 404 || ans.status === 405 || ans.status === 503) return { status: 'v1', full: false };
   if (ans.status === 403) {
     markSyncError('denied');
@@ -185,7 +196,8 @@ async function sendBatch(owner: string, since: number, rows: OutboxRow[], isOwne
     return { status: ans.data.error === 'switched' ? 'error' : 'offline', full: false };
   }
   if (ans.status !== 200 || !ans.data.ok || !isOwner()) return { status: 'error', full: false };
-  const accepted = await acceptV2Page(owner, ans.data, rows);
+  const accepted = await acceptV2Page(owner, ans.data, rows, isOwner);
+  if (!isOwner()) return { status: 'error', full: false };
   return { status: accepted.blocked ? 'recovery' : 'ok', full: (ans.data.records || []).length >= 500 };
 }
 
@@ -236,9 +248,8 @@ function socketFor(owner: string, epoch: number, isOwner: () => boolean): SyncSo
     isOwner,
     readMeta: readV2Meta,
     readOutbox: readV2Outbox,
-    accept: (answer, sent) => acceptV2Page(owner, answer, sent),
+    accept: (answer, sent) => acceptV2Page(owner, answer, sent, isOwner),
     fallback: () => runV2Http(owner, epoch, isOwner),
-    block: blockV2Mutation,
     socketFactory: (url) => new WebSocket(url) as any,
     onStatus: (status) => {
       if (status === 'http') updateSyncV2Status({ transport: 'http' });
@@ -257,12 +268,14 @@ export async function runV2(owner: string, epoch: number, isOwner: () => boolean
   if (client && client.isReady()) {
     await enqueueUnsent(unsentRecords(epoch), owner);
     status = await client.sync();
+    if (status === 'ok' && (await readV2Outbox(owner)).some((row) => row.blocked)) status = 'error';
     if (status === 'ok') markSynced(Date.now());
     else if (status !== 'offline' && status !== 'denied') markSyncError(status);
   } else {
     status = await runV2Http(owner, epoch, isOwner);
     if (status === 'ok' && client && isOwner()) client.start();
   }
+  if (!isOwner()) return 'error';
   const transport = status === 'v1' ? 'v1' : client && client.isReady() ? 'websocket' : 'http';
   publishSyncV2Result(owner, status, transport);
   return status;

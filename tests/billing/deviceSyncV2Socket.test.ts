@@ -75,5 +75,11 @@ describe('V2 socket transport integration', () => {
     socket.message({ type: 'ack', ack: [{ recordId: second.id, mutationId: sent.records[0].mutationId, revision: 2 }] });
     expect(await syncing).toBe('ok');
     expect(fetched).toHaveBeenCalledTimes(1);
+
+    const db = await import('../../src/store/deviceV2Db');
+    const third = { ...first, id: 'progress:a:3', updatedAt: 102 };
+    const queued = await db.putV2Local([third], 'acc-1');
+    await db.blockV2Mutation(queued[0].mutationId, 'too_large');
+    expect(await runV2('acc-1', 0, () => true)).toBe('error');
   });
 });
