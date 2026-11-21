@@ -1,26 +1,28 @@
 {
-  "version": "0.30.2",
-  "ipkUrl": "https://github.com/spacesarmat/omp/releases/download/v0.30.2/OMP-0.30.2.apk",
-  "ipkHash": "79243c54f301d1e0f2236ce3c505d329653646c4fed1c4da5209d13a43e07a75",
-  "ipkSize": 98381524,
+  "version": "0.30.3-beta.2",
+  "ipkUrl": "https://github.com/spacesarmat/omp/releases/download/v0.30.3-beta.2/OMP-0.30.3-beta.2.apk",
+  "ipkHash": "afe5f1793cb8e4803c3d027ee7c73cf1d65265ccbff7de08bf77b2e31d5e4d1c",
+  "ipkSize": 98409080,
   "apks": {
     "arm64": {
-      "url": "https://github.com/spacesarmat/omp/releases/download/v0.30.2/OMP-0.30.2-arm64.apk",
-      "sha256": "60891269a4907a69210b08a1203de9b726145ecb9dea2399527eaa89fa299d3d",
-      "size": 63833262
+      "url": "https://github.com/spacesarmat/omp/releases/download/v0.30.3-beta.2/OMP-0.30.3-beta.2-arm64.apk",
+      "sha256": "43fcecba80cc64c0c7009c63fdb3dec470c82f60eea3d840eb1cac4e339f2dce",
+      "size": 63860818
     },
     "armv7": {
-      "url": "https://github.com/spacesarmat/omp/releases/download/v0.30.2/OMP-0.30.2-armv7.apk",
-      "sha256": "1f2e7321a6758f16793ea547e98d589f7a3b35cf7b900ec729fc1e7ff5e588e7",
-      "size": 59652286
+      "url": "https://github.com/spacesarmat/omp/releases/download/v0.30.3-beta.2/OMP-0.30.3-beta.2-armv7.apk",
+      "sha256": "8ea7392929b3806827c53f2efd44299437de59c7d28c9285305e2b9a2cd314ff",
+      "size": 59679842
     }
   },
   "notes": [
-    "Встроенные субтитры читаются прямо из MKV, когда на TorrServer нет ffprobe. Дорожки появляются в меню телевизора и в пульте на телефоне. Большие фрагменты MKV больше не оставляют бесконечную загрузку без текста. Сжатые PGS распаковываются и сохраняют правильное время"
+    "Исправления и улучшения"
   ],
-  "notesTv": [
-    "Встроенные субтитры читаются прямо из MKV, когда на TorrServer нет ffprobe. Дорожки появляются в меню телевизора и в пульте на телефоне. Большие фрагменты MKV больше не оставляют бесконечную загрузку без текста. Сжатые PGS распаковываются и сохраняют правильное время"
+  "notesTv": [],
+  "notesPhone": [
+    "Синхронизация надежнее сохраняет изменения библиотеки после перезапуска и не откатывает позицию «Продолжить», если старый ответ сети пришел позже нового",
+    "В аккаунте видно, что играет на других ваших устройствах: название, серия, позиция и пауза. Кнопка «Продолжить здесь» открывает тот же файл на телефоне с той же позиции. Автоматического переключения нет",
+    "В настройках синхронизации видно число изменений в offline-очереди и подтверждение «Синхронизировано»"
   ],
-  "notesPhone": [],
-  "releaseUrl": "https://github.com/spacesarmat/omp/releases/tag/v0.30.2"
+  "releaseUrl": "https://github.com/spacesarmat/omp/releases/tag/v0.30.3-beta.2"
 }
