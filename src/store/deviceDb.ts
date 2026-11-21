@@ -3,6 +3,7 @@
 // rows so a wiped localStorage can be filled again. No TorrServer is required to read or write.
 import { loadJson, saveJson, isObject } from './storage';
 import { mergeRecords, type SyncRecord } from './syncMerge';
+import { hydrateV2Projection, mirrorV2Bag } from './deviceV2Db';
 
 const KEY = 'omp.deviceDb';
 const DB = 'omp-device';
@@ -58,6 +59,7 @@ function write(bag: Bag, quiet: boolean): void {
   writes++;
   saveJson(KEY, bag);
   mirrorIndexed(bag);
+  void mirrorV2Bag(Object.keys(bag.records).map((id) => bag.records[id])).catch(() => undefined);
   if (!quiet) afterWrite();
 }
 
@@ -216,6 +218,12 @@ function mirrorIndexed(bag: Bag): void {
 
 /** Fill localStorage from IndexedDB when the page store is empty and IndexedDB has a bag. */
 export function hydrateDeviceDb(done: () => void): void {
+  const finish = () => {
+    void hydrateV2Projection(deviceRecords()).then((rows) => {
+      if (rows.length) putDeviceRecords(rows, true);
+      done();
+    }, () => done());
+  };
   const idb = typeof indexedDB === 'undefined' ? null : indexedDB;
   if (!idb) {
     hydrated = true;
@@ -230,7 +238,7 @@ export function hydrateDeviceDb(done: () => void): void {
     };
     open.onerror = () => {
       hydrated = true;
-      done();
+      finish();
     };
     open.onsuccess = () => {
       const db = open.result;
@@ -242,17 +250,17 @@ export function hydrateDeviceDb(done: () => void): void {
         hydrated = true;
         if (writes > 0) mirrorIndexed(read());
         db.close();
-        done();
+        finish();
       };
       req.onerror = () => {
         hydrated = true;
         db.close();
-        done();
+        finish();
       };
     };
   } catch (e) {
     hydrated = true;
-    done();
+    finish();
   }
 }
 
