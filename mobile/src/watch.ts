@@ -36,6 +36,7 @@ import { sharedResume } from './lib/sharedProgress';
 import { t as tr } from '../../src/i18n';
 import { filePath, launchLabel, libraryTorrent } from './lib/playingNames';
 import { cachedEpisodeName } from '../../src/lib/episodeNames';
+import { startPresenceReporting, type PresenceReport } from '../../src/billing/presenceClient';
 
 export interface WatchOnTvParams {
   server: string;
@@ -238,7 +239,39 @@ export async function watchOnPhone(c: TorrServerClient, t: Torrent, w: PhoneWatc
     let seen: number | null = null;
     let finished: number | null = null;
     while (index >= 0 && index < queue.length) {
-      const saved = await play2160({ open2160: open }, c, queue, index, index === start ? at : 0, skip, index === start ? w.duration : 0);
+      const playItem = queue[index];
+      const startAt = index === start ? at : 0;
+      const startDuration = index === start ? w.duration : 0;
+      const presence: PresenceReport = {
+        state: 'playing',
+        hash: w.hash,
+        fileId: playItem.fileIndex === undefined ? w.file.id : playItem.fileIndex,
+        title: showTitle,
+        episode: playItem.episodeTitle || playItem.title,
+        positionSec: startAt,
+        durationSec: startDuration,
+        deviceName: await phoneNameSafe(),
+        platform: 'phone',
+      };
+      const stopPresence = startPresenceReporting(() => presence, 'phone:' + w.hash + ':' + presence.fileId);
+      let saved: Awaited<ReturnType<typeof play2160>>;
+      try {
+        saved = await play2160({ open2160: open }, c, queue, index, startAt, skip, startDuration);
+      } catch (error) {
+        stopPresence(null);
+        throw error;
+      }
+      if (saved && saved.item.fileIndex !== undefined) {
+        stopPresence({
+          ...presence,
+          state: saved.completed ? 'finished' : 'paused',
+          fileId: saved.item.fileIndex,
+          positionSec: saved.time,
+          durationSec: saved.duration,
+        });
+      } else {
+        stopPresence(null);
+      }
       // the journal gets where the player stopped, not a start at 0:00: a start that never played (no network,
       // a dead source) is not a watch and must not show in «История» as «0:00»
       // an end with no known length comes back at 0: nothing to write then, so an older real position stays
