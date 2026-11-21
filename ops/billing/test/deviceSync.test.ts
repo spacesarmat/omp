@@ -167,6 +167,9 @@ describe('POST /v1/sync', () => {
 
   it('exposes the sync v2 server kill-switch through /v1/me', async () => {
     const file = await testStore();
+    const initial = await readState(file);
+    initial.accounts.push({ id: 'acc-v2-flag', createdAt: Date.now() });
+    await writeState(file, initial);
     const make = (env: Record<string, string>) => createApp(file, async () => ({ status: 200, headers: { get: () => null }, text: async () => '{}' }), {
       env,
       monitor: { health: () => null },
