@@ -1,16 +1,14 @@
 {
-  "version": "0.30.3-beta.2",
-  "ipkUrl": "https://github.com/spacesarmat/omp/releases/download/v0.30.3-beta.2/OMP-0.30.3-beta.2-webOS.ipk",
-  "ipkHash": "4958479de64acb52deece6dc084f91624db6c28acdb1cc29121f5a5a7065a6f0",
-  "ipkSize": 1238070,
+  "version": "0.30.3-beta.3",
+  "ipkUrl": "https://github.com/spacesarmat/omp/releases/download/v0.30.3-beta.3/OMP-0.30.3-beta.3-webOS.ipk",
+  "ipkHash": "eb441f7900299b694b5066411689de0b0d373953cddb0f15c4222619ee4768a0",
+  "ipkSize": 1238224,
   "notes": [
     "Исправления и улучшения"
   ],
-  "releaseUrl": "https://github.com/spacesarmat/omp/releases/tag/v0.30.3-beta.2",
+  "releaseUrl": "https://github.com/spacesarmat/omp/releases/tag/v0.30.3-beta.3",
   "notesTv": [],
   "notesPhone": [
-    "Синхронизация надежнее сохраняет изменения библиотеки после перезапуска и не откатывает позицию «Продолжить», если старый ответ сети пришел позже нового",
-    "В аккаунте видно, что играет на других ваших устройствах: название, серия, позиция и пауза. Кнопка «Продолжить здесь» открывает тот же файл на телефоне с той же позиции. Автоматического переключения нет",
-    "В настройках синхронизации видно число изменений в offline-очереди и подтверждение «Синхронизировано»"
+    "При обрыве сети синхронизация снова показывает offline и число изменений в очереди вместо общей ошибки"
   ]
 }
