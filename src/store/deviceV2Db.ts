@@ -206,6 +206,15 @@ export function hydrateV2Projection(currentRows: SyncRecord[]): Promise<SyncReco
   return readV2Records().then((stored) => mergeRecords(currentRows, stored));
 }
 
+export function checkV2Capability(): Promise<boolean> {
+  return transaction([RECORDS, OUTBOX, META], 'readwrite', async (tx) => {
+    const meta = tx.objectStore(META);
+    await request(meta.put({ key: 'capability-check', value: Date.now() }));
+    await request(meta.delete('capability-check'));
+    return true;
+  });
+}
+
 export function resetDeviceV2Db(): void {
   if (opened) opened.close();
   opened = null;

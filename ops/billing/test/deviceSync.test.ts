@@ -164,4 +164,21 @@ describe('POST /v1/sync', () => {
     const everyone = await call(app, 'POST', '/v1/sync', { headers: headersA, json: { since: 0, records: [] } });
     expect(everyone.status).toBe(200);
   });
+
+  it('exposes the sync v2 server kill-switch through /v1/me', async () => {
+    const file = await testStore();
+    const make = (env: Record<string, string>) => createApp(file, async () => ({ status: 200, headers: { get: () => null }, text: async () => '{}' }), {
+      env,
+      monitor: { health: () => null },
+    });
+    const app = make({});
+    const token = await tokenFor(app, file, 'acc-v2-flag', DEV_A);
+    const headers = { authorization: 'Bearer ' + token, 'x-device-id': DEV_A };
+    const enabled = await call(app, 'GET', '/v1/me', { headers });
+    expect(enabled.status).toBe(200);
+    expect(enabled.data.sync.v2).toBe(true);
+    const disabled = await call(make({ BILLING_SYNC_V2: '0' }), 'GET', '/v1/me', { headers });
+    expect(disabled.status).toBe(200);
+    expect(disabled.data.sync.v2).toBe(false);
+  });
 });
