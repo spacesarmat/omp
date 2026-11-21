@@ -5,7 +5,7 @@ import { createSyncLeader, type SyncLeader } from './syncLeader';
 import { publishSyncV2Result, resetSyncV2Status, syncV2Status } from './syncV2Status';
 import { billingSession, deviceId, legacySyncLink, onBillingChange } from './session';
 import { withDeviceToken } from './tokens';
-import { ackSent, markSyncError, markSynced, noteSyncAccount, onDeviceWrite, onSyncStateChange, putDeviceRecords, setSyncCursor, syncCursor, syncEnabled, unsentRecords } from '../store/deviceDb';
+import { ackSent, lastSyncError, markSyncError, markSynced, noteSyncAccount, onDeviceWrite, onSyncStateChange, putDeviceRecords, setSyncCursor, syncCursor, syncEnabled, unsentRecords } from '../store/deviceDb';
 import { applyPulled, reapplyDeviceRecords } from '../store/applyPulled';
 import type { SyncRecord } from '../store/syncMerge';
 import type { SourceContext } from '../sources/types';
@@ -179,7 +179,7 @@ function pumpSelected(owner: string, epoch: number, pending: SyncRecord[]): Prom
     if (!sameAccount(owner)) return Promise.resolve('switched');
     stopV2Runtime();
     return pump(owner, syncCursor(), pending).then((status) => {
-      publishSyncV2Result(owner, status, 'v1');
+      publishSyncV2Result(owner, status === 'error' ? lastSyncError() : status, 'v1');
       return status;
     });
   };
