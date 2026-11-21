@@ -193,7 +193,8 @@ export function createSyncSocket(options) {
   function updatePresence(client, message) {
     if (!presence) return sendError(client, 'bad_message');
     if (message.presence === null) {
-      presence.clear(client.accountId, client.deviceId);
+      if (!Number.isSafeInteger(message.sessionSeq) || message.sessionSeq <= 0) return sendError(client, 'bad_presence');
+      presence.clear(client.accountId, client.deviceId, message.sessionSeq);
       return;
     }
     const parsed = parsePresenceInput(message.presence);

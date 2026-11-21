@@ -60,6 +60,15 @@ describe('playback presence store', () => {
     expect(events).toHaveLength(1);
   });
 
+  it('prunes inactive account rows without requiring another list of that account', () => {
+    let now = 1000;
+    const store = createPresenceStore(() => now);
+    store.put('account-a', 'device-a', input);
+    now += 90001;
+    expect(store.prune()).toBe(1);
+    expect(store.list('account-a')).toEqual([]);
+  });
+
   it('rejects a delayed old session without emitting a change', () => {
     let now = 1000;
     const store = createPresenceStore(() => now);
@@ -83,13 +92,32 @@ describe('playback presence store', () => {
     const events: unknown[] = [];
     store.subscribe((...args: unknown[]) => events.push(args));
     store.put('account-a', 'device-a', { ...input, sessionSeq: 10 });
-    store.clear('account-a', 'device-a');
+    store.clear('account-a', 'device-a', 10);
     expect(store.put('account-a', 'device-a', { ...input, sessionSeq: 10 })).toBe(false);
     expect(store.put('account-a', 'device-a', { ...input, sessionSeq: 9 })).toBe(false);
     expect(store.list('account-a')).toEqual([]);
     expect(events).toHaveLength(2);
     expect(store.put('account-a', 'device-a', { ...input, sessionId: 'new', sessionSeq: 11 })).toBe(true);
     expect(store.list('account-a')[0]).toMatchObject({ sessionId: 'new', sessionSeq: 11 });
+  });
+
+  it('scopes clear to its session, including clear before the first heartbeat', () => {
+    const store = createPresenceStore(() => 1000);
+    store.clear('account-a', 'device-a', 20);
+    expect(store.put('account-a', 'device-a', { ...input, sessionSeq: 20 })).toBe(false);
+    expect(store.put('account-a', 'device-a', { ...input, sessionId: 'new', sessionSeq: 21 })).toBe(true);
+    expect(store.clear('account-a', 'device-a', 20)).toBe(false);
+    expect(store.list('account-a')[0].sessionSeq).toBe(21);
+  });
+
+  it('remembers the newest session after its visible row expires', () => {
+    let now = 1000;
+    const store = createPresenceStore(() => now);
+    store.put('account-a', 'device-a', { ...input, sessionSeq: 10 });
+    now += 90001;
+    expect(store.list('account-a')).toEqual([]);
+    expect(store.put('account-a', 'device-a', { ...input, sessionId: 'old', sessionSeq: 9 })).toBe(false);
+    expect(store.put('account-a', 'device-a', { ...input, sessionSeq: 10 })).toBe(false);
   });
 
   it('sorts playing first, clears a device and isolates listener errors', () => {
@@ -102,7 +130,7 @@ describe('playback presence store', () => {
     now = 2000;
     store.put('account-a', 'device-playing', { ...input, deviceName: 'TV', sessionSeq: 2 });
     expect(store.list('account-a').map((row) => row.deviceId)).toEqual(['device-playing', 'device-paused']);
-    store.clear('account-a', 'device-playing');
+    store.clear('account-a', 'device-playing', 2);
     expect(store.list('account-a').map((row) => row.deviceId)).toEqual(['device-paused']);
     expect(events).toHaveLength(3);
   });

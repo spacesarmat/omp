@@ -3602,6 +3602,8 @@ export function createApp(file, fetchImpl, opts) {
         return json(res, 200, { ok: true, records, nextRevision, ack, serverTime: Date.now() });
       }
       if ((req.method === 'GET' || req.method === 'POST') && path === '/v2/sync/presence') {
+        const cors = browserReadCors(path);
+        for (const [name, value] of Object.entries(cors)) res.setHeader(name, value);
         const device = String(req.headers['x-device-id'] || '');
         const access = await authorizeSync(bearer(req), device);
         if (access.error) return json(res, access.status, { error: access.error });
@@ -3610,7 +3612,8 @@ export function createApp(file, fetchImpl, opts) {
           if (readOnly) return json(res, 503, { error: 'read_only' });
           const body = await readBody(req);
           if (body.presence === null) {
-            presenceDb.clear(accountId, device);
+            if (!Number.isSafeInteger(body.sessionSeq) || body.sessionSeq <= 0) return json(res, 400, { error: 'bad_presence' });
+            presenceDb.clear(accountId, device, body.sessionSeq);
           } else {
             const parsed = parsePresenceInput(body.presence);
             if (parsed.error) return json(res, 400, { error: parsed.error });

@@ -63,10 +63,10 @@ describe('presence client requests', () => {
     const fetched = vi.fn();
     vi.stubGlobal('fetch', fetched);
     expect(await sendPresence(full)).toBe(true);
-    expect(await sendPresence(null)).toBe(true);
+    expect(await sendPresence(null, 1)).toBe(true);
     expect(await fetchPresence()).toEqual([{ deviceId: 'tv' }]);
     expect(JSON.parse(bodies[0])).toEqual({ presence: full });
-    expect(JSON.parse(bodies[1])).toEqual({ presence: null });
+    expect(JSON.parse(bodies[1])).toEqual({ presence: null, sessionSeq: 1 });
     expect(gets).toBe(1);
     expect(fetched).not.toHaveBeenCalled();
   });

@@ -173,10 +173,10 @@ describe('watchOnPhone', () => {
       source = next;
       return stop;
     });
-    a.playEmbedded2160.mockResolvedValue({ returned: true, positionMs: 600000, durationMs: 2400000, url: 'http://h:8090/stream/Show.S01E02.mkv?link=abc&index=2&play' });
+    a.playEmbedded2160.mockResolvedValue({ returned: true, positionMs: 600000, durationMs: 2400000, url: 'http://h:8090/stream/Show.S01E03.mkv?link=abc&index=3&play' });
     await watchOnPhone(c, tor as any, w(2, 125.7));
     expect(source()).toMatchObject({ state: 'playing', fileId: 2, positionSec: 125 });
-    expect(stop).toHaveBeenCalledWith(expect.objectContaining({ state: 'paused', fileId: 2, positionSec: 600, durationSec: 2400 }));
+    expect(stop).toHaveBeenCalledWith(expect.objectContaining({ state: 'paused', fileId: 3, episode: 'Show.S01E03.mkv', positionSec: 600, durationSec: 2400 }));
     done();
   });
 

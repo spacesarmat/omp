@@ -31,6 +31,8 @@ import { communityVoiceFor } from '../viewer/communityRank';
 import { p2160Package, play2160 } from '../player/player2160';
 import { getLocalProgress } from '../store/progress';
 import { engineFor, knownProbe } from '../player/nativeEngine';
+import { startPresenceReporting, type PresenceReport } from '../billing/presenceClient';
+import { deviceName } from '../platform/deviceName';
 
 interface Props {
   queue: PlayItem[];
@@ -88,6 +90,7 @@ export function NativePlayerScreen({ queue, index, startAt, from, seasonNext }: 
     let session: NativeSession | null = null;
     let unbridge: (() => void) | null = null;
     let unwatch: (() => void) | null = null;
+    let stopPresence: ((final?: PresenceReport | null) => void) | null = null;
     // a launch while the native player is open (phone) must not ask behind the player
     decideStart(queue[index], startAt, !nativePlayerOpen()).then((pos) => {
       if (cancelled) return;
@@ -152,6 +155,8 @@ export function NativePlayerScreen({ queue, index, startAt, from, seasonNext }: 
         onClosed: (closed, replaced) => {
           if (unbridge) unbridge();
           unbridge = null;
+          if (stopPresence) stopPresence();
+          stopPresence = null;
           if (replaced) return;
           if (closed.another) {
             const it = queue[closed.index];
@@ -163,6 +168,21 @@ export function NativePlayerScreen({ queue, index, startAt, from, seasonNext }: 
       }, journal, probeLoader(c), skipIo(c));
       session = run;
       unbridge = setPlayerBridge({ snapshot: () => run.snapshot(), exec: (cmd) => run.exec(cmd) });
+      stopPresence = startPresenceReporting(() => {
+        const snapshot = run.snapshot();
+        if (!snapshot) return null;
+        return {
+          state: snapshot.paused ? 'paused' as const : 'playing' as const,
+          hash: snapshot.hash,
+          fileId: snapshot.file,
+          title: snapshot.subtitle || snapshot.title,
+          episode: '',
+          positionSec: snapshot.time,
+          durationSec: snapshot.duration,
+          deviceName: deviceName.value,
+          platform: 'androidtv',
+        };
+      }, 'androidtv-native');
       const donate = donateCardEnabled(journalSupportActive());
       // a support mark read later (the skip settings' list) hides the card in the open player
       if (donate) unwatch = effect(() => { if (journalSupportActive()) run.hideDonate(); });
@@ -181,6 +201,8 @@ export function NativePlayerScreen({ queue, index, startAt, from, seasonNext }: 
         (e) => {
           if (unbridge) unbridge();
           unbridge = null;
+          if (stopPresence) stopPresence(null);
+          stopPresence = null;
           if (cancelled) return;
           toast(failText(e), 'error');
           leave();
@@ -195,24 +217,57 @@ export function NativePlayerScreen({ queue, index, startAt, from, seasonNext }: 
           if (!pkg) return false;
           const io = skipIo(c);
           const prefs = io && first.hash ? io.load(first.hash).catch(() => null) : Promise.resolve(null);
+          const presence: PresenceReport = {
+            state: 'playing',
+            hash: first.hash || '',
+            fileId: first.fileIndex === undefined ? 0 : first.fileIndex,
+            title: first.torrentTitle || first.title,
+            episode: first.episodeTitle || first.title,
+            positionSec: pos,
+            durationSec: dur,
+            deviceName: deviceName.value,
+            platform: 'androidtv',
+          };
+          stopPresence = startPresenceReporting(() => presence, 'androidtv-2160:' + presence.hash + ':' + presence.fileId);
           // the watch journal («История») like the built-in player: the start, then where the user stopped
           journal.start(first, pos, dur);
           return prefs.then((p) => play2160(plugin, c, queue, index, pos, p, dur, () => cancelled)).then(
             (saved) => {
               if (cancelled && !saved) {
+                if (stopPresence) stopPresence(null);
+                stopPresence = null;
                 // left before the player opened: the screen is gone already
                 journal.end(first, pos, dur);
                 return true;
               }
               if (saved) {
+                if (stopPresence) stopPresence({
+                  ...presence,
+                  state: saved.completed ? 'finished' : 'paused',
+                  fileId: saved.item.fileIndex === undefined ? presence.fileId : saved.item.fileIndex,
+                  episode: saved.item.episodeTitle || saved.item.title,
+                  positionSec: saved.time,
+                  durationSec: saved.duration,
+                });
+                stopPresence = null;
                 // another item of the playlist: its own entry
                 if (saved.item !== first) journal.start(saved.item, 0, saved.duration);
                 journal.end(saved.item, saved.time, saved.duration);
-              } else journal.end(first, pos, dur);
+              } else {
+                if (stopPresence) stopPresence(null);
+                stopPresence = null;
+                journal.end(first, pos, dur);
+              }
               leave();
               return true;
             },
-            (e) => { journal.end(first, pos, dur); if (!cancelled) { toast(failText(e), 'error'); leave(); } return true; },
+            (e) => {
+              if (stopPresence) stopPresence(null);
+              stopPresence = null;
+              journal.end(first, pos, dur);
+              if (!cancelled) { toast(failText(e), 'error'); leave(); }
+              return true;
+            },
           );
         }).then((handled) => { if (!handled && !cancelled) startBuiltin(); });
         return;
@@ -224,6 +279,7 @@ export function NativePlayerScreen({ queue, index, startAt, from, seasonNext }: 
       if (session) session.detach();
       if (unbridge) unbridge();
       if (unwatch) unwatch();
+      if (stopPresence) stopPresence();
     };
   }, []);
 

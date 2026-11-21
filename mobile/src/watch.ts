@@ -266,6 +266,7 @@ export async function watchOnPhone(c: TorrServerClient, t: Torrent, w: PhoneWatc
           ...presence,
           state: saved.completed ? 'finished' : 'paused',
           fileId: saved.item.fileIndex,
+          episode: saved.item.episodeTitle || saved.item.title,
           positionSec: saved.time,
           durationSec: saved.duration,
         });

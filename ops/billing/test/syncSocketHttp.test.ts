@@ -16,9 +16,13 @@ afterEach(async () => {
 function mockRes() {
   return {
     status: 0,
+    headers: {} as Record<string, string>,
     body: '',
-    writeHead(status: number) { this.status = status; },
-    setHeader() {},
+    writeHead(status: number, headers?: Record<string, string>) {
+      this.status = status;
+      if (headers) Object.assign(this.headers, headers);
+    },
+    setHeader(name: string, value: string) { this.headers[name.toLowerCase()] = value; },
     end(buf?: Buffer | string) { this.body = Buffer.isBuffer(buf) ? buf.toString('utf8') : String(buf || ''); },
   };
 }
@@ -33,7 +37,7 @@ async function call(app: (req: unknown, res: unknown) => Promise<void>, path: st
   };
   const res = mockRes();
   await app(req, res);
-  return { status: res.status, data: JSON.parse(res.body) as Record<string, any> };
+  return { status: res.status, data: JSON.parse(res.body || '{}') as Record<string, any>, headers: res.headers };
 }
 
 async function tokenFor(app: (req: unknown, res: unknown) => Promise<void>, file: Awaited<ReturnType<typeof testStore>>, accountId: string, deviceId: string) {
@@ -181,6 +185,11 @@ describe('billing sync websocket', () => {
     };
     const saved = await call(app, '/v2/sync/presence', { presence: value }, headersA);
     expect(saved.status).toBe(200);
+    expect(saved.headers['access-control-allow-origin']).toBe('*');
+    const preflight = await call(app, '/v2/sync/presence', {}, headersA, 'OPTIONS');
+    expect(preflight.status).toBe(204);
+    expect(preflight.headers['access-control-allow-origin']).toBe('*');
+    expect(preflight.headers['access-control-allow-headers']).toContain('Authorization');
     expect(saved.data.presences[0]).toMatchObject({ ...value, deviceId: DEV_A });
     const otherDevice = await call(app, '/v2/sync/presence', {}, { authorization: 'Bearer ' + tokenB, 'x-device-id': DEV_B }, 'GET');
     expect(otherDevice.data.presences).toHaveLength(1);
@@ -189,7 +198,7 @@ describe('billing sync websocket', () => {
     expect((await call(app, '/v2/sync/presence', { presence: { ...value, sessionSeq: 1, title: 'Old' } }, headersA)).data.presences[0].title).toBe('Show');
     expect((await call(app, '/v2/sync/presence', { presence: { ...value, hash: 'bad' } }, headersA)).status).toBe(400);
     expect((await call(app, '/v2/sync/presence', { presence: value }, { ...headersA, authorization: 'Bearer bad' })).status).toBe(401);
-    expect((await call(app, '/v2/sync/presence', { presence: null }, headersA)).data.presences).toEqual([]);
+    expect((await call(app, '/v2/sync/presence', { presence: null, sessionSeq: 2 }, headersA)).data.presences).toEqual([]);
   });
 
   it('refuses WebSocket upgrade in read-only mode', async () => {

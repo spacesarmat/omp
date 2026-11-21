@@ -43,6 +43,7 @@ let probeCache = { at: 0, value: null };
 const BROWSER_ROUTES = {
   '/v1/rollout': { methods: 'GET, OPTIONS', headers: 'X-Device-Id' },
   '/v1/crash': { methods: 'POST, OPTIONS', headers: 'X-Device-Id, Content-Type, Authorization' },
+  '/v2/sync/presence': { methods: 'GET, POST, OPTIONS', headers: 'X-Device-Id, Content-Type, Authorization' },
 };
 
 export function isBrowserRead(path) {

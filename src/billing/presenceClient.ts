@@ -58,9 +58,9 @@ function parseRows(text: string): PlaybackPresence[] {
   }
 }
 
-export function sendPresence(input: PresenceInput | null): Promise<boolean> {
+export function sendPresence(input: PresenceInput | null, clearSeq = 0): Promise<boolean> {
   if (!syncEnabled() || !accessToken()) return Promise.resolve(false);
-  const body = JSON.stringify({ presence: input });
+  const body = JSON.stringify(input === null ? { presence: null, sessionSeq: clearSeq } : { presence: input });
   const ctx = contextOf && contextOf();
   if (ctx && ctx.http.postJson) {
     const postJson = ctx.http.postJson;
@@ -165,7 +165,7 @@ export function startPresenceReporting(source: () => PresenceReport | null, sess
     if (final) {
       void sendPresence({ ...final, sessionId: session, sessionSeq: nextSessionSeq() });
     } else {
-      void sendPresence(null);
+      void sendPresence(null, sessionSeq);
     }
   };
 }

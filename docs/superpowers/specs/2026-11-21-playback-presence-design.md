@@ -44,7 +44,7 @@
 
 Сервер добавляет `deviceId` и `updatedAt`, отбрасывает чужие deviceId из body. URL потоков, magnet, токены и серверные пароли в presence запрещены.
 
-- `POST /v2/sync/presence` с `{ presence }` обновляет свое состояние, с `{ presence: null }` очищает его. Ответ: `{ ok, presences, serverTime }`.
+- `POST /v2/sync/presence` с `{ presence }` обновляет свое состояние, с `{ presence: null, sessionSeq }` очищает его только если clear не относится к более старой сессии. Ответ: `{ ok, presences, serverTime }`.
 - `GET /v2/sync/presence` возвращает `{ ok, presences, serverTime }` без изменения состояния.
 - WS `presence { presence }` использует тот же валидатор и рассылает `{ type: 'presence', presences, serverTime }` только устройствам аккаунта.
 - Авторизация, подписка, read-only поведение и повторная проверка доступа те же, что у sync V2. GET разрешен в read-only, изменение presence в read-only отклоняется без изменения памяти.
@@ -53,7 +53,7 @@
 
 - Все presence записи имеют TTL 90 секунд. Клиент обновляет открытый плеер каждые 15 секунд и при смене файла, паузе, перемотке и завершении.
 - TTL удаляет зависшее устройство. Paused/finished остаются видимыми, пока открытый клиент обновляет их; durable позиция независимо сохраняется существующим progress sync.
-- Явный выход из плеера отправляет `presence: null`. Сервер хранит clear tombstone с последним `sessionSeq`, поэтому поздний heartbeat не воскрешает запись. Final paused/finished отправляется с новым `sessionSeq`, чтобы опоздавший playing не заменил его. Ошибка сети не мешает локальному воспроизведению.
+- Явный выход из плеера отправляет `presence: null` со своим `sessionSeq`. Clear старой сессии не удаляет новую; clear tombstone блокирует поздний heartbeat той же или более старой сессии, включая heartbeat после clear до первого отчета. Final paused/finished отправляется с новым `sessionSeq`, чтобы опоздавший playing не заменил его. Sequence history сохраняется после TTL видимой строки и автоматически очищается через 24 часа вместе с неактивными account maps. Ошибка сети не мешает локальному воспроизведению.
 - Presence живет в памяти процесса и исчезает при его перезапуске. Multi-process broker не входит в этот этап.
 
 ## 6. Источники состояния

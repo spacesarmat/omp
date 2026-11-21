@@ -321,7 +321,7 @@ describe('sync websocket protocol', () => {
     client.send({ type: 'presence', presence: { ...value, sessionId: 'session-0', sessionSeq: 1, title: 'Old' } });
     client.send({ type: 'ping' });
     expect((await client.next()).type).toBe('pong');
-    client.send({ type: 'presence', presence: null });
+    client.send({ type: 'presence', presence: null, sessionSeq: 2 });
     expect(await client.next()).toEqual({ type: 'presence', presences: [], serverTime: 1000 });
   });
 
