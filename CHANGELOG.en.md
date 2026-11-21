@@ -4,7 +4,7 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
-## Unreleased
+## 0.30.3-beta.3
 
 - [phone] When the network drops, sync reports offline and the queued change count instead of a generic error
 

@@ -2,7 +2,7 @@
 
 <!-- Markers [phone] [tv] [lg] [atv] [tech]: see docs/changelog-markers.md. [tech] bullets are technical or admin-only and never reach users. -->
 
-## Не выпущено
+## 0.30.3-beta.3
 
 - [phone] При обрыве сети синхронизация снова показывает offline и число изменений в очереди вместо общей ошибки
 
