@@ -1,5 +1,6 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import { parseSyncV2Body } from './deviceSyncV2.mjs';
+import { parsePresenceInput } from './playbackPresence.mjs';
 
 const MAX_ACCOUNT_CONNECTIONS = 20;
 const MAX_DEVICE_CONNECTIONS = 5;
@@ -69,26 +70,41 @@ export function createSyncSocket(options) {
     }
   }
 
+  function queueLive(client, deliver) {
+    if (client.livePending >= 100) {
+      closeClient(client, 1013, 'live_queue_limit');
+      return;
+    }
+    client.livePending++;
+    client.liveQueue = client.liveQueue.then(async () => {
+      if (!client.ready || client.ws.readyState !== WebSocket.OPEN) return;
+      if (!await revalidate(client)) return;
+      if (!client.ready || client.ws.readyState !== WebSocket.OPEN) return;
+      deliver();
+    }).catch(() => {}).finally(() => {
+      client.livePending--;
+    });
+  }
+
   const unsubscribe = options.onChanges((accountId, changes) => {
     if (closed) return;
     for (const client of clients) {
       if (!client.ready || client.accountId !== accountId || client.ws.readyState !== WebSocket.OPEN) continue;
-      if (client.livePending >= 100) {
-        closeClient(client, 1013, 'live_queue_limit');
-        continue;
-      }
-      client.livePending++;
-      client.liveQueue = client.liveQueue.then(async () => {
-        if (!client.ready || client.ws.readyState !== WebSocket.OPEN) return;
-        if (!await revalidate(client)) return;
-        if (!client.ready || client.ws.readyState !== WebSocket.OPEN) return;
+      queueLive(client, () => {
         if (client.resuming) client.buffer.push(...changes);
         else sendChanges(client, changes);
-      }).catch(() => {}).finally(() => {
-        client.livePending--;
       });
     }
   });
+
+  const presence = options.presence;
+  const unsubscribePresence = presence ? presence.subscribe((accountId, presences) => {
+    if (closed) return;
+    for (const client of clients) {
+      if (!client.ready || client.accountId !== accountId || client.ws.readyState !== WebSocket.OPEN) continue;
+      queueLive(client, () => send(client, { type: 'presence', presences, serverTime: now() }));
+    }
+  }) : () => {};
 
   async function authenticate(client, message) {
     if (client.ready) return closeClient(client, 1008, 'already_authenticated');
@@ -113,6 +129,10 @@ export function createSyncSocket(options) {
       clearTimeout(client.authTimer);
       Promise.resolve(options.seen(accountId, deviceId, now())).catch(() => {});
       send(client, { type: 'ready', serverTime: now() });
+      if (presence) {
+        const presences = presence.list(accountId);
+        if (presences.length) send(client, { type: 'presence', presences, serverTime: now() });
+      }
     } catch (error) {
       closeClient(client, 1008, errorCode(error, 'bad_token').slice(0, 100));
     }
@@ -170,6 +190,17 @@ export function createSyncSocket(options) {
     }
   }
 
+  function updatePresence(client, message) {
+    if (!presence) return sendError(client, 'bad_message');
+    if (message.presence === null) {
+      presence.clear(client.accountId, client.deviceId);
+      return;
+    }
+    const parsed = parsePresenceInput(message.presence);
+    if (parsed.error) return sendError(client, 'bad_presence');
+    presence.put(client.accountId, client.deviceId, parsed);
+  }
+
   async function handleMessage(client, data, isBinary) {
     if (client.ws.readyState !== WebSocket.OPEN) return;
     if (isBinary) {
@@ -195,6 +226,7 @@ export function createSyncSocket(options) {
     if (!await revalidate(client) || client.ws.readyState !== WebSocket.OPEN) return;
     if (message.type === 'resume') return resume(client, message);
     if (message.type === 'mutations') return mutations(client, message);
+    if (message.type === 'presence') return updatePresence(client, message);
     if (message.type === 'ping') return send(client, { type: 'pong', serverTime: now() });
     sendError(client, 'bad_message');
   }
@@ -267,6 +299,7 @@ export function createSyncSocket(options) {
       closed = true;
       clearInterval(heartbeat);
       unsubscribe();
+      unsubscribePresence();
       for (const client of clients) {
         clearTimeout(client.authTimer);
         client.ws.terminate();

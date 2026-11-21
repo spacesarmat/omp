@@ -23,9 +23,9 @@ function mockRes() {
   };
 }
 
-async function call(app: (req: unknown, res: unknown) => Promise<void>, path: string, json: unknown, headers: Record<string, string> = {}) {
+async function call(app: (req: unknown, res: unknown) => Promise<void>, path: string, json: unknown, headers: Record<string, string> = {}, method = 'POST') {
   const req = {
-    method: 'POST',
+    method,
     url: path,
     headers: { 'x-forwarded-proto': 'https', 'content-type': 'application/json', ...headers },
     socket: { remoteAddress: '127.0.0.1' },
@@ -171,8 +171,32 @@ describe('billing sync websocket', () => {
     expect(await closed).toEqual({ code: 1008, reason: 'bad_token' });
   });
 
+  it('updates, lists and clears authorized HTTP presence', async () => {
+    const { app, tokenA, tokenB, tokenOther } = await setup();
+    const headersA = { authorization: 'Bearer ' + tokenA, 'x-device-id': DEV_A };
+    const value = {
+      state: 'playing', sessionId: 'session-http', sessionSeq: 2, hash: 'a'.repeat(40), fileId: 1,
+      title: 'Show', episode: 'S01E01', positionSec: 10, durationSec: 100, deviceName: 'LG', platform: 'lg',
+      deviceId: DEV_B,
+    };
+    const saved = await call(app, '/v2/sync/presence', { presence: value }, headersA);
+    expect(saved.status).toBe(200);
+    expect(saved.data.presences[0]).toMatchObject({ ...value, deviceId: DEV_A });
+    const otherDevice = await call(app, '/v2/sync/presence', {}, { authorization: 'Bearer ' + tokenB, 'x-device-id': DEV_B }, 'GET');
+    expect(otherDevice.data.presences).toHaveLength(1);
+    const otherAccount = await call(app, '/v2/sync/presence', {}, { authorization: 'Bearer ' + tokenOther, 'x-device-id': DEV_OTHER }, 'GET');
+    expect(otherAccount.data.presences).toEqual([]);
+    expect((await call(app, '/v2/sync/presence', { presence: { ...value, sessionSeq: 1, title: 'Old' } }, headersA)).data.presences[0].title).toBe('Show');
+    expect((await call(app, '/v2/sync/presence', { presence: { ...value, hash: 'bad' } }, headersA)).status).toBe(400);
+    expect((await call(app, '/v2/sync/presence', { presence: value }, { ...headersA, authorization: 'Bearer bad' })).status).toBe(401);
+    expect((await call(app, '/v2/sync/presence', { presence: null }, headersA)).data.presences).toEqual([]);
+  });
+
   it('refuses WebSocket upgrade in read-only mode', async () => {
-    const { connect } = await setup({ readOnly: true });
+    const { app, connect, tokenA } = await setup({ readOnly: true });
     await expect(connect()).rejects.toThrow('503');
+    const headers = { authorization: 'Bearer ' + tokenA, 'x-device-id': DEV_A };
+    expect((await call(app, '/v2/sync/presence', {}, headers, 'GET')).status).toBe(200);
+    expect((await call(app, '/v2/sync/presence', { presence: null }, headers)).status).toBe(503);
   });
 });

@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { createServer } from 'node:http';
 import { WebSocket } from 'ws';
 import { createSyncSocket } from '../src/syncSocket.mjs';
+import { createPresenceStore } from '../src/playbackPresence.mjs';
 
 const row = {
   id: 'progress:abc:1',
@@ -298,6 +299,54 @@ describe('sync websocket protocol', () => {
     gate.resolve([]);
     client.send({ type: 'ping' });
     expect((await client.next()).type).toBe('pong');
+  });
+
+  it('broadcasts presence only to its account and ignores stale sessions', async () => {
+    const presence = createPresenceStore(() => 1000);
+    const { connect } = await start({ presence });
+    const client = await connect();
+    const other = await connect();
+    await client.auth();
+    await other.auth('other-b');
+    const value = {
+      state: 'playing', sessionId: 'session-1', sessionSeq: 2, hash: 'a'.repeat(40), fileId: 1,
+      title: 'Show', episode: 'S01E01', positionSec: 10, durationSec: 100, deviceName: 'LG', platform: 'lg',
+    };
+    client.send({ type: 'presence', presence: value });
+    expect(await client.next()).toEqual({
+      type: 'presence', presences: [{ ...value, deviceId: 'device-a', updatedAt: 1000 }], serverTime: 1000,
+    });
+    other.send({ type: 'ping' });
+    expect((await other.next()).type).toBe('pong');
+    client.send({ type: 'presence', presence: { ...value, sessionId: 'session-0', sessionSeq: 1, title: 'Old' } });
+    client.send({ type: 'ping' });
+    expect((await client.next()).type).toBe('pong');
+    client.send({ type: 'presence', presence: null });
+    expect(await client.next()).toEqual({ type: 'presence', presences: [], serverTime: 1000 });
+  });
+
+  it('closes a revoked device before account presence delivery', async () => {
+    let revoked = false;
+    const presence = createPresenceStore(() => 1000);
+    const { connect } = await start({
+      presence,
+      authorize: async (token: string, deviceId: string) => {
+        if (deviceId === 'device-a' && revoked) throw Object.assign(new Error('bad_token'), { code: 'bad_token' });
+        return { accountId: 'account-a' };
+      },
+    });
+    const a = await connect();
+    const b = await connect();
+    await a.auth('device-a');
+    await b.auth('device-b');
+    revoked = true;
+    const closed = a.closed();
+    b.send({ type: 'presence', presence: {
+      state: 'playing', sessionId: 'session-b', sessionSeq: 1, hash: 'b'.repeat(40), fileId: 2,
+      title: 'Other', episode: '', positionSec: 0, durationSec: 0, deviceName: 'TV', platform: 'androidtv',
+    } });
+    expect((await b.next()).type).toBe('presence');
+    expect(await closed).toEqual({ code: 1008, reason: 'bad_token' });
   });
 
   it('terminates a client that does not answer heartbeat pings', async () => {
