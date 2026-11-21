@@ -102,6 +102,7 @@ describe('presence reporting sessions', () => {
     stop({ ...report, state: 'paused', positionSec: 33 });
     await vi.advanceTimersByTimeAsync(0);
     expect(bodies[3]).toMatchObject({ state: 'paused', positionSec: 33 });
+    expect(bodies[3].sessionSeq).toBeGreaterThan(bodies[0].sessionSeq);
     const count = bodies.length;
     await vi.advanceTimersByTimeAsync(30000);
     expect(bodies).toHaveLength(count);
@@ -129,11 +130,13 @@ describe('presence reporting sessions', () => {
   it('does not start requests without authentication', async () => {
     vi.useFakeTimers();
     const fetched = vi.fn(() => Promise.resolve(ok()));
+    const source = vi.fn(() => report);
     vi.stubGlobal('fetch', fetched);
     saveBillingSession(null);
-    const stop = startPresenceReporting(() => report, 'phone-play');
+    const stop = startPresenceReporting(source, 'phone-play');
     await vi.advanceTimersByTimeAsync(30000);
     stop();
+    expect(source).not.toHaveBeenCalled();
     expect(fetched).not.toHaveBeenCalled();
   });
 });

@@ -38,13 +38,15 @@ export function parsePresenceInput(raw) {
 
 export function createPresenceStore(now = Date.now, ttlMs = 90000) {
   const accounts = new Map();
+  const latest = new Map();
+  const cleared = new Map();
   const listeners = new Set();
 
-  function rowsFor(accountId) {
-    let rows = accounts.get(accountId);
+  function mapFor(root, accountId) {
+    let rows = root.get(accountId);
     if (!rows) {
       rows = new Map();
-      accounts.set(accountId, rows);
+      root.set(accountId, rows);
     }
     return rows;
   }
@@ -79,15 +81,23 @@ export function createPresenceStore(now = Date.now, ttlMs = 90000) {
     put(accountId, deviceId, input) {
       const parsed = parsePresenceInput(input);
       if (parsed.error) return false;
-      const rows = rowsFor(accountId);
+      const removed = mapFor(cleared, accountId);
+      if (parsed.sessionSeq <= (removed.get(deviceId) || 0)) return false;
+      const rows = mapFor(accounts, accountId);
       const previous = rows.get(deviceId);
       if (previous && (parsed.sessionSeq < previous.sessionSeq ||
         (parsed.sessionSeq === previous.sessionSeq && parsed.sessionId !== previous.sessionId))) return false;
+      const seen = mapFor(latest, accountId);
+      seen.set(deviceId, Math.max(seen.get(deviceId) || 0, parsed.sessionSeq));
       rows.set(deviceId, { ...parsed, deviceId, updatedAt: now() });
       notify(accountId);
       return true;
     },
     clear(accountId, deviceId) {
+      const previous = accounts.get(accountId) && accounts.get(accountId).get(deviceId);
+      const seen = mapFor(latest, accountId).get(deviceId) || 0;
+      const removed = mapFor(cleared, accountId);
+      removed.set(deviceId, Math.max(removed.get(deviceId) || 0, seen, previous ? previous.sessionSeq : 0));
       const rows = accounts.get(accountId);
       if (!rows || !rows.delete(deviceId)) return false;
       notify(accountId);

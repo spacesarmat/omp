@@ -78,6 +78,20 @@ describe('playback presence store', () => {
     expect(events).toHaveLength(2);
   });
 
+  it('keeps a clear tombstone against delayed heartbeats and allows a newer session', () => {
+    const store = createPresenceStore(() => 1000);
+    const events: unknown[] = [];
+    store.subscribe((...args: unknown[]) => events.push(args));
+    store.put('account-a', 'device-a', { ...input, sessionSeq: 10 });
+    store.clear('account-a', 'device-a');
+    expect(store.put('account-a', 'device-a', { ...input, sessionSeq: 10 })).toBe(false);
+    expect(store.put('account-a', 'device-a', { ...input, sessionSeq: 9 })).toBe(false);
+    expect(store.list('account-a')).toEqual([]);
+    expect(events).toHaveLength(2);
+    expect(store.put('account-a', 'device-a', { ...input, sessionId: 'new', sessionSeq: 11 })).toBe(true);
+    expect(store.list('account-a')[0]).toMatchObject({ sessionId: 'new', sessionSeq: 11 });
+  });
+
   it('sorts playing first, clears a device and isolates listener errors', () => {
     let now = 1000;
     const store = createPresenceStore(() => now);

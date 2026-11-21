@@ -119,6 +119,10 @@ function adjustedPosition(current: PresenceReport, previous: PresenceReport | nu
 
 export function startPresenceReporting(source: () => PresenceReport | null, sessionKey: string): (final?: PresenceReport | null) => void {
   if (timer) clearInterval(timer);
+  if (!syncEnabled() || !accessToken()) {
+    active = ++clock;
+    return () => {};
+  }
   const id = ++clock;
   active = id;
   const sessionSeq = nextSessionSeq();
@@ -158,8 +162,11 @@ export function startPresenceReporting(source: () => PresenceReport | null, sess
     timer = null;
     active = 0;
     if (owner && accountOwner() !== owner) return;
-    if (final) void sendPresence(payload(final, final.positionSec));
-    else void sendPresence(null);
+    if (final) {
+      void sendPresence({ ...final, sessionId: session, sessionSeq: nextSessionSeq() });
+    } else {
+      void sendPresence(null);
+    }
   };
 }
 
