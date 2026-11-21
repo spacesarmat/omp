@@ -24,6 +24,7 @@ import { resetHints } from '../../../src/onboarding/hints';
 import { loadMonitorSettings } from '../../../src/monitor/settings';
 import { lastSyncAt, lastSyncError, setSyncEnabled, syncEnabled } from '../../../src/store/deviceDb';
 import { fetchSyncDevices, runDeviceSync, type SyncDeviceRow } from '../../../src/billing/deviceSyncClient';
+import { PresenceCards } from './PresenceCards';
 import { syncAgo } from '../../../src/billing/syncAgo';
 import { hoursText } from '../monitor/text';
 import { activeMethods, openDonate } from '../donate';
@@ -508,6 +509,7 @@ function SyncRow() {
           {err ? <button type="button" class="m-btn m-btn-secondary" disabled={busy} onClick={go}>{t('settings.syncRetry')}</button> : null}
         </div>
       )}
+      {on && !blocked ? <PresenceCards /> : null}
       {open && (
         <div class="m-set-row">
           <div class="m-set-text">
