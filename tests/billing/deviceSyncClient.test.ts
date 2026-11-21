@@ -26,9 +26,11 @@ describe('runDeviceSync', () => {
   it('sends an edit that arrived while a request was still running', async () => {
     const bodies: string[] = [];
     let release: (res: { status: number; json: () => Promise<unknown> }) => void = () => undefined;
+    let calls = 0;
     vi.stubGlobal('fetch', vi.fn((_url: string, init: { body?: string }) => {
-      bodies.push(init && init.body ? init.body : '');
-      if (bodies.length === 1) return new Promise((resolve) => { release = resolve; });
+      calls++;
+      if (init && init.body) bodies.push(init.body);
+      if (calls === 1) return new Promise((resolve) => { release = resolve; });
       return Promise.resolve(ok(2));
     }));
     const first = runDeviceSync();
@@ -123,7 +125,7 @@ describe('runDeviceSync', () => {
     saveBillingSession({ token: '', access: 'a1.new', paidUntil: Date.now() + 60000, id: id });
     const bodies: string[] = [];
     vi.stubGlobal('fetch', vi.fn((_url: string, init: { body?: string }) => {
-      bodies.push(init && init.body ? init.body : '');
+      if (init && init.body) bodies.push(init.body);
       return Promise.resolve(ok(1));
     }));
     const epoch = syncEpoch();
@@ -142,7 +144,7 @@ describe('runDeviceSync', () => {
     saveBillingSession({ token: '', access: 'a1.other', paidUntil: Date.now() + 60000, id: 'b'.repeat(32) });
     const bodies: string[] = [];
     vi.stubGlobal('fetch', vi.fn((_url: string, init: { body?: string }) => {
-      bodies.push(init && init.body ? init.body : '');
+      if (init && init.body) bodies.push(init.body);
       return Promise.resolve(ok(2));
     }));
     const epoch = syncEpoch();

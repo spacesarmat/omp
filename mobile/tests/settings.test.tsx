@@ -1007,3 +1007,21 @@ describe('Settings: the TV row', () => {
     expect(el.textContent).toContain('LG');
   });
 });
+
+
+describe('Sync V2 status', () => {
+  it('shows offline queue size and a synchronized state', async () => {
+    const { resetSyncV2Status, updateSyncV2Status } = await import('../../src/billing/syncV2Status');
+    resetSyncV2Status();
+    const el = mount();
+    const row = el.querySelector('[data-row="sync"]')!;
+    act(() => updateSyncV2Status({ transport: 'websocket', pending: 3, lastError: 'offline' }));
+    expect(row.textContent).toContain('Offline, 3 изменения в очереди');
+    act(() => updateSyncV2Status({ pending: 0, lastError: '', lastAt: Date.now() }));
+    expect(row.textContent).toContain('Синхронизировано');
+    act(() => updateSyncV2Status({ blocked: 1, lastError: 'error' }));
+    expect(row.textContent).not.toContain('Синхронизировано');
+    expect(row.textContent).toContain('Не удалось');
+    resetSyncV2Status();
+  });
+});

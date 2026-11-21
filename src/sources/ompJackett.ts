@@ -52,7 +52,7 @@ interface MeBody {
   supporter?: boolean;
   bill?: { priceRub?: number; feeRub?: number; totalRub?: number; autoRenew?: boolean; payments?: { at?: number; amount?: string; currency?: string; title?: string }[] };
   /** Omitted by a server from before device sync. Missing means the app must not guess. */
-  sync?: { audience?: string; allowed?: boolean };
+  sync?: { audience?: string; allowed?: boolean; v2?: boolean };
 }
 
 interface ErrorBody {
@@ -90,7 +90,7 @@ function billOf(body: MeBody): BillingAccount['bill'] {
 function syncOf(body: MeBody): BillingAccount['sync'] {
   const row = body.sync;
   if (!row || typeof row !== 'object' || typeof row.allowed !== 'boolean') return undefined;
-  return { audience: row.audience === 'all' ? 'all' : 'subscribers', allowed: row.allowed };
+  return { audience: row.audience === 'all' ? 'all' : 'subscribers', allowed: row.allowed, v2: row.v2 !== false };
 }
 
 function referralOf(body: MeBody): BillingAccount['referral'] {

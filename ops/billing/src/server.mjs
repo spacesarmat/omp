@@ -3465,7 +3465,7 @@ export function createApp(file, fetchImpl, opts) {
           // The monitoring list is stored on the phone only, so this is the cap that app enforces. 0: no cap.
           // Apps already released ignore the field and keep their own check.
           monitorMax: monitorMaxFor(isActive),
-          sync: { audience: syncAudience(state.settings), allowed: maySync(state.settings, isActive) },
+          sync: { audience: syncAudience(state.settings), allowed: maySync(state.settings, isActive), v2: env.BILLING_SYNC_V2 !== '0' },
           // Popular-release cache. Omitted by old servers. False until an admin turns it on.
           cache: { enabled: cacheEnabled(state.settings) },
           referral: publicReferral(state.settings && state.settings.referral, account.id, state.referralJournal, state.referralBinds || []),

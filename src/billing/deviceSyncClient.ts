@@ -1,9 +1,12 @@
 // Push and pull remembered rows. A refused sync (no subscription) leaves the local copy as it is.
 import { BILLING_ORIGIN } from './config';
+import { runV2, setV2SyncContext, shouldUseV2, stopV2Socket } from './deviceSyncV2Client';
+import { createSyncLeader, type SyncLeader } from './syncLeader';
+import { publishSyncV2Result, resetSyncV2Status, syncV2Status } from './syncV2Status';
 import { billingSession, deviceId, legacySyncLink, onBillingChange } from './session';
 import { withDeviceToken } from './tokens';
-import { ackSent, markSyncError, markSynced, noteSyncAccount, onDeviceWrite, putDeviceRecords, setSyncCursor, syncCursor, syncEnabled, unsentRecords } from '../store/deviceDb';
-import { applyPulled } from '../store/applyPulled';
+import { ackSent, markSyncError, markSynced, noteSyncAccount, onDeviceWrite, onSyncStateChange, putDeviceRecords, setSyncCursor, syncCursor, syncEnabled, unsentRecords } from '../store/deviceDb';
+import { applyPulled, reapplyDeviceRecords } from '../store/applyPulled';
 import type { SyncRecord } from '../store/syncMerge';
 import type { SourceContext } from '../sources/types';
 
@@ -16,6 +19,7 @@ let contextOf: () => SourceContext | null = () => null;
 /** Android passes the same source context the rest of billing uses. A browser keeps window.fetch. */
 export function setSyncContext(fn: (() => SourceContext | null) | null): void {
   contextOf = fn || (() => null);
+  setV2SyncContext(fn);
 }
 
 export function scheduleDeviceSync(): void {
@@ -127,11 +131,86 @@ function finish(status: string): Promise<string> {
   return runDeviceSync();
 }
 
+let v2Leader: SyncLeader | null = null;
+let v2LeaderOwner = '';
+let v2RunOwned: (() => Promise<string>) | null = null;
+
+function stopV2Runtime(): void {
+  if (v2Leader) v2Leader.stop();
+  v2Leader = null;
+  v2LeaderOwner = '';
+  v2RunOwned = null;
+  stopV2Socket();
+}
+
+function runV2Leader(owner: string, epoch: number): Promise<string> {
+  if (!v2Leader || v2LeaderOwner !== owner) {
+    stopV2Runtime();
+    resetSyncV2Status();
+    let running: Promise<string> | null = null;
+    v2RunOwned = () => {
+      if (running) return running;
+      running = runV2(owner, epoch, () => syncEnabled() && sameAccount(owner) && !!v2Leader && v2Leader.isLeader()).finally(() => { running = null; });
+      return running;
+    };
+    v2LeaderOwner = owner;
+    v2Leader = createSyncLeader({
+      deviceId: deviceId(),
+      run: () => v2RunOwned ? v2RunOwned() : 'error',
+      publish: (value) => {
+        if (v2Leader && !v2Leader.isLeader()) reapplyDeviceRecords();
+        const status = typeof value === 'string' ? value : 'error';
+        publishSyncV2Result(owner, status, syncV2Status().transport);
+      },
+    });
+    v2Leader.start();
+  }
+  const leader = v2Leader;
+  const run = v2RunOwned!;
+  if (leader.isLeader()) {
+    return Promise.resolve().then(() => leader.isLeader() ? run() : 'busy');
+  }
+  leader.request();
+  return Promise.resolve('busy');
+}
+
+function pumpSelected(owner: string, epoch: number, pending: SyncRecord[]): Promise<string> {
+  const v1 = () => {
+    if (!sameAccount(owner)) return Promise.resolve('switched');
+    stopV2Runtime();
+    return pump(owner, syncCursor(), pending).then((status) => {
+      publishSyncV2Result(owner, status, 'v1');
+      return status;
+    });
+  };
+  return shouldUseV2(owner, () => sameAccount(owner)).then((useV2) => {
+    if (!sameAccount(owner)) return 'switched';
+    if (!useV2) return v1();
+    try {
+      return runV2Leader(owner, epoch).then((status) => {
+        if (!sameAccount(owner)) return 'switched';
+        if (status === 'v1') return v1();
+        if (status === 'offline') return 'error';
+        if (status === 'denied') return 'subscribers';
+        return status;
+      });
+    } catch (e) {
+      return v1();
+    }
+  }, v1);
+}
+
 export function runDeviceSync(): Promise<string> {
-  if (!syncEnabled()) return Promise.resolve('off');
+  if (!syncEnabled()) {
+    stopV2Runtime();
+    return Promise.resolve('off');
+  }
   const session = billingSession();
   const access = session && (session.access || session.token);
-  if (!access) return Promise.resolve('local');
+  if (!access) {
+    stopV2Runtime();
+    return Promise.resolve('local');
+  }
   if (syncing) {
     again = true;
     if (timer) {
@@ -145,7 +224,7 @@ export function runDeviceSync(): Promise<string> {
   seenAccount = owner;
   const epoch = noteSyncAccount(owner);
   const pending = unsentRecords(epoch);
-  return pump(owner, syncCursor(), pending).then(
+  return pumpSelected(owner, epoch, pending).then(
     (status) => finish(status),
     () => finish('error'),
   );
@@ -164,6 +243,10 @@ onBillingChange(() => {
 });
 
 onDeviceWrite(scheduleDeviceSync);
+onSyncStateChange((on) => {
+  if (!on) stopV2Runtime();
+});
+if (typeof window !== 'undefined') window.addEventListener('pagehide', stopV2Socket);
 
 export interface SyncDeviceRow {
   id: string;

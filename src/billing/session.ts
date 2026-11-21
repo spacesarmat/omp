@@ -55,7 +55,7 @@ export interface BillingAccount {
   /** Price, card fee, auto-renew and recent payments. Absent on an older server. */
   bill?: { priceRub: number; feeRub: number; totalRub: number; autoRenew: boolean; payments: { at: number; amount: string; currency: string; title: string }[] };
   /** From /v1/me. Absent on an older server: the switch stays usable. */
-  sync?: { audience: 'subscribers' | 'all'; allowed: boolean };
+  sync?: { audience: 'subscribers' | 'all'; allowed: boolean; v2?: boolean };
 }
 
 function hex(bytes: Uint8Array): string {

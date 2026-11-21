@@ -24,6 +24,7 @@ import { resetHints } from '../../../src/onboarding/hints';
 import { loadMonitorSettings } from '../../../src/monitor/settings';
 import { lastSyncAt, lastSyncError, setSyncEnabled, syncEnabled } from '../../../src/store/deviceDb';
 import { fetchSyncDevices, runDeviceSync, type SyncDeviceRow } from '../../../src/billing/deviceSyncClient';
+import { onSyncV2Status, syncV2Status } from '../../../src/billing/syncV2Status';
 import { PresenceCards } from './PresenceCards';
 import { syncAgo } from '../../../src/billing/syncAgo';
 import { hoursText } from '../monitor/text';
@@ -420,14 +421,19 @@ function SyncRow() {
   const [open, setOpen] = useState(false);
   const [devices, setDevices] = useState<SyncDeviceRow[]>([]);
   const [now, setNow] = useState(() => Date.now());
+  const [v2, setV2] = useState(() => syncV2Status());
   void tick;
   const on = syncEnabled();
   const err = lastSyncError();
   const at = lastSyncAt();
   const blocked = allowed === false;
   useEffect(() => {
+    const offStatus = onSyncV2Status(() => setV2(syncV2Status()));
     const id = window.setInterval(() => setNow(Date.now()), 30000);
-    return () => window.clearInterval(id);
+    return () => {
+      offStatus();
+      window.clearInterval(id);
+    };
   }, []);
   useEffect(() => {
     let alive = true;
@@ -474,9 +480,17 @@ function SyncRow() {
     ? t('settings.syncNeedSub')
     : !on
       ? t('settings.syncLocal')
-      : err
-        ? t('settings.syncFail', { reason: syncReason(err) })
-        : t('settings.syncLast', { when: syncWhen(at, now) });
+      : v2.lastError === 'offline' && v2.pending > 0
+        ? t('settings.syncOfflineQueue', { n: v2.pending })
+        : (v2.blocked > 0 || v2.lastError === 'error')
+          ? t('settings.syncFail', { reason: syncReason('error') })
+          : err
+            ? t('settings.syncFail', { reason: syncReason(err) })
+            : v2.pending > 0
+              ? t('settings.syncPending', { n: v2.pending })
+              : v2.transport && v2.lastAt
+                ? t('settings.syncSynchronized')
+                : t('settings.syncLast', { when: syncWhen(at, now) });
   return (
     <div data-row="sync">
       <div class="m-set-row">
