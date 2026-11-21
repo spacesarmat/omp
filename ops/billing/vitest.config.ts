@@ -13,6 +13,7 @@ const testDir = path.join(root, 'ops/billing/test');
  */
 function include(): string[] {
   const react = path.join(root, 'ops/billing/admin/node_modules/react/package.json');
+  const socket = path.join(root, 'ops/billing/node_modules/ws/package.json');
   const globs = ['ops/billing/test/**/*.test.ts'];
   // The admin window test needs the admin React install. The root `npm test` job does not install it.
   if (existsSync(react)) globs.push('ops/billing/test/**/*.test.tsx');
@@ -21,6 +22,7 @@ function include(): string[] {
   const needsPg = /from '\.\/pg'|serve\.mjs|BILLING_TEST_DATABASE_URL/;
   const files = readdirSync(testDir).filter((f) => {
     if (f.endsWith('.test.tsx') && !existsSync(react)) return false;
+    if (f === 'syncSocket.test.ts' && !existsSync(socket)) return false;
     return (f.endsWith('.test.ts') || f.endsWith('.test.tsx')) && !needsPg.test(readFileSync(path.join(testDir, f), 'utf8'));
   });
   process.stderr.write('billing: no BILLING_TEST_DATABASE_URL, the Postgres tests are skipped (' + files.length + ' files run)\n');
