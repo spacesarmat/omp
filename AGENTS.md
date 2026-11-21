@@ -19,6 +19,7 @@
 - `scripts/`: релиз, CHANGELOG, Telegram-посты, TorrServer, проверки (`npm run check:boot`, `check:changelog`, `check:torrserver`,
   `npm run check:overflow`, `npm run screenshots`).
 - Тесты: `npm test` (корень, затем billing через `ops/billing/vitest.config.ts`), `npm run build`, `npm run build:mobile`, `npm run build:desktop`, `npm run build:editor`.
+  Перед локальным `npm test` установить billing-зависимости: `npm ci --prefix ops/billing`. CI делает это в build и billing jobs.
   Rust: `cargo test --manifest-path desktop/src-tauri/Cargo.toml`. Node 24.
   Полный `npm test` запускать в Linux или WSL: нужны `shellcheck`, `rsync`, `flock` и Postgres 17. Git Bash на Windows - только точечные JS-тесты.
 - CI (`.github/workflows/ci.yml`): джобы `build`, `android`, `billing`. Desktop (`.github/workflows/desktop.yml`): smoke-матрица и `package-windows`.
