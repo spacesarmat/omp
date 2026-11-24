@@ -36,6 +36,16 @@ export function setInstallPermission(fn: InstallPermission | null): void {
   installPermission = fn;
 }
 
+export type SelfInstallReader = () => Promise<boolean>;
+let selfInstallReader: SelfInstallReader | null = null;
+
+/** Replaces the store-channel query (tests); null restores the native one. */
+export function setSelfInstallReader(fn: SelfInstallReader | null): void {
+  selfInstallReader = fn;
+}
+
+const RUSTORE_LISTING = 'https://www.rustore.ru/catalog/app/com.spacesarmat.omp';
+
 export function describeInstallError(e: unknown): string {
   const m = e && typeof e === 'object' ? (e as { message?: unknown }).message : e;
   const msg = typeof m === 'string' ? m : '';
@@ -78,6 +88,17 @@ export function UpdateSheet({ info }: { info: UpdateInfo }) {
 
   // the permission is not given yet: what Android is about to ask, before its page opens
   const [asking, setAsking] = useState(false);
+  // store channel (RuStore): in-app install is forbidden, offer the store listing instead
+  const [storeChannel, setStoreChannel] = useState(false);
+
+  useEffect(() => {
+    let dead = false;
+    (selfInstallReader ?? native.selfInstallEnabled.bind(native))().then(
+      (en) => { if (!dead) setStoreChannel(!en); },
+      () => {},
+    );
+    return () => { dead = true; };
+  }, []);
 
   async function install(explained = false) {
     if (running.current) return;
@@ -145,7 +166,19 @@ export function UpdateSheet({ info }: { info: UpdateInfo }) {
           {error}
         </div>
       )}
-      {asking ? (
+      {storeChannel ? (
+        <div class="m-field">
+          <div class="m-muted m-small">{t('update.storeChannel')}</div>
+          <button
+            type="button"
+            class="m-btn m-btn-primary"
+            disabled={locked}
+            onClick={() => void native.openExternal(RUSTORE_LISTING, '')}
+          >
+            {t('update.openStore')}
+          </button>
+        </div>
+      ) : asking ? (
         <div class="m-field" data-allow-hint role="alertdialog" aria-label={t('update.allowHint')}>
           <div class="m-hint-warn">{t('update.allowHint')}</div>
           <button type="button" class="m-btn m-btn-primary" onClick={() => void install(true)}>

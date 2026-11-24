@@ -289,6 +289,8 @@ export const ky: EnDict<typeof ru> = {
     available: "Версиясы {version} дарегинде жеткиликтүү.",
     installFailed: "Жаңыртуу орнотула алган жок",
     installUnavailable: "Бул түзмөккө жаңыртууларды орнотуу мүмкүн эмес",
+    storeChannel: 'Бул курама колдонмо дүкөнү аркылуу жаңыланат - колдонмо ичинде APK орнотуу өчүрүлгөн',
+    openStore: 'RuStore ачуу',
     hb: {
       done: "Ошол эле. OMPти кайра жүктөңүз.",
       verifying: "Текшерип жатам…",

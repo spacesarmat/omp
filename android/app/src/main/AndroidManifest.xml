@@ -24,7 +24,8 @@
         android:usesPermissionFlags="neverForLocation"
         tools:targetApi="tiramisu" />
     <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
-    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!-- REQUEST_INSTALL_PACKAGES lives in the sideload flavor manifest only; the rustore flavor
+         removes it (RuStore forbids sideloading). See src/sideload / src/rustore. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <!-- API 34+: PlaybackService uses foregroundServiceType=mediaPlayback. Install-time, not a runtime prompt. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />

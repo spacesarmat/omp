@@ -289,6 +289,8 @@ export const tg: EnDict<typeof ru> = {
     available: "Нусха дастрас аст {version}",
     installFailed: "Навсозӣ насб карда нашуд",
     installUnavailable: "Навсозиҳо дар ин дастгоҳ насб карда намешаванд",
+    storeChannel: 'Ин сохт тавассути мағозаи барномаҳо навсозӣ мешавад - насби APK дар дохили барнома хомӯш аст',
+    openStore: 'Кушодани RuStore',
     hb: {
       done: "Ҳамин аст. OMP-ро аз нав оғоз кунед.",
       verifying: "Тафтиш…",

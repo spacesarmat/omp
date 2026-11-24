@@ -238,15 +238,15 @@ jobs:
           if [ "$EVENT_NAME" = "pull_request" ]; then
             args+=(-PompAbi=arm64-v8a)
           fi
-          (cd android && ./gradlew "${args[@]}" assembleDebug testDebugUnitTest)
+          (cd android && ./gradlew "${args[@]}" assembleSideloadDebug testSideloadDebugUnitTest)
       - name: APK size per ABI
         if: steps.filter.outputs.android == 'true'
         env:
           EVENT_NAME: ${{ github.event_name }}
         run: |
           set -eu
-          ls -l android/app/build/outputs/apk/debug/*.apk
-          dir=android/app/build/outputs/apk/debug
+          ls -l android/app/build/outputs/apk/sideload/debug/*.apk
+          dir=android/app/build/outputs/apk/sideload/debug
           if [ "$EVENT_NAME" = "pull_request" ]; then
             test -f "$dir"/*arm64-v8a*.apk
             test ! -e "$dir"/*armeabi-v7a*.apk
@@ -261,7 +261,7 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: apk-debug
-          path: android/app/build/outputs/apk/debug/*.apk
+          path: android/app/build/outputs/apk/sideload/debug/*.apk
           retention-days: 7
           if-no-files-found: error
 

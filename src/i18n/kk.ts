@@ -289,6 +289,8 @@ export const kk: EnDict<typeof ru> = {
     available: "Нұсқасы қолжетімді {version}",
     installFailed: "Жаңарту орнатылмады",
     installUnavailable: "Осы құрылғыға жаңартуларды орнату мүмкін емес",
+    storeChannel: 'Бұл құрастырылым қолданбалар дүкені арқылы жаңартылады - қолданба ішінде APK орнату өшірілген',
+    openStore: 'RuStore ашу',
     hb: {
       done: "Міне. OMP-ті қайта жүктеңіз.",
       verifying: "Тексеріп жатыр…",

@@ -282,6 +282,8 @@ export const be: typeof ru = {
     available: "Даступна версія {version}",
     installFailed: "Не ўдалося ўсталяваць абнаўленне",
     installUnavailable: "Усталяванне абнаўленняў недаступна на гэтай прыладзе",
+    storeChannel: 'Гэтая зборка абнаўляецца праз краму праграм - усталяванне APK унутры праграмы адключана',
+    openStore: 'Адкрыць RuStore',
     hb: {
       done: "Гатова. Адкрыйце OMP нанова",
       verifying: "Праверка…",

@@ -284,6 +284,8 @@ export const en: EnDict<typeof ru> = {
     fixes: 'Fixes and improvements',
     allowHint: 'Android will ask to allow installs: find OMP in the list, turn the switch on and press Back - the install continues',
     allowGo: 'Continue',
+    storeChannel: 'This build updates through the app store - in-app APK install is disabled',
+    openStore: 'Open RuStore',
     replacesBeta: 'OMP {version} is out and replaces the beta',
     available: 'Version {version} available',
     installFailed: 'Could not install the update',

@@ -288,6 +288,8 @@ export const ru = {
     /** Before Android's «Установка неизвестных приложений» page (on some boxes the list of all apps). */
     allowHint: 'Android попросит разрешить установку: найдите OMP в списке, включите переключатель и нажмите «Назад» - установка продолжится',
     allowGo: 'Продолжить',
+    storeChannel: 'Эта сборка обновляется через магазин приложений - установка APK внутри приложения отключена',
+    openStore: 'Открыть RuStore',
     replacesBeta: 'Вышла OMP {version} - она заменит бету',
     available: 'Доступна версия {version}',
     installFailed: 'Не удалось установить обновление',

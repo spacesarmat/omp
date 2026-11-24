@@ -21,6 +21,11 @@ internal fun OmpNativePlugin.deviceAbiKeyOp(call: PluginCall) {
 
 internal fun OmpNativePlugin.downloadAndInstallApkOp(call: PluginCall) {
     val once = CallOnce(call)
+    // RuStore channel forbids sideloading; updates arrive through the store, never an in-app install.
+    if (!BuildConfig.ALLOW_SELF_INSTALL) {
+        once.reject("Обновление доступно через магазин приложений", "omp")
+        return
+    }
     // the feed's per-ABI APK for this device (arm64 / armv7) when the page passed them, else the universal one
     val apk = ApkAbi.choose(
         Build.SUPPORTED_ABIS.toList(),
@@ -47,7 +52,11 @@ internal fun OmpNativePlugin.downloadAndInstallApkOp(call: PluginCall) {
 }
 
 internal fun OmpNativePlugin.canInstallApksOp(call: PluginCall) {
-    call.resolve(JSObject().put("granted", ApkInstaller.canInstall(context)))
+    call.resolve(
+        JSObject()
+            .put("granted", BuildConfig.ALLOW_SELF_INSTALL && ApkInstaller.canInstall(context))
+            .put("selfInstall", BuildConfig.ALLOW_SELF_INSTALL),
+    )
 }
 
 internal fun OmpNativePlugin.startApkInstall(job: ApkJob) {
