@@ -1,24 +1,32 @@
 {
-  "version": "0.30.3-beta.4",
-  "ipkUrl": "https://github.com/spacesarmat/omp/releases/download/v0.30.3-beta.4/OMP-0.30.3-beta.4.apk",
-  "ipkHash": "a058555220bc02b6b47dc6c6bcde1d363bb0602288981e134ce8c254415e9400",
-  "ipkSize": 98410008,
+  "version": "0.30.3",
+  "ipkUrl": "https://github.com/spacesarmat/omp/releases/download/v0.30.3/OMP-0.30.3.apk",
+  "ipkHash": "0181f3f54377f2bda86a350941309cb79e55450999816b05b8349afb7b3cb5e3",
+  "ipkSize": 98404996,
   "apks": {
     "arm64": {
-      "url": "https://github.com/spacesarmat/omp/releases/download/v0.30.3-beta.4/OMP-0.30.3-beta.4-arm64.apk",
-      "sha256": "88eadfa9c4aca2a342751723cc06cbf007fbdaf0de72615d536ffd2dc25bfcb4",
-      "size": 63861746
+      "url": "https://github.com/spacesarmat/omp/releases/download/v0.30.3/OMP-0.30.3-arm64.apk",
+      "sha256": "9dc415327db2df89937fd3314126bf2dff340770302a8c67097d6090e714570b",
+      "size": 63856734
     },
     "armv7": {
-      "url": "https://github.com/spacesarmat/omp/releases/download/v0.30.3-beta.4/OMP-0.30.3-beta.4-armv7.apk",
-      "sha256": "b8a39c7d99d4a4afdce775895e45fc1472f6330da9fa1cc05f943273291e48e7",
-      "size": 59680770
+      "url": "https://github.com/spacesarmat/omp/releases/download/v0.30.3/OMP-0.30.3-armv7.apk",
+      "sha256": "0095bd75a37ab5bc11a186f518dc10ff5ab962ed425faf5bd0458c479377c695",
+      "size": 59675758
     }
   },
   "notes": [
-    "Исправления и улучшения"
+    "Встроенный TorrServer обновлён до MatriX.151"
   ],
-  "notesTv": [],
-  "notesPhone": [],
-  "releaseUrl": "https://github.com/spacesarmat/omp/releases/tag/v0.30.3-beta.4"
+  "notesTv": [
+    "Встроенный TorrServer обновлён до MatriX.151"
+  ],
+  "notesPhone": [
+    "Сборка для RuStore: без разрешения на установку APK и без само-обновления внутри приложения - обновление приходит через магазин. Релизы автоматически публикуются в RuStore; sideload-сборка с GitHub/сайта сохраняет установку в один тап",
+    "Синхронизация надежнее сохраняет изменения библиотеки после перезапуска и не откатывает позицию «Продолжить», если старый ответ сети пришел позже нового. При обрыве сети видно offline и число изменений в очереди",
+    "В аккаунте видно, что играет на других ваших устройствах: название, серия, позиция и пауза. Кнопка «Продолжить здесь» открывает тот же файл на телефоне с той же позиции. Автоматического переключения нет",
+    "В настройках синхронизации видно число изменений в offline-очереди и подтверждение «Синхронизировано»",
+    "Встроенный TorrServer обновлён до MatriX.151"
+  ],
+  "releaseUrl": "https://github.com/spacesarmat/omp/releases/tag/v0.30.3"
 }

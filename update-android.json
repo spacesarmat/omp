@@ -1,26 +1,32 @@
 {
-  "version": "0.30.2",
-  "ipkUrl": "https://github.com/spacesarmat/omp/releases/download/v0.30.2/OMP-0.30.2.apk",
-  "ipkHash": "79243c54f301d1e0f2236ce3c505d329653646c4fed1c4da5209d13a43e07a75",
-  "ipkSize": 98381524,
+  "version": "0.30.3",
+  "ipkUrl": "https://github.com/spacesarmat/omp/releases/download/v0.30.3/OMP-0.30.3.apk",
+  "ipkHash": "0181f3f54377f2bda86a350941309cb79e55450999816b05b8349afb7b3cb5e3",
+  "ipkSize": 98404996,
   "apks": {
     "arm64": {
-      "url": "https://github.com/spacesarmat/omp/releases/download/v0.30.2/OMP-0.30.2-arm64.apk",
-      "sha256": "60891269a4907a69210b08a1203de9b726145ecb9dea2399527eaa89fa299d3d",
-      "size": 63833262
+      "url": "https://github.com/spacesarmat/omp/releases/download/v0.30.3/OMP-0.30.3-arm64.apk",
+      "sha256": "9dc415327db2df89937fd3314126bf2dff340770302a8c67097d6090e714570b",
+      "size": 63856734
     },
     "armv7": {
-      "url": "https://github.com/spacesarmat/omp/releases/download/v0.30.2/OMP-0.30.2-armv7.apk",
-      "sha256": "1f2e7321a6758f16793ea547e98d589f7a3b35cf7b900ec729fc1e7ff5e588e7",
-      "size": 59652286
+      "url": "https://github.com/spacesarmat/omp/releases/download/v0.30.3/OMP-0.30.3-armv7.apk",
+      "sha256": "0095bd75a37ab5bc11a186f518dc10ff5ab962ed425faf5bd0458c479377c695",
+      "size": 59675758
     }
   },
   "notes": [
-    "Встроенные субтитры читаются прямо из MKV, когда на TorrServer нет ffprobe. Дорожки появляются в меню телевизора и в пульте на телефоне. Большие фрагменты MKV больше не оставляют бесконечную загрузку без текста. Сжатые PGS распаковываются и сохраняют правильное время"
+    "Встроенный TorrServer обновлён до MatriX.151"
   ],
   "notesTv": [
-    "Встроенные субтитры читаются прямо из MKV, когда на TorrServer нет ffprobe. Дорожки появляются в меню телевизора и в пульте на телефоне. Большие фрагменты MKV больше не оставляют бесконечную загрузку без текста. Сжатые PGS распаковываются и сохраняют правильное время"
+    "Встроенный TorrServer обновлён до MatriX.151"
   ],
-  "notesPhone": [],
-  "releaseUrl": "https://github.com/spacesarmat/omp/releases/tag/v0.30.2"
+  "notesPhone": [
+    "Сборка для RuStore: без разрешения на установку APK и без само-обновления внутри приложения - обновление приходит через магазин. Релизы автоматически публикуются в RuStore; sideload-сборка с GitHub/сайта сохраняет установку в один тап",
+    "Синхронизация надежнее сохраняет изменения библиотеки после перезапуска и не откатывает позицию «Продолжить», если старый ответ сети пришел позже нового. При обрыве сети видно offline и число изменений в очереди",
+    "В аккаунте видно, что играет на других ваших устройствах: название, серия, позиция и пауза. Кнопка «Продолжить здесь» открывает тот же файл на телефоне с той же позиции. Автоматического переключения нет",
+    "В настройках синхронизации видно число изменений в offline-очереди и подтверждение «Синхронизировано»",
+    "Встроенный TorrServer обновлён до MatriX.151"
+  ],
+  "releaseUrl": "https://github.com/spacesarmat/omp/releases/tag/v0.30.3"
 }

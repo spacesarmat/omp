@@ -1,12 +1,20 @@
 {
-  "version": "0.30.3-beta.4",
-  "ipkUrl": "https://github.com/spacesarmat/omp/releases/download/v0.30.3-beta.4/OMP-0.30.3-beta.4-webOS.ipk",
-  "ipkHash": "6a15edae6986edd6eff25e3400e528f40f8261bda057dab493116142ee420d57",
-  "ipkSize": 1238492,
+  "version": "0.30.3",
+  "ipkUrl": "https://github.com/spacesarmat/omp/releases/download/v0.30.3/OMP-0.30.3-webOS.ipk",
+  "ipkHash": "20393ca57514a6dc61094062ea100c164f39687b8c5dfbc1d40786fb0a8362bf",
+  "ipkSize": 1235888,
   "notes": [
-    "Исправления и улучшения"
+    "Встроенный TorrServer обновлён до MatriX.151"
   ],
-  "releaseUrl": "https://github.com/spacesarmat/omp/releases/tag/v0.30.3-beta.4",
-  "notesTv": [],
-  "notesPhone": []
+  "releaseUrl": "https://github.com/spacesarmat/omp/releases/tag/v0.30.3",
+  "notesTv": [
+    "Встроенный TorrServer обновлён до MatriX.151"
+  ],
+  "notesPhone": [
+    "Сборка для RuStore: без разрешения на установку APK и без само-обновления внутри приложения - обновление приходит через магазин. Релизы автоматически публикуются в RuStore; sideload-сборка с GitHub/сайта сохраняет установку в один тап",
+    "Синхронизация надежнее сохраняет изменения библиотеки после перезапуска и не откатывает позицию «Продолжить», если старый ответ сети пришел позже нового. При обрыве сети видно offline и число изменений в очереди",
+    "В аккаунте видно, что играет на других ваших устройствах: название, серия, позиция и пауза. Кнопка «Продолжить здесь» открывает тот же файл на телефоне с той же позиции. Автоматического переключения нет",
+    "В настройках синхронизации видно число изменений в offline-очереди и подтверждение «Синхронизировано»",
+    "Встроенный TorrServer обновлён до MatriX.151"
+  ]
 }
