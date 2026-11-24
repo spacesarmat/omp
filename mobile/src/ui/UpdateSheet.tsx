@@ -173,7 +173,7 @@ export function UpdateSheet({ info }: { info: UpdateInfo }) {
             type="button"
             class="m-btn m-btn-primary"
             disabled={locked}
-            onClick={() => void native.openExternal(RUSTORE_LISTING, '')}
+            onClick={() => void native.openExternal(RUSTORE_LISTING, 'text/html')}
           >
             {t('update.openStore')}
           </button>
@@ -201,7 +201,7 @@ export function UpdateSheet({ info }: { info: UpdateInfo }) {
           {t('update.skip')}
         </button>
       </div>
-      <div class="m-muted m-small">{t('update.permission')}</div>
+      {!storeChannel && <div class="m-muted m-small">{t('update.permission')}</div>}
     </Sheet>
   );
 }

@@ -209,15 +209,16 @@ jobs:
           (cd android && ./gradlew --build-cache --parallel -Porg.gradle.java.installations.fromEnv=JAVA_HOME_17_X64 assembleSideloadRelease --stacktrace) || { df -h /; exit 1; }
           OUT=android/app/build/outputs/apk/sideload/release
           mkdir -p build
-          cp "$OUT/app-universal-release.apk" "build/OMP-${VERSION}.apk"
-          cp "$OUT/app-arm64-v8a-release.apk" "build/OMP-${VERSION}-arm64.apk"
-          cp "$OUT/app-arm64-v8a-release.apk" "build/OMP-${VERSION}-arm64-v8a.apk"
-          cp "$OUT/app-armeabi-v7a-release.apk" "build/OMP-${VERSION}-armv7.apk"
-          cp "$OUT/app-armeabi-v7a-release.apk" "build/OMP-${VERSION}-armeabi-v7a.apk"
+          # Flavor+ABI splits embed the channel in the file name; glob by ABI so the order does not matter.
+          cp "$OUT/"*universal*.apk "build/OMP-${VERSION}.apk"
+          cp "$OUT/"*arm64-v8a*.apk "build/OMP-${VERSION}-arm64.apk"
+          cp "$OUT/"*arm64-v8a*.apk "build/OMP-${VERSION}-arm64-v8a.apk"
+          cp "$OUT/"*armeabi-v7a*.apk "build/OMP-${VERSION}-armv7.apk"
+          cp "$OUT/"*armeabi-v7a*.apk "build/OMP-${VERSION}-armeabi-v7a.apk"
           # RuStore channel: no REQUEST_INSTALL_PACKAGES, self-install disabled; uploaded to the store below.
           (cd android && ./gradlew --build-cache --parallel -Porg.gradle.java.installations.fromEnv=JAVA_HOME_17_X64 assembleRustoreRelease --stacktrace) || { df -h /; exit 1; }
           ROUT=android/app/build/outputs/apk/rustore/release
-          cp "$ROUT/app-universal-rustore-release.apk" "build/OMP-${VERSION}-rustore.apk"
+          cp "$ROUT/"*universal*.apk "build/OMP-${VERSION}-rustore.apk"
           rm -f "$RUNNER_TEMP/omp.jks"
           echo "APK sizes (bytes):"
           ls -l "build/OMP-${VERSION}-arm64.apk" "build/OMP-${VERSION}-armv7.apk" "build/OMP-${VERSION}.apk" "build/OMP-${VERSION}-arm64-v8a.apk" "build/OMP-${VERSION}-armeabi-v7a.apk"
@@ -289,6 +290,8 @@ jobs:
       # RuStore: upload the rustore-channel APK (no REQUEST_INSTALL_PACKAGES) and submit for moderation.
       # Stable -> RUSTORE_APP_ID, beta -> RUSTORE_BETA_APP_ID (separate store app). Skipped without the secrets.
       - name: Publish to RuStore
+        # A store outage / expired key must not block the update feeds; the release itself already exists.
+        continue-on-error: true
         env:
           RUSTORE_KEY_ID: ${{ secrets.RUSTORE_KEY_ID }}
           RUSTORE_PRIVATE_KEY: ${{ secrets.RUSTORE_PRIVATE_KEY }}
@@ -308,7 +311,8 @@ jobs:
               PKG="$RUSTORE_BETA_APP_ID" ;;
           esac
           if [ -z "$PKG" ]; then echo "rustore: no package id - skipping"; exit 0; fi
-          node -e 'const fs=require("fs");const v=process.argv[1];const s=fs.readFileSync("CHANGELOG.md","utf8");const sec=s.split("\n## ").find(x=>x.startsWith(v+"\n"));const body=sec?sec.split("\n").slice(1).join("\n"):"";fs.writeFileSync("rustore-notes.md",body);' "$VERSION"
+          # user-facing notes only: drop [tech] bullets and strip platform markers
+          node -e 'const fs=require("fs");const v=process.argv[1];const s=fs.readFileSync("CHANGELOG.md","utf8");const sec=s.split("\n## ").find(x=>x.startsWith(v+"\n"));const lines=sec?sec.split("\n").slice(1):[];const body=lines.filter(l=>!l.includes("[tech]")).map(l=>l.replace(/\[(phone|tv|lg|atv|tech)\]\s*/g,"")).join("\n").trim();fs.writeFileSync("rustore-notes.md",body);' "$VERSION"
           node scripts/rustore-publish.mjs --apk "build/OMP-${VERSION}-rustore.apk" --pkg "$PKG" --notes rustore-notes.md --publishType INSTANTLY
       - name: Publish update feed to gh-pages
         env:
