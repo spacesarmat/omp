@@ -189,7 +189,7 @@ services:
       - omp
 
   torrserver:
-    image: ghcr.io/yourok/torrserver@sha256:9188743fbdba14dccd38654a1185f44338bf5062f4098730acb8adeac6e596d7
+    image: ghcr.io/yourok/torrserver@sha256:6adc851f5ce2f523b6b95998f1fdb1e172deef1c001c1419abcdc5788d77be5a
     container_name: omp-torrserver
     restart: unless-stopped
     environment:
