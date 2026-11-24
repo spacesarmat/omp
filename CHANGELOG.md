@@ -7,7 +7,7 @@
 - [phone] Сборка для RuStore: без разрешения на установку APK и без само-обновления внутри приложения - обновление приходит через магазин. Релизы (бета и стабильные) автоматически публикуются в RuStore; sideload-сборка с GitHub/сайта сохраняет установку в один тап
 - [tech] Android: каналы sideload/rustore (flavor), rustore-манифест убирает REQUEST_INSTALL_PACKAGES; скрипт rustore-publish и шаг релиза грузят APK в RuStore и отправляют на модерацию
 
-## 0.30.3-beta.4
+## 0.30.3
 
 - [tech] TorrServer: образ закреплён на digest MatriX.151 - раньше менялся только torrserver.version, и сервер оставался на старой сборке
 - [tech] Админка: public bundle пересобран под обновлённые зависимости, CI снова сверяет сборку с committed
