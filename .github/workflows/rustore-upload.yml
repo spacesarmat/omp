@@ -1,0 +1,50 @@
+name: RuStore upload
+
+# Manually (re)upload an already-published release's rustore APK to RuStore, e.g. when the
+# automatic publish step failed (TLS / outage). Does not touch the GitHub release or feeds.
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag (vX.Y.Z) whose rustore APK to upload
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  upload:
+    runs-on: ubuntu-latest
+    env:
+      TAG: ${{ inputs.tag }}
+      RUSTORE_KEY_ID: ${{ secrets.RUSTORE_KEY_ID }}
+      RUSTORE_PRIVATE_KEY: ${{ secrets.RUSTORE_PRIVATE_KEY }}
+      RUSTORE_APP_ID: ${{ secrets.RUSTORE_APP_ID }}
+      RUSTORE_BETA_APP_ID: ${{ secrets.RUSTORE_BETA_APP_ID }}
+      NODE_EXTRA_CA_CERTS: ${{ github.workspace }}/scripts/certs/rustore-ca.pem
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0 (main: has the CA + script)
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24
+      - name: Download the rustore APK from the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -eu
+          VERSION="${TAG#v}"
+          mkdir -p build
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" -p "OMP-${VERSION}-rustore.apk" -D build
+      - name: Upload to RuStore
+        run: |
+          set -eu
+          VERSION="${TAG#v}"
+          PKG="$RUSTORE_APP_ID"
+          case "$TAG" in
+            *-beta.*)
+              if [ -z "$RUSTORE_BETA_APP_ID" ]; then echo "rustore: beta without RUSTORE_BETA_APP_ID - skipping"; exit 0; fi
+              PKG="$RUSTORE_BETA_APP_ID" ;;
+          esac
+          node -e 'const fs=require("fs");const v=process.argv[1];const s=fs.readFileSync("CHANGELOG.md","utf8");const sec=s.split("\n## ").find(x=>x.startsWith(v+"\n"));const lines=sec?sec.split("\n").slice(1):[];const body=lines.filter(l=>!l.includes("[tech]")).map(l=>l.replace(/\[(phone|tv|lg|atv|tech)\]\s*/g,"")).join("\n").trim();fs.writeFileSync("rustore-notes.md",body);' "$VERSION"
+          node scripts/rustore-publish.mjs --apk "build/OMP-${VERSION}-rustore.apk" --pkg "$PKG" --notes rustore-notes.md --publishType INSTANTLY
