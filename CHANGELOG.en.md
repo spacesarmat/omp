@@ -6,14 +6,17 @@ The English translation covers the latest versions only; the full history (in Ru
 
 ## Unreleased
 
-- [phone] RuStore build: no APK-install permission and no in-app self-update - updates arrive through the store. Releases (beta and stable) publish to RuStore automatically; the sideload build from GitHub/site keeps one-tap install
-- [tech] Android: sideload/rustore channel flavors, the rustore manifest removes REQUEST_INSTALL_PACKAGES; rustore-publish script and a release step upload the APK to RuStore and submit it for moderation
-
 ## 0.30.3
 
+- [phone] RuStore build: no APK-install permission and no in-app self-update - updates arrive through the store. Releases publish to RuStore automatically; the sideload build from GitHub/site keeps one-tap install
+- [phone] Sync reliably reapplies library changes after a restart and no longer moves Continue back when an older network response arrives after a newer one. When the network drops, offline and the queued change count are shown
+- [phone] The account shows what is playing on your other devices: title, episode, position and pause. Continue here opens the same file on the phone at the same position. Nothing switches automatically
+- [phone] Sync settings show the number of queued offline changes and a Synchronized confirmation
+- The built-in TorrServer is updated to MatriX.151
 - [tech] TorrServer: the image is pinned to the MatriX.151 digest - previously only torrserver.version changed and the server stayed on the old build
 - [tech] Admin: the public bundle is rebuilt against the updated dependencies so CI matches the build to the committed tree again
 - [tech] Dependencies: npm, cargo and gradle updates (dependabot)
+- [tech] Android: sideload/rustore channel flavors, the rustore manifest removes REQUEST_INSTALL_PACKAGES; rustore-publish script and a release step upload the APK to RuStore and submit it for moderation
 
 ## 0.30.3-beta.3
 
