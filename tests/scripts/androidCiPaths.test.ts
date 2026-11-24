@@ -39,7 +39,7 @@ describe('android CI path filter', () => {
     expect(sync).toContain('run: npm run android:sync');
     const build = job.slice(job.indexOf('name: Build and test'), job.indexOf('name: APK size per ABI'));
     expect(build).toContain("if: steps.filter.outputs.android == 'true'");
-    expect(build).toContain('assembleDebug testDebugUnitTest');
+    expect(build).toContain('assembleSideloadDebug testSideloadDebugUnitTest');
     expect(build).toContain('-PompAbi=arm64-v8a');
     expect(build).toContain('--build-cache');
     expect(build).toContain('--parallel');

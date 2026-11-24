@@ -11,7 +11,7 @@ describe('release workflow asset names', () => {
     paths.forEach((p: string) => {
       if (p.indexOf('com.spacesarmat') >= 0) return; // the packager's own output name
       if (p.indexOf('*') >= 0) return; // artifact upload glob, not a published name
-      expect(p).toMatch(/^build\/OMP-\$\{VERSION\}(-webOS|-arm64|-arm64-v8a|-armv7|-armeabi-v7a)?\.(apk|ipk)$/);
+      expect(p).toMatch(/^build\/OMP-\$\{VERSION\}(-webOS|-arm64|-arm64-v8a|-armv7|-armeabi-v7a|-rustore)?\.(apk|ipk)$/);
     });
   });
 
@@ -65,9 +65,9 @@ describe('CI workflow', () => {
   const ci = readFileSync('.github/workflows/ci.yml', 'utf8').replace(/\r\n/g, '\n');
 
   it('prints the size of every debug APK (one per ABI)', () => {
-    const at = ci.indexOf('assembleDebug');
+    const at = ci.indexOf('assembleSideloadDebug');
     expect(at).toBeGreaterThan(0);
-    expect(ci.slice(at)).toContain('ls -l android/app/build/outputs/apk/debug/*.apk');
+    expect(ci.slice(at)).toContain('ls -l android/app/build/outputs/apk/sideload/debug/*.apk');
   });
 
   it('keeps the overflow check beside build, not inside it', () => {
@@ -80,7 +80,7 @@ describe('CI workflow', () => {
   it('builds only the arm64 debug APK on pull requests and uploads debug APKs otherwise', () => {
     expect(ci).toContain("if [ \"$EVENT_NAME\" = \"pull_request\" ]; then");
     expect(ci).toContain('-PompAbi=arm64-v8a');
-    expect(ci).toContain('assembleDebug testDebugUnitTest');
+    expect(ci).toContain('assembleSideloadDebug testSideloadDebugUnitTest');
     expect(ci).not.toContain('assembleArm64-v8aDebug');
     expect(ci).toContain("github.event_name != 'pull_request'");
     expect(ci).toContain('gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c');
@@ -89,7 +89,8 @@ describe('CI workflow', () => {
     expect(ci).toContain('--build-cache --parallel');
     expect(readFileSync('android/gradle.properties', 'utf8')).toContain('org.gradle.configuration-cache=true');
     const release = readFileSync('.github/workflows/release.yml', 'utf8');
-    expect(release).toContain('assembleRelease');
+    expect(release).toContain('assembleSideloadRelease');
+    expect(release).toContain('assembleRustoreRelease');
     expect(release).not.toContain('ompAbi');
     expect(release).toContain('app-universal-release.apk');
     expect(release).toContain('app-arm64-v8a-release.apk');
