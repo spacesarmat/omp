@@ -30,9 +30,10 @@ describe('release workflow asset names', () => {
 
   it('ships the per-ABI APKs and the universal one, in the release and in the Android feed', () => {
     const build = yml.slice(yml.indexOf('Build signed Android APKs'), yml.indexOf('Homebrew Channel files'));
-    expect(build).toContain('cp "$OUT/app-universal-release.apk" "build/OMP-${VERSION}.apk"');
-    expect(build).toContain('cp "$OUT/app-arm64-v8a-release.apk" "build/OMP-${VERSION}-arm64.apk"');
-    expect(build).toContain('cp "$OUT/app-armeabi-v7a-release.apk" "build/OMP-${VERSION}-armv7.apk"');
+    expect(build).toContain('cp "$OUT/"*universal*.apk "build/OMP-${VERSION}.apk"');
+    expect(build).toContain('cp "$OUT/"*arm64-v8a*.apk "build/OMP-${VERSION}-arm64.apk"');
+    expect(build).toContain('cp "$OUT/"*armeabi-v7a*.apk "build/OMP-${VERSION}-armv7.apk"');
+    expect(build).toContain('cp "$ROUT/"*universal*.apk "build/OMP-${VERSION}-rustore.apk"');
     expect(build).toMatch(/ls -l .*-arm64\.apk.*-armv7\.apk/); // size of every APK in the build log
     const hb = yml.slice(yml.indexOf('Homebrew Channel files'), yml.indexOf('Create GitHub release'));
     expect(hb).toContain('"build/OMP-${VERSION}.apk" "build/OMP-${VERSION}-arm64.apk" "build/OMP-${VERSION}-armv7.apk"');
@@ -92,9 +93,9 @@ describe('CI workflow', () => {
     expect(release).toContain('assembleSideloadRelease');
     expect(release).toContain('assembleRustoreRelease');
     expect(release).not.toContain('ompAbi');
-    expect(release).toContain('app-universal-release.apk');
-    expect(release).toContain('app-arm64-v8a-release.apk');
-    expect(release).toContain('app-armeabi-v7a-release.apk');
+    expect(release).toContain('*universal*.apk');
+    expect(release).toContain('*arm64-v8a*.apk');
+    expect(release).toContain('*armeabi-v7a*.apk');
     const gradle = readFileSync('android/app/build.gradle', 'utf8');
     expect(gradle).toContain("findProperty('ompAbi')");
     expect(gradle).toContain('universalApk = false');
@@ -143,7 +144,7 @@ describe('release jobs run side by side', () => {
     expect(test).toContain('if [ ! -f scripts/release-ci-skip.mjs ]');
     expect(test).toContain("if: steps.ci.outputs.skip != 'true'");
     expect(android.indexOf('mkdir -p build')).toBeGreaterThan(-1);
-    expect(android.indexOf('mkdir -p build')).toBeLessThan(android.indexOf('cp "$OUT/app-universal-release.apk"'));
+    expect(android.indexOf('mkdir -p build')).toBeLessThan(android.indexOf('cp "$OUT/"*universal*.apk'));
     expect(publish).toContain('publish is off');
   });
 });
