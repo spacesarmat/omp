@@ -181,10 +181,10 @@ describe('committed store files', () => {
 describe('store workflows', () => {
   it('publishes Izzy ABI names beside the existing APK names', () => {
     const build = releaseYml.slice(releaseYml.indexOf('Build signed Android APKs'), releaseYml.indexOf('Homebrew Channel files'));
-    expect(build).toContain('cp "$OUT/app-arm64-v8a-release.apk" "build/OMP-${VERSION}-arm64.apk"');
-    expect(build).toContain('cp "$OUT/app-arm64-v8a-release.apk" "build/OMP-${VERSION}-arm64-v8a.apk"');
-    expect(build).toContain('cp "$OUT/app-armeabi-v7a-release.apk" "build/OMP-${VERSION}-armv7.apk"');
-    expect(build).toContain('cp "$OUT/app-armeabi-v7a-release.apk" "build/OMP-${VERSION}-armeabi-v7a.apk"');
+    expect(build).toContain('cp "$OUT/"*arm64-v8a*.apk "build/OMP-${VERSION}-arm64.apk"');
+    expect(build).toContain('cp "$OUT/"*arm64-v8a*.apk "build/OMP-${VERSION}-arm64-v8a.apk"');
+    expect(build).toContain('cp "$OUT/"*armeabi-v7a*.apk "build/OMP-${VERSION}-armv7.apk"');
+    expect(build).toContain('cp "$OUT/"*armeabi-v7a*.apk "build/OMP-${VERSION}-armeabi-v7a.apk"');
     const step = releaseYml.slice(releaseYml.indexOf('Create GitHub release'), releaseYml.indexOf('Publish update feed'));
     expect(step).toContain('"$APK64ABI" "$APK32ABI"');
   });
