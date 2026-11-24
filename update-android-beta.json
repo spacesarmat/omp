@@ -1,26 +1,24 @@
 {
-  "version": "0.30.3-beta.3",
-  "ipkUrl": "https://github.com/spacesarmat/omp/releases/download/v0.30.3-beta.3/OMP-0.30.3-beta.3.apk",
-  "ipkHash": "551e8e1c4d47a99e92cdc8e699a75abbbadd74dfdb888b86623dd97fdf10493e",
-  "ipkSize": 98409440,
+  "version": "0.30.3-beta.4",
+  "ipkUrl": "https://github.com/spacesarmat/omp/releases/download/v0.30.3-beta.4/OMP-0.30.3-beta.4.apk",
+  "ipkHash": "a058555220bc02b6b47dc6c6bcde1d363bb0602288981e134ce8c254415e9400",
+  "ipkSize": 98410008,
   "apks": {
     "arm64": {
-      "url": "https://github.com/spacesarmat/omp/releases/download/v0.30.3-beta.3/OMP-0.30.3-beta.3-arm64.apk",
-      "sha256": "0723a0333ed2be54572012ac9f26cd66b5881df489d530c5f7b81e4a7ba94852",
-      "size": 63861178
+      "url": "https://github.com/spacesarmat/omp/releases/download/v0.30.3-beta.4/OMP-0.30.3-beta.4-arm64.apk",
+      "sha256": "88eadfa9c4aca2a342751723cc06cbf007fbdaf0de72615d536ffd2dc25bfcb4",
+      "size": 63861746
     },
     "armv7": {
-      "url": "https://github.com/spacesarmat/omp/releases/download/v0.30.3-beta.3/OMP-0.30.3-beta.3-armv7.apk",
-      "sha256": "629017b91817dd70204b66ca3f4422e30f33891e4c30cae50c28e595ce0ec138",
-      "size": 59680202
+      "url": "https://github.com/spacesarmat/omp/releases/download/v0.30.3-beta.4/OMP-0.30.3-beta.4-armv7.apk",
+      "sha256": "b8a39c7d99d4a4afdce775895e45fc1472f6330da9fa1cc05f943273291e48e7",
+      "size": 59680770
     }
   },
   "notes": [
     "Исправления и улучшения"
   ],
   "notesTv": [],
-  "notesPhone": [
-    "При обрыве сети синхронизация снова показывает offline и число изменений в очереди вместо общей ошибки"
-  ],
-  "releaseUrl": "https://github.com/spacesarmat/omp/releases/tag/v0.30.3-beta.3"
+  "notesPhone": [],
+  "releaseUrl": "https://github.com/spacesarmat/omp/releases/tag/v0.30.3-beta.4"
 }

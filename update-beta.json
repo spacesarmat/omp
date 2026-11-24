@@ -1,14 +1,12 @@
 {
-  "version": "0.30.3-beta.3",
-  "ipkUrl": "https://github.com/spacesarmat/omp/releases/download/v0.30.3-beta.3/OMP-0.30.3-beta.3-webOS.ipk",
-  "ipkHash": "eb441f7900299b694b5066411689de0b0d373953cddb0f15c4222619ee4768a0",
-  "ipkSize": 1238224,
+  "version": "0.30.3-beta.4",
+  "ipkUrl": "https://github.com/spacesarmat/omp/releases/download/v0.30.3-beta.4/OMP-0.30.3-beta.4-webOS.ipk",
+  "ipkHash": "6a15edae6986edd6eff25e3400e528f40f8261bda057dab493116142ee420d57",
+  "ipkSize": 1238492,
   "notes": [
     "Исправления и улучшения"
   ],
-  "releaseUrl": "https://github.com/spacesarmat/omp/releases/tag/v0.30.3-beta.3",
+  "releaseUrl": "https://github.com/spacesarmat/omp/releases/tag/v0.30.3-beta.4",
   "notesTv": [],
-  "notesPhone": [
-    "При обрыве сети синхронизация снова показывает offline и число изменений в очереди вместо общей ошибки"
-  ]
+  "notesPhone": []
 }
