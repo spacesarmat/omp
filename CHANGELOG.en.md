@@ -4,6 +4,12 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## 0.30.3-beta.4
+
+- [tech] TorrServer: the image is pinned to the MatriX.151 digest - previously only torrserver.version changed and the server stayed on the old build
+- [tech] Admin: the public bundle is rebuilt against the updated dependencies so CI matches the build to the committed tree again
+- [tech] Dependencies: npm, cargo and gradle updates (dependabot)
+
 ## 0.30.3-beta.3
 
 - [phone] When the network drops, sync reports offline and the queued change count instead of a generic error

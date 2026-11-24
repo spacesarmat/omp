@@ -2,6 +2,12 @@
 
 <!-- Markers [phone] [tv] [lg] [atv] [tech]: see docs/changelog-markers.md. [tech] bullets are technical or admin-only and never reach users. -->
 
+## 0.30.3-beta.4
+
+- [tech] TorrServer: образ закреплён на digest MatriX.151 - раньше менялся только torrserver.version, и сервер оставался на старой сборке
+- [tech] Админка: public bundle пересобран под обновлённые зависимости, CI снова сверяет сборку с committed
+- [tech] Зависимости: обновлены npm, cargo и gradle (dependabot)
+
 ## 0.30.3-beta.3
 
 - [phone] При обрыве сети синхронизация снова показывает offline и число изменений в очереди вместо общей ошибки
