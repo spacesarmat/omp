@@ -9,15 +9,21 @@ on:
         description: Release tag (vX.Y.Z) whose rustore APK to upload
         type: string
         required: true
+      run:
+        description: Release run id to pull the rustore APK from its artifact (for releases made before the APK was attached)
+        type: string
+        required: false
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   upload:
     runs-on: ubuntu-latest
     env:
       TAG: ${{ inputs.tag }}
+      RUN_ID: ${{ inputs.run }}
       RUSTORE_KEY_ID: ${{ secrets.RUSTORE_KEY_ID }}
       RUSTORE_PRIVATE_KEY: ${{ secrets.RUSTORE_PRIVATE_KEY }}
       RUSTORE_APP_ID: ${{ secrets.RUSTORE_APP_ID }}
@@ -35,7 +41,13 @@ jobs:
           set -eu
           VERSION="${TAG#v}"
           mkdir -p build
-          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" -p "OMP-${VERSION}-rustore.apk" -D build
+          if [ -n "$RUN_ID" ]; then
+            # releases made before the rustore APK was attached keep it only as an Actions artifact
+            gh run download "$RUN_ID" --repo "$GITHUB_REPOSITORY" -n release-apk -D build
+          else
+            gh release download "$TAG" --repo "$GITHUB_REPOSITORY" -p "OMP-${VERSION}-rustore.apk" -D build
+          fi
+          test -f "build/OMP-${VERSION}-rustore.apk"
       - name: Upload to RuStore
         run: |
           set -eu
