@@ -21,6 +21,7 @@ jobs:
       RUSTORE_KEY_ID: ${{ secrets.RUSTORE_KEY_ID }}
       RUSTORE_PRIVATE_KEY: ${{ secrets.RUSTORE_PRIVATE_KEY }}
       RUSTORE_APP_ID: ${{ secrets.RUSTORE_APP_ID }}
+      RUSTORE_BETA_APP_ID: ${{ secrets.RUSTORE_BETA_APP_ID }}
       NODE_EXTRA_CA_CERTS: ${{ github.workspace }}/scripts/certs/rustore-ca.pem
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0 (main: has the CA + script)
@@ -39,5 +40,11 @@ jobs:
         run: |
           set -eu
           VERSION="${TAG#v}"
+          PKG="$RUSTORE_APP_ID"
+          case "$TAG" in
+            *-beta.*)
+              if [ -z "$RUSTORE_BETA_APP_ID" ]; then echo "rustore: beta without RUSTORE_BETA_APP_ID - skipping"; exit 0; fi
+              PKG="$RUSTORE_BETA_APP_ID" ;;
+          esac
           node -e 'const fs=require("fs");const v=process.argv[1];const s=fs.readFileSync("CHANGELOG.md","utf8");const sec=s.split("\n## ").find(x=>x.startsWith(v+"\n"));const lines=sec?sec.split("\n").slice(1):[];const body=lines.filter(l=>!l.includes("[tech]")).map(l=>l.replace(/\[(phone|tv|lg|atv|tech)\]\s*/g,"")).join("\n").trim();fs.writeFileSync("rustore-notes.md",body);' "$VERSION"
-          node scripts/rustore-publish.mjs --apk "build/OMP-${VERSION}-rustore.apk" --pkg "$RUSTORE_APP_ID" --notes rustore-notes.md --publishType INSTANTLY
+          node scripts/rustore-publish.mjs --apk "build/OMP-${VERSION}-rustore.apk" --pkg "$PKG" --notes rustore-notes.md --publishType INSTANTLY

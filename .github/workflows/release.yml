@@ -286,7 +286,8 @@ jobs:
           # a beta (vX.Y.Z-beta.N) is a pre-release: never «latest», never the Homebrew repository
           EXTRA=""
           case "$TAG" in *-beta.*) EXTRA="--prerelease --latest=false" ;; esac
-          gh release create "$TAG" "$IPK" "$APK64" "$APK32" "$APK" "$APK64ABI" "$APK32ABI" "build/hb/com.spacesarmat.torrplayer.manifest.json" --title "OMP $TAG" --notes-file notes.md $EXTRA
+          # the rustore APK is attached too so the manual RuStore re-upload workflow can download it
+          gh release create "$TAG" "$IPK" "$APK64" "$APK32" "$APK" "$APK64ABI" "$APK32ABI" "build/OMP-${VERSION}-rustore.apk" "build/hb/com.spacesarmat.torrplayer.manifest.json" --title "OMP $TAG" --notes-file notes.md $EXTRA
       # RuStore: upload the rustore-channel APK (no REQUEST_INSTALL_PACKAGES) and submit for moderation.
       # Stable -> RUSTORE_APP_ID, beta -> RUSTORE_BETA_APP_ID (separate store app). Skipped without the secrets.
       - name: Publish to RuStore
