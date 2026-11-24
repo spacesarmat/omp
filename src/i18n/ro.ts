@@ -282,6 +282,8 @@ export const ro: typeof ru = {
     available: "Este disponibilă versiunea {version}",
     installFailed: "Nu s-a putut instala actualizarea",
     installUnavailable: "Instalarea actualizărilor nu este disponibilă pe acest dispozitiv",
+    storeChannel: 'Această compilare se actualizează prin magazinul de aplicații - instalarea APK în aplicație este dezactivată',
+    openStore: 'Deschide RuStore',
     hb: {
       done: "Gata. Redeschideți OMP",
       verifying: "Verificare…",

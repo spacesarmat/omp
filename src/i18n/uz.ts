@@ -289,6 +289,8 @@ export const uz: EnDict<typeof ru> = {
     available: "{version} manzilida versiya mavjud",
     installFailed: "Yangilanishni o'rnatib bo'lmadi",
     installUnavailable: "Ushbu qurilmaga yangilanishlarni o'rnatib bo'lmaydi.",
+    storeChannel: 'Ushbu qurilma ilovalar do‘koni orqali yangilanadi - ilova ichida APK o‘rnatish o‘chirilgan',
+    openStore: 'RuStore ochish',
     hb: {
       done: "Shu. OMPni qayta ishga tushiring.",
       verifying: "Tekshirmoqda…",

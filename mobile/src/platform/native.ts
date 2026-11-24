@@ -243,6 +243,8 @@ export interface OmpNativeApi {
   takePendingUpdateResult?(): Promise<{ status: 'success' | 'error'; message?: string } | null>;
   /** «Установка неизвестных приложений» is allowed for OMP (true when it cannot be told: nothing to explain). */
   canInstallApks(): Promise<boolean>;
+  /** false on store channels (RuStore) where in-app APK install is forbidden; updates go through the store. */
+  selfInstallEnabled(): Promise<boolean>;
   takePendingMagnet(): Promise<string | null>;
   /** Native crash and hang text, or '' when this build has no watcher. */
   takeNativeCrashes(): Promise<string>;
@@ -402,7 +404,7 @@ interface OmpNativePlugin {
   audioState?(): Promise<unknown>;
   downloadAndInstallApk(o: { url: string; sha256: string; apks?: ApkFiles; packageName?: string }): Promise<void>;
   deviceAbiKey(): Promise<{ key?: unknown }>;
-  canInstallApks?(): Promise<{ granted?: unknown }>;
+  canInstallApks?(): Promise<{ granted?: unknown; selfInstall?: unknown }>;
   takePendingMagnet(): Promise<{ link?: string | null }>;
   takeNativeCrashes?: () => Promise<{ text?: string }>;
   takePendingAudioOpen?(): Promise<{ hash?: string | null }>;
@@ -947,6 +949,16 @@ export const native: OmpNativeApi = {
     try {
       const r = await plugin.canInstallApks();
       return !(r && r.granted === false);
+    } catch {
+      return true;
+    }
+  },
+
+  async selfInstallEnabled() {
+    if (!plugin || typeof plugin.canInstallApks !== 'function') return true;
+    try {
+      const r = await plugin.canInstallApks();
+      return !(r && r.selfInstall === false);
     } catch {
       return true;
     }

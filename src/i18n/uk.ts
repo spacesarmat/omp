@@ -282,6 +282,8 @@ export const uk: typeof ru = {
     available: "Доступна версія {version}",
     installFailed: "Не вдалося встановити оновлення",
     installUnavailable: "Встановлення оновлень недоступне на цьому пристрої",
+    storeChannel: 'Ця збірка оновлюється через магазин застосунків - встановлення APK усередині застосунку вимкнено',
+    openStore: 'Відкрити RuStore',
     hb: {
       done: "Готово. Відкрийте OMP заново",
       verifying: "Перевірка…",

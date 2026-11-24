@@ -6,7 +6,7 @@ vi.mock('../../src/version', () => ({ APP_VERSION: '0.15.5' }));
 import { render } from 'preact';
 import { act } from 'preact/test-utils';
 import { applyLanguageSetting } from '../../src/i18n';
-import { UpdateSheet, setApkInstaller, setAbiKeyReader, setInstallPermission, describeInstallError } from '../src/ui/UpdateSheet';
+import { UpdateSheet, setApkInstaller, setAbiKeyReader, setInstallPermission, setSelfInstallReader, describeInstallError } from '../src/ui/UpdateSheet';
 import { updatePrompt } from '../../src/store/updates';
 import type { UpdateInfo } from '../../src/lib/updateInfo';
 
@@ -34,6 +34,7 @@ beforeEach(() => {
   setApkInstaller(null);
   setAbiKeyReader(null);
   setInstallPermission(null);
+  setSelfInstallReader(null);
 });
 
 const apks = {
@@ -239,5 +240,31 @@ describe('«unknown apps» permission', () => {
     await act(async () => btn(el, 'Установить').click());
     expect(el.querySelector('[data-allow-hint]')).toBeNull();
     expect(calls).toEqual([info.ipkUrl]);
+  });
+});
+
+describe('UpdateSheet on a store channel (RuStore)', () => {
+  it('offers the store listing instead of an in-app install', async () => {
+    setSelfInstallReader(() => Promise.resolve(false));
+    const calls: string[] = [];
+    setApkInstaller((url) => {
+      calls.push(url);
+      return Promise.resolve();
+    });
+    let el: HTMLElement = null as any;
+    await act(async () => { el = mount(); });
+    await act(async () => {});
+    expect(el.textContent).toContain('Открыть RuStore');
+    expect(el.textContent).not.toContain('Установить');
+    expect(calls).toEqual([]);
+  });
+
+  it('keeps the normal install button when self-install is enabled', async () => {
+    setSelfInstallReader(() => Promise.resolve(true));
+    let el: HTMLElement = null as any;
+    await act(async () => { el = mount(); });
+    await act(async () => {});
+    expect(el.textContent).toContain('Установить');
+    expect(el.textContent).not.toContain('Открыть RuStore');
   });
 });

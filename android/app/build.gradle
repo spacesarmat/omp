@@ -26,6 +26,23 @@ android {
         versionName pkg.version
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
+    buildFeatures {
+        buildConfig = true
+    }
+    // Channel flavors: sideload keeps REQUEST_INSTALL_PACKAGES + one-tap self-update (GitHub/site);
+    // rustore strips the permission (RuStore moderation 2.14/5.3/6.3/10.1) and disables self-install,
+    // updates arrive through the store. See src/sideload and src/rustore manifests.
+    flavorDimensions "channel"
+    productFlavors {
+        sideload {
+            dimension "channel"
+            buildConfigField "boolean", "ALLOW_SELF_INSTALL", "true"
+        }
+        rustore {
+            dimension "channel"
+            buildConfigField "boolean", "ALLOW_SELF_INSTALL", "false"
+        }
+    }
     androidResources {
         // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
         // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61

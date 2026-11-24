@@ -289,6 +289,8 @@ export const hy: EnDict<typeof ru> = {
     available: "Տարբերակը հասանելի է {version}",
     installFailed: "Թարմացումը չհաջողվեց տեղադրել",
     installUnavailable: "Այս սարքում թարմացումներ տեղադրել չի կարելի։",
+    storeChannel: 'Այս հավաքածուն թարմացվում է հավելվածների խանութի միջոցով - հավելվածի ներսում APK տեղադրումն անջատված է',
+    openStore: 'Բացել RuStore',
     hb: {
       done: "Այդքանն է։ Վերագործարկել OMP-ը։",
       verifying: "Ստուգում…",

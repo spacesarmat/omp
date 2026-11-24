@@ -11,7 +11,7 @@ describe('release workflow asset names', () => {
     paths.forEach((p: string) => {
       if (p.indexOf('com.spacesarmat') >= 0) return; // the packager's own output name
       if (p.indexOf('*') >= 0) return; // artifact upload glob, not a published name
-      expect(p).toMatch(/^build\/OMP-\$\{VERSION\}(-webOS|-arm64|-arm64-v8a|-armv7|-armeabi-v7a)?\.(apk|ipk)$/);
+      expect(p).toMatch(/^build\/OMP-\$\{VERSION\}(-webOS|-arm64|-arm64-v8a|-armv7|-armeabi-v7a|-rustore)?\.(apk|ipk)$/);
     });
   });
 
@@ -30,9 +30,10 @@ describe('release workflow asset names', () => {
 
   it('ships the per-ABI APKs and the universal one, in the release and in the Android feed', () => {
     const build = yml.slice(yml.indexOf('Build signed Android APKs'), yml.indexOf('Homebrew Channel files'));
-    expect(build).toContain('cp "$OUT/app-universal-release.apk" "build/OMP-${VERSION}.apk"');
-    expect(build).toContain('cp "$OUT/app-arm64-v8a-release.apk" "build/OMP-${VERSION}-arm64.apk"');
-    expect(build).toContain('cp "$OUT/app-armeabi-v7a-release.apk" "build/OMP-${VERSION}-armv7.apk"');
+    expect(build).toContain('cp "$OUT/"*universal*.apk "build/OMP-${VERSION}.apk"');
+    expect(build).toContain('cp "$OUT/"*arm64-v8a*.apk "build/OMP-${VERSION}-arm64.apk"');
+    expect(build).toContain('cp "$OUT/"*armeabi-v7a*.apk "build/OMP-${VERSION}-armv7.apk"');
+    expect(build).toContain('cp "$ROUT/"*universal*.apk "build/OMP-${VERSION}-rustore.apk"');
     expect(build).toMatch(/ls -l .*-arm64\.apk.*-armv7\.apk/); // size of every APK in the build log
     const hb = yml.slice(yml.indexOf('Homebrew Channel files'), yml.indexOf('Create GitHub release'));
     expect(hb).toContain('"build/OMP-${VERSION}.apk" "build/OMP-${VERSION}-arm64.apk" "build/OMP-${VERSION}-armv7.apk"');
@@ -65,9 +66,9 @@ describe('CI workflow', () => {
   const ci = readFileSync('.github/workflows/ci.yml', 'utf8').replace(/\r\n/g, '\n');
 
   it('prints the size of every debug APK (one per ABI)', () => {
-    const at = ci.indexOf('assembleDebug');
+    const at = ci.indexOf('assembleSideloadDebug');
     expect(at).toBeGreaterThan(0);
-    expect(ci.slice(at)).toContain('ls -l android/app/build/outputs/apk/debug/*.apk');
+    expect(ci.slice(at)).toContain('ls -l android/app/build/outputs/apk/sideload/debug/*.apk');
   });
 
   it('keeps the overflow check beside build, not inside it', () => {
@@ -80,7 +81,7 @@ describe('CI workflow', () => {
   it('builds only the arm64 debug APK on pull requests and uploads debug APKs otherwise', () => {
     expect(ci).toContain("if [ \"$EVENT_NAME\" = \"pull_request\" ]; then");
     expect(ci).toContain('-PompAbi=arm64-v8a');
-    expect(ci).toContain('assembleDebug testDebugUnitTest');
+    expect(ci).toContain('assembleSideloadDebug testSideloadDebugUnitTest');
     expect(ci).not.toContain('assembleArm64-v8aDebug');
     expect(ci).toContain("github.event_name != 'pull_request'");
     expect(ci).toContain('gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c');
@@ -89,11 +90,12 @@ describe('CI workflow', () => {
     expect(ci).toContain('--build-cache --parallel');
     expect(readFileSync('android/gradle.properties', 'utf8')).toContain('org.gradle.configuration-cache=true');
     const release = readFileSync('.github/workflows/release.yml', 'utf8');
-    expect(release).toContain('assembleRelease');
+    expect(release).toContain('assembleSideloadRelease');
+    expect(release).toContain('assembleRustoreRelease');
     expect(release).not.toContain('ompAbi');
-    expect(release).toContain('app-universal-release.apk');
-    expect(release).toContain('app-arm64-v8a-release.apk');
-    expect(release).toContain('app-armeabi-v7a-release.apk');
+    expect(release).toContain('*universal*.apk');
+    expect(release).toContain('*arm64-v8a*.apk');
+    expect(release).toContain('*armeabi-v7a*.apk');
     const gradle = readFileSync('android/app/build.gradle', 'utf8');
     expect(gradle).toContain("findProperty('ompAbi')");
     expect(gradle).toContain('universalApk = false');
@@ -142,7 +144,7 @@ describe('release jobs run side by side', () => {
     expect(test).toContain('if [ ! -f scripts/release-ci-skip.mjs ]');
     expect(test).toContain("if: steps.ci.outputs.skip != 'true'");
     expect(android.indexOf('mkdir -p build')).toBeGreaterThan(-1);
-    expect(android.indexOf('mkdir -p build')).toBeLessThan(android.indexOf('cp "$OUT/app-universal-release.apk"'));
+    expect(android.indexOf('mkdir -p build')).toBeLessThan(android.indexOf('cp "$OUT/"*universal*.apk'));
     expect(publish).toContain('publish is off');
   });
 });

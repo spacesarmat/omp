@@ -4,6 +4,11 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## Unreleased
+
+- [phone] RuStore build: no APK-install permission and no in-app self-update - updates arrive through the store. Releases (beta and stable) publish to RuStore automatically; the sideload build from GitHub/site keeps one-tap install
+- [tech] Android: sideload/rustore channel flavors, the rustore manifest removes REQUEST_INSTALL_PACKAGES; rustore-publish script and a release step upload the APK to RuStore and submit it for moderation
+
 ## 0.30.3-beta.4
 
 - [tech] TorrServer: the image is pinned to the MatriX.151 digest - previously only torrserver.version changed and the server stayed on the old build

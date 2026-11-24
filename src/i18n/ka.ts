@@ -289,6 +289,8 @@ export const ka: EnDict<typeof ru> = {
     available: "ვერსია ხელმისაწვდომია {version}",
     installFailed: "განახლების დაყენება ვერ მოხერხდა",
     installUnavailable: "ამ მოწყობილობაზე განახლებების დაყენება შეუძლებელია",
+    storeChannel: 'ეს აწყობა განახლდება აპლიკაციების მაღაზიით - აპლიკაციაში APK-ის დაყენება გამორთულია',
+    openStore: 'RuStore-ის გახსნა',
     hb: {
       done: "სულ ეს არის. გადატვირთეთ OMP.",
       verifying: "მიმდინარეობს შემოწმება…",

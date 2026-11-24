@@ -289,6 +289,8 @@ export const tk: EnDict<typeof ru> = {
     available: "{version} salgysynda bir wersiýa elýeterlidir.",
     installFailed: "Täzeleniş gurnalmady",
     installUnavailable: "Bu enjamda täzelenmeleri gurnap bolmaýar.",
+    storeChannel: 'Bu gurnama programma dükanı arkaly täzelenýär - programma içinde APK gurmak öçürilen',
+    openStore: 'RuStore aç',
     hb: {
       done: "Şol. OMP-i täzeden işe giriziň.",
       verifying: "Barlaýar…",

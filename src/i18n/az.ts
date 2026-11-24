@@ -289,6 +289,8 @@ export const az: EnDict<typeof ru> = {
     available: "{version} ünvanında bir versiya mövcuddur.",
     installFailed: "Yeniləmə quraşdırıla bilmədi",
     installUnavailable: "Bu cihazda yeniləmələr quraşdırıla bilməz.",
+    storeChannel: 'Bu quraşdırma tətbiq mağazası vasitəsilə yenilənir - tətbiq daxilində APK quraşdırılması söndürülüb',
+    openStore: 'RuStore aç',
     hb: {
       done: "Budur. OMP-i yenidən başladın.",
       verifying: "Yoxlayıram…",
