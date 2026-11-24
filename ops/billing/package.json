@@ -11,7 +11,7 @@
     "migrate:pg": "node tools/migrateToPostgres.mjs"
   },
   "dependencies": {
-    "nodemailer": "^10.5.0",
+    "nodemailer": "^10.6.0",
     "pg": "8.23.1",
     "ws": "8.23.0"
   },
