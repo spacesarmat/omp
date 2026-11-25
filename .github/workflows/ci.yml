@@ -11,6 +11,10 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+# Every job here only reads the repository and uploads artifacts; no job pushes or writes releases.
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: ubuntu-latest

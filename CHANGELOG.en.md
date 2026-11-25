@@ -7,6 +7,7 @@ The English translation covers the latest versions only; the full history (in Ru
 ## Unreleased
 
 - The "In library" mark no longer picks up the second work's English alias from a bundled release: a translation counts only while it follows its own title
+- [tech] CodeQL no longer reports files from node_modules as first-party (the SARIF is filtered before upload), and CI jobs now state their permissions
 
 ## 0.30.4-beta.1
 
