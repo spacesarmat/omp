@@ -13,9 +13,13 @@ on:
         description: Release run id to pull the rustore APK from its artifact (for releases made before the APK was attached)
         type: string
         required: false
+      attachOnly:
+        description: Only attach the rustore APK to the GitHub release (no RuStore upload)
+        type: boolean
+        default: false
 
 permissions:
-  contents: read
+  contents: write
   actions: read
 
 jobs:
@@ -24,6 +28,7 @@ jobs:
     env:
       TAG: ${{ inputs.tag }}
       RUN_ID: ${{ inputs.run }}
+      ATTACH_ONLY: ${{ inputs.attachOnly }}
       RUSTORE_KEY_ID: ${{ secrets.RUSTORE_KEY_ID }}
       RUSTORE_PRIVATE_KEY: ${{ secrets.RUSTORE_PRIVATE_KEY }}
       RUSTORE_APP_ID: ${{ secrets.RUSTORE_APP_ID }}
@@ -48,7 +53,16 @@ jobs:
             gh release download "$TAG" --repo "$GITHUB_REPOSITORY" -p "OMP-${VERSION}-rustore.apk" -D build
           fi
           test -f "build/OMP-${VERSION}-rustore.apk"
+      - name: Attach the rustore APK to the GitHub release
+        if: env.ATTACH_ONLY == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -eu
+          VERSION="${TAG#v}"
+          gh release upload "$TAG" "build/OMP-${VERSION}-rustore.apk" --repo "$GITHUB_REPOSITORY" --clobber
       - name: Upload to RuStore
+        if: env.ATTACH_ONLY != 'true'
         run: |
           set -eu
           VERSION="${TAG#v}"
