@@ -6,6 +6,7 @@ The English translation covers the latest versions only; the full history (in Ru
 
 ## Unreleased
 
+- The "In library" mark no longer picks up the second work's English alias from a bundled release: a translation counts only while it follows its own title
 - [tech] Billing: a subscription code can no longer reach a page or a link as written - the /go/ page and the app link are built only from code characters, and the code itself is drawn uniformly from the alphabet
 
 ## 0.30.4-beta.1

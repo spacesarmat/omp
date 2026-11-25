@@ -75,6 +75,20 @@ describe('a release that bundles several works', () => {
   });
 });
 
+describe('a pack that lists each work in two scripts', () => {
+  const pack = { hash: 'p', title: 'Крестьянин 999 уровня / 999 Level Farmer / Маска вермильона / Vermillion Mask' } as Torrent;
+  const first = { kind: 'tv' as const, title: 'Крестьянин 999 уровня', original: '999 Level Farmer', year: 2026 };
+  const second = { kind: 'tv' as const, title: 'Маска вермильона', original: 'Vermillion Mask', year: 2026 };
+
+  it('the second work neither opens the pack nor wears the mark', () => {
+    expect(libraryTargetOf([pack], first)).toEqual({ kind: 'torrent', hash: 'p' });
+    expect(libraryTargetOf([pack], second)).toBeNull();
+    const owned = ownedChecker([pack]);
+    expect(owned(asTitle(first))).toBe(true);
+    expect(owned(asTitle(second))).toBe(false);
+  });
+});
+
 describe('ownedChecker on a big library', () => {
   it('agrees with libraryTargetOf for every credit (300 torrents x 120 credits)', () => {
     const big: Torrent[] = [];

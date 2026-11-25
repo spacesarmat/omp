@@ -185,6 +185,14 @@ describe('a release string that lists several works', () => {
     expect(inLibrary(idx, { title: 'Пак Дюна', original: 'Dune: Part Two', year: 2024 })).toBe(true);
   });
 
+  it('an alias of the second work claims neither the first work nor itself', () => {
+    const idx = libraryIndex([{ title: 'Крестьянин 999 уровня / 999 Level Farmer / Маска вермильона / Vermillion Mask' }]);
+    expect(inLibrary(idx, { title: 'Крестьянин 999 уровня', original: '999 Level Farmer', year: 2026 })).toBe(true);
+    // the Latin name stands next to «Маска вермильона», so it is not a second name of the first work
+    expect(inLibrary(idx, { title: 'Маска вермильона', original: 'Vermillion Mask', year: 2026 })).toBe(false);
+    expect(inLibrary(idx, { title: 'Vermillion Mask', original: 'Vermillion Mask', year: 2026 })).toBe(false);
+  });
+
   it('season keys of a pack name only its first work', () => {
     const idx = seasonIndex([{ title: 'Дорама А / Дорама Б 1 сезон [LostFilm]' }]);
     expect(inLibrarySeason(idx, { title: 'Дорама А', original: 'Dorama A' }, 1)).toBe(true);
