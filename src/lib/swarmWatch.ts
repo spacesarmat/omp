@@ -12,6 +12,9 @@ import { noteSwarmSample } from '../viewer/swarmReport';
 
 export const SWARM_POLL_MS = 4000;
 
+/** /cache answers once a second. Older than this, the player has stopped asking and the last sample proves nothing. */
+export const PLAYBACK_SAMPLE_FRESH_MS = 5000;
+
 /** Bumps only when a torrent's dead flag flips, so a card can re-read isDeadRelease. */
 export const swarmVersion = signal(0);
 
@@ -23,6 +26,7 @@ interface Streak {
 const streaks: { [hash: string]: Streak } = {};
 const holds: { [hash: string]: boolean } = {};
 const lastSample: { [hash: string]: DeadSample } = {};
+const lastSampleAt: { [hash: string]: number } = {};
 
 let users = 0;
 let timer: ReturnType<typeof setInterval> | null = null;
@@ -37,6 +41,7 @@ export function resetSwarmWatch(): void {
   Object.keys(streaks).forEach((k) => delete streaks[k]);
   Object.keys(holds).forEach((k) => delete holds[k]);
   Object.keys(lastSample).forEach((k) => delete lastSample[k]);
+  Object.keys(lastSampleAt).forEach((k) => delete lastSampleAt[k]);
   swarmVersion.value = 0;
 }
 
@@ -73,10 +78,29 @@ export function isDeadRelease(hash: string | undefined): boolean {
   return !!(s && s.dead);
 }
 
+/** Nothing proves the streak any more: drop it, and tell the cards when a dead flag was standing. */
+function dropStreak(k: string): void {
+  const prev = streaks[k];
+  if (!prev) return;
+  const was = !!prev.dead;
+  delete streaks[k];
+  if (was) swarmVersion.value = swarmVersion.value + 1;
+}
+
 function downloaded(t: Pick<Torrent, 'loaded_size' | 'preloaded_bytes'>): number {
   const loaded = t.loaded_size && t.loaded_size > 0 ? t.loaded_size : 0;
   const pre = t.preloaded_bytes && t.preloaded_bytes > 0 ? t.preloaded_bytes : 0;
   return loaded + pre;
+}
+
+/**
+ * What the release has handed over while playing. TorrServer's torrent counters can stay 0 while the cache
+ * is already filling, so /cache `Filled` counts too: the same evidence the failure classifier reads.
+ */
+function playbackBytes(cache: CacheState): number {
+  const fromTorrent = cache.Torrent ? downloaded(cache.Torrent) : 0;
+  const filled = cache.Filled && cache.Filled > 0 ? cache.Filled : 0;
+  return Math.max(fromTorrent, filled);
 }
 
 function sampleOf(t: Torrent): DeadSample {
@@ -192,16 +216,24 @@ export function useLiveSwarm(): void {
 
 /**
  * Player /cache samples. `active` stays true while the player is waiting, so a list that still says
- * "in db" cannot clear the streak (holdPlayback). The interval moves the clock even when the numbers stay 0.
+ * "in db" cannot clear the streak (holdPlayback). The interval moves the clock even when the numbers stay 0,
+ * but only while the samples keep arriving: the player stops asking /cache once frames flow, and aging that
+ * frozen sample used to call a playing release dead a minute after its first frame.
  */
 export function usePlaybackDead(hash: string | undefined, cache: CacheState | null): boolean {
   swarmVersion.value;
   useEffect(() => {
     if (!hash) return undefined;
     holdPlayback(hash, true);
+    const k = keyOf(hash);
     const timerId = setInterval(() => {
-      const s = lastSample[keyOf(hash)];
-      if (s) noteSwarm(hash, s, Date.now());
+      const s = lastSample[k];
+      const at = lastSampleAt[k];
+      if (!s || at === undefined || Date.now() - at > PLAYBACK_SAMPLE_FRESH_MS) {
+        dropStreak(k);
+        return;
+      }
+      noteSwarm(hash, s, Date.now());
     }, 1000);
     return () => {
       holdPlayback(hash, false);
@@ -211,8 +243,9 @@ export function usePlaybackDead(hash: string | undefined, cache: CacheState | nu
   useEffect(() => {
     if (!hash || !cache || !cache.Torrent) return;
     const t = cache.Torrent;
-    const sample: DeadSample = { active: true, seeders: t.connected_seeders && t.connected_seeders > 0 ? t.connected_seeders : 0, bytes: downloaded(t) };
+    const sample: DeadSample = { active: true, seeders: t.connected_seeders && t.connected_seeders > 0 ? t.connected_seeders : 0, bytes: playbackBytes(cache) };
     lastSample[keyOf(hash)] = sample;
+    lastSampleAt[keyOf(hash)] = Date.now();
     noteSwarm(hash, sample, Date.now());
     // crowd counts (phase 3) from the player's /cache samples; the hash comes from the screen
     noteSwarmSample({ hash: t.hash || hash, stat: t.stat, connected_seeders: t.connected_seeders, active_peers: t.active_peers }, Date.now());
