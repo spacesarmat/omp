@@ -4,7 +4,7 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
-## Unreleased
+## 0.30.4-beta.2
 
 - The "In library" mark no longer picks up the second work's English alias from a bundled release: a translation counts only while it follows its own title
 - The "In library" mark no longer appears on a card whose name matches a release the person has already matched to another show: the TMDB id now outranks the name
