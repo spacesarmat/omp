@@ -1,6 +1,7 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { libraryTargetOf, ownedChecker, torrentTarget } from '../../src/catalog/libraryTarget';
 import { seriesKey } from '../../src/lib/seriesGroups';
+import { applySyncedMatch, resetSeriesMatches, seriesMatchVersion } from '../../src/lib/seriesMatch';
 import type { Torrent } from '../../src/api/types';
 import type { CatalogTitle } from '../../src/catalog/tmdb';
 
@@ -11,7 +12,7 @@ const list = [a, b];
 const dark = { kind: 'tv' as 'tv' | 'movie', title: 'Тёмная материя', original: 'Dark Matter', year: 2024 };
 const dune = { kind: 'movie' as 'tv' | 'movie', title: 'Дюна: Часть вторая', original: 'Dune: Part Two', year: 2024 };
 const nope = { kind: 'movie' as 'tv' | 'movie', title: 'Ничего', original: 'Nothing', year: 2001 };
-const asTitle = (t: { kind: 'tv' | 'movie'; title: string; original: string; year: number }): CatalogTitle => ({ ...t, id: 1, poster: '', rating: 0 });
+const asTitle = (t: { kind: 'tv' | 'movie'; title: string; original: string; year: number; id?: number }): CatalogTitle => ({ ...t, id: t.id || 1, poster: '', rating: 0 });
 
 describe('libraryTargetOf', () => {
   it('opens the series on the newest season of the library', () => {
@@ -86,6 +87,72 @@ describe('a pack that lists each work in two scripts', () => {
     const owned = ownedChecker([pack]);
     expect(owned(asTitle(first))).toBe(true);
     expect(owned(asTitle(second))).toBe(false);
+  });
+});
+
+describe('a release the person already matched to another show', () => {
+  const show = { hash: 'h1', title: 'Маска вермильона / Vermillion Mask 1 сезон 2026 WEB-DL' } as Torrent;
+  // the saved match is keyed by language and the series key, the way seriesMatch writes it
+  const key = 'ru|' + seriesKey(show);
+
+  beforeEach(() => {
+    // the saved choices live in localStorage: without clearing them a test sees the previous test's match
+    localStorage.removeItem('tsp.seriesTmdb');
+    resetSeriesMatches();
+  });
+
+  it('keeps the card it was matched to and refuses the one of the same name', () => {
+    resetSeriesMatches();
+    applySyncedMatch(key, 100, '', Date.now());
+    const mine = { kind: 'tv' as const, id: 100, title: 'Маска вермильона', original: 'Vermillion Mask', year: 2026 };
+    const other = { kind: 'tv' as const, id: 200, title: 'Маска вермильона', original: 'Vermillion Mask', year: 2026 };
+    expect(libraryTargetOf([show], mine)).toEqual({ kind: 'series', key: seriesKey(show), season: 1 });
+    expect(libraryTargetOf([show], other)).toBeNull();
+    const owned = ownedChecker([show]);
+    expect(owned(asTitle(mine))).toBe(true);
+    expect(owned(asTitle(other))).toBe(false);
+  });
+
+  it('a release nobody matched yet still answers by name', () => {
+    const cold = { hash: 'h2', title: 'Ледяной перевал / Frost Pass 1 сезон 2026 WEB-DL' } as Torrent;
+    const fresh = { kind: 'tv' as const, id: 300, title: 'Ледяной перевал', original: 'Frost Pass', year: 2026 };
+    resetSeriesMatches();
+    expect(libraryTargetOf([cold], fresh)).toEqual({ kind: 'series', key: seriesKey(cold), season: 1 });
+    expect(ownedChecker([cold])(asTitle(fresh))).toBe(true);
+  });
+
+  it('a checker built before a correction sees it without being rebuilt', () => {
+    resetSeriesMatches();
+    const other = { kind: 'tv' as const, id: 200, title: 'Маска вермильона', original: 'Vermillion Mask', year: 2026 };
+    const owned = ownedChecker([show]);
+    expect(owned(asTitle(other))).toBe(true);
+    applySyncedMatch(key, 100, '', Date.now());
+    // this is what chooseSeries does when a person picks another show in the picker
+    seriesMatchVersion.value = seriesMatchVersion.value + 1;
+    expect(owned(asTitle(other))).toBe(false);
+    resetSeriesMatches();
+  });
+
+  it('two releases of one name are one series: the chosen show wins for both', () => {
+    const s2 = { hash: 'm2', title: 'Маска вермильона / Vermillion Mask 2 сезон 2026 WEB-DL' } as Torrent;
+    resetSeriesMatches();
+    expect(seriesKey(s2)).toBe(seriesKey(show));
+    applySyncedMatch(key, 100, '', Date.now());
+    const mine = { kind: 'tv' as const, id: 100, title: 'Маска вермильона', original: 'Vermillion Mask', year: 2026 };
+    const other = { kind: 'tv' as const, id: 200, title: 'Маска вермильона', original: 'Vermillion Mask', year: 2026 };
+    expect(libraryTargetOf([show, s2], mine)!.kind).toBe('series');
+    expect(libraryTargetOf([show, s2], other)).toBeNull();
+    resetSeriesMatches();
+  });
+
+  it('the id check reads a name the same way the library index does', () => {
+    const loud = { hash: 'd1', title: 'DARK MATTER!! (2 сезон) 2026 WEB-DL' } as Torrent;
+    resetSeriesMatches();
+    applySyncedMatch('ru|' + seriesKey(loud), 100, '', Date.now());
+    const other = { kind: 'tv' as const, id: 200, title: 'Dark Matter', original: 'Dark Matter', year: 2024 };
+    expect(ownedChecker([loud])(asTitle(other))).toBe(false);
+    expect(libraryTargetOf([loud], other)).toBeNull();
+    resetSeriesMatches();
   });
 });
 

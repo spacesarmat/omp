@@ -5,6 +5,8 @@ import { CatalogMenu } from '../src/share/CatalogMenu';
 import { currentRoute, resetTo } from '../src/nav';
 import { torrents } from '../../src/store/library';
 import { seriesKey } from '../../src/lib/seriesGroups';
+import { setCatalogClientForTests } from '../src/catalog/phoneCatalog';
+import { resetSeriesMatches } from '../../src/lib/seriesMatch';
 import type { CatalogTitle } from '../../src/catalog/tmdb';
 import type { Torrent } from '../../src/api/types';
 
@@ -29,6 +31,34 @@ afterEach(() => {
 });
 
 describe('catalog poster menu', () => {
+  it('names the release the mark points at and offers to correct the show', async () => {
+    const tor = { hash: 'a', title: 'Тёмная материя / Dark Matter (2 сезон) 2026 WEB-DL' } as Torrent;
+    torrents.value = [tor];
+    const bad = () => Promise.reject(new Error('unused here'));
+    setCatalogClientForTests({
+      novelties: bad,
+      discover: bad,
+      person: bad,
+      season: bad,
+      posters: bad,
+      similar: async () => [],
+      card: bad,
+      search: async () => ({ items: [{ kind: 'tv', id: 77, title: 'Другая тёмная материя', original: 'Dark Matter', year: 2024, poster: '', rating: 0 }], pages: 1 }),
+    } as unknown as Parameters<typeof setCatalogClientForTests>[0]);
+    mount(show);
+    const sub = el.querySelector('[data-library-release]');
+    expect(sub && sub.textContent).toContain('Тёмная материя');
+    const fix = el.querySelector('[data-catalog-wrong]') as HTMLButtonElement;
+    expect(fix).toBeTruthy();
+    act(() => fix.click());
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 0));
+    });
+    expect(el.textContent).toContain('Другая тёмная материя');
+    setCatalogClientForTests(null);
+    resetSeriesMatches();
+  });
+
   it('opens the series page for a later season whose year is not the show year', () => {
     const tor = { hash: 'a', title: 'Тёмная материя / Dark Matter (2 сезон) 2026 WEB-DL' } as Torrent;
     torrents.value = [tor];

@@ -5,7 +5,8 @@ import { t, lang } from '../../../../src/i18n';
 import { navigate } from '../../nav';
 import { torrents } from '../../../../src/store/library';
 import { catalogErrorCode, type CatalogErrorCode } from '../../../../src/catalog/client';
-import { libraryIndex, inLibrary } from '../../../../src/catalog/library';
+import { ownedChecker } from '../../../../src/catalog/libraryTarget';
+import { seriesMatchVersion } from '../../../../src/lib/seriesMatch';
 import type { CatalogTitle } from '../../../../src/catalog/tmdb';
 import { phoneCatalog } from '../../catalog/phoneCatalog';
 import { CatalogError } from './CatalogError';
@@ -55,7 +56,8 @@ export function CatalogResults({ text, onTrackers }: { text: string; onTrackers:
   // the first search of a visit and «Повторить» read the server's TMDB settings again
   const fresh = useRef(true);
   const list = torrents.value;
-  const index = useMemo(() => libraryIndex(list), [list]);
+  const matchStamp = seriesMatchVersion.value;
+  const ownedOf = useMemo(() => ownedChecker(list), [list, matchStamp]);
 
   useEffect(() => {
     if (restored.current) {
@@ -127,7 +129,7 @@ export function CatalogResults({ text, onTrackers }: { text: string; onTrackers:
                     {(x.year ? x.year + ' · ' : '') + (x.kind === 'tv' ? t('discover.series') : t('library.movie'))}
                   </span>
                   {x.rating > 0 && <span class="m-small m-srch-rating">{ratingText(x.rating)}</span>}
-                  {inLibrary(index, x) && <span class="m-small m-srch-lib">{t('discover.inLibrary')}</span>}
+                  {ownedOf(x) && <span class="m-small m-srch-lib">{t('discover.inLibrary')}</span>}
                 </span>
               </PosterButton>
                 ))}

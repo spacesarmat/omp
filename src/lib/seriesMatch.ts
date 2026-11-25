@@ -115,6 +115,20 @@ export function cachedSeriesMatch(key: string): CatalogCard | null | undefined {
   return matches.get(cacheKey(key));
 }
 
+/**
+ * The TMDB show this series key is known to be: the id a person locked (this run or a saved choice), else the id the
+ * last lookup found. 0 when this series was never matched. The library matcher refuses a release whose known id
+ * points at another show, so a name collision cannot wear the mark of a show the person already corrected.
+ */
+export function knownSeriesId(key: string): number {
+  if (!key) return 0;
+  const full = cacheKey(key); // matches and saved choices are kept per language, the same way the screen writes them
+  const locked = lockedShow(full);
+  if (locked) return locked;
+  const card = matches.get(full);
+  return card ? card.id : 0;
+}
+
 /** The show among search results: a series of that year, else the first series; films never match. */
 export const pickShow = pick;
 
