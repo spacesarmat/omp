@@ -2504,7 +2504,7 @@ export const ro: typeof ru = {
     volShort: "Volum mare.",
     volume: "Volumul",
     kbdShort: "Klav.",
-    powerTools: 'Power and IR',
+    powerTools: 'Alimentare și IR',
     red: "Butonul roșu",
     green: "Butonul verde",
     yellow: "Butonul galben",

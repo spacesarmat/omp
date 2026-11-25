@@ -2619,7 +2619,7 @@ export const az: EnDict<typeof ru> = {
     volShort: "Ağır",
     volume: "Həcm",
     kbdShort: "Klav.",
-    powerTools: 'Power and IR',
+    powerTools: 'Enerji və İR',
     red: "Qırmızı düymə",
     green: "Yaşıl düymə",
     yellow: "Sarı düymə",

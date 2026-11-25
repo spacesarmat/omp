@@ -242,7 +242,10 @@ function PowerBlock({ deviceId }: { deviceId: string }) {
       <button type="button" class="m-btn-text" data-power-tools aria-expanded={open} onClick={() => setOpen((v) => !v)}>
         {t('remote.powerTools')} {open ? '▴' : '▾'}
       </button>
-      {open && <PowerTools deviceId={deviceId} />}
+      {/* stays mounted: a half-typed IR paste or a learned signal must survive closing the row */}
+      <div class="m-remote-power-body" hidden={!open}>
+        <PowerTools deviceId={deviceId} />
+      </div>
     </div>
   );
 }
