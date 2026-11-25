@@ -68,8 +68,22 @@ async function samsungPress(d: NetDevice, key: string): Promise<void> {
   if (next) await keepSamsungToken(d.id, next);
 }
 
+/** The HDMI inputs of the TV that is connected now: the control people reach for while watching, so it stays in the deck. */
+export function HdmiRow() {
+  if (tvKind() === 'atv') return null;
+  return (
+    <div class="m-tv-row">
+      {['HDMI_1', 'HDMI_2', 'HDMI_3'].map((id) => (
+        <button key={id} type="button" class="m-btn m-btn-secondary m-btn-sm" onClick={() => void switchInput(id).catch((e) => showToast(e instanceof Error ? e.message : t('remote.ir.badCode')))}>
+          {id.replace('_', ' ')}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 /** IR, manual Wake-on-LAN and network TV keys. The OMP remote stays above this block. */
-export function PowerTools({ deviceId, showInputs }: { deviceId: string; showInputs: boolean }) {
+export function PowerTools({ deviceId }: { deviceId: string }) {
   const [hw, setHw] = useState<IrHardware>({ transmit: false, receive: false });
   const tried = useRef<{ [brand: string]: number }>({});
   useEffect(() => {
@@ -194,35 +208,32 @@ export function PowerTools({ deviceId, showInputs }: { deviceId: string; showInp
           {t('remote.powerOn')} {d.name}
         </button>
       ))}
-      {showInputs && tvKind() !== 'atv' && (
-        <div class="m-tv-row">
-          {['HDMI_1', 'HDMI_2', 'HDMI_3'].map((id) => (
-            <button key={id} type="button" class="m-btn m-btn-secondary m-btn-sm" onClick={() => void switchInput(id).catch((e) => showToast(e instanceof Error ? e.message : t('remote.ir.badCode')))}>
-              {id.replace('_', ' ')}
-            </button>
-          ))}
-        </div>
-      )}
-      {netTvs.value.length > 0 && <h2 class="m-small">{t('remote.netTitle')}</h2>}
+      {netTvs.value.length > 0 && <div class="m-set-label">{t('remote.netTitle')}</div>}
       {netTvs.value.map((d) => (
-        <div key={d.id} class="m-tv-row">
-          <span>{d.name}</span>
-          {d.mac ? (
-            <button type="button" class="m-btn m-btn-primary m-btn-sm tm" data-code="P08.2" onClick={() => void power(d)}>
-              {t('remote.powerOn')}
-            </button>
-          ) : (
+        <div key={d.id} class="m-net-tv">
+          <div class="m-net-tv-head">
+            <span class="m-net-tv-name">{d.name}</span>
+            <span class="m-muted m-small">{d.ip}</span>
+          </div>
+          {!d.mac && (
             <NetMacField id={'net-mac-' + d.id.replace(/[^a-z0-9]+/gi, '-')} onSave={(mac) => attachNetMac(d.id, mac)} />
           )}
-          <button type="button" class="m-btn m-btn-secondary m-btn-sm" onClick={() => void (d.kind === 'samsung' ? samsungPress(d, 'KEY_VOLUP') : googleKey(d, 'VOLUMEUP')).catch((e) => showToast(e instanceof Error ? e.message : t('remote.ir.badCode')))}>
-            {t('remote.volUp')}
-          </button>
-          <button type="button" class="m-btn m-btn-secondary m-btn-sm" onClick={() => void (d.kind === 'samsung' ? samsungPress(d, 'KEY_VOLDOWN') : googleKey(d, 'VOLUMEDOWN')).catch((e) => showToast(e instanceof Error ? e.message : t('remote.ir.badCode')))}>
-            {t('remote.volDown')}
-          </button>
-          <button type="button" class="m-btn m-btn-secondary m-btn-sm" onClick={() => void (d.kind === 'samsung' ? samsungPress(d, 'KEY_HDMI') : googleKey(d, 'INPUT')).catch((e) => showToast(e instanceof Error ? e.message : t('remote.ir.badCode')))}>
-            {t('remote.netInput')}
-          </button>
+          <div class="m-net-tv-acts">
+            {d.mac ? (
+              <button type="button" class="m-btn m-btn-primary m-btn-sm tm" data-code="P08.2" onClick={() => void power(d)}>
+                {t('remote.powerOn')}
+              </button>
+            ) : null}
+            <button type="button" class="m-btn m-btn-secondary m-btn-sm" onClick={() => void (d.kind === 'samsung' ? samsungPress(d, 'KEY_VOLUP') : googleKey(d, 'VOLUMEUP')).catch((e) => showToast(e instanceof Error ? e.message : t('remote.ir.badCode')))}>
+              {t('remote.volUp')}
+            </button>
+            <button type="button" class="m-btn m-btn-secondary m-btn-sm" onClick={() => void (d.kind === 'samsung' ? samsungPress(d, 'KEY_VOLDOWN') : googleKey(d, 'VOLUMEDOWN')).catch((e) => showToast(e instanceof Error ? e.message : t('remote.ir.badCode')))}>
+              {t('remote.volDown')}
+            </button>
+            <button type="button" class="m-btn m-btn-secondary m-btn-sm" onClick={() => void (d.kind === 'samsung' ? samsungPress(d, 'KEY_HDMI') : googleKey(d, 'INPUT')).catch((e) => showToast(e instanceof Error ? e.message : t('remote.ir.badCode')))}>
+              {t('remote.netInput')}
+            </button>
+          </div>
         </div>
       ))}
       {coding && <BoxCodeSheet onSubmit={(code) => submitBoxCode(coding, code)} onCancel={cancelBoxCode} />}

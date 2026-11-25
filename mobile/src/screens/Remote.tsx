@@ -15,7 +15,7 @@ import { Sheet } from '../ui/Sheet';
 import { CodeSheet } from '../ui/CodeSheet';
 import { FoundTvs } from '../ui/FoundTvs';
 import { PowerBanner } from '../ui/PowerBanner';
-import { PowerTools } from '../ui/PowerTools';
+import { HdmiRow, PowerTools } from '../ui/PowerTools';
 import { adoptProfile } from '../tv/power/irProfile';
 import { foundTvNoWifi, foundTvRows, foundTvScanning } from '../tv/foundTvDiscovery';
 import { TouchpadSheet } from '../ui/TouchpadSheet';
@@ -228,6 +228,26 @@ function NoAnswer({ tv, onWake }: { tv: SavedTv; onWake: () => void }) {
 function savedState(tv: SavedTv, current: SavedTv, live: string): string {
   if (tv.ip === current.ip) return live;
   return isAtv(tv) && !tv.token ? t('remote.tvNeedsCode') : t('remote.tvSaved');
+}
+
+/**
+ * Power and IR tools, folded away behind one line. The deck of the remote has to fit the phone screen, and these
+ * are for the moment a TV was discovered or an IR signal is being learned, not for every press; open in place they
+ * push nothing around, because the deck below is what gives room.
+ */
+function PowerBlock({ deviceId }: { deviceId: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div class="m-remote-power">
+      <button type="button" class="m-btn-text" data-power-tools aria-expanded={open} onClick={() => setOpen((v) => !v)}>
+        {t('remote.powerTools')} {open ? '▴' : '▾'}
+      </button>
+      {/* stays mounted: a half-typed IR paste or a learned signal must survive closing the row */}
+      <div class="m-remote-power-body" hidden={!open}>
+        <PowerTools deviceId={deviceId} />
+      </div>
+    </div>
+  );
 }
 
 /**
@@ -1041,7 +1061,7 @@ function AtvRemote({ tv, onShowPlayer }: { tv: SavedTv; onShowPlayer?: () => voi
           {!(!forgot && !box && state === 'error' && !tvWaking.value) && (
             <PowerBanner offline={state !== 'connected'} name={tv.name} onWake={() => void wake()} />
           )}
-          <PowerTools deviceId={tv.mac || tv.ip} showInputs={false} />
+          <PowerBlock deviceId={tv.mac || tv.ip} />
         </>
       )}
       {!forgot && !box && <NoAnswer tv={tv} onWake={() => void wake()} />}
@@ -1224,7 +1244,7 @@ export function Remote({ onShowPlayer }: { onShowPlayer?: () => void } = {}) {
         <ScreenHeader title={t('nav.remote')} />
         {/* one block, not «Ищу…» above «Подключите телевизор» (QA B18): found TVs still show above, the search is a line in the card */}
         <FoundTvs quiet />
-        <PowerTools deviceId="local" showInputs={false} />
+        <PowerBlock deviceId="local" />
         <div class="m-empty">
           <h2>{t('remote.noTvTitle')}</h2>
           <p class="m-muted">{t('remote.noTvText')}</p>
@@ -1377,7 +1397,8 @@ export function Remote({ onShowPlayer }: { onShowPlayer?: () => void } = {}) {
           {!(state === 'error' && !tvWaking.value) && (
             <PowerBanner offline={state !== 'connected' && state !== 'pairing'} name={tv.name} onWake={() => void on()} />
           )}
-          <PowerTools deviceId={tv.mac || tv.ip} showInputs={state === 'connected'} />
+          {state === 'connected' && <HdmiRow />}
+          <PowerBlock deviceId={tv.mac || tv.ip} />
         </>
       )}
       <NoAnswer tv={tv} onWake={() => void on()} />

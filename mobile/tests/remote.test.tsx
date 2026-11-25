@@ -155,6 +155,23 @@ describe('Remote header and layout', () => {
     tvState.value = 'idle';
   });
 
+  it('power and IR tools are folded away until asked', () => {
+    saveTv({ ip: '192.168.1.5', name: 'LG OLED' });
+    mount();
+    const toggle = () => el.querySelector('[data-power-tools]') as HTMLButtonElement;
+    const body = () => el.querySelector('.m-remote-power-body') as HTMLElement;
+    expect(toggle().textContent).toContain('Питание и ИК');
+    expect(toggle().getAttribute('aria-expanded')).toBe('false');
+    // closed: hidden, but still in the tree - a half-typed IR paste must survive the fold
+    expect(body().hidden).toBe(true);
+    act(() => toggle().click());
+    expect(toggle().getAttribute('aria-expanded')).toBe('true');
+    expect(body().hidden).toBe(false);
+    act(() => toggle().click());
+    expect(body().hidden).toBe(true);
+    expect(el.querySelector('.m-remote-power-body')).toBeTruthy();
+  });
+
   it('buttons mode (Magic Remote): d-pad, colour keys, Back/Home/Menu, volume · play · keyboard/mute', () => {
     saveTv({ ip: '192.168.1.5', name: 'LG OLED' });
     mount();

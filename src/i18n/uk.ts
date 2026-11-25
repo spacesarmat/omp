@@ -2504,6 +2504,7 @@ export const uk: typeof ru = {
     volShort: "Гучн.",
     volume: "Гучність",
     kbdShort: "Клав.",
+    powerTools: 'Живлення та ІК',
     red: "Червона кнопка",
     green: "Зелена кнопка",
     yellow: "Жовта кнопка",

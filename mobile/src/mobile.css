@@ -1041,6 +1041,14 @@ textarea.m-input, textarea.m-area {
 .m-remote-noanswer { display: flex; flex-direction: column; gap: 8px; }
 .m-remote-noanswer-row { display: flex; align-items: center; }
 .m-remote-noanswer-row .m-btn { margin-right: 8px; }
+/* the folded power and IR block: one line until it is opened */
+.m-remote-power { display: flex; flex-direction: column; gap: 8px; }
+/* one discovered TV: its name and address on top, the MAC field full width, the keys under them */
+.m-net-tv { display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: 14px; background: var(--panel); }
+.m-net-tv-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.m-net-tv-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.m-net-tv-acts { display: flex; flex-wrap: wrap; gap: 8px; }
+.m-net-tv .m-field { width: 100%; }
 .m-remote.dim .m-rb, .m-remote.dim .m-rt { opacity: 0.45; }
 .m-remote-state { font-size: 13px; color: var(--muted); }
 .m-box-row { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 0 4px 0 12px; border-radius: 14px; background: var(--panel); }
