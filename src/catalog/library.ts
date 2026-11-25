@@ -34,23 +34,28 @@ const FILM_TAG = 'f|';
 const SEASON_LABEL = /[([][^)\]]*(?:сезон|season)[^)\]]*\d|[([][^)\]]*\d[^)\]]*(?:сезон|season)/i;
 
 /**
- * The release settles its own tag. TorrServer's «Сериалы» category decides at once; otherwise both the shown title
- * and the saved release string are read - a rename can drop the marks from the title while the saved string still
- * carries them.
+ * The release text settles the tag: both the shown title and the saved release string are read, because a rename can
+ * drop the marks from the title while the saved string still carries them. The server category is asked only when no
+ * text says anything about seasons - OMP fills that category from the same loose guess, so a magnet added as
+ * «Open Season 2 (2008)» arrives tagged «Сериалы» and must not become a season pack.
  */
 function releaseTag(tr: { title: string; data?: string; category?: string }): string {
-  if (tr.category === 'tv') return SERIES_TAG;
   const texts = [identityText(tr), rawReleaseOf(tr.data)];
+  let namedSeason = false; // a lone season number that belongs to the name, not a mark
   for (let i = 0; i < texts.length; i++) {
     const s = texts[i];
     if (!s) continue;
     const r = parseRelease(s);
     // «Complete Series» and «Сезоны: 1-3» are no film title
     if (r.allSeasons || r.seasons.length > 1) return SERIES_TAG;
-    // a single season number: a series mark («2 сезон», S02), a bracketed label, or a film name
-    if (r.seasons.length === 1 && (titleSaysSeries(s) || SEASON_LABEL.test(s))) return SERIES_TAG;
+    if (r.seasons.length === 1) {
+      // a series mark («2 сезон», S02) or a bracketed label («(Season 2)»)
+      if (titleSaysSeries(s) || SEASON_LABEL.test(s)) return SERIES_TAG;
+      namedSeason = true;
+    }
   }
-  return FILM_TAG;
+  if (namedSeason) return FILM_TAG;
+  return tr.category === 'tv' ? SERIES_TAG : FILM_TAG;
 }
 
 export function yearOf(title: string): number {

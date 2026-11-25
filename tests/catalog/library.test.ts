@@ -108,6 +108,11 @@ describe('a card only reads the releases of its kind', () => {
     expect(inLibrary(idx, { ...named, kind: 'tv' })).toBe(true);
   });
 
+  it('a film name with a season number stays a film even if the guess called it «Сериалы»', () => {
+    const idx = libraryIndex([{ title: 'Сезон охоты 2 / Open Season 2 (2008) BDRip', category: 'tv' }]);
+    expect(inLibrary(idx, { title: 'Сезон охоты 2', original: 'Open Season 2', year: 2008, kind: 'movie' })).toBe(true);
+  });
+
   it('without a kind both readings still match, as before', () => {
     expect(inLibrary(libraryIndex(pack), named)).toBe(true);
     expect(inLibrary(libraryIndex([{ title: 'Король Лев / The Lion King WEB-DL' }]), { title: 'Король Лев', original: 'The Lion King', year: 2019 })).toBe(true);
