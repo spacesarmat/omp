@@ -9,6 +9,7 @@ The English translation covers the latest versions only; the full history (in Ru
 - The "In library" mark no longer picks up the second work's English alias from a bundled release: a translation counts only while it follows its own title
 - The "In library" mark no longer appears on a card whose name matches a release the person has already matched to another show: the TMDB id now outranks the name
 - The card menu shows which release the "In library" mark points at, and offers "Not this series?" in the same place
+- [phone] The remote keys are no longer too small to hit: the colour buttons, the round Back/Home/Menu, the seek buttons and play all have a minimum size, and on a short phone the room around them shrinks instead of the keys
 - [tech] CodeQL no longer reports files from node_modules as first-party (the SARIF is filtered before upload), and CI jobs now state their permissions
 - [tech] Billing: a subscription code can no longer reach a page or a link as written - the /go/ page and the app link are built only from code characters, and the code itself is drawn uniformly from the alphabet
 
