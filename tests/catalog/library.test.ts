@@ -69,9 +69,27 @@ describe('a card only reads the releases of its kind', () => {
     expect(inLibrary(idx, lion(1994))).toBe(false);
   });
 
-  it('a series release still claims a series of another year', () => {
+  it('a season release that names no year still claims the series', () => {
     const idx = libraryIndex([{ title: 'Медсестра / The Nurse 3 сезон WEB-DL' }]);
     expect(inLibrary(idx, { title: 'Медсестра', original: 'The Nurse', year: 2026, kind: 'tv' })).toBe(true);
+  });
+
+  it('a film whose name carries a season number keeps its mark', () => {
+    const idx = libraryIndex([{ title: 'Сезон охоты 2 / Open Season 2 (2008) BDRip' }]);
+    expect(inLibrary(idx, { title: 'Сезон охоты 2', original: 'Open Season 2', year: 2008, kind: 'movie' })).toBe(true);
+  });
+
+  it('a complete-series pack is no film, even when it names a year', () => {
+    const idx = libraryIndex([{ title: 'Содержание / The Content (2024) Complete Series WEB-DL' }]);
+    expect(inLibrary(idx, { ...named, kind: 'movie' })).toBe(false);
+    expect(inLibrary(idx, { ...named, kind: 'tv' })).toBe(true);
+  });
+
+  it('a renamed season pack is still a season pack', () => {
+    const data = JSON.stringify({ omp: { rt: 'Содержание / The Content (2 сезон) 2024 WEB-DL', nm: true } });
+    const idx = libraryIndex([{ title: 'Содержание (2024)', data }]);
+    expect(inLibrary(idx, { ...named, kind: 'movie' })).toBe(false);
+    expect(inLibrary(idx, { ...named, kind: 'tv' })).toBe(true);
   });
 
   it('without a kind both readings still match, as before', () => {

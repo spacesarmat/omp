@@ -3,6 +3,7 @@ import { titleCore } from '../lib/posterSearch';
 import { rawReleaseOf } from '../lib/journal';
 import { identityText } from '../lib/keptQuality';
 import { parseRelease } from '../sources/filters';
+import { titleSaysSeries } from '../lib/seriesGroups';
 import type { Kind } from './tmdb';
 
 // ye as a char code: the guard strips regex literals but not string literals.
@@ -19,14 +20,29 @@ export function libraryKey(title: string, year: number): string {
 }
 
 /**
- * What the index key is about: 's|' a release that marks its seasons (a series), 'f|' any other release (a film, or
- * a show the release text says nothing about). A card only reads the keys of its own kind, so a film card cannot be
- * owned by a season pack of the same name, and a series release that names no year cannot claim every remake.
+ * What the index key is about: 's|' a release that reads as a season pack, 'f|' any other release (a film, or a show
+ * the release text says nothing about). A card only reads the keys of its own kind, so a season pack cannot claim a
+ * film of the same name, and a release that names no year cannot claim every remake of it.
  */
 const SERIES_TAG = 's|';
 const FILM_TAG = 'f|';
-function releaseTag(raw: string): string {
-  return parseRelease(raw).seasons.length ? SERIES_TAG : FILM_TAG;
+
+/**
+ * The season marks of the release text decide the tag. Both the shown title and the saved release string are read:
+ * a rename by the person can drop the marks from the title while the saved string still carries them.
+ */
+function releaseTag(tr: { title: string; data?: string }): string {
+  const texts = [identityText(tr), rawReleaseOf(tr.data)];
+  for (let i = 0; i < texts.length; i++) {
+    const s = texts[i];
+    if (!s) continue;
+    const r = parseRelease(s);
+    // «Complete Series» and «Сезоны: 1-3» are no film title
+    if (r.allSeasons || r.seasons.length > 1) return SERIES_TAG;
+    // a single season number can be part of a name («Сезон охоты 2 / Open Season 2 (2008)»): only a series mark counts
+    if (r.seasons.length === 1 && titleSaysSeries(s)) return SERIES_TAG;
+  }
+  return FILM_TAG;
 }
 
 export function yearOf(title: string): number {
@@ -40,7 +56,7 @@ export function libraryIndex(torrents: { title: string; data?: string }[]): Set<
   const idx = new Set<string>();
   torrents.forEach((tr) => {
     const raw = identityText(tr);
-    const tag = releaseTag(raw);
+    const tag = releaseTag(tr);
     const year = yearOf(raw);
     const add = (s: string): void => {
       const core = titleCore(s);
@@ -62,8 +78,8 @@ export function libraryTitleHash(list: { title: string; hash?: string; data?: st
 }
 
 /**
- * True when the title or its original name is in the index. A film card needs the release to read as a film and to
- * name the same year; a series card takes a season release of any year (those rarely name one) and a release that
+ * True when the title or its original name is in the index. A film card needs a film release of the same year; a
+ * series card takes a season release whose year is the same or absent (those often name none), and a release that
  * reads as a film only when its year agrees. Without a kind both readings are allowed.
  */
 export function inLibrary(idx: Set<string>, t: { title: string; original: string; year: number; kind?: Kind }): boolean {
