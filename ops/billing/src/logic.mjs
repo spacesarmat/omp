@@ -644,10 +644,13 @@ function issue(state, subscriptionId, now) {
   return { state: { ...state, codes: state.codes.concat([row]) }, code: plain, codeId: row.id };
 }
 
-/** XXXX-XXXX from a normalized or dashed code. */
+/**
+ * XXXX-XXXX from a normalized or dashed code. Anything that is not eight code characters comes back empty:
+ * this string is put into pages, app links and /go/ URLs, and echoing the caller's text back is never the point.
+ */
 export function formatCode(code) {
   const n = normalizeCode(code);
-  if (n.length !== 8) return String(code || '');
+  if (n.length !== 8) return '';
   return n.slice(0, 4) + '-' + n.slice(4);
 }
 

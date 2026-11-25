@@ -4,6 +4,10 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## Unreleased
+
+- [tech] Billing: a subscription code can no longer reach a page or a link as written - the /go/ page and the app link are built only from code characters, and the code itself is drawn uniformly from the alphabet
+
 ## 0.30.4-beta.1
 
 - The «In the library» mark in Discover no longer appears on cards whose title is merely listed with / inside one bundled release: the release counts for its own first title and for its translation in another script

@@ -62,6 +62,8 @@ function syncLangLinks() {
   const hash = location.hash || "";
   document.querySelectorAll("[data-lang-href]").forEach((a) => {
     const base = a.getAttribute("data-lang-href") || "/";
+    // the language links keep their own path: a URL that starts with the visitor's fragment is not ours to follow
+    if (base.charAt(0) !== "/") return;
     a.setAttribute("href", base + hash);
   });
 }

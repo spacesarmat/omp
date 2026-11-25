@@ -4,7 +4,7 @@ import { esc } from './panel.mjs';
 
 /** Landing page Telegram opens; redirects into the OMP app with the code. */
 export function goPage(code) {
-  const dashed = formatCode(code);
+  // the code from the URL is normalized first: the page and the app link are built only from code characters
   const n = normalizeCode(code);
   if (n.length !== 8) {
     return (
@@ -12,6 +12,7 @@ export function goPage(code) {
       '<p>Некорректный код.</p></body></html>'
     );
   }
+  const dashed = formatCode(n);
   const scheme = appSchemeUrl(dashed);
   const intent =
     'intent://billing?code=' +
