@@ -2619,6 +2619,7 @@ export const ka: EnDict<typeof ru> = {
     volShort: "ხმაურიანი",
     volume: "მოცულობა",
     kbdShort: "კლავ.",
+    powerTools: 'Power and IR',
     red: "წითელი ღილაკი",
     green: "მწვანე ღილაკი",
     yellow: "ყვითელი ღილაკი",

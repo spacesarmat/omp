@@ -2619,6 +2619,7 @@ export const uz: EnDict<typeof ru> = {
     volShort: "Baland ovozli.",
     volume: "Hajm",
     kbdShort: "Klav.",
+    powerTools: 'Power and IR',
     red: "Qizil tugma",
     green: "Yashil tugma",
     yellow: "Sariq tugma",

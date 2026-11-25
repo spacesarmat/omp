@@ -2619,6 +2619,7 @@ export const tk: EnDict<typeof ru> = {
     volShort: "Gür",
     volume: "Häcm",
     kbdShort: "Klav.",
+    powerTools: 'Power and IR',
     red: "Gyzyl düwme",
     green: "Ýaşyl düwme",
     yellow: "Sary düwme",

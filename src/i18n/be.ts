@@ -2504,6 +2504,7 @@ export const be: typeof ru = {
     volShort: "Гучн.",
     volume: "Гучнасць",
     kbdShort: "Клав.",
+    powerTools: 'Power and IR',
     red: "Чырвоная кнопка",
     green: "Зялёная кнопка",
     yellow: "Жоўтая кнопка",

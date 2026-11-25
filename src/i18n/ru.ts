@@ -2585,6 +2585,7 @@ export const ru = {
     volShort: 'Громк.',
     volume: 'Громкость',
     kbdShort: 'Клав.',
+    powerTools: 'Питание и ИК',
     red: 'Красная кнопка',
     green: 'Зелёная кнопка',
     yellow: 'Жёлтая кнопка',

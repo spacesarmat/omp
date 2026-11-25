@@ -2619,6 +2619,7 @@ export const ky: EnDict<typeof ru> = {
     volShort: "Катуу.",
     volume: "Көлөм",
     kbdShort: "Клави",
+    powerTools: 'Power and IR',
     red: "Кызыл баскыч",
     green: "Жашыл баскыч",
     yellow: "Сары баскыч",

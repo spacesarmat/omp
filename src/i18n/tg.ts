@@ -2619,6 +2619,7 @@ export const tg: EnDict<typeof ru> = {
     volShort: "Баланд",
     volume: "Ҳаҷм",
     kbdShort: "Клав.",
+    powerTools: 'Power and IR',
     red: "Тугмаи сурх",
     green: "Тугмаи сабз",
     yellow: "Тугмаи зард",

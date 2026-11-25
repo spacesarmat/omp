@@ -2619,6 +2619,7 @@ export const hy: EnDict<typeof ru> = {
     volShort: "Ձայնային",
     volume: "Ծավալ",
     kbdShort: "Կլավ.",
+    powerTools: 'Power and IR',
     red: "Կարմիր կոճակը",
     green: "Կանաչ կոճակը",
     yellow: "Դեղին կոճակ",

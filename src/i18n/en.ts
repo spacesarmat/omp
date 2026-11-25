@@ -2538,6 +2538,7 @@ export const en: EnDict<typeof ru> = {
     volShort: 'Vol.',
     volume: 'Volume',
     kbdShort: 'Keys',
+    powerTools: 'Power and IR',
     red: 'Red button',
     green: 'Green button',
     yellow: 'Yellow button',
