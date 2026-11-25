@@ -3,6 +3,8 @@ import { titleCore } from '../lib/posterSearch';
 import { rawReleaseOf } from '../lib/journal';
 import { identityText } from '../lib/keptQuality';
 import { parseRelease } from '../sources/filters';
+import { titleSaysSeries } from '../lib/seriesGroups';
+import type { Kind } from './tmdb';
 
 // ye as a char code: the guard strips regex literals but not string literals.
 const YE = String.fromCharCode(0x435);
@@ -15,6 +17,45 @@ export function libraryKey(title: string, year: number): string {
     .replace(/[^a-z0-9а-я]+/g, ' ')
     .trim();
   return s + '|' + year;
+}
+
+/**
+ * What the index key is about: 's|' a release that reads as a season pack, 'f|' any other release (a film, or a show
+ * the release text says nothing about). A card only reads the keys of its own kind, so a season pack cannot claim a
+ * film of the same name, and a release that names no year cannot claim every remake of it.
+ */
+const SERIES_TAG = 's|';
+const FILM_TAG = 'f|';
+
+/**
+ * A season label set off from the name: «(Сезон: 2)», «[Season 2]». Inside brackets a number and the word belong to
+ * each other, which a film name never does - «Open Season 2 (2008)» keeps its name and gets no bracket label.
+ */
+const SEASON_LABEL = /[([][^)\]]*(?:сезон|season)[^)\]]*\d|[([][^)\]]*\d[^)\]]*(?:сезон|season)/i;
+
+/**
+ * The release text settles the tag: both the shown title and the saved release string are read, because a rename can
+ * drop the marks from the title while the saved string still carries them. The server category is asked only when no
+ * text says anything about seasons - OMP fills that category from the same loose guess, so a magnet added as
+ * «Open Season 2 (2008)» arrives tagged «Сериалы» and must not become a season pack.
+ */
+function releaseTag(tr: { title: string; data?: string; category?: string }): string {
+  const texts = [identityText(tr), rawReleaseOf(tr.data)];
+  let namedSeason = false; // a lone season number that belongs to the name, not a mark
+  for (let i = 0; i < texts.length; i++) {
+    const s = texts[i];
+    if (!s) continue;
+    const r = parseRelease(s);
+    // «Complete Series» and «Сезоны: 1-3» are no film title
+    if (r.allSeasons || r.seasons.length > 1) return SERIES_TAG;
+    if (r.seasons.length === 1) {
+      // a series mark («2 сезон», S02) or a bracketed label («(Season 2)»)
+      if (titleSaysSeries(s) || SEASON_LABEL.test(s)) return SERIES_TAG;
+      namedSeason = true;
+    }
+  }
+  if (namedSeason) return FILM_TAG;
+  return tr.category === 'tv' ? SERIES_TAG : FILM_TAG;
 }
 
 export function yearOf(title: string): number {
@@ -45,14 +86,15 @@ function sameWorkParts(raw: string): string[] {
 }
 
 /** Keys of the torrents: the title proper (and its translation) with the year found in the release string. */
-export function libraryIndex(torrents: { title: string; data?: string }[]): Set<string> {
+export function libraryIndex(torrents: { title: string; data?: string; category?: string }[]): Set<string> {
   const idx = new Set<string>();
   torrents.forEach((tr) => {
     const raw = identityText(tr);
+    const tag = releaseTag(tr);
     const year = yearOf(raw);
     const add = (s: string): void => {
       const core = titleCore(s);
-      if (core) idx.add(libraryKey(core, year));
+      if (core) idx.add(tag + libraryKey(core, year));
     };
     add(raw);
     sameWorkParts(raw).forEach(add);
@@ -61,7 +103,7 @@ export function libraryIndex(torrents: { title: string; data?: string }[]): Set<
 }
 
 /** The first torrent hash that matches the title (or its original name). '' when none. */
-export function libraryTitleHash(list: { title: string; hash?: string; data?: string }[], t: { title: string; original: string; year: number }): string {
+export function libraryTitleHash(list: { title: string; hash?: string; data?: string; category?: string }[], t: { title: string; original: string; year: number }): string {
   for (let i = 0; i < list.length; i++) {
     const tr = list[i];
     if (tr.hash && inLibrary(libraryIndex([tr]), t)) return tr.hash;
@@ -69,12 +111,28 @@ export function libraryTitleHash(list: { title: string; hash?: string; data?: st
   return '';
 }
 
-/** True when the title or its original name (with the year, or with the year unknown) is in the index. */
-export function inLibrary(idx: Set<string>, t: { title: string; original: string; year: number }): boolean {
+/**
+ * True when the title or its original name is in the index. A film card needs a release that reads as a film and
+ * names the same year, which is what stops a season pack and a yearless remake claim. A series card - and a caller
+ * without a kind - also takes a release that names no year, because season packs rarely write one.
+ */
+export function inLibrary(idx: Set<string>, t: { title: string; original: string; year: number; kind?: Kind }): boolean {
   const names = [t.title, t.original];
   for (let i = 0; i < names.length; i++) {
-    if (!names[i]) continue;
-    if (idx.has(libraryKey(names[i], t.year)) || idx.has(libraryKey(names[i], 0))) return true;
+    const name = names[i];
+    if (!name) continue;
+    const exact = libraryKey(name, t.year);
+    const yearless = libraryKey(name, 0);
+    if (t.kind === 'movie') {
+      // a film is owned only by a release that reads as a film and names the same year
+      if (idx.has(FILM_TAG + exact)) return true;
+      continue;
+    }
+    // a series card takes a release of either kind with the same year, or one that names no year at all: season
+    // packs rarely write one, and a series release without any mark cannot be told from a film by its text
+    if (idx.has(SERIES_TAG + exact) || idx.has(SERIES_TAG + yearless) || idx.has(FILM_TAG + exact) || idx.has(FILM_TAG + yearless)) {
+      return true;
+    }
   }
   return false;
 }
