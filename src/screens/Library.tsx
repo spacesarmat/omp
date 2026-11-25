@@ -1,6 +1,6 @@
 import { t, tp } from '../i18n';
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
-import { setFocus, doesFocusableExist } from '@noriginmedia/norigin-spatial-navigation';
+import { setFocus, doesFocusableExist, getCurrentFocusKey } from '@noriginmedia/norigin-spatial-navigation';
 import { client, activeServer } from '../store/servers';
 import { catalogReason, cachedBanner, catalogHint } from '../lib/catalogState';
 import { torrents, libraryTab, libraryQuery, librarySearchOpen, refreshTorrents, torrentsAt, addedTorrents, addedMessage } from '../store/library';
@@ -80,7 +80,24 @@ export function LibraryScreen() {
     // the count on the «Новое» tab (the tab itself asks the phone when it is open)
     if (phoneLink.peek() && libraryTab.peek() !== 'news') phoneFeed().catch(() => undefined);
     // picks up torrents added from a phone via the TorrServer web UI
+    let lastFocus = '';
+    let deferred = 0;
     const timer = setInterval(() => {
+      let cur = '';
+      try {
+        cur = getCurrentFocusKey() || '';
+      } catch (e) {
+        cur = '';
+      }
+      // a focus that moved since the last tick means the person is going through the grid: replacing the whole list
+      // in the middle of a move is the freeze they feel. The refresh waits, but never more than half a minute.
+      if (cur && cur !== lastFocus && deferred < 3) {
+        lastFocus = cur;
+        deferred++;
+        return;
+      }
+      lastFocus = cur;
+      deferred = 0;
       load(() => dead);
       // the TV may sleep across the expiry mark: recheck while the catalog stays open
       if (watchDevmode) setDevmodeDue(devmodeExpiring(Date.now()));

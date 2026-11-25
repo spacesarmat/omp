@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { DICTS, type Lang } from '../../src/i18n';
+import { DICTS, LANGS, loadDict, type Lang } from '../../src/i18n';
 import { ru } from '../../src/i18n/ru';
 
 type Node = { [k: string]: unknown };
@@ -90,7 +90,11 @@ function compare(r: Node, e: Node, path: string, problems: Problem[], lang: Lang
 }
 
 describe('dictionaries', () => {
-  it('every landed pack has the same keys, placeholders and plural forms as ru', () => {
+  it('every language pack has the same keys, placeholders and plural forms as ru', async () => {
+    // the packs load on demand now, so the checker has to ask for all of them before comparing
+    await Promise.all(LANGS.map((l) => loadDict(l)));
+    const landed = Object.keys(DICTS).sort();
+    expect(landed).toEqual([...LANGS].sort());
     const problems: Problem[] = [];
     for (const [l, dict] of Object.entries(DICTS)) {
       if (l === 'ru') continue;

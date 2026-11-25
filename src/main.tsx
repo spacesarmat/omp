@@ -18,7 +18,7 @@ import { installCleartextSync } from './cleartextSync';
 import { hydrateDeviceDb } from './store/deviceDb';
 import { reapplyDeviceRecords } from './store/applyPulled';
 import { installErrorHooks, log, logStart } from './lib/log';
-import { t } from './i18n';
+import { t, lang, loadDict } from './i18n';
 import { setCatalogProvider } from './catalog/activeCatalog';
 import { tvCatalog } from './catalog/tvCatalog';
 import { ensureFirstRun } from './ads/firstRun';
@@ -123,6 +123,9 @@ function start(): void {
   if (platformKind() === 'androidtv') installTvTitleLinks();
 }
 
+// The pack of this device's language is read before the first frame, so a non-Russian screen never flashes Russian.
+const startApp = () => loadDict(lang.peek()).then(start, start);
+
 // The built-in tracker parsers need the native http of the Android APK; LG search stays TorrServer-only, so the
 // parsers are a separate chunk that the LG bundle never loads. A failed load must not keep the TV from starting.
 if (platformKind() === 'androidtv') {
@@ -139,7 +142,7 @@ if (platformKind() === 'androidtv') {
     // the visible Cloudflare check (native dialog, «Пройти на телефоне»)
     .then(() => import('./sources/cloudflareTv').then((m) => m.installTvCloudflare()))
     .then(undefined, () => log('warn', 'app', t('log.cloudflareConnectFailed')))
-    .then(start, start);
+    .then(startApp, startApp);
 } else {
-  start();
+  startApp();
 }

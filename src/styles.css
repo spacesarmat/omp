@@ -26,7 +26,9 @@ h2 { font-size: 32px; margin: 32px 0 16px; color: var(--muted); font-weight: nor
 .spacer { flex: 1; }
 .muted { color: var(--muted); }
 
-.focusable { transition: transform .12s, box-shadow .12s, background-color .12s; outline: none; cursor: pointer; }
+/* box-shadow is never animated: on the TV's engine a growing shadow repaints the whole layer every frame of the
+   move, while the frame appearing at once costs nothing. */
+.focusable { transition: transform .12s, background-color .12s; outline: none; cursor: pointer; }
 .focusable.focused { box-shadow: 0 0 0 4px var(--focus); transform: scale(1.04); }
 .focusable.disabled { opacity: .4; }
 

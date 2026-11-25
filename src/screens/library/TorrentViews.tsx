@@ -14,7 +14,7 @@ import { SeriesTile, useSeriesPill, SeriesPill } from './SeriesTile';
 import { tvGlyphs } from '../../ui/tvText';
 import { seriesName } from '../../lib/cleanNames';
 import { requestSeriesMatch, cachedSeriesMatch, seriesMatchVersion } from '../../lib/seriesMatch';
-import { focusedRow, keepRows, keepsImage, rowOf } from '../../lib/gridWindow';
+import { focusedRow, keepBand, keepRows, keepsImage, rowOf } from '../../lib/gridWindow';
 import { getCurrentFocusKey } from '@noriginmedia/norigin-spatial-navigation';
 import { withAds } from '../../ads/ads';
 import { TV_PER_SCREEN, useTvAds } from '../../ads/useTvAds';
@@ -95,7 +95,7 @@ function Tile(p: ItemProps & { size: 'large' | 'small' }) {
   const name = useLoneName(t);
   return (
     <Focusable focusKey={'torrent-' + t.hash} className={'tile tile-' + p.size} onPress={() => p.onOpen(t)} onFocused={() => p.onFocused(t)}>
-      <Poster t={t} showTitle unload={p.unload}>
+      <Poster t={t} showTitle unload={p.unload} box={p.size === 'large' ? 253 : 160}>
         {p.count && p.count >= 2 ? <div class="tile-count">{p.count}</div> : null}
         <Badges list={badgesOf(t, p.size === 'large' ? 2 : 1)} className="art-badges" />
       </Poster>
@@ -110,7 +110,7 @@ function Row(p: ItemProps) {
   const name = useLoneName(t);
   return (
     <Focusable focusKey={'torrent-' + t.hash} className="lrow" onPress={() => p.onOpen(t)} onFocused={() => p.onFocused(t)}>
-      <Poster t={t} unload={p.unload} />
+      <Poster t={t} unload={p.unload} box={72} />
       <div class="lrow-main">
         <div class="lrow-title">{tvGlyphs(name)}</div>
         {(p.metaLine !== undefined ? p.metaLine : metaOf(t)) && <div class="lrow-meta">{p.metaLine !== undefined ? p.metaLine : metaOf(t)}</div>}
@@ -139,7 +139,7 @@ function SeriesRow(p: { g: SeriesGroup; onOpen: (g: SeriesGroup) => void; onFocu
   const pill = useSeriesPill(g, true);
   return (
     <Focusable focusKey={'series-' + g.key} className="lrow" onPress={() => p.onOpen(g)} onFocused={() => p.onFocused(g)}>
-      <Poster t={g.lead} unload={p.unload} />
+      <Poster t={g.lead} unload={p.unload} box={72} />
       <div class="lrow-main">
         <div class="lrow-title">{tvGlyphs(seriesName(g))}</div>
         <div class="lrow-meta">{groupLabel(g)}</div>
@@ -191,7 +191,7 @@ export function TorrentViews(p: {
     rowRef.current = r;
     setFocusRow(r);
   };
-  const focusAt = (i: number) => setRow(rowOf(i, cols));
+  const focusAt = (i: number) => setRow(keepBand(rowRef.current, rowOf(i, cols), keep));
   const adsOn = p.ads !== false && items.length > 0;
   const ads = useTvAds({
     section: 'mine',

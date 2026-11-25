@@ -61,7 +61,7 @@ import { installTabSwipe } from './ui/tabSwipe';
 import { monitorNative } from './monitor/native';
 import { reloadLog } from '../../src/lib/log';
 import { Fragment } from 'preact';
-import { lang, t, type Lang } from '../../src/i18n';
+import { dictVersion, lang, t, type Lang } from '../../src/i18n';
 import { applySchedule, monitorFinished, notifyBlocked, openNewsLink, reloadMonitor, startupNotify } from './monitor/ui';
 import { installPhoneSubPosters } from './monitor/posters';
 import { lazyScreen } from './lib/lazyScreen';
@@ -466,6 +466,7 @@ export function App() {
   // a language change remounts the whole UI (t() does not subscribe components to the language)
   const desktop = isDesktopBuild();
   const navActive: Tab = route.name === 'title' || route.name === 'seasonCard' || route.name === 'series' || route.name === 'person' ? 'library' : (route.name as Tab);
+  void dictVersion.value; // a pack that lands after the first frame redraws the text (t() does not subscribe)
   return (
     <Fragment key={lang.value}>
       {desktop && <DesktopSidebar active={navActive} />}

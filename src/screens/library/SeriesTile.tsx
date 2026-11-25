@@ -25,7 +25,7 @@ export function SeriesTile(p: { g: SeriesGroup; size: 'large' | 'small'; onOpen:
   const pill = useSeriesPill(g, true);
   return (
     <Focusable focusKey={'series-' + g.key} className={'tile tile-series tile-' + p.size} onPress={() => p.onOpen(g)} onFocused={() => p.onFocused(g)}>
-      <Poster t={g.lead} showTitle unload={p.unload}>
+      <Poster t={g.lead} showTitle unload={p.unload} box={p.size === 'large' ? 253 : 160}>
         {g.members.length >= 2 && <div class="tile-count">{g.members.length}</div>}
         {pill && <SeriesPill pill={pill} />}
       </Poster>

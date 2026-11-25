@@ -23,8 +23,9 @@ describe('phone boot screen', () => {
     expect(tag).toContain('onload="this.media=\'all\'"');
   });
 
-  it('the app hides it after the first render', () => {
-    expect(main).toMatch(/render\(<App \/>, document\.getElementById\('app'\)!\);\nhideBootScreen\(\);/);
+  it('the app hides it after the first render, which waits for the language pack', () => {
+    expect(main).toMatch(/function mount\(\): void \{\n {2}render\(<App \/>, document\.getElementById\('app'\)!\);\n {2}hideBootScreen\(\);/);
+    expect(main).toMatch(/loadDict\(lang\.peek\(\)\)\.then\(mount, mount\)/);
   });
 
   it('hideBootScreen removes the layer and is safe without it', () => {

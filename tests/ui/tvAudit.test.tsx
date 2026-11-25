@@ -12,7 +12,7 @@ import { OnboardingScreen } from '../../src/ui/OnboardingScreen';
 import { LibraryScreen } from '../../src/screens/Library';
 import { TorrentScreen } from '../../src/screens/Torrent';
 import { scrollStep } from '../../src/screens/Faq';
-import { posterImageSize, backdropImageSize, sharpPosterUrl } from '../../src/catalog/tmdb';
+import { backdropImageSize, posterImageSize, posterSizeFor, posterUrlFor, sharpPosterUrl } from '../../src/catalog/tmdb';
 import { servers, addServer, setActiveServer, removeServer } from '../../src/store/servers';
 import { torrents, libraryTab, libraryQuery, librarySearchOpen, resetLibrary } from '../../src/store/library';
 import { routeStack } from '../../src/ui/nav';
@@ -253,6 +253,27 @@ describe('TMDB image sizes', () => {
     expect(sharpPosterUrl('https://image.tmdb.org/t/p/original/abc.jpg', 2)).toBe('https://image.tmdb.org/t/p/original/abc.jpg');
     expect(sharpPosterUrl('http://img/poster.jpg', 2)).toBe('http://img/poster.jpg');
     expect(sharpPosterUrl('', 1)).toBe('');
+  });
+
+  it('asks a poster in the size of the box it lands in, on both panels', () => {
+    // a grid tile (177 CSS px), a list row (72), a history card (112), a large library tile (253)
+    expect(posterSizeFor(177, 1)).toBe('w185');
+    expect(posterSizeFor(177, 2)).toBe('w500');
+    expect(posterSizeFor(72, 1)).toBe('w92');
+    expect(posterSizeFor(72, 2)).toBe('w154');
+    expect(posterSizeFor(112, 1)).toBe('w154');
+    expect(posterSizeFor(253, 1)).toBe('w300');
+    expect(posterSizeFor(253, 2)).toBe('w780');
+    // nothing bigger than the largest poster file TMDB serves
+    expect(posterSizeFor(900, 1)).toBe('w780');
+  });
+
+  it('shrinks a saved big poster to the tile and leaves other URLs alone', () => {
+    expect(posterUrlFor('https://image.tmdb.org/t/p/w780/abc.jpg', 177, 1)).toBe('https://image.tmdb.org/t/p/w185/abc.jpg');
+    expect(posterUrlFor('https://image.tmdb.org/t/p/original/abc.jpg', 72, 2)).toBe('https://image.tmdb.org/t/p/w154/abc.jpg');
+    expect(posterUrlFor('https://image.tmdb.org/t/p/w300/abc.jpg', 253, 2)).toBe('https://image.tmdb.org/t/p/w780/abc.jpg');
+    expect(posterUrlFor('http://img/poster.jpg', 177, 1)).toBe('http://img/poster.jpg');
+    expect(posterUrlFor('', 177, 1)).toBe('');
   });
 });
 
