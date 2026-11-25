@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { libraryTargetOf, ownedChecker, torrentTarget } from '../../src/catalog/libraryTarget';
 import { seriesKey } from '../../src/lib/seriesGroups';
+import { applySyncedMatch, resetSeriesMatches } from '../../src/lib/seriesMatch';
 import type { Torrent } from '../../src/api/types';
 import type { CatalogTitle } from '../../src/catalog/tmdb';
 
@@ -11,7 +12,7 @@ const list = [a, b];
 const dark = { kind: 'tv' as 'tv' | 'movie', title: 'Тёмная материя', original: 'Dark Matter', year: 2024 };
 const dune = { kind: 'movie' as 'tv' | 'movie', title: 'Дюна: Часть вторая', original: 'Dune: Part Two', year: 2024 };
 const nope = { kind: 'movie' as 'tv' | 'movie', title: 'Ничего', original: 'Nothing', year: 2001 };
-const asTitle = (t: { kind: 'tv' | 'movie'; title: string; original: string; year: number }): CatalogTitle => ({ ...t, id: 1, poster: '', rating: 0 });
+const asTitle = (t: { kind: 'tv' | 'movie'; title: string; original: string; year: number; id?: number }): CatalogTitle => ({ ...t, id: t.id || 1, poster: '', rating: 0 });
 
 describe('libraryTargetOf', () => {
   it('opens the series on the newest season of the library', () => {
@@ -86,6 +87,31 @@ describe('a pack that lists each work in two scripts', () => {
     const owned = ownedChecker([pack]);
     expect(owned(asTitle(first))).toBe(true);
     expect(owned(asTitle(second))).toBe(false);
+  });
+});
+
+describe('a release the person already matched to another show', () => {
+  const show = { hash: 'h1', title: 'Маска вермильона / Vermillion Mask 1 сезон 2026 WEB-DL' } as Torrent;
+  // the saved match is keyed by language and the series key, the way seriesMatch writes it
+  const key = 'ru|' + seriesKey(show);
+
+  it('keeps the card it was matched to and refuses the one of the same name', () => {
+    resetSeriesMatches();
+    applySyncedMatch(key, 100, '', Date.now());
+    const mine = { kind: 'tv' as const, id: 100, title: 'Маска вермильона', original: 'Vermillion Mask', year: 2026 };
+    const other = { kind: 'tv' as const, id: 200, title: 'Маска вермильона', original: 'Vermillion Mask', year: 2026 };
+    expect(libraryTargetOf([show], mine)).toEqual({ kind: 'series', key: seriesKey(show), season: 1 });
+    expect(libraryTargetOf([show], other)).toBeNull();
+    const owned = ownedChecker([show]);
+    expect(owned(asTitle(mine))).toBe(true);
+    expect(owned(asTitle(other))).toBe(false);
+  });
+
+  it('a release nobody matched yet still answers by name', () => {
+    const cold = { hash: 'h2', title: 'Ледяной перевал / Frost Pass 1 сезон 2026 WEB-DL' } as Torrent;
+    const fresh = { kind: 'tv' as const, id: 300, title: 'Ледяной перевал', original: 'Frost Pass', year: 2026 };
+    expect(libraryTargetOf([cold], fresh)).toEqual({ kind: 'series', key: seriesKey(cold), season: 1 });
+    expect(ownedChecker([cold])(asTitle(fresh))).toBe(true);
   });
 });
 

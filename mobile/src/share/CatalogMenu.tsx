@@ -17,6 +17,8 @@ import { watchTarget } from '../lib/torrentActions';
 import { Sheet } from '../ui/Sheet';
 import { Icon, ICONS } from '../ui/Icon';
 import { WantSheet } from '../screens/catalog/WantSheet';
+import { WrongShowSheet } from '../ui/WrongShowSheet';
+import { displayTitle } from '../../../src/lib/torrentName';
 import { posterShare } from './text';
 import { sendShare } from './send';
 
@@ -37,10 +39,13 @@ function ownedTorrent(list: Torrent[], target: LibraryTarget): Torrent | undefin
 
 export function CatalogMenu(p: { item: CatalogTitle; onClose: () => void }) {
   const [want, setWant] = useState(false);
+  const [wrong, setWrong] = useState(false);
   const item = p.item;
   const list = torrents.value;
   const target = libraryTargetOf(list, item);
   const tor = target ? ownedTorrent(list, target) : undefined;
+  // the series group the mark points at: this is where «Не тот сериал?» fixes the show
+  const group = target && target.kind === 'series' ? findGroup(list, target.key) : null;
   const file = tor ? watchTarget(tor.hash, playableFiles(filesOf(tor))) : undefined;
   const following = loadSubs().some((s) => s.catalog && s.catalog.kind === item.kind && s.catalog.id === item.id);
   const go = (run: () => void) => {
@@ -59,6 +64,9 @@ export function CatalogMenu(p: { item: CatalogTitle; onClose: () => void }) {
       />
     );
   }
+  if (wrong && group) {
+    return <WrongShowSheet group={group} onClose={() => setWrong(false)} />;
+  }
   return (
     <Sheet label={item.title} testId="PD58" onClose={p.onClose}>
       <div class="m-sheet-title">{item.title}</div>
@@ -69,7 +77,16 @@ export function CatalogMenu(p: { item: CatalogTitle; onClose: () => void }) {
       {target ? (
         <button type="button" class="m-opt" data-catalog-action="library" onClick={() => go(() => navigate(libraryRoute(target)))}>
           <Icon d={ICONS.play} size={22} />
-          <span class="m-opt-name">{t('discover.inLibrary')}</span>
+          <span class="m-opt-text">
+            <span class="m-opt-name">{t('discover.inLibrary')}</span>
+            {tor ? <span class="m-opt-sub" data-library-release={tor.hash}>{displayTitle(tor)}</span> : null}
+          </span>
+        </button>
+      ) : null}
+      {group ? (
+        <button type="button" class="m-opt" data-catalog-wrong onClick={() => setWrong(true)}>
+          <Icon d="M20 20l-3.5-3.5M18 11a7 7 0 11-14 0 7 7 0 0114 0z" size={22} />
+          <span class="m-opt-name">{t('titleCard.wrongShow')}</span>
         </button>
       ) : null}
       {tor && file ? (
