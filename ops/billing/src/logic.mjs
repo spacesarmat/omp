@@ -644,26 +644,32 @@ function issue(state, subscriptionId, now) {
   return { state: { ...state, codes: state.codes.concat([row]) }, code: plain, codeId: row.id };
 }
 
-/**
- * XXXX-XXXX from a normalized or dashed code. Anything that is not eight code characters comes back empty:
- * this string is put into pages, app links and /go/ URLs, and echoing the caller's text back is never the point.
- */
+/** XXXX-XXXX from a normalized or dashed code. Text shown to a person keeps what is stored, even an old code. */
 export function formatCode(code) {
   const n = normalizeCode(code);
-  if (n.length !== 8) return '';
+  if (n.length !== 8) return String(code || '');
   return n.slice(0, 4) + '-' + n.slice(4);
+}
+
+/**
+ * XXXX-XXXX of a real code; anything that is not eight code characters comes back empty. Pages and links use this:
+ * text a caller typed has no business inside an HTML page, an app link or a /go/ URL.
+ */
+export function safeCode(code) {
+  const n = normalizeCode(code);
+  return n.length === 8 ? n.slice(0, 4) + '-' + n.slice(4) : '';
 }
 
 /** Custom scheme that opens OMP and fills the subscription code. */
 export function appSchemeUrl(code) {
-  return 'omp://billing?code=' + encodeURIComponent(formatCode(code));
+  return 'omp://billing?code=' + encodeURIComponent(safeCode(code));
 }
 
 /** HTTPS page that redirects into the app (Telegram-friendly). */
 export function openAppUrl(origin, code) {
   const base = String(origin || '').replace(/\/+$/, '');
   if (!base) return appSchemeUrl(code);
-  return base + '/go/' + encodeURIComponent(formatCode(code));
+  return base + '/go/' + encodeURIComponent(safeCode(code));
 }
 
 function idList(raw) {
