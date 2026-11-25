@@ -1,12 +1,11 @@
-import { normalizeCode } from './crypto.mjs';
-import { appSchemeUrl, formatCode } from './logic.mjs';
+import { appSchemeUrl, safeCode } from './logic.mjs';
 import { esc } from './panel.mjs';
 
 /** Landing page Telegram opens; redirects into the OMP app with the code. */
 export function goPage(code) {
-  const dashed = formatCode(code);
-  const n = normalizeCode(code);
-  if (n.length !== 8) {
+  // the code from the URL is checked first: the page and the app link are built only from code characters
+  const dashed = safeCode(code);
+  if (!dashed) {
     return (
       '<!doctype html><html lang="ru"><meta charset="utf-8"><title>OMP</title><body style="font:16px sans-serif;padding:24px">' +
       '<p>Некорректный код.</p></body></html>'

@@ -1,4 +1,4 @@
-import { createHash, randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
+import { createHash, randomBytes, randomInt, scryptSync, timingSafeEqual } from 'node:crypto';
 
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
@@ -12,9 +12,10 @@ export function randomId() {
 
 /** Eight characters, shown as XXXX-XXXX. No 0/O/1/I. */
 export function randomCode() {
-  const bytes = randomBytes(8);
+  // randomInt draws from the whole alphabet and rejects the biased tail of a byte, so the code stays uniform
+  // even if the alphabet ever changes size
   let out = '';
-  for (let i = 0; i < 8; i++) out += CODE_ALPHABET[bytes[i] % CODE_ALPHABET.length];
+  for (let i = 0; i < 8; i++) out += CODE_ALPHABET[randomInt(CODE_ALPHABET.length)];
   return out.slice(0, 4) + '-' + out.slice(4);
 }
 
