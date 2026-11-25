@@ -6,6 +6,9 @@ The English translation covers the latest versions only; the full history (in Ru
 
 ## Unreleased
 
+- [tv] Scrolling on the TV no longer stutters: the poster grid redraws only when the focus leaves the kept window, posters are asked in the size of the tile, the focus frame stopped animating its shadow, and the library list waits with its refresh while the focus is moving
+- Screens open faster: the build no longer carries all 13 language packs at once, the interface language arrives as its own file
+
 ## 0.30.3
 
 - [phone] RuStore build: no APK-install permission and no in-app self-update - updates arrive through the store. Releases publish to RuStore automatically; the sideload build from GitHub/site keeps one-tap install

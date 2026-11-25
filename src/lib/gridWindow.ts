@@ -26,3 +26,14 @@ export function focusedRow(keys: string[], current: string, cols: number): numbe
   const i = current ? keys.indexOf(current) : -1;
   return i >= 0 ? rowOf(i, cols) : 0;
 }
+
+/**
+ * The row the image window keeps while the focus moves: inside the kept band nothing changes at all (the grid does
+ * not re-render), only past its edge the band jumps to the focus. Returns the row to store.
+ */
+export function keepBand(prev: number, next: number, keep: number): number {
+  return Math.abs(next - prev) <= keep ? prev : next;
+}
+
+/** The CSS width of one poster tile of an 8-column grid on the 1920 px TV layout (styles.css .disc-tile). */
+export const DISCOVER_TILE_PX = 177;

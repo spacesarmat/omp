@@ -43,7 +43,7 @@ import { isHotChip, releaseChips, releaseTitle } from '../../sources/releaseRow'
 import { resultBytes, resultSizeText } from '../../sources/resultSize';
 import { TvSearchSize } from '../../ui/LiveSeeds';
 import { sourceBadge } from '../../sources/view';
-import { sharpPosterUrl } from '../../catalog/tmdb';
+import { posterUrlFor } from '../../catalog/tmdb';
 import { posterInitials } from './Poster';
 import { removeWantByQuery } from '../../store/wantList';
 
@@ -781,7 +781,7 @@ function SubsTv(p: { link: PhoneLink; onFocused: () => void }) {
           <div key={s.id} class={'news-sub' + (s.paused ? ' news-sub-paused' : '')} data-sub={s.id} data-paused={s.paused ? '' : undefined}>
             <div class="news-sub-art">
               {poster ? (
-                <img src={sharpPosterUrl(poster)} alt="" />
+                <img src={posterUrlFor(poster, 72)} alt="" />
               ) : s.noPoster ? (
                 <div class={'disc-ph disc-ph-' + hue}>{tvGlyphs(posterInitials(s.query))}</div>
               ) : null}

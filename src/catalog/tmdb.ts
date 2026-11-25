@@ -243,7 +243,7 @@ export function postersUrl(e: TmdbEndpoint, kind: Kind, id: number, season?: num
   return url(e, path, { include_image_language: imageLangs() });
 }
 
-export type ImageSize = 'w185' | 'w300' | 'w500' | 'w780' | 'w1280' | 'original';
+export type ImageSize = 'w92' | 'w154' | 'w185' | 'w300' | 'w500' | 'w780' | 'w1280' | 'original';
 
 /** Poster width: w500 at 1080p, w780 when the panel is 4K (devicePixelRatio >= 2). */
 export function posterImageSize(dpr?: number): 'w500' | 'w780' {
@@ -257,6 +257,29 @@ export function posterImageSize(dpr?: number): 'w500' | 'w780' {
 export function sharpPosterUrl(url: string, dpr?: number): string {
   if (!url || url.indexOf('/t/p/') < 0) return url;
   return url.replace(/\/t\/p\/w(?:45|92|154|185|300)(?=\/)/, '/t/p/' + posterImageSize(dpr));
+}
+
+/** The TMDB poster widths a client may ask for, smallest first. */
+const POSTER_STEPS = [92, 154, 185, 300, 500, 780];
+
+/**
+ * The smallest poster width that still fills a box `cssPx` CSS px wide on this panel: 1080p takes the step that
+ * matches the CSS size, a 4K panel the step that matches twice it.
+ */
+export function posterSizeFor(cssPx: number, dpr?: number): ImageSize {
+  const r = dpr !== undefined ? dpr : (typeof window !== 'undefined' && window.devicePixelRatio) || 1;
+  const need = Math.max(1, cssPx) * r;
+  for (let i = 0; i < POSTER_STEPS.length; i++) if (POSTER_STEPS[i] >= need) return ('w' + POSTER_STEPS[i]) as ImageSize;
+  return 'w780';
+}
+
+/**
+ * A poster URL sized for the box it lands in: any TMDB token (w500, w780, original included) is replaced, so a
+ * scrolling grid never decodes an image several times wider than the tile. Non-TMDB URLs are returned unchanged.
+ */
+export function posterUrlFor(url: string, cssPx: number, dpr?: number): string {
+  if (!url || url.indexOf('/t/p/') < 0) return url;
+  return url.replace(/\/t\/p\/(?:w\d+|original)(?=\/)/, '/t/p/' + posterSizeFor(cssPx, dpr));
 }
 
 /** Backdrop width: w1280 at 1080p, original on a 4K panel. */

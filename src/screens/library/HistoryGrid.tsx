@@ -69,7 +69,7 @@ function HistoryCard(p: { e: HistoryEntry; now: number; path: string; onOpen: (e
       onPress={() => p.onOpen(e)}
       onFocused={() => p.onFocused(e)}
     >
-      <Poster t={t} />
+      <Poster t={t} box={112} />
       <div class="hcard-main">
         <div class="hcard-title">{tvGlyphs(torrentName(t, list))}</div>
         <div class="hcard-ep">{tvGlyphs(episodeSubLine(ep, name, isFilmFile(t, p.path)))}</div>

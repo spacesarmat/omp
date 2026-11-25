@@ -1,17 +1,6 @@
 import { signal } from '@preact/signals';
 import { ru } from './ru';
 import { en } from './en';
-import { uk } from './uk';
-import { be } from './be';
-import { kk } from './kk';
-import { ky } from './ky';
-import { uz } from './uz';
-import { tg } from './tg';
-import { tk } from './tk';
-import { hy } from './hy';
-import { az } from './az';
-import { ka } from './ka';
-import { ro } from './ro';
 import type { StringKeys, PluralKeys } from './types';
 
 export type { Plural, EnPlural, EnDict, StringKeys, PluralKeys } from './types';
@@ -31,8 +20,51 @@ export type Params = { [k: string]: string | number };
 /** The current UI language. t() reads it with peek(): the app roots re-mount the UI (key={lang.value}) when it changes. */
 export const lang = signal<Lang>('ru');
 
-/** Translated packs plug in here as they land; a missing pack or key falls back to Russian. */
-export const DICTS: Partial<Record<Lang, unknown>> = { ru, en, uk, be, kk, ky, uz, tg, tk, hy, az, ka, ro };
+/**
+ * The packs plug in here as they land; a missing pack or key falls back to Russian. Only ru and en are in the
+ * bundle: a TV that shows one language must not parse thirteen (all the packs together are 2.4 MB of source).
+ */
+export const DICTS: Partial<Record<Lang, unknown>> = { ru, en };
+
+const LOADERS: { [K in Lang]?: () => Promise<unknown> } = {
+  uk: () => import('./uk').then((m) => m.uk),
+  be: () => import('./be').then((m) => m.be),
+  kk: () => import('./kk').then((m) => m.kk),
+  ky: () => import('./ky').then((m) => m.ky),
+  uz: () => import('./uz').then((m) => m.uz),
+  tg: () => import('./tg').then((m) => m.tg),
+  tk: () => import('./tk').then((m) => m.tk),
+  hy: () => import('./hy').then((m) => m.hy),
+  az: () => import('./az').then((m) => m.az),
+  ka: () => import('./ka').then((m) => m.ka),
+  ro: () => import('./ro').then((m) => m.ro),
+};
+
+/** Bumped when a pack arrives, so a screen that first drew Russian text draws it again in its own language. */
+export const dictVersion = signal(0);
+const loading: { [K in Lang]?: Promise<void> } = {};
+
+/**
+ * Starts the pack of `l`, or joins the load already running. Resolves either way: a device offline or a missing
+ * chunk leaves the Russian text and the app still starts.
+ */
+export function loadDict(l: Lang): Promise<void> {
+  if (DICTS[l]) return Promise.resolve();
+  const run = LOADERS[l];
+  if (!run) return Promise.resolve();
+  if (!loading[l]) {
+    loading[l] = run().then(
+      (dict) => {
+        DICTS[l] = dict;
+        dictVersion.value = dictVersion.value + 1;
+      },
+      () => {
+        delete loading[l];
+      },
+    );
+  }
+  return loading[l];
+}
 
 /** Prefix match so regional variants (uk-UA, kk-KZ, en-US, ...) map to the base code. Unsupported stays ''. */
 export function normalizeLang(code: string): Lang | '' {
@@ -60,9 +92,10 @@ function navLangs(): string[] {
   }
 }
 
-/** Sets the UI language from the setting and the browser languages. */
+/** Sets the UI language from the setting and the browser languages, and asks for the pack it needs. */
 export function applyLanguageSetting(setting: LanguageSetting): void {
   lang.value = resolveLanguage(setting, navLangs());
+  void loadDict(lang.value);
 }
 
 function lookup(dict: unknown, key: string): unknown {

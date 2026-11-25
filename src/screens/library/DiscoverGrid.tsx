@@ -6,7 +6,7 @@ import { t, lang, type Key } from '../../i18n';
 import { activeCatalog } from '../../catalog/activeCatalog';
 import { catalogErrorCode, catalogErrorKey, type CatalogErrorCode } from '../../catalog/client';
 import { libraryIndex, inLibrary } from '../../catalog/library';
-import { sharpPosterUrl, type CatalogTitle } from '../../catalog/tmdb';
+import { posterUrlFor, type CatalogTitle } from '../../catalog/tmdb';
 import {
   DISCOVER_SORTS, DISCOVER_RATINGS, DISCOVER_COUNTRIES, genresFor, sanitizeDiscoverQuery, discoverQueryKey,
   type DiscoverQuery, type DiscoverSort, type DiscoverYear,
@@ -26,7 +26,7 @@ import { navigate } from '../../ui/nav';
 import { tvGlyphs } from '../../ui/tvText';
 import { scrollToShow } from '../../ui/focus';
 import { posterInitials } from './Poster';
-import { focusedRow, keepRows, keepsImage, rowOf } from '../../lib/gridWindow';
+import { DISCOVER_TILE_PX, focusedRow, keepBand, keepRows, keepsImage, rowOf } from '../../lib/gridWindow';
 import { withAds } from '../../ads/ads';
 import { TV_PER_SCREEN, useTvAds } from '../../ads/useTvAds';
 import { TvAdCell } from './TvAdCell';
@@ -392,6 +392,15 @@ export function DiscoverGrid(p: DiscoverGridProps) {
   const shownError = isWant ? null : search ? searchError : error;
   const keep = keepRows(DISCOVER_ROW_PX);
   const gridRows = shown ? withAds(shown, !isWant && !search ? ads.admitted : []) : null;
+  // how many real items come before each row (an ad cell is not an item): one pass instead of a scan per tile
+  const itemBefore: number[] = [];
+  if (gridRows) {
+    let n = 0;
+    for (let i = 0; i < gridRows.length; i++) {
+      itemBefore.push(n);
+      if (gridRows[i].item !== undefined) n++;
+    }
+  }
   // another list (kind, search, the want list, a new page): the window follows the focused poster where it is now
   const shownKeys = gridRows ? gridRows.map((e) => (e.item === undefined ? 'ad-disc-' + e.ad : tileKey(e.item))) : [];
   const shownId = shownKeys.join('|');
@@ -499,8 +508,6 @@ export function DiscoverGrid(p: DiscoverGridProps) {
               );
             }
             const x = e.item;
-            let itemIndex = 0;
-            for (let k = 0; k < visual; k++) if (gridRows[k].item !== undefined) itemIndex++;
             return (
             <Focusable
               key={x.kind + ':' + x.id}
@@ -510,13 +517,13 @@ export function DiscoverGrid(p: DiscoverGridProps) {
               onPress={() => navigate({ name: 'title', kind: x.kind, id: x.id })}
               onFocused={() => {
                 if (p.onFocused) p.onFocused();
-                setRow(rowOf(visual, DISCOVER_COLS));
+                setRow(keepBand(rowRef.current, rowOf(visual, DISCOVER_COLS), keep));
                 focused.current = x;
-                if (!isWant && !search && shown && itemIndex >= lastRowStart(shown.length)) loadMore();
+                if (!isWant && !search && shown && itemBefore[visual] >= lastRowStart(shown.length)) loadMore();
               }}
             >
               <div class="disc-poster">
-                {x.poster ? (keepsImage(visual, focusRow, DISCOVER_COLS, keep) ? <img src={sharpPosterUrl(x.poster)} alt="" /> : null) : <div class={'disc-ph disc-ph-' + (x.id % 4)}>{tvGlyphs(posterInitials(x.title))}</div>}
+                {x.poster ? (keepsImage(visual, focusRow, DISCOVER_COLS, keep) ? <img src={posterUrlFor(x.poster, DISCOVER_TILE_PX)} alt="" /> : null) : <div class={'disc-ph disc-ph-' + (x.id % 4)}>{tvGlyphs(posterInitials(x.title))}</div>}
                 {x.rating > 0 && <span class="disc-rating">{ratingText(x.rating)}</span>}
                 {wantedFn(x.kind, x.id) ? (
                   <span class="disc-mark disc-mark-want">{t('tv.discover.wantMark')}</span>

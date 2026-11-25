@@ -21,7 +21,7 @@ import {
   serverViewed,
 } from '../store/progress';
 import type { Torrent } from '../api/types';
-import { sharpPosterUrl, torrentQuery, type CatalogCard, type Episode } from '../catalog/tmdb';
+import { posterUrlFor, torrentQuery, type CatalogCard, type Episode } from '../catalog/tmdb';
 import { lang, t, tp, fmtNumber, fmtDuration, fmtSize } from '../i18n';
 import { findGroup, groupLabel, NO_SEASON, onlyThisSeason, seasonMembers, seasonsOf, type SeriesGroup } from '../lib/seriesGroups';
 import { carryWatch, forgetRemoved, pickKeeper } from '../store/releaseCarry';
@@ -508,7 +508,7 @@ function Body({ group, asked }: { group: SeriesGroup; asked?: number }) {
             <div class="series-shade" />
           </div>
         ) : null}
-        <div class="series-poster">{posterUrl ? <img src={sharpPosterUrl(posterUrl)} alt="" /> : <Poster t={group.lead} showTitle />}</div>
+        <div class="series-poster">{posterUrl ? <img src={posterUrlFor(posterUrl, 280)} alt="" /> : <Poster t={group.lead} showTitle box={280} />}</div>
         <div class="series-info">
           <h1>{tvGlyphs(title)}</h1>
           <div class="series-kicker">{season !== NO_SEASON ? t('library.season', { n: season }) : t('series.noSeason')}</div>

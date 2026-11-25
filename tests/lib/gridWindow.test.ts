@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { keepRows, rowOf, keepsImage, focusedRow } from '../../src/lib/gridWindow';
+import { keepBand, keepRows, rowOf, keepsImage, focusedRow } from '../../src/lib/gridWindow';
 
 describe('grid image window', () => {
   it('keeps about 3 screens of rows on each side of the focus', () => {
@@ -32,6 +32,18 @@ describe('grid image window', () => {
     expect(shown(0)).toBe(10 * cols);
     expect(keepsImage(0, 24, cols, 9)).toBe(false);
     expect(keepsImage(0, 0, cols, 9)).toBe(true);
+  });
+
+  it('moves the band only when the focus leaves it, so scrolling inside it redraws nothing', () => {
+    // the window of row 20 covers rows 11..29: a focus inside it keeps the stored row
+    expect(keepBand(20, 21, 9)).toBe(20);
+    expect(keepBand(20, 29, 9)).toBe(20);
+    expect(keepBand(20, 11, 9)).toBe(20);
+    // past either edge the band jumps to the focus, once, not on every row
+    expect(keepBand(20, 30, 9)).toBe(30);
+    expect(keepBand(20, 10, 9)).toBe(10);
+    // the same row changes nothing at all
+    expect(keepBand(7, 7, 9)).toBe(7);
   });
 
   it('finds the focused row in a new list, the top when the focus is elsewhere', () => {

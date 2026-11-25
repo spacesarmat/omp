@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import type { ComponentType } from 'preact';
-import { lang, t } from './i18n';
+import { dictVersion, lang, t } from './i18n';
 import { currentRoute, goBack, routeKey, Route } from './ui/nav';
 import { installKeyListener } from './ui/keys';
 import { installWheelScroll } from './ui/wheel';
@@ -171,6 +171,7 @@ export function App() {
   const anyDialog = dialogOpen.value || textDialogOpen.value;
   const showTour = onboardingVisible('tv', r.name);
   const showWhatsNew = !!wn && !showTour && !anyDialog && (!wn.auto || (shouldShowWhatsNew(r.name) && !updatePrompt.value && !componentPrompt.value));
+  void dictVersion.value; // a pack that lands after the first frame redraws the text (t() does not subscribe)
   return (
     <div class="app" key={lang.value}>
       <div class="screen-host" key={routeKey(r)}>{renderRoute(r)}</div>
