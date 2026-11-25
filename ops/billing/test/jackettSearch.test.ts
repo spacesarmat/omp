@@ -1300,7 +1300,8 @@ describe('POST /v1/torrent magnet redirect', () => {
     expect(res.status).toBe(502);
     expect(JSON.parse(res.body)).toEqual({ error: 'timeout' });
     expect(aborted).toBe(true);
-  }, 1000);
+    // the budget covers the store setup in subscriber(), not the 10 ms abort the test waits for
+  }, 5000);
 
   it.each([
     'http://external.example/file.torrent',
@@ -1454,5 +1455,5 @@ describe('POST /v1/torrent magnet redirect', () => {
     const res = await postTorrent(app, { token, device, link: 'omp-fetch:/dl/rutracker/' });
     expect(res.status).toBe(502);
     expect(JSON.parse(res.body)).toEqual({ error: 'timeout' });
-  }, 1000);
+  }, 5000);
 });
