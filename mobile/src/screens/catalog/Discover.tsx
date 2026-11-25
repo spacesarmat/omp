@@ -6,7 +6,8 @@ import { Icon, ICONS } from '../../ui/Icon';
 import { navigate, scrollToTop, switchTab } from '../../nav';
 import { torrents } from '../../../../src/store/library';
 import { catalogErrorCode, type CatalogErrorCode } from '../../../../src/catalog/client';
-import { libraryIndex, inLibrary } from '../../../../src/catalog/library';
+import { ownedChecker } from '../../../../src/catalog/libraryTarget';
+import { seriesMatchVersion } from '../../../../src/lib/seriesMatch';
 import { phoneCatalog } from '../../catalog/phoneCatalog';
 import { CatalogError } from './CatalogError';
 import { readDiscover, saveDiscover, type Feed, type Filter } from './discoverCache';
@@ -77,7 +78,9 @@ export function Discover() {
   const fresh = useRef(true);
   const homeFresh = useRef(true);
   const list = torrents.value;
-  const index = useMemo(() => libraryIndex(list), [list]);
+  // «В медиатеке» must follow a show the person corrected in the card menu, so the check is rebuilt with the matches
+  const matchStamp = seriesMatchVersion.value;
+  const ownedOf = useMemo(() => ownedChecker(list), [list, matchStamp]);
   // one of four views, the same in portrait and landscape. A pinch steps them (spread = bigger cards).
   const [view, setView] = useState<DiscoverView>(readDiscoverCols);
   const viewRef = useRef(view);
@@ -310,7 +313,7 @@ export function Discover() {
                 return b ? <AdCell key={'ad:grid:' + pos} kind={kind} banner={b} onShown={() => ads.shown(pos)} onClick={() => ads.click(pos)} /> : null;
               }
               const x = e.item;
-              const owned = inLibrary(index, x);
+              const owned = ownedOf(x);
               const label = x.year ? x.title + ' ' + x.year : x.title;
               const open = () => navigate({ name: 'title', kind: x.kind, id: x.id });
               if (view === 'compact') {

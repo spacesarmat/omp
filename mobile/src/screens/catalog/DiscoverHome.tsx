@@ -4,7 +4,8 @@ import { t } from '../../../../src/i18n';
 import { navigate } from '../../nav';
 import { torrents } from '../../../../src/store/library';
 import { catalogErrorCode, type CatalogErrorCode } from '../../../../src/catalog/client';
-import { libraryIndex, inLibrary } from '../../../../src/catalog/library';
+import { ownedChecker } from '../../../../src/catalog/libraryTarget';
+import { seriesMatchVersion } from '../../../../src/lib/seriesMatch';
 import { phoneCatalog } from '../../catalog/phoneCatalog';
 import { CatalogError } from './CatalogError';
 import type { CatalogTitle, HomeSection, HomeSectionId, Kind, TrendingWindow } from '../../../../src/catalog/tmdb';
@@ -138,7 +139,8 @@ export function DiscoverHome({
   const [sections, setSections] = useState<HomeSection[] | null>(null);
   const [error, setError] = useState<CatalogErrorCode | null>(null);
   const list = torrents.value;
-  const lib = useMemo(() => libraryIndex(list), [list]);
+  const matchStamp = seriesMatchVersion.value;
+  const ownedOf = useMemo(() => ownedChecker(list), [list, matchStamp]);
   const homeRef = useRef<HTMLDivElement>(null);
   const cards = isGridDiscoverView(view);
   // card modes: a horizontal rail, wider for large cards. Lists are rows in either orientation.
@@ -242,7 +244,7 @@ export function DiscoverHome({
           return b ? <AdCell key={'ad:rails:' + pos} kind={kind} banner={b} onShown={() => ads.shown(pos)} onClick={() => ads.click(pos)} /> : null;
         }
         const s = e.item;
-        return <Rail key={s.id} section={s} view={view} owned={(x) => inLibrary(lib, x)} />;
+        return <Rail key={s.id} section={s} view={view} owned={ownedOf} />;
       })}
     </div>
   );

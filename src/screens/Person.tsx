@@ -9,6 +9,7 @@ import { activeCatalog } from '../catalog/activeCatalog';
 import { catalogErrorCode, catalogErrorKey, type CatalogErrorCode } from '../catalog/client';
 import { filmography, personJobs, type FilmSort } from '../catalog/filmography';
 import { libraryTargetOf, ownedChecker } from '../catalog/libraryTarget';
+import { seriesMatchVersion } from '../lib/seriesMatch';
 import { posterUrlFor, type Credit, type PersonCard } from '../catalog/tmdb';
 import { torrents } from '../store/library';
 import { isWanted, wantAction } from '../store/wantList';
@@ -53,7 +54,8 @@ function Body({ card }: { card: PersonCard }) {
   const [onlyOwned, setOnlyOwned] = useState(false);
   const [, setTick] = useState(0);
   const list = torrents.value;
-  const owned = useMemo(() => ownedChecker(list), [list]);
+  const matchStamp = seriesMatchVersion.value;
+  const owned = useMemo(() => ownedChecker(list), [list, matchStamp]);
   const items = useMemo(() => filmography(card, job, sort, owned, onlyOwned), [card, job, sort, owned, onlyOwned]);
   const focused = useRef<Credit | null>(null);
   const [focusRow, setFocusRow] = useState(0);

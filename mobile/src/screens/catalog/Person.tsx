@@ -5,6 +5,7 @@ import { t } from '../../../../src/i18n';
 import { catalogErrorCode, type CatalogErrorCode } from '../../../../src/catalog/client';
 import { filmography, personJobs, type FilmSort } from '../../../../src/catalog/filmography';
 import { libraryTargetOf, ownedChecker } from '../../../../src/catalog/libraryTarget';
+import { seriesMatchVersion } from '../../../../src/lib/seriesMatch';
 import type { Credit, PersonCard } from '../../../../src/catalog/tmdb';
 import { torrents } from '../../../../src/store/library';
 import { phoneCatalog, setCatalogMode, type CatalogMode } from '../../catalog/phoneCatalog';
@@ -86,7 +87,8 @@ function Body({ card }: { card: PersonCard }) {
   const [sort, setSort] = useState<FilmSort>('popular');
   const [onlyOwned, setOnlyOwned] = useState(false);
   const list = torrents.value;
-  const owned = useMemo(() => ownedChecker(list), [list]);
+  const matchStamp = seriesMatchVersion.value;
+  const owned = useMemo(() => ownedChecker(list), [list, matchStamp]);
   const items = useMemo(() => filmography(card, job, sort, owned, onlyOwned), [card, job, sort, owned, onlyOwned]);
   const view = readDiscoverCols();
   const gridClass = discoverGridClass(view);

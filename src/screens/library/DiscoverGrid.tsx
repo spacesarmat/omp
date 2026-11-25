@@ -5,7 +5,8 @@ import { setFocus, doesFocusableExist, getCurrentFocusKey } from '@noriginmedia/
 import { t, lang, type Key } from '../../i18n';
 import { activeCatalog } from '../../catalog/activeCatalog';
 import { catalogErrorCode, catalogErrorKey, type CatalogErrorCode } from '../../catalog/client';
-import { libraryIndex, inLibrary } from '../../catalog/library';
+import { ownedChecker } from '../../catalog/libraryTarget';
+import { seriesMatchVersion } from '../../lib/seriesMatch';
 import { posterUrlFor, type CatalogTitle } from '../../catalog/tmdb';
 import {
   DISCOVER_SORTS, DISCOVER_RATINGS, DISCOVER_COUNTRIES, genresFor, sanitizeDiscoverQuery, discoverQueryKey,
@@ -136,7 +137,8 @@ export function DiscoverGrid(p: DiscoverGridProps) {
   const focusResults = useRef(false);
   const focused = useRef<CatalogTitle | null>(null);
   const list = torrents.value;
-  const index = useMemo(() => libraryIndex(list), [list]);
+  const matchStamp = seriesMatchVersion.value;
+  const ownedOf = useMemo(() => ownedChecker(list), [list, matchStamp]);
   // the bar does not wrap: it scrolls sideways so the focused chip is whole, with a margin
   const barRef = useRef<HTMLDivElement>(null);
   const showChip = (key: string) => {
@@ -527,7 +529,7 @@ export function DiscoverGrid(p: DiscoverGridProps) {
                 {x.rating > 0 && <span class="disc-rating">{ratingText(x.rating)}</span>}
                 {wantedFn(x.kind, x.id) ? (
                   <span class="disc-mark disc-mark-want">{t('tv.discover.wantMark')}</span>
-                ) : inLibrary(index, x) ? (
+                ) : ownedOf(x) ? (
                   <span class="disc-mark">{t('discover.inLibrary')}</span>
                 ) : null}
               </div>
