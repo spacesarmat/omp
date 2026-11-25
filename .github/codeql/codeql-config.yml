@@ -1,0 +1,8 @@
+# CodeQL analyzes this repository; node_modules is third-party code.
+# This filter works for the interpreted languages. The java-kotlin job builds with Gradle after
+# initialization, and Gradle compiles the Capacitor module straight out of node_modules, so for the
+# compiled language the findings are dropped from the SARIF by scripts/codeql-sarif-filter.mjs
+# before the results are uploaded (the two errors on MessageHandler.java came that way).
+paths-ignore:
+  - node_modules
+  - '**/node_modules/**'
