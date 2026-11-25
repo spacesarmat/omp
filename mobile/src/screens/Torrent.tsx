@@ -883,10 +883,24 @@ export function Torrent({ hash }: { hash: string }) {
               ))}
             </div>
           )}
-          {group && (
-            <button type="button" class="m-btn-text" data-wrong-show onClick={() => setWrongOpen(true)}>
-              {t('titleCard.wrongShow')}
-            </button>
+          {(group || movie) && (
+            <div class="m-thead-links">
+              {group && (
+                <button type="button" class="m-btn-text" data-wrong-show onClick={() => setWrongOpen(true)}>
+                  {t('titleCard.wrongShow')}
+                </button>
+              )}
+              {movie && (
+                <button
+                  type="button"
+                  class="m-btn-text"
+                  data-catalog-card
+                  onClick={() => navigate({ name: 'title', kind: movie.kind, id: movie.id })}
+                >
+                  {t('torrent.screen.showInCatalog')}
+                </button>
+              )}
+            </div>
           )}
           {!book && chipSeasons.length > 1 && (
             <div class="m-chips m-tc-chips m-thead-chips" role="group" aria-label={t('titleCard.seasons')} data-block="seasons">
