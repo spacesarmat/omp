@@ -28,11 +28,13 @@ export function focusedRow(keys: string[], current: string, cols: number): numbe
 }
 
 /**
- * The row the image window keeps while the focus moves: inside the kept band nothing changes at all (the grid does
- * not re-render), only past its edge the band jumps to the focus. Returns the row to store.
+ * The row the image window keeps while the focus moves. The band is kept around the focus, not up to its edge: the
+ * window holds `keep` rows on each side of the stored row, so the focus may drift half of that before the band
+ * jumps. Past half the stored row the grid re-renders once, and the side the person is heading to always keeps at
+ * least keep/2 loaded rows - a row that is only a sliver under the focused tile never shows an empty box.
  */
 export function keepBand(prev: number, next: number, keep: number): number {
-  return Math.abs(next - prev) <= keep ? prev : next;
+  return Math.abs(next - prev) >= Math.max(1, Math.floor(keep / 2)) ? next : prev;
 }
 
 /** The CSS width of one poster tile of an 8-column grid on the 1920 px TV layout (styles.css .disc-tile). */

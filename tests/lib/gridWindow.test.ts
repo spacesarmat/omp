@@ -34,16 +34,32 @@ describe('grid image window', () => {
     expect(keepsImage(0, 0, cols, 9)).toBe(true);
   });
 
-  it('moves the band only when the focus leaves it, so scrolling inside it redraws nothing', () => {
-    // the window of row 20 covers rows 11..29: a focus inside it keeps the stored row
+  it('moves the band every half a window, not every row, so most moves redraw nothing', () => {
+    // the window of row 20 covers rows 11..29: a focus a few rows away keeps the stored row
     expect(keepBand(20, 21, 9)).toBe(20);
-    expect(keepBand(20, 29, 9)).toBe(20);
-    expect(keepBand(20, 11, 9)).toBe(20);
-    // past either edge the band jumps to the focus, once, not on every row
-    expect(keepBand(20, 30, 9)).toBe(30);
-    expect(keepBand(20, 10, 9)).toBe(10);
+    expect(keepBand(20, 23, 9)).toBe(20);
+    // at half the band the stored row jumps to the focus, once, not on every row
+    expect(keepBand(20, 24, 9)).toBe(24);
+    expect(keepBand(20, 16, 9)).toBe(16);
     // the same row changes nothing at all
     expect(keepBand(7, 7, 9)).toBe(7);
+    // a window of one row still follows the focus
+    expect(keepBand(3, 4, 1)).toBe(4);
+  });
+
+  it('keeps the rows ahead of and behind the focus loaded while the band holds', () => {
+    const cols = 8;
+    const keep = 9;
+    let stored = 0;
+    for (let focus = 0; focus <= 40; focus++) {
+      stored = keepBand(stored, focus, keep);
+      for (let ahead = 1; ahead <= 4; ahead++) {
+        expect(keepsImage((focus + ahead) * cols, stored, cols, keep)).toBe(true);
+      }
+      for (let back = 1; back <= 4; back++) {
+        expect(keepsImage((focus - back) * cols, stored, cols, keep)).toBe(true);
+      }
+    }
   });
 
   it('finds the focused row in a new list, the top when the focus is elsewhere', () => {
