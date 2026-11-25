@@ -182,6 +182,7 @@ describe('Remote header and layout', () => {
     expect(labels('.m-rb-colors button')).toEqual(['Красная кнопка', 'Зелёная кнопка', 'Жёлтая кнопка', 'Синяя кнопка']);
     expect(labels('.m-rb-round button')).toEqual(['Назад', 'Домой', 'Меню']);
     expect(Array.from(rb.querySelectorAll('.m-rkey-cap')).map((c) => c.textContent)).toEqual(['Назад', 'Домой', 'Меню']);
+    expect(Array.from(rb.querySelectorAll('.m-ckey-cap')).map((c) => c.textContent)).toEqual(['Красная', 'Зелёная', 'Жёлтая', 'Синяя']);
     const rockers = Array.from(rb.querySelectorAll('.m-rb-bottom .m-rocker'));
     expect(rockers.length).toBe(2);
     expect(Array.from(rockers[0].querySelectorAll('button')).map((b) => b.getAttribute('aria-label'))).toEqual(['Громче', 'Тише']);
@@ -1051,6 +1052,16 @@ describe('buttons mode fits the phone height (mobile.css)', () => {
     expect(rule('.m-ckey')).toContain('var(--pill)');
   });
 
+  it('every key keeps a floor a finger can hit, whatever the height does', () => {
+    const floors: { [v: string]: number } = { '--pill': 20, '--rnd': 44, '--rk': 44, '--play': 44, '--seek-h': 36, '--seek-w': 44 };
+    const rb = rule('.m-rb');
+    for (const v of Object.keys(floors)) {
+      const m = new RegExp(v + ': clamp\\((\\d+)px').exec(rb);
+      expect(m, v).toBeTruthy();
+      expect(Number(m![1]), v + ' floor').toBeGreaterThanOrEqual(floors[v]);
+    }
+  });
+
   it('swipes mode keeps a 44px tap height on the player buttons', () => {
     expect(rule('.m-rt')).toContain('--seek-h: 44px');
     expect(rule('.m-rt .m-rb-seekbtn')).toContain('min-height: 44px');
@@ -1058,7 +1069,13 @@ describe('buttons mode fits the phone height (mobile.css)', () => {
 
   it('no row is pinned to its full size, captions go on short phones', () => {
     expect(css).not.toMatch(/\.m-rb > \* \{[^}]*flex-shrink: 0/);
-    expect(css).toMatch(/@media \(max-height: 700px\) \{\n {2}\.m-rkey-cap \{ display: none; \}/);
+    expect(css).toMatch(/@media \(max-height: 700px\) \{\n {2}\.m-rkey-cap, \.m-ckey-cap \{ display: none; \}/);
+  });
+
+  it('colour keys carry their names under the bar', () => {
+    expect(rule('.m-ckey-wrap')).toContain('flex-direction: column');
+    expect(rule('.m-ckey-cap')).toContain('font-size: 11px');
+    expect(rule('.m-ckey')).toContain('width: 100%');
   });
 });
 

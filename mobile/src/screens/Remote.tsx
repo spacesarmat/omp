@@ -148,12 +148,12 @@ const TUNE =
 const KEYBOARD = 'M3 6h18v12H3zM7 10h.01M11 10h.01M15 10h.01M7 14h10';
 const MUTE = 'M11 5L6 9H3v6h3l5 4zM22 9l-6 6M16 9l6 6';
 
-/** The four colour keys of the TV remote, left to right (webOS pointer-socket button names). */
-const COLOR_KEYS: ReadonlyArray<readonly ['RED' | 'GREEN' | 'YELLOW' | 'BLUE', () => string]> = [
-  ['RED', () => t('remote.red')],
-  ['GREEN', () => t('remote.green')],
-  ['YELLOW', () => t('remote.yellow')],
-  ['BLUE', () => t('remote.blue')],
+/** The four colour keys of the TV remote, left to right (webOS pointer-socket button names): name, label, caption. */
+const COLOR_KEYS: ReadonlyArray<readonly ['RED' | 'GREEN' | 'YELLOW' | 'BLUE', () => string, () => string]> = [
+  ['RED', () => t('remote.red'), () => t('remote.redShort')],
+  ['GREEN', () => t('remote.green'), () => t('remote.greenShort')],
+  ['YELLOW', () => t('remote.yellow'), () => t('remote.yellowShort')],
+  ['BLUE', () => t('remote.blue'), () => t('remote.blueShort')],
 ];
 
 /** The TV's name without the maker prefixes LG puts first: «[LG] webOS TV OLED55C9PLA» → «OLED55C9PLA». */
@@ -705,6 +705,23 @@ function HwVolume(p: { on: boolean; fire: (dir: 'up' | 'down' | 'mute') => void 
   return null;
 }
 
+/**
+ * The four colour keys, each with its name under the bar. A bare coloured strip reads as decoration and is missed on
+ * the first press; the names are the same words the buttons already carry as their accessibility label.
+ */
+function ColorKeys({ press }: { press: (n: 'RED' | 'GREEN' | 'YELLOW' | 'BLUE') => unknown }) {
+  return (
+    <div class="m-rb-colors">
+      {COLOR_KEYS.map(([name, label, caption]) => (
+        <div key={name} class="m-ckey-wrap">
+          <button type="button" class={'m-ckey m-ckey-' + name.toLowerCase()} aria-label={label()} onClick={() => press(name)} />
+          <span class="m-ckey-cap" aria-hidden="true">{caption()}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function DPad({ press }: { press: (n: RemoteButton) => void }) {
   const key = (name: 'UP' | 'DOWN' | 'LEFT' | 'RIGHT', label: string) => (
     <HoldButton class={'m-dpad m-dpad-' + name.toLowerCase()} label={label} onFire={() => press(name)}>
@@ -1099,11 +1116,7 @@ function AtvRemote({ tv, onShowPlayer }: { tv: SavedTv; onShowPlayer?: () => voi
         <div class="m-stage m-rb-pad">
           <DPad press={press} />
         </div>
-        <div class="m-rb-colors">
-          {COLOR_KEYS.map(([n, label]) => (
-            <button key={n} type="button" class={'m-ckey m-ckey-' + n.toLowerCase()} aria-label={label()} onClick={() => press(n)} />
-          ))}
-        </div>
+        <ColorKeys press={(n) => press(n)} />
         <div class="m-rb-round">
           {atvRoundKey(t('common.back'), BACK, () => press('BACK'))}
           {/* «Домой»: the box's Home screen with the box channel, else the OMP catalog */}
@@ -1402,11 +1415,7 @@ export function Remote({ onShowPlayer }: { onShowPlayer?: () => void } = {}) {
           <div class="m-stage m-rb-pad">
             <DPad press={press} />
           </div>
-          <div class="m-rb-colors">
-            {COLOR_KEYS.map(([name, label]) => (
-              <button key={name} type="button" class={'m-ckey m-ckey-' + name.toLowerCase()} aria-label={label()} onClick={() => press(name)} />
-            ))}
-          </div>
+          <ColorKeys press={press} />
           <div class="m-rb-round">
             {roundKey(t('common.back'), BACK, () => press('BACK'))}
             {roundKey(t('remote.home'), HOME, () => press('HOME'))}
