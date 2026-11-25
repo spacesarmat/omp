@@ -6,6 +6,8 @@ The English translation covers the latest versions only; the full history (in Ru
 
 ## Unreleased
 
+- The «In the library» mark in Discover no longer appears on cards whose title is merely listed with / inside one bundled release: the release counts for its own first title and for its translation in another script
+
 ## 0.30.3
 
 - [phone] RuStore build: no APK-install permission and no in-app self-update - updates arrive through the store. Releases publish to RuStore automatically; the sideload build from GitHub/site keeps one-tap install

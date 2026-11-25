@@ -23,7 +23,28 @@ export function yearOf(title: string): number {
   return m ? +m[1] : 0;
 }
 
-/** Keys of the torrents: the title proper (and each part of a 'a / b' title) with the year found in the release string. */
+/** A Russian release name: the script that separates a translation from another work. */
+function hasCyrillic(s: string): boolean {
+  return /[а-яё]/i.test(s || '');
+}
+
+/**
+ * The ' / ' parts of a release title that name the SAME work. « / » is both a translation pair
+ * («Дюна: Часть вторая / Dune: Part Two») and a list of different works in one pack («Дорама А / Дорама Б»).
+ * A part in another script is the same work under another name; a part in the same script is another work,
+ * and marking its catalog card «В медиатеке» because someone bundled it is wrong.
+ */
+function sameWorkParts(raw: string): string[] {
+  if (raw.indexOf(' / ') < 0) return [];
+  const parts = raw.split(' / ');
+  const out: string[] = [];
+  for (let i = 1; i < parts.length; i++) {
+    if (hasCyrillic(parts[i]) !== hasCyrillic(parts[0])) out.push(parts[i]);
+  }
+  return out;
+}
+
+/** Keys of the torrents: the title proper (and its translation) with the year found in the release string. */
 export function libraryIndex(torrents: { title: string; data?: string }[]): Set<string> {
   const idx = new Set<string>();
   torrents.forEach((tr) => {
@@ -34,7 +55,7 @@ export function libraryIndex(torrents: { title: string; data?: string }[]): Set<
       if (core) idx.add(libraryKey(core, year));
     };
     add(raw);
-    if (raw.indexOf(' / ') > 0) raw.split(' / ').forEach(add);
+    sameWorkParts(raw).forEach(add);
   });
   return idx;
 }
@@ -80,7 +101,7 @@ function eachSeason(torrents: { title: string; hash?: string; data?: string }[],
       seasons.forEach((n) => visit(name + '|' + n, hash));
     };
     add(raw);
-    if (raw.indexOf(' / ') > 0) raw.split(' / ').forEach(add);
+    sameWorkParts(raw).forEach(add);
   });
 }
 
