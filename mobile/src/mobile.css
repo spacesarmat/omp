@@ -742,6 +742,7 @@ textarea.m-input, textarea.m-area {
 .m-glass { background: rgba(15, 17, 21, 0.6); }
 .m-danger { color: #FF9EA2; }
 .m-thead-info { margin-top: auto; display: flex; flex-direction: column; gap: 8px; }
+.m-thead-links { display: flex; flex-wrap: wrap; gap: 4px; margin: 0 -12px; }
 .m-thead-title { font-family: 'Unbounded', sans-serif; font-weight: 700; font-size: 24px; line-height: 1.15; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 6; overflow: hidden; }
 .m-thead-meta { font-size: 14px; color: #C9CEDA; }
 .m-tbody { display: flex; flex-direction: column; gap: 12px; padding: 16px; }
@@ -1796,8 +1797,8 @@ html.m-kb-open .m-sheet-host:has(textarea) { bottom: var(--kb-inset, 0px); }
 .m-ep-card-title { font-size: 14px; font-weight: 700; }
 .m-hl { box-shadow: inset 0 0 0 2px var(--accent); }
 .m-flag { padding: 2px 8px; border-radius: 6px; background: var(--accent); color: var(--bg); font-weight: 700; }
-.m-torrent-tracks { margin-top: 8px; }
-.m-torrent-tracks .m-btn { margin-right: 8px; margin-bottom: 8px; }
+.m-torrent-tracks { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.m-torrent-tracks .m-btn { flex: 0 1 auto; margin: 0; }
 .m-watch-prompt { display: flex; flex-direction: column; gap: 8px; overflow-wrap: anywhere; }
 .m-sub-plate { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 8px 10px; border-radius: 12px; background: #3A3320; color: var(--accent); font-size: 13px; line-height: 1.35; }
 .m-sub-plate svg { flex-shrink: 0; }

@@ -6,6 +6,10 @@ The English translation covers the latest versions only; the full history (in Ru
 
 ## Unreleased
 
+- [phone] "Not this series?" on a release card no longer shows an empty list: it says it is searching, that nothing was found, or that the TMDB key is missing
+- [phone] The audio and subtitle buttons on a release card sit in one row
+- [phone] New "Show in the catalog" button opens the series or film page in the catalog: details and similar titles
+
 ## 0.30.3
 
 - [phone] RuStore build: no APK-install permission and no in-app self-update - updates arrive through the store. Releases publish to RuStore automatically; the sideload build from GitHub/site keeps one-tap install
