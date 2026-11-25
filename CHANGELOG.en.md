@@ -6,6 +6,9 @@ The English translation covers the latest versions only; the full history (in Ru
 
 ## Unreleased
 
+- [phone] The phone launch screen is no longer empty: the OMP logo sits centered on the brand background, both in the Android 12+ system splash and while the interface loads
+- [atv] The Android TV launch splash shows the OMP logo on the brand background
+
 ## 0.30.3
 
 - [phone] RuStore build: no APK-install permission and no in-app self-update - updates arrive through the store. Releases publish to RuStore automatically; the sideload build from GitHub/site keeps one-tap install
