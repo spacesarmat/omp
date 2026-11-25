@@ -1,0 +1,7 @@
+# CodeQL analyzes this repository; node_modules is third-party code.
+# The java-kotlin job runs `npx cap sync android`, and Gradle then compiles the Capacitor module
+# straight out of node_modules, so without this ignore CodeQL reports Capacitor's own Java files
+# as first-party findings (the two errors on MessageHandler.java came that way).
+paths-ignore:
+  - node_modules
+  - '**/node_modules/**'

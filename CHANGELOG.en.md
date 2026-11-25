@@ -4,6 +4,10 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## Unreleased
+
+- [tech] CodeQL no longer reports files from node_modules as first-party, and CI jobs now state their permissions
+
 ## 0.30.4-beta.1
 
 - The «In the library» mark in Discover no longer appears on cards whose title is merely listed with / inside one bundled release: the release counts for its own first title and for its translation in another script
