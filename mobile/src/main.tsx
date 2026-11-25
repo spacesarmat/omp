@@ -23,7 +23,7 @@ import { bindWifiRuntime, considerWifi, ensureWifiPrimary, loadWifiPrefs, saveWi
 import { reloadSourcePrefs } from '../../src/sources/store';
 
 import { ensureFirstRun } from './donate';
-import { t } from '../../src/i18n';
+import { t, lang, loadDict } from '../../src/i18n';
 import { startKeyboardWatch } from './ui/keyboard';
 import { initPhoneRpc } from './tv/phoneRpc';
 import { attachIfOmpForeground, nowPlaying, pushPhoneSub } from './tv/playerLink';
@@ -151,25 +151,31 @@ if (import.meta.env.DEV && typeof location !== 'undefined') {
   const asked = /(?:^|[?&])screen=([a-zA-Z]+)(?:&|$)/.exec(location.search || '');
   if (asked) resetTo({ name: asked[1] } as MRoute);
 }
-render(<App />, document.getElementById('app')!);
-// The desktop shell installs its own production design context with the target from the Tauri
-// bridge; the phone app installs the android-phone context only when it runs standalone.
-if (typeof __DESKTOP__ === 'undefined' || !__DESKTOP__) {
-  const stopProductionLayout = installProductionDesign(document.body, {
-    target: 'android-phone',
-    screenOf: () => currentRoute.value.name,
-    subscribeScreen: (notify) => routeStack.subscribe(notify),
-  });
-  window.addEventListener('pagehide', stopProductionLayout, { once: true });
-  // Exported logic flows run through the typed dispatcher on top of the existing app APIs;
-  // the empty generated document keeps this a no-op until an explicit export.
-  const stopProductionFlow = installProductionFlow(document.body, {
-    target: 'android-phone',
-    screenOf: () => currentRoute.value.name,
-    subscribeScreen: (notify) => routeStack.subscribe(notify),
-    environment: () => ({ serverConnected: Boolean(activeServer.value), networkOnline: navigator.onLine }),
-    publishers: createPhoneFlowPublishers(),
-    dispatcher: createPhoneFlowDispatcher({ openUrl: (url) => window.open(url, '_system') }),
-  });
-  window.addEventListener('pagehide', stopProductionFlow, { once: true });
+// The first frame waits for this device's language pack, the way the TV does: nobody sees a screen in Russian
+// before their own language. The pack load never rejects, so a missing chunk still mounts the app.
+function mount(): void {
+  render(<App />, document.getElementById('app')!);
+  // The desktop shell installs its own production design context with the target from the Tauri
+  // bridge; the phone app installs the android-phone context only when it runs standalone.
+  if (typeof __DESKTOP__ === 'undefined' || !__DESKTOP__) {
+    const stopProductionLayout = installProductionDesign(document.body, {
+      target: 'android-phone',
+      screenOf: () => currentRoute.value.name,
+      subscribeScreen: (notify) => routeStack.subscribe(notify),
+    });
+    window.addEventListener('pagehide', stopProductionLayout, { once: true });
+    // Exported logic flows run through the typed dispatcher on top of the existing app APIs;
+    // the empty generated document keeps this a no-op until an explicit export.
+    const stopProductionFlow = installProductionFlow(document.body, {
+      target: 'android-phone',
+      screenOf: () => currentRoute.value.name,
+      subscribeScreen: (notify) => routeStack.subscribe(notify),
+      environment: () => ({ serverConnected: Boolean(activeServer.value), networkOnline: navigator.onLine }),
+      publishers: createPhoneFlowPublishers(),
+      dispatcher: createPhoneFlowDispatcher({ openUrl: (url) => window.open(url, '_system') }),
+    });
+    window.addEventListener('pagehide', stopProductionFlow, { once: true });
+  }
 }
+
+void loadDict(lang.peek()).then(mount, mount);
