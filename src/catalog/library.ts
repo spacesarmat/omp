@@ -64,7 +64,28 @@ export function yearOf(title: string): number {
   return m ? +m[1] : 0;
 }
 
-/** Keys of the torrents: the title proper (and each part of a 'a / b' title) with the year found in the release string. */
+/** A Russian release name: the script that separates a translation from another work. */
+function hasCyrillic(s: string): boolean {
+  return /[а-яё]/i.test(s || '');
+}
+
+/**
+ * The ' / ' parts of a release title that name the SAME work. « / » is both a translation pair
+ * («Дюна: Часть вторая / Dune: Part Two») and a list of different works in one pack («Дорама А / Дорама Б»).
+ * A part in another script is the same work under another name; a part in the same script is another work,
+ * and marking its catalog card «В медиатеке» because someone bundled it is wrong.
+ */
+function sameWorkParts(raw: string): string[] {
+  if (raw.indexOf(' / ') < 0) return [];
+  const parts = raw.split(' / ');
+  const out: string[] = [];
+  for (let i = 1; i < parts.length; i++) {
+    if (hasCyrillic(parts[i]) !== hasCyrillic(parts[0])) out.push(parts[i]);
+  }
+  return out;
+}
+
+/** Keys of the torrents: the title proper (and its translation) with the year found in the release string. */
 export function libraryIndex(torrents: { title: string; data?: string; category?: string }[]): Set<string> {
   const idx = new Set<string>();
   torrents.forEach((tr) => {
@@ -76,7 +97,7 @@ export function libraryIndex(torrents: { title: string; data?: string; category?
       if (core) idx.add(tag + libraryKey(core, year));
     };
     add(raw);
-    if (raw.indexOf(' / ') > 0) raw.split(' / ').forEach(add);
+    sameWorkParts(raw).forEach(add);
   });
   return idx;
 }
@@ -91,9 +112,9 @@ export function libraryTitleHash(list: { title: string; hash?: string; data?: st
 }
 
 /**
- * True when the title or its original name is in the index. A film card needs a film release of the same year; a
- * series card takes a season release whose year is the same or absent (those often name none), and a release that
- * reads as a film only when its year agrees. Without a kind both readings are allowed.
+ * True when the title or its original name is in the index. A film card needs a release that reads as a film and
+ * names the same year, which is what stops a season pack and a yearless remake claim. A series card - and a caller
+ * without a kind - also takes a release that names no year, because season packs rarely write one.
  */
 export function inLibrary(idx: Set<string>, t: { title: string; original: string; year: number; kind?: Kind }): boolean {
   const names = [t.title, t.original];
@@ -103,10 +124,13 @@ export function inLibrary(idx: Set<string>, t: { title: string; original: string
     const exact = libraryKey(name, t.year);
     const yearless = libraryKey(name, 0);
     if (t.kind === 'movie') {
+      // a film is owned only by a release that reads as a film and names the same year
       if (idx.has(FILM_TAG + exact)) return true;
-    } else if (t.kind === 'tv') {
-      if (idx.has(SERIES_TAG + exact) || idx.has(SERIES_TAG + yearless) || idx.has(FILM_TAG + exact)) return true;
-    } else if (idx.has(SERIES_TAG + exact) || idx.has(SERIES_TAG + yearless) || idx.has(FILM_TAG + exact) || idx.has(FILM_TAG + yearless)) {
+      continue;
+    }
+    // a series card takes a release of either kind with the same year, or one that names no year at all: season
+    // packs rarely write one, and a series release without any mark cannot be told from a film by its text
+    if (idx.has(SERIES_TAG + exact) || idx.has(SERIES_TAG + yearless) || idx.has(FILM_TAG + exact) || idx.has(FILM_TAG + yearless)) {
       return true;
     }
   }
@@ -135,7 +159,7 @@ function eachSeason(torrents: { title: string; hash?: string; data?: string }[],
       seasons.forEach((n) => visit(name + '|' + n, hash));
     };
     add(raw);
-    if (raw.indexOf(' / ') > 0) raw.split(' / ').forEach(add);
+    sameWorkParts(raw).forEach(add);
   });
 }
 
