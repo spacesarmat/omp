@@ -6,6 +6,7 @@ The English translation covers the latest versions only; the full history (in Ru
 
 ## Unreleased
 
+- The «In the library» mark in Discover no longer appears on cards whose title is merely listed with / inside one bundled release: the release counts for its own first title and for its translation in another script
 - [phone] The phone launch screen is no longer empty: the OMP logo sits centered on the brand background, both in the Android 12+ system splash and while the interface loads
 - [atv] The Android TV launch splash shows the OMP logo on the brand background
 

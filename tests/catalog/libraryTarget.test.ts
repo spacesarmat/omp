@@ -39,6 +39,26 @@ describe('ownedChecker', () => {
   });
 });
 
+describe('a release that bundles several works', () => {
+  const pack = { hash: 'p', title: 'Крестьянин 999 уровня / Второй брак императрицы / Рамаяна. Возрождение' } as Torrent;
+  const peasant = { kind: 'tv' as 'tv' | 'movie', title: 'Крестьянин 999 уровня', original: '999 Level Farmer', year: 2026 };
+  const marriage = { kind: 'tv' as 'tv' | 'movie', title: 'Второй брак императрицы', original: 'Empress Second Marriage', year: 2026 };
+  const ramayana = { kind: 'movie' as 'tv' | 'movie', title: 'Рамаяна. Возрождение', original: 'Ramayana: Rebirth', year: 2026 };
+
+  it('opens the pack only for the work it is named after', () => {
+    expect(libraryTargetOf([pack], peasant)).toEqual({ kind: 'torrent', hash: 'p' });
+    expect(libraryTargetOf([pack], marriage)).toBeNull();
+    expect(libraryTargetOf([pack], ramayana)).toBeNull();
+  });
+
+  it('ownedChecker does not mark the bundled cards owned', () => {
+    const owned = ownedChecker([pack]);
+    expect(owned(asTitle(peasant))).toBe(true);
+    expect(owned(asTitle(marriage))).toBe(false);
+    expect(owned(asTitle(ramayana))).toBe(false);
+  });
+});
+
 describe('ownedChecker on a big library', () => {
   it('agrees with libraryTargetOf for every credit (300 torrents x 120 credits)', () => {
     const big: Torrent[] = [];

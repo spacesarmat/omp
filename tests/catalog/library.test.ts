@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { libraryKey, libraryIndex, inLibrary, seasonIndex, seasonHashIndex, inLibrarySeason, librarySeasonHash, librarySeasonHashes } from '../../src/catalog/library';
+import { libraryKey, libraryIndex, inLibrary, seasonIndex, seasonHashIndex, inLibrarySeason, inLibrarySeries, seriesNames, librarySeasonHash, librarySeasonHashes } from '../../src/catalog/library';
 
 describe('library matching', () => {
   it('libraryKey normalises case, yo, punctuation and adds the year', () => {
@@ -92,5 +92,29 @@ describe('season matching', () => {
     expect(librarySeasonHashes(all, show, 2)).toEqual(['h1', 'h2']);
     expect(librarySeasonHashes(all, show, 3)).toEqual(['h3']);
     expect(librarySeasonHashes(all, show, 4)).toEqual([]);
+  });
+});
+
+describe('a release string that lists several works', () => {
+  const pack = [{ title: 'Крестьянин 999 уровня / Второй брак императрицы / Рамаяна. Возрождение' }];
+
+  it('marks owned only the work the release is named after', () => {
+    const idx = libraryIndex(pack);
+    expect(inLibrary(idx, { title: 'Крестьянин 999 уровня', original: '999 Level Farmer', year: 2026 })).toBe(true);
+    expect(inLibrary(idx, { title: 'Второй брак императрицы', original: 'Empress Second Marriage', year: 2026 })).toBe(false);
+    expect(inLibrary(idx, { title: 'Рамаяна. Возрождение', original: 'Ramayana: Rebirth', year: 2026 })).toBe(false);
+  });
+
+  it('keeps a translation in another script as the same work', () => {
+    const idx = libraryIndex([{ title: 'Дюна: Часть вторая / Dune: Part Two (2024) 2160p' }]);
+    expect(inLibrary(idx, { title: 'Dune: Part Two', original: 'Дюна: Часть вторая', year: 2024 })).toBe(true);
+    expect(inLibrary(idx, { title: 'Пак Дюна', original: 'Dune: Part Two', year: 2024 })).toBe(true);
+  });
+
+  it('season keys of a pack name only its first work', () => {
+    const idx = seasonIndex([{ title: 'Дорама А / Дорама Б 1 сезон [LostFilm]' }]);
+    expect(inLibrarySeason(idx, { title: 'Дорама А', original: 'Dorama A' }, 1)).toBe(true);
+    expect(inLibrarySeason(idx, { title: 'Дорама Б', original: 'Dorama B' }, 1)).toBe(false);
+    expect(inLibrarySeries(seriesNames(idx), { title: 'Дорама Б', original: 'Dorama B' })).toBe(false);
   });
 });
