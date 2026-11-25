@@ -77,7 +77,7 @@ function hasCyrillic(s: string): boolean {
  * the alias of the second work, and marking its catalog card «В медиатеке» because someone bundled it is wrong.
  * The first part in the same script as the title proper starts another work, and everything after it is not ours.
  */
-function sameWorkParts(raw: string): string[] {
+export function sameWorkParts(raw: string): string[] {
   if (raw.indexOf(' / ') < 0) return [];
   const parts = raw.split(' / ');
   const out: string[] = [];
@@ -140,8 +140,8 @@ export function inLibrary(idx: Set<string>, t: { title: string; original: string
   return false;
 }
 
-/** The name part of libraryKey (no year). */
-function nameKey(title: string): string {
+/** The name part of libraryKey (no year). Exported so an id check uses exactly the same name normalization. */
+export function nameKey(title: string): string {
   const k = libraryKey(title, 0);
   return k.slice(0, k.length - 2);
 }
