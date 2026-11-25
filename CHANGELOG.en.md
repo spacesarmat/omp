@@ -6,7 +6,7 @@ The English translation covers the latest versions only; the full history (in Ru
 
 ## Unreleased
 
-- [tech] CodeQL no longer reports files from node_modules as first-party, and CI jobs now state their permissions
+- [tech] CodeQL no longer reports files from node_modules as first-party (the SARIF is filtered before upload), and CI jobs now state their permissions
 
 ## 0.30.4-beta.1
 
