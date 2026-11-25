@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The launch window before Android 12 (and the window the WebView inherits): brand background, mark centered. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@color/omp_splash_background" />
+    <item
+        android:drawable="@drawable/omp_splash_logo"
+        android:gravity="center" />
+</layer-list>
