@@ -995,3 +995,54 @@ describe('Torrent · cast', () => {
     expect(el.querySelector('.m-tc-cast-ph')).toBeNull();
   });
 });
+
+describe('Torrent · «Не тот сериал?» и карточка в каталоге', () => {
+  const hit = (id: number, title: string) => ({ items: [{ kind: 'tv', id, title, original: title, year: 2026, poster: '', rating: 0 }], pages: 1 });
+  const catalog = (search: unknown, card: unknown = vi.fn()) =>
+    setCatalogClientForTests({ novelties: vi.fn(), discover: vi.fn(), search, card } as any);
+
+  afterEach(() => {
+    setCatalogClientForTests(null);
+    resetSeriesMatches();
+  });
+
+  it('opens the TMDB list to pick another show', async () => {
+    resetSeriesMatches();
+    catalog(vi.fn(async () => hit(21, 'Другой сериал')));
+    mount();
+    await flush();
+    click('[data-wrong-show]');
+    await flush();
+    expect(document.querySelector('.m-sheet-title')!.textContent).toBe('Не тот сериал?');
+    expect(document.body.textContent).toContain('Другой сериал');
+  });
+
+  it('says the TMDB key is missing instead of showing an empty sheet', async () => {
+    resetSeriesMatches();
+    catalog(vi.fn(async () => Promise.reject(Object.assign(new Error('catalog:nokey'), { code: 'nokey' }))));
+    mount();
+    await flush();
+    click('[data-wrong-show]');
+    await flush();
+    expect(document.body.textContent).toContain('Нет ключа TMDB');
+  });
+
+  it('says nothing was found', async () => {
+    resetSeriesMatches();
+    catalog(vi.fn(async () => ({ items: [], pages: 1 })));
+    mount();
+    await flush();
+    click('[data-wrong-show]');
+    await flush();
+    expect(document.body.textContent).toContain('Ничего не найдено');
+  });
+
+  it('«Показать в каталоге» opens the catalog card of the matched series', async () => {
+    resetSeriesMatches();
+    catalog(vi.fn(async () => hit(5, 'Starbound Frontier')), vi.fn(() => Promise.resolve({ kind: 'tv', id: 5, title: 'x', cast: [] })));
+    mount();
+    await flush();
+    click(byText('Показать в каталоге'));
+    expect(currentRoute.value).toEqual({ name: 'title', kind: 'tv', id: 5 });
+  });
+});
