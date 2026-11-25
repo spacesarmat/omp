@@ -17,6 +17,12 @@ describe('phone boot screen', () => {
     expect(html).toContain('M44 41 L59 50 L44 59 Z');
   });
 
+  it('loads the web fonts without blocking the first paint', () => {
+    const tag = html.split('\n').find((l) => l.includes('fonts.googleapis.com/css2')) || '';
+    expect(tag).toContain('media="print"');
+    expect(tag).toContain('onload="this.media=\'all\'"');
+  });
+
   it('the app hides it after the first render', () => {
     expect(main).toMatch(/render\(<App \/>, document\.getElementById\('app'\)!\);\nhideBootScreen\(\);/);
   });

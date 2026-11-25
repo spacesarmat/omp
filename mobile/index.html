@@ -13,7 +13,10 @@
     #omp-boot b { margin-top: 18px; font: 800 22px/1 'Unbounded', 'Manrope', Arial, sans-serif; letter-spacing: 4px; color: #E8EAF0; }
   </style>
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700&family=Unbounded:wght@500;600&display=swap" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <!-- Web fonts must never hold the first paint back (the host is unreachable on some networks): the sheet loads
+       non-blocking, the boot screen and the app use the system font until it arrives. -->
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700&family=Unbounded:wght@500;600&display=swap" media="print" onload="this.media='all'">
 </head>
 <body>
   <div id="app"></div>
