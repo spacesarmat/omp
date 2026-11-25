@@ -972,7 +972,9 @@ textarea.m-input, textarea.m-area {
 /* the least room between rows (cq units resolve against .m-rb only on its children) */
 .m-rb > * + * { padding-top: clamp(2px, 1.4cqh, 8px); }
 .m-rb-colors { display: flex; justify-content: center; gap: 8px; }
-.m-ckey { flex: 0 1 40px; min-width: 0; height: var(--pill); min-height: 0; padding: 0; border: none; border-radius: 8px; }
+.m-ckey-wrap { display: flex; flex-direction: column; align-items: center; gap: 4px; flex: 0 1 64px; min-width: 0; }
+.m-ckey { width: 100%; min-width: 0; height: var(--pill); min-height: 0; padding: 0; border: none; border-radius: 8px; }
+.m-ckey-cap { max-width: 100%; font-size: 11px; line-height: 1.2; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .m-ckey-red { background: #E5484D; }
 .m-ckey-green { background: #3FB950; }
 .m-ckey-yellow { background: #F5B700; }
@@ -992,10 +994,10 @@ textarea.m-input, textarea.m-area {
 .m-rb-playbtn { width: var(--play); height: var(--play); min-height: 0; padding: 0; border: none; border-radius: 50%; background: var(--accent); color: var(--bg); display: flex; align-items: center; justify-content: center; }
 .m-rb-seek { display: flex; gap: 8px; }
 .m-rb-seekbtn { width: var(--seek-w); height: var(--seek-h); min-height: 0; padding: 0; border: none; border-radius: 12px; background: var(--panel); color: var(--text); display: flex; align-items: center; justify-content: center; }
-/* short phones: the round keys drop their captions, the colour pills get narrower */
+/* short phones: the captions go, the colour bars get wider instead */
 @media (max-height: 700px) {
-  .m-rkey-cap { display: none; }
-  .m-ckey { flex-basis: 52px; }
+  .m-rkey-cap, .m-ckey-cap { display: none; }
+  .m-ckey-wrap { flex-basis: 52px; }
 }
 /* very little room (mini-player and keyboard field on a short phone): the rockers drop their captions */
 @container (max-height: 240px) {
