@@ -956,12 +956,14 @@ textarea.m-input, textarea.m-area {
   overflow-y: auto;
   --dp: min(200px, calc(100vw - 64px), 26vh);
   --dp: clamp(40px, min(calc(100cqw - 48px), 46cqh), 220px);
-  --pill: clamp(8px, 3.2cqh, 18px);
-  --rnd: clamp(24px, 11cqh, 64px);
+  /* nothing in the deck is smaller than a finger can hit: the colour strip, the round keys, the seek buttons and
+     play all keep a floor of their own, so a short phone shrinks the room around them, not the keys themselves */
+  --pill: clamp(20px, 5cqh, 32px);
+  --rnd: clamp(44px, 11cqh, 64px);
   --rk: clamp(44px, 26cqh, 150px);
-  --play: clamp(28px, 12.3cqh, 72px);
-  --seek-h: clamp(18px, 6.8cqh, 40px);
-  --seek-w: clamp(30px, 8.2cqh, 48px);
+  --play: clamp(44px, 12.3cqh, 72px);
+  --seek-h: clamp(36px, 8cqh, 44px);
+  --seek-w: clamp(44px, 9cqh, 52px);
   --play-gap: clamp(3px, 1.7cqh, 10px);
 }
 /* space-evenly through auto margins: when the rows cannot fit they collapse to 0 and the area scrolls from the top */
