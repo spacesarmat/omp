@@ -6,8 +6,15 @@ The English translation covers the latest versions only; the full history (in Ru
 
 ## Unreleased
 
-- [tv] Scrolling on the TV no longer stutters: the poster grid redraws only when the focus leaves the kept window, posters are asked in the size of the tile, the focus frame stopped animating its shadow, and the library list waits with its refresh while the focus is moving
+- The «In the library» mark in Discover no longer appears on cards whose title is merely listed with / inside one bundled release: the release counts for its own first title and for its translation in another script
+- [phone] "Not this series?" on a release card no longer shows an empty list: it says it is searching, that nothing was found, or that the TMDB key is missing
+- [phone] The audio and subtitle buttons on a release card sit in one row
+- [phone] New "Show in the catalog" button opens the series or film page in the catalog: details and similar titles
+- [phone] The phone launch screen is no longer empty: the OMP logo sits centered on the brand background, both in the Android 12+ system splash and while the interface loads
+- [atv] The Android TV launch splash shows the OMP logo on the brand background
+- [tv] Scrolling on the TV no longer stutters: the poster grid redraws four times less often, posters are asked in the size of the tile, the focus frame stopped animating its shadow, and the library list waits with its refresh while the focus is moving
 - Screens open faster: the build no longer carries all 13 language packs at once, the interface language arrives as its own file
+- [tech] Billing tests: two magnet-link tests now get 5 s instead of 1 s - the budget covers their store setup, not the 10 ms abort they wait for, and a slow runner used to time out
 
 ## 0.30.3
 

@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The OMP mark for the Android 12+ splash screen (assets/icon.svg without its tile). The 240dp canvas keeps the
+     glyph inside the central 160dp that the system may mask, so it never loses a corner. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="240dp"
+    android:height="240dp"
+    android:viewportWidth="240"
+    android:viewportHeight="240">
+    <group
+        android:scaleX="1.148"
+        android:scaleY="1.148"
+        android:translateX="62.6"
+        android:translateY="62.6">
+        <path
+            android:pathData="M24,22 H76 A10,10 0 0 1 86,32 V68 A10,10 0 0 1 76,78 H24 A10,10 0 0 1 14,68 V32 A10,10 0 0 1 24,22 Z"
+            android:fillColor="#00000000"
+            android:strokeColor="#F5B700"
+            android:strokeWidth="7"
+            android:strokeLineJoin="round" />
+        <path
+            android:pathData="M23,29h6v5h-6z M35,29h6v5h-6z M47,29h6v5h-6z M59,29h6v5h-6z M71,29h6v5h-6z M23,66h6v5h-6z M35,66h6v5h-6z M47,66h6v5h-6z M59,66h6v5h-6z M71,66h6v5h-6z"
+            android:fillColor="#F5B700" />
+        <path
+            android:pathData="M44,41 L59,50 L44,59 Z"
+            android:fillColor="#E8EAF0"
+            android:strokeColor="#E8EAF0"
+            android:strokeWidth="4"
+            android:strokeLineJoin="round" />
+    </group>
+</vector>

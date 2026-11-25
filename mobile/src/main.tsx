@@ -4,6 +4,7 @@ import { runDeviceSync, setSyncContext } from '../../src/billing/deviceSyncClien
 import { setPresenceContext } from '../../src/billing/presenceClient';
 import './catalog/phoneCatalog'; // registers the catalog provider the shared series code uses
 import { resetTo, type MRoute } from './nav';
+import { hideBootScreen } from './bootScreen';
 import { activeServer, activeServerId, servers, setActiveServer } from '../../src/store/servers';
 import { installErrorHooks, logStart } from '../../src/lib/log';
 import { registerBuiltinSources } from '../../src/sources/builtin';
@@ -155,6 +156,7 @@ if (import.meta.env.DEV && typeof location !== 'undefined') {
 // before their own language. The pack load never rejects, so a missing chunk still mounts the app.
 function mount(): void {
   render(<App />, document.getElementById('app')!);
+  hideBootScreen();
   // The desktop shell installs its own production design context with the target from the Tauri
   // bridge; the phone app installs the android-phone context only when it runs standalone.
   if (typeof __DESKTOP__ === 'undefined' || !__DESKTOP__) {
