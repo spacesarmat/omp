@@ -92,6 +92,22 @@ describe('a card only reads the releases of its kind', () => {
     expect(inLibrary(idx, { ...named, kind: 'tv' })).toBe(true);
   });
 
+  it('a bracketed season label is a pack, not a film name', () => {
+    const idx = libraryIndex([{ title: 'Содержание / The Content (Сезон: 2) 2024 WEB-DL' }]);
+    expect(inLibrary(idx, { ...named, kind: 'movie' })).toBe(false);
+    expect(inLibrary(idx, { ...named, kind: 'tv' })).toBe(true);
+    const en = libraryIndex([{ title: 'The Content (Season 2) 2024 WEB-DL' }]);
+    const content = { title: 'The Content', original: 'The Content', year: 2024 };
+    expect(inLibrary(en, { ...content, kind: 'movie' })).toBe(false);
+    expect(inLibrary(en, { ...content, kind: 'tv' })).toBe(true);
+  });
+
+  it('the «Сериалы» category of the server settles it without any mark', () => {
+    const idx = libraryIndex([{ title: 'Содержание / The Content (2024) WEB-DL', category: 'tv' }]);
+    expect(inLibrary(idx, { ...named, kind: 'movie' })).toBe(false);
+    expect(inLibrary(idx, { ...named, kind: 'tv' })).toBe(true);
+  });
+
   it('without a kind both readings still match, as before', () => {
     expect(inLibrary(libraryIndex(pack), named)).toBe(true);
     expect(inLibrary(libraryIndex([{ title: 'Король Лев / The Lion King WEB-DL' }]), { title: 'Король Лев', original: 'The Lion King', year: 2019 })).toBe(true);

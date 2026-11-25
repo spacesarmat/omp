@@ -28,10 +28,18 @@ const SERIES_TAG = 's|';
 const FILM_TAG = 'f|';
 
 /**
- * The season marks of the release text decide the tag. Both the shown title and the saved release string are read:
- * a rename by the person can drop the marks from the title while the saved string still carries them.
+ * A season label set off from the name: «(Сезон: 2)», «[Season 2]». Inside brackets a number and the word belong to
+ * each other, which a film name never does - «Open Season 2 (2008)» keeps its name and gets no bracket label.
  */
-function releaseTag(tr: { title: string; data?: string }): string {
+const SEASON_LABEL = /[([][^)\]]*(?:сезон|season)[^)\]]*\d|[([][^)\]]*\d[^)\]]*(?:сезон|season)/i;
+
+/**
+ * The release settles its own tag. TorrServer's «Сериалы» category decides at once; otherwise both the shown title
+ * and the saved release string are read - a rename can drop the marks from the title while the saved string still
+ * carries them.
+ */
+function releaseTag(tr: { title: string; data?: string; category?: string }): string {
+  if (tr.category === 'tv') return SERIES_TAG;
   const texts = [identityText(tr), rawReleaseOf(tr.data)];
   for (let i = 0; i < texts.length; i++) {
     const s = texts[i];
@@ -39,8 +47,8 @@ function releaseTag(tr: { title: string; data?: string }): string {
     const r = parseRelease(s);
     // «Complete Series» and «Сезоны: 1-3» are no film title
     if (r.allSeasons || r.seasons.length > 1) return SERIES_TAG;
-    // a single season number can be part of a name («Сезон охоты 2 / Open Season 2 (2008)»): only a series mark counts
-    if (r.seasons.length === 1 && titleSaysSeries(s)) return SERIES_TAG;
+    // a single season number: a series mark («2 сезон», S02), a bracketed label, or a film name
+    if (r.seasons.length === 1 && (titleSaysSeries(s) || SEASON_LABEL.test(s))) return SERIES_TAG;
   }
   return FILM_TAG;
 }
@@ -52,7 +60,7 @@ export function yearOf(title: string): number {
 }
 
 /** Keys of the torrents: the title proper (and each part of a 'a / b' title) with the year found in the release string. */
-export function libraryIndex(torrents: { title: string; data?: string }[]): Set<string> {
+export function libraryIndex(torrents: { title: string; data?: string; category?: string }[]): Set<string> {
   const idx = new Set<string>();
   torrents.forEach((tr) => {
     const raw = identityText(tr);
@@ -69,7 +77,7 @@ export function libraryIndex(torrents: { title: string; data?: string }[]): Set<
 }
 
 /** The first torrent hash that matches the title (or its original name). '' when none. */
-export function libraryTitleHash(list: { title: string; hash?: string; data?: string }[], t: { title: string; original: string; year: number }): string {
+export function libraryTitleHash(list: { title: string; hash?: string; data?: string; category?: string }[], t: { title: string; original: string; year: number }): string {
   for (let i = 0; i < list.length; i++) {
     const tr = list[i];
     if (tr.hash && inLibrary(libraryIndex([tr]), t)) return tr.hash;
