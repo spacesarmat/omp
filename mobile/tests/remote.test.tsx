@@ -165,6 +165,7 @@ describe('Remote header and layout', () => {
     expect(labels('.m-rb-colors button')).toEqual(['Красная кнопка', 'Зелёная кнопка', 'Жёлтая кнопка', 'Синяя кнопка']);
     expect(labels('.m-rb-round button')).toEqual(['Назад', 'Домой', 'Меню']);
     expect(Array.from(rb.querySelectorAll('.m-rkey-cap')).map((c) => c.textContent)).toEqual(['Назад', 'Домой', 'Меню']);
+    expect(Array.from(rb.querySelectorAll('.m-ckey-cap')).map((c) => c.textContent)).toEqual(['Красная', 'Зелёная', 'Жёлтая', 'Синяя']);
     const rockers = Array.from(rb.querySelectorAll('.m-rb-bottom .m-rocker'));
     expect(rockers.length).toBe(2);
     expect(Array.from(rockers[0].querySelectorAll('button')).map((b) => b.getAttribute('aria-label'))).toEqual(['Громче', 'Тише']);
@@ -1051,7 +1052,13 @@ describe('buttons mode fits the phone height (mobile.css)', () => {
 
   it('no row is pinned to its full size, captions go on short phones', () => {
     expect(css).not.toMatch(/\.m-rb > \* \{[^}]*flex-shrink: 0/);
-    expect(css).toMatch(/@media \(max-height: 700px\) \{\n {2}\.m-rkey-cap \{ display: none; \}/);
+    expect(css).toMatch(/@media \(max-height: 700px\) \{\n {2}\.m-rkey-cap, \.m-ckey-cap \{ display: none; \}/);
+  });
+
+  it('colour keys carry their names under the bar', () => {
+    expect(rule('.m-ckey-wrap')).toContain('flex-direction: column');
+    expect(rule('.m-ckey-cap')).toContain('font-size: 11px');
+    expect(rule('.m-ckey')).toContain('width: 100%');
   });
 });
 
