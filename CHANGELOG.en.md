@@ -7,6 +7,7 @@ The English translation covers the latest versions only; the full history (in Ru
 ## Unreleased
 
 - The «In the library» mark in Discover no longer appears on cards whose title is merely listed with / inside one bundled release: the release counts for its own first title and for its translation in another script
+- The "In library" mark and the library jump no longer confuse a film with a series release of the same name, or a release without a year with a remake of another year
 - [phone] "Not this series?" on a release card no longer shows an empty list: it says it is searching, that nothing was found, or that the TMDB key is missing
 - [phone] The audio and subtitle buttons on a release card sit in one row
 - [phone] New "Show in the catalog" button opens the series or film page in the catalog: details and similar titles
