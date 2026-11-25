@@ -3,6 +3,7 @@ import { titleCore } from '../lib/posterSearch';
 import { rawReleaseOf } from '../lib/journal';
 import { identityText } from '../lib/keptQuality';
 import { parseRelease } from '../sources/filters';
+import type { Kind } from './tmdb';
 
 // ye as a char code: the guard strips regex literals but not string literals.
 const YE = String.fromCharCode(0x435);
@@ -17,6 +18,17 @@ export function libraryKey(title: string, year: number): string {
   return s + '|' + year;
 }
 
+/**
+ * What the index key is about: 's|' a release that marks its seasons (a series), 'f|' any other release (a film, or
+ * a show the release text says nothing about). A card only reads the keys of its own kind, so a film card cannot be
+ * owned by a season pack of the same name, and a series release that names no year cannot claim every remake.
+ */
+const SERIES_TAG = 's|';
+const FILM_TAG = 'f|';
+function releaseTag(raw: string): string {
+  return parseRelease(raw).seasons.length ? SERIES_TAG : FILM_TAG;
+}
+
 export function yearOf(title: string): number {
   const re = /(?:^|[^0-9])((?:19|20)\d\d)(?![0-9])/;
   const m = re.exec(title || '');
@@ -28,10 +40,11 @@ export function libraryIndex(torrents: { title: string; data?: string }[]): Set<
   const idx = new Set<string>();
   torrents.forEach((tr) => {
     const raw = identityText(tr);
+    const tag = releaseTag(raw);
     const year = yearOf(raw);
     const add = (s: string): void => {
       const core = titleCore(s);
-      if (core) idx.add(libraryKey(core, year));
+      if (core) idx.add(tag + libraryKey(core, year));
     };
     add(raw);
     if (raw.indexOf(' / ') > 0) raw.split(' / ').forEach(add);
@@ -48,12 +61,25 @@ export function libraryTitleHash(list: { title: string; hash?: string; data?: st
   return '';
 }
 
-/** True when the title or its original name (with the year, or with the year unknown) is in the index. */
-export function inLibrary(idx: Set<string>, t: { title: string; original: string; year: number }): boolean {
+/**
+ * True when the title or its original name is in the index. A film card needs the release to read as a film and to
+ * name the same year; a series card takes a season release of any year (those rarely name one) and a release that
+ * reads as a film only when its year agrees. Without a kind both readings are allowed.
+ */
+export function inLibrary(idx: Set<string>, t: { title: string; original: string; year: number; kind?: Kind }): boolean {
   const names = [t.title, t.original];
   for (let i = 0; i < names.length; i++) {
-    if (!names[i]) continue;
-    if (idx.has(libraryKey(names[i], t.year)) || idx.has(libraryKey(names[i], 0))) return true;
+    const name = names[i];
+    if (!name) continue;
+    const exact = libraryKey(name, t.year);
+    const yearless = libraryKey(name, 0);
+    if (t.kind === 'movie') {
+      if (idx.has(FILM_TAG + exact)) return true;
+    } else if (t.kind === 'tv') {
+      if (idx.has(SERIES_TAG + exact) || idx.has(SERIES_TAG + yearless) || idx.has(FILM_TAG + exact)) return true;
+    } else if (idx.has(SERIES_TAG + exact) || idx.has(SERIES_TAG + yearless) || idx.has(FILM_TAG + exact) || idx.has(FILM_TAG + yearless)) {
+      return true;
+    }
   }
   return false;
 }

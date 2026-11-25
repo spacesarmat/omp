@@ -39,6 +39,22 @@ describe('ownedChecker', () => {
   });
 });
 
+describe('a film card against a season release', () => {
+  const pack = { hash: 'p', title: 'Содержание / The Content (2 сезон) 2024 WEB-DL' } as Torrent;
+  const film = { kind: 'movie' as const, title: 'Содержание', original: 'The Content', year: 2024 };
+  const show = { kind: 'tv' as const, title: 'Содержание', original: 'The Content', year: 2024 };
+
+  it('the film gets no target and no mark from the series pack of the same name', () => {
+    expect(libraryTargetOf([pack], film)).toBeNull();
+    expect(ownedChecker([pack])(asTitle(film))).toBe(false);
+  });
+
+  it('the series card still opens the season screen', () => {
+    expect(libraryTargetOf([pack], show)).toEqual({ kind: 'series', key: seriesKey(pack), season: 2 });
+    expect(ownedChecker([pack])(asTitle(show))).toBe(true);
+  });
+});
+
 describe('ownedChecker on a big library', () => {
   it('agrees with libraryTargetOf for every credit (300 torrents x 120 credits)', () => {
     const big: Torrent[] = [];

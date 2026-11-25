@@ -45,6 +45,41 @@ describe('library matching', () => {
   });
 });
 
+describe('a card only reads the releases of its kind', () => {
+  const pack = [{ title: 'Содержание / The Content (2 сезон) 2024 WEB-DL' }];
+  const named = { title: 'Содержание', original: 'The Content', year: 2024 };
+
+  it('a season release does not claim the film of the same name and year', () => {
+    const idx = libraryIndex(pack);
+    expect(inLibrary(idx, { ...named, kind: 'movie' })).toBe(false);
+    expect(inLibrary(idx, { ...named, kind: 'tv' })).toBe(true);
+  });
+
+  it('a release that names no year claims no film of another year (a remake)', () => {
+    const idx = libraryIndex([{ title: 'Король Лев / The Lion King WEB-DL' }]);
+    const lion = (year: number) => ({ title: 'Король Лев', original: 'The Lion King', year, kind: 'movie' as const });
+    expect(inLibrary(idx, lion(2019))).toBe(false);
+    expect(inLibrary(idx, lion(1994))).toBe(false);
+  });
+
+  it('a film release that names its year still claims that film', () => {
+    const idx = libraryIndex([{ title: 'Король Лев / The Lion King (2019) 1080p' }]);
+    const lion = (year: number) => ({ title: 'Король Лев', original: 'The Lion King', year, kind: 'movie' as const });
+    expect(inLibrary(idx, lion(2019))).toBe(true);
+    expect(inLibrary(idx, lion(1994))).toBe(false);
+  });
+
+  it('a series release still claims a series of another year', () => {
+    const idx = libraryIndex([{ title: 'Медсестра / The Nurse 3 сезон WEB-DL' }]);
+    expect(inLibrary(idx, { title: 'Медсестра', original: 'The Nurse', year: 2026, kind: 'tv' })).toBe(true);
+  });
+
+  it('without a kind both readings still match, as before', () => {
+    expect(inLibrary(libraryIndex(pack), named)).toBe(true);
+    expect(inLibrary(libraryIndex([{ title: 'Король Лев / The Lion King WEB-DL' }]), { title: 'Король Лев', original: 'The Lion King', year: 2019 })).toBe(true);
+  });
+});
+
 describe('season matching', () => {
   const show = { title: 'Ледяной перевал', original: 'Frost Pass' };
 
