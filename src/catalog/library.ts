@@ -72,15 +72,18 @@ function hasCyrillic(s: string): boolean {
 /**
  * The ' / ' parts of a release title that name the SAME work. « / » is both a translation pair
  * («Дюна: Часть вторая / Dune: Part Two») and a list of different works in one pack («Дорама А / Дорама Б»).
- * A part in another script is the same work under another name; a part in the same script is another work,
- * and marking its catalog card «В медиатеке» because someone bundled it is wrong.
+ * A translation stands right next to the name it translates, so only the run of other-script parts that FOLLOWS the
+ * first title belongs to that title: in «Крестьянин / Peasant / Маска вермильона / Vermillion Mask» the last part is
+ * the alias of the second work, and marking its catalog card «В медиатеке» because someone bundled it is wrong.
+ * The first part in the same script as the title proper starts another work, and everything after it is not ours.
  */
 function sameWorkParts(raw: string): string[] {
   if (raw.indexOf(' / ') < 0) return [];
   const parts = raw.split(' / ');
   const out: string[] = [];
   for (let i = 1; i < parts.length; i++) {
-    if (hasCyrillic(parts[i]) !== hasCyrillic(parts[0])) out.push(parts[i]);
+    if (hasCyrillic(parts[i]) === hasCyrillic(parts[0])) break;
+    out.push(parts[i]);
   }
   return out;
 }
