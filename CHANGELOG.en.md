@@ -9,6 +9,7 @@ The English translation covers the latest versions only; the full history (in Ru
 - The "In library" mark no longer picks up the second work's English alias from a bundled release: a translation counts only while it follows its own title
 - The "In library" mark no longer appears on a card whose name matches a release the person has already matched to another show: the TMDB id now outranks the name
 - The card menu shows which release the "In library" mark points at, and offers "Not this series?" in the same place
+- [tech] CodeQL no longer reports files from node_modules as first-party (the SARIF is filtered before upload), and CI jobs now state their permissions
 
 ## 0.30.4-beta.1
 

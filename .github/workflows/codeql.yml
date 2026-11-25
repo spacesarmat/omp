@@ -98,6 +98,7 @@ jobs:
         with:
           languages: ${{ matrix.language }}
           build-mode: ${{ matrix.build-mode }}
+          config-file: .github/codeql/codeql-config.yml
 
       - name: Build Android debug
         if: matrix.language == 'java-kotlin'
@@ -107,4 +108,17 @@ jobs:
       - name: Perform CodeQL analysis
         uses: github/codeql-action/analyze@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
         with:
+          category: /language:${{ matrix.language }}
+          # Write the results to disk instead of uploading: paths-ignore does not filter a compiled
+          # language, so the third-party findings are dropped from the SARIF before it goes up.
+          upload: false
+          output: build/codeql-sarif
+
+      - name: Drop findings from third-party code
+        run: node scripts/codeql-sarif-filter.mjs build/codeql-sarif
+
+      - name: Upload CodeQL results
+        uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with:
+          sarif_file: build/codeql-sarif
           category: /language:${{ matrix.language }}
