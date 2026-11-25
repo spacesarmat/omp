@@ -4,6 +4,10 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## Unreleased
+
+- The "In library" mark no longer picks up the second work's English alias from a bundled release: a translation counts only while it follows its own title
+
 ## 0.30.4-beta.1
 
 - The «In the library» mark in Discover no longer appears on cards whose title is merely listed with / inside one bundled release: the release counts for its own first title and for its translation in another script
