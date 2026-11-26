@@ -41,6 +41,15 @@ describe('parseSearchQuery', () => {
     expect(yearFits('Сериал 2019-2023', 2025)).toBe('no');
   });
 
+  it('a number that is the whole name survives the season mark, and a bracket takes no letter with it', () => {
+    // «1983 1 сезон»: the series is named 1983, so the number stays the title and asks no year filter
+    expect(parseSearchQuery('1983 1 сезон')).toMatchObject({ title: '1983', year: 0, season: 1 });
+    expect(parseSearchQuery('1917 2 сезон 3 серия')).toMatchObject({ title: '1917', year: 0, season: 2, episode: 3 });
+    // the character before the bracket stays in the name
+    expect(parseSearchQuery('Локи(2023)')).toMatchObject({ title: 'Локи', year: 2023 });
+    expect(parseSearchQuery('Локи (2023)')).toMatchObject({ title: 'Локи', year: 2023 });
+  });
+
   it('ignores years outside 1900-2099 and resolutions', () => {
     expect(yearInTitle('Фильм 1899')).toBe(0);
     expect(yearInTitle('Фильм 2100')).toBe(0);

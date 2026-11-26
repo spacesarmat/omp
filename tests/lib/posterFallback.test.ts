@@ -82,6 +82,10 @@ describe('search fallbacks: ё and the English title', () => {
     const pair = one.concat([{ title: 'Бегущий по лезвию 2049', original_title: 'Blade Runner 2049', poster_path: '/later.jpg', release_date: '2030-01-01' }]);
     expect(yearPoster(cfg, pair, 2017, 'Бегущий по лезвию 2049')).toBe(img('/2017.jpg'));
     expect(yearPoster(cfg, pair, 2049, 'Бегущий по лезвию 2049')).toBe('');
+    // the single exact name has no picture: a row of another title must not take its place
+    const noImage = [{ title: 'Бегущий по лезвию 2049', original_title: 'Blade Runner 2049', poster_path: '', release_date: '2017-10-04' }];
+    const withoutPicture = noImage.concat([{ title: 'Другой фильм', original_title: '', poster_path: '/other.jpg', release_date: '2017-01-01' }]);
+    expect(yearPoster(cfg, withoutPicture, 2017, 'Бегущий по лезвию 2049')).toBe('');
   });
 
   it('«Супергерл / Supergirl / 2026» resolves to the 2026 film through the ё variant, not the 2015 series', async () => {

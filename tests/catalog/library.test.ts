@@ -18,6 +18,9 @@ describe('library matching', () => {
     const blade = libraryIndex([{ title: 'Бегущий по лезвию 2049 (2017) 1080p' }]);
     expect(inLibrary(blade, { title: 'Бегущий по лезвию 2049', original: 'Blade Runner 2049', year: 2017, kind: 'movie' })).toBe(true);
     expect(inLibrary(blade, { title: 'Бегущий по лезвию', original: 'Blade Runner', year: 1982, kind: 'movie' })).toBe(false);
+    // a run of years is not one year: the name ends before it, so the card still finds the release
+    const run = libraryIndex([{ title: 'Dark Matter 2015-2017 S01 1080p' }]);
+    expect(inLibrary(run, { title: 'Dark Matter', original: 'Dark Matter', year: 2015, kind: 'tv' })).toBe(true);
     // a title that is only a number names no year of its own: it cannot claim a remake of another year
     const alone = libraryIndex([{ title: '1992' }]);
     expect(inLibrary(alone, { title: '1992', original: '1992', year: 2015, kind: 'movie' })).toBe(false);

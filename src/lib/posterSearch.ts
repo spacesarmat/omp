@@ -208,8 +208,13 @@ export function yearPoster(cfg: TmdbConfig, results: unknown, year: number, quer
   if (!rows.length) return '';
   const q = normTitle(query || '');
   if (q) {
-    const named = rows.filter((r) => resultTitles(r).indexOf(q) >= 0);
-    if (named.length === 1) return firstPoster(cfg, named);
+    // counted over every answer, not only the ones with a picture: a remake of another year must not win because
+    // the asked work happens to have no poster
+    const namedAll = (results as unknown[]).filter((r) => r && typeof r === 'object' && resultTitles(r as { [k: string]: unknown }).indexOf(q) >= 0);
+    if (namedAll.length === 1) {
+      const named = rows.filter((r) => resultTitles(r).indexOf(q) >= 0);
+      return named.length === 1 ? firstPoster(cfg, named) : '';
+    }
   }
   if (!year) return firstPoster(cfg, titleFirst(rows, query));
   const same = rows.filter((r) => resultYear(r) === year);

@@ -35,18 +35,20 @@ function maxReleaseYear(): number {
 }
 
 /**
- * The release year and where it stands in the text (`at` is -1 when there is none).
+ * The release year and where the name of the work ends (`at` is -1 when the text names no number at all).
  * A number that is the whole title ("1917") is the name, not a year. A year in parentheses wins
  * ("2049 (2017)" is 2017): a bare number can be part of the name. Otherwise the last standalone year that
  * could be a release at all ("Blade Runner 2049 2017" is 2017, "Бегущий по лезвию 2099" is a name with no year).
- * A year range ("2022-2026") is not one year: see yearFits. A resolution (1080, 2160, 1920x1080) is not a year.
+ * A year range ("2022-2026") is not one year - no year, but the name still ends before it.
+ * A resolution (1080, 2160, 1920x1080) is not a year.
  */
 export function yearOfText(text: string): { year: number; at: number } {
   const s = text || '';
   if (bareYear(s)) return { year: 0, at: -1 };
   const paren = /\(((?:19|20)\d\d)\)/.exec(s);
   if (paren) return { year: asYear(paren[1]), at: paren.index };
-  if (yearRanges(s).length) return { year: 0, at: -1 };
+  const ranges = yearRanges(s);
+  if (ranges.length) return { year: 0, at: ranges[0].at };
   const max = maxReleaseYear();
   let last = { year: 0, at: -1 };
   const re = /(?:^|[^0-9])((?:19|20)\d\d)(?![0-9])/g;
@@ -55,7 +57,8 @@ export function yearOfText(text: string): { year: number; at: number } {
     const y = asYear(m[1]);
     if (!y || y > max) continue;
     const at = m.index + m[0].indexOf(m[1]);
-    if (widthAt(s, at, m[1])) continue;
+    // the line opens with the number: that is the name («1983 1 сезон»), the year would stand after it
+    if (at === 0 || widthAt(s, at, m[1])) continue;
     last = { year: y, at: at };
   }
   return last;
@@ -66,22 +69,22 @@ export function yearInTitle(text: string): number {
 }
 
 /**
- * Where the release year of the text stands, -1 when the text names none. The name of the work ends here:
- * a year-shaped number before it ("Бегущий по лезвию 2049") belongs to the name and must not be cut off.
+ * Where the name of the work ends: at its release year, at the first year of a run («2015-2017»), -1 when the text
+ * names no number. A year-shaped number that stands before it («Бегущий по лезвию 2049») belongs to the name.
  */
 export function yearPosition(text: string): number {
   return yearOfText(text).at;
 }
 
-function yearRanges(text: string): { from: number; to: number }[] {
-  const out: { from: number; to: number }[] = [];
+function yearRanges(text: string): { from: number; to: number; at: number }[] {
+  const out: { from: number; to: number; at: number }[] = [];
   const re = /((?:19|20)\d\d)\s*[\u2013\u2014-]\s*((?:19|20)\d\d)/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(text))) {
     const a = asYear(m[1]);
     const b = asYear(m[2]);
     if (!a || !b) continue;
-    out.push({ from: a < b ? a : b, to: a < b ? b : a });
+    out.push({ from: a < b ? a : b, to: a < b ? b : a, at: m.index });
   }
   return out;
 }
@@ -169,12 +172,13 @@ function stripMarks(text: string, year: number): string {
   }
   // Only the number read as the release year leaves the name. Written as two forms: a year given by the caller
   // needs a built pattern, and it must hold no letters (the i18n guard reads a Cyrillic range in a string as copy).
+  // The character before the number stays: «Локи(2023)» is «Локи», not «Лок».
   const any = !year && yearRanges(s).length > 0;
   if (any) {
     YEAR_MARK.lastIndex = 0;
-    s = s.replace(YEAR_MARK, ' ');
+    s = s.replace(YEAR_MARK, '$1 ');
   } else if (year) {
-    s = s.replace(new RegExp('(^|[^0-9])\\(?(' + year + ')\\)?(?![0-9])', 'g'), ' ');
+    s = s.replace(new RegExp('(^|[^0-9])\\(?(' + year + ')\\)?(?![0-9])', 'g'), '$1 ');
   }
   s = s.replace(/\(\s*\)/g, ' ').replace(/\[\s*\]/g, ' ');
   s = s.replace(/\s+/g, ' ').trim();
@@ -192,8 +196,13 @@ export function parseSearchQuery(raw: string): ParsedQuery {
   const found = readSeasonEpisode(text);
   const bare = bareYear(text);
   // A film whose name is the year ("1917") must still be searched: the number is the title, not a filter.
-  const year = bare ? 0 : yearInTitle(text);
-  const title = bare ? String(bare) : stripMarks(text, year);
+  let year = bare ? 0 : yearInTitle(text);
+  let title = bare ? String(bare) : stripMarks(text, year);
+  // «1983 1 сезон»: with the season mark gone the number is all the name has, so it was never a year
+  if (!title && year) {
+    title = String(year);
+    year = 0;
+  }
   return { raw: text, title: title, year: year, season: found.season, episode: found.episode };
 }
 
