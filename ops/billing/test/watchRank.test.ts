@@ -134,9 +134,15 @@ describe('watch rank score', () => {
     expect(stripOmp(forged)).not.toContain('omp_reason');
     expect(stripOmp(forged)).not.toContain('omp_rank');
     expect(stripOmp(forged)).toContain('infohash');
-    // an omp attribute hidden behind an unbalanced tag: one pass leaves the tail, so the passes repeat
+    // an omp attribute hidden behind an unbalanced tag: a pattern over the whole string eats the wrong span,
+    // a tag-by-tag walk sees the attribute where it actually starts
     const nested = '<item><title>S</title><scr<torznab:attr name="omp_rank" value="9"/>ipt></item>';
     expect(stripOmp(nested)).not.toContain('omp_rank');
+    // the block form belongs to its element entirely: content and closing tag go with the opening one
+    const block = '<item><title>S</title><torznab:attr name="omp_reason" value="up">x</torznab:attr>y</item>';
+    expect(stripOmp(block)).not.toContain('omp_reason');
+    expect(stripOmp(block)).not.toContain('</torznab:attr>');
+    expect(stripOmp(block)).toContain('y');
     // XML allows single quotes and spaces around `=`: those forms are ours to remove too, because the app
     // keeps the first value of a name and an upstream omp_rank would win over the one we append
     const single = "<item><title>S</title><torznab:attr name='omp_rank' value='999999'/></item>";

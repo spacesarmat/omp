@@ -314,20 +314,56 @@ export function parseFeed(xml) {
   return { original: src, items, head, tail, truncated: chunks.length > items.length ? chunks.slice(items.length) : [] };
 }
 
-/** An omp attribute of ours, written any way XML allows: both quote styles and any spaces around the `=`. */
-const OMP_SELF = /<[^>]*\battr\b[^>]*\bname\s*=\s*["']omp_(?:rank|reason|voice)["'][^>]*\/>/gi;
-const OMP_BLOCK = /<[^>]*\battr\b[^>]*\bname\s*=\s*["']omp_(?:rank|reason|voice)["'][^>]*>[\s\S]*?<\/[^>]*attr>/gi;
+const OMP_ATTRS = ['omp_rank', 'omp_reason', 'omp_voice'];
+
+/** Whether this one tag is an attribute of ours, however the name is quoted and whatever sits before it. */
+function isOmpAttr(tag) {
+  const m = /(?:^|\s)name\s*=\s*(?:"([^"]*)"|'([^']*)')/i.exec(tag);
+  if (!m) return false;
+  return OMP_ATTRS.indexOf(String(m[1] !== undefined ? m[1] : m[2] || '').toLowerCase()) >= 0;
+}
+
+/** Where the next closing tag ends (past its `>`), or -1 when there is none. */
+function closingTagEnd(text, from) {
+  const lt = text.indexOf('</', from);
+  if (lt < 0) return -1;
+  const gt = text.indexOf('>', lt);
+  return gt < 0 ? -1 : gt + 1;
+}
 
 export function stripOmp(item) {
-  // One pass is not enough: a tag that never closes, or an omp attribute behind a quote the pattern did not
-  // expect, survives a single replace and comes back into the feed we are about to sign. The passes repeat
-  // until the string stops changing, so what is left carries none of our omp attributes. They must all go:
-  // the app keeps the first value of each name, so an upstream omp_rank would win over the one we append.
-  let out = item;
-  for (let i = 0; i < 8; i++) {
-    const next = out.replace(OMP_SELF, '').replace(OMP_BLOCK, '');
-    if (next === out) break;
-    out = next;
+  // Tags are walked one at a time instead of being erased by a pattern over the whole string. A pattern leaves
+  // whatever it did not expect - an attribute in single quotes, a tag that never closes, an omp name behind a
+  // broken neighbour - and one leftover upstream omp_rank wins over the one we append, because the app keeps
+  // the first value of each name. Here every `<` is looked at on its own, so nothing can hide behind the
+  // previous match, and the block form loses its content and its closing tag together with the opening one.
+  let out = '';
+  let at = 0;
+  while (at < item.length) {
+    const lt = item.indexOf('<', at);
+    if (lt < 0) {
+      out += item.slice(at);
+      break;
+    }
+    out += item.slice(at, lt);
+    const gt = item.indexOf('>', lt);
+    if (gt < 0) {
+      // nothing closes this tag: the rest of the string is text as far as we are concerned
+      out += item.slice(lt);
+      break;
+    }
+    const tag = item.slice(lt, gt + 1);
+    if (!isOmpAttr(tag)) {
+      out += tag;
+      at = gt + 1;
+      continue;
+    }
+    if (tag.charAt(tag.length - 2) === '/') {
+      at = gt + 1;
+      continue;
+    }
+    const end = closingTagEnd(item, gt + 1);
+    at = end < 0 ? item.length : end;
   }
   return out;
 }
