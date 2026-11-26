@@ -4,6 +4,7 @@ import { formatDuration } from './format';
 import { t, fmtDuration } from '../i18n';
 import { deriveName, displayTitle, fileSeasons, isPlaceholderTitle, torrentFiles, yearOf } from './torrentName';
 import { parseEpisodeRange, SEASON_WORDS } from '../monitor/episodes';
+import { yearPosition } from '../sources/queryParse';
 import { STORE_BUILD } from '../storeMode';
 
 export type LibraryView = 'one' | 'large' | 'small' | 'list' | 'compact';
@@ -94,14 +95,18 @@ export function posterColor(hash: string): string {
   return POSTER_COLORS[h % POSTER_COLORS.length];
 }
 
-// first of: bracket, year, season/episode, resolution
-const CUT = /(\[|\(|\b(?:19[5-9][0-9]|20[0-4][0-9])\b|\bS[0-9]{1,2}(?:E[0-9]{1,3})?\b|\b(?:2160|1080|720|480)[pi]\b)/i;
+// first of: bracket, season/episode, resolution. A year-shaped number is not here: «Бегущий по лезвию 2049» is
+// named with its number, and where the year of the release begins is said by yearPosition
+const CUT = /(\[|\(|\bS[0-9]{1,2}(?:E[0-9]{1,3})?\b|\b(?:2160|1080|720|480)[pi]\b)/i;
 
 export function shortTitle(title: string): string {
   const first = (title || '').split(' / ')[0].replace(/[._]+/g, ' ').trim();
   if (!first) return '?';
   const m = CUT.exec(first);
-  const cut = (m ? first.slice(0, m.index) : first).replace(/[\s\-–:,]+$/, '').trim();
+  let end = m ? m.index : first.length;
+  const year = yearPosition(first);
+  if (year >= 0 && year < end) end = year;
+  const cut = first.slice(0, end).replace(/[\s\-–:,]+$/, '').trim();
   return cut || first;
 }
 

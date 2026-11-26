@@ -157,7 +157,8 @@ describe('a release the person already matched to another show', () => {
 });
 
 describe('ownedChecker on a big library', () => {
-  it('agrees with libraryTargetOf for every credit (300 torrents x 120 credits)', () => {
+  // 36 000 lookups: alone it takes under two seconds, in a full suite run the workers share the machine
+  it('agrees with libraryTargetOf for every credit (300 torrents x 120 credits)', { timeout: 20000 }, () => {
     const big: Torrent[] = [];
     for (let i = 0; i < 300; i++) {
       big.push({

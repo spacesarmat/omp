@@ -1,11 +1,13 @@
 import type { TmdbConfig } from '../api/types';
 import { posterImageSize } from '../catalog/tmdb';
 import { isTmdbV4Token } from '../catalog/tmdbToken';
+import { yearInTitle, yearPosition } from '../sources/queryParse';
 
 const MAX_WORDS = 4;
 const MAX_LEN = 50;
-// the title proper ends where the year, season or release details begin
-const TAIL = /\b(?:19\d\d|20\d\d|s\d{1,2}(?:e\d{1,3})?|\d{3,4}p|4k|web-?dl|web-?rip|bd-?rip|hd-?rip|dvd-?rip|blu-?ray|hdtv|x26[45]|h\.?26[45]|hevc)\b/i;
+// the release details that end a name: a season mark, a resolution, a source or a codec. A year is not here:
+// «Бегущий по лезвию 2049» keeps its number in the name, and the year of the release is found by yearPosition
+const TAIL = /\b(?:s\d{1,2}(?:e\d{1,3})?|\d{3,4}p|4k|web-?dl|web-?rip|bd-?rip|hd-?rip|dvd-?rip|blu-?ray|hdtv|x26[45]|h\.?26[45]|hevc)\b/i;
 
 /** Short query for the poster search from a torrent title, as the TorrServer web page does. */
 export function posterQuery(title: string): string {
@@ -18,7 +20,7 @@ export function posterQuery(title: string): string {
   return q;
 }
 
-/** The title proper of a torrent title: before « [», « (», « / », « | », the year, season or release details. */
+/** The title proper of a torrent title: before « [», « (», « / », « | », the release year or its details. */
 export function titleCore(title: string): string {
   let s = (title || '').trim();
   const seps = [' [', ' (', ' / ', ' | '];
@@ -28,8 +30,13 @@ export function titleCore(title: string): string {
   }
   // release names use dots or underscores instead of spaces
   if (s.indexOf(' ') < 0) s = s.replace(/[._]+/g, ' ');
+  // whichever comes first: a detail mark or the year the release was named for
+  let cut = -1;
   const tail = TAIL.exec(s);
-  if (tail && tail.index > 0) s = s.slice(0, tail.index);
+  if (tail && tail.index > 0) cut = tail.index;
+  const year = yearPosition(s);
+  if (year > 0 && (cut < 0 || year < cut)) cut = year;
+  if (cut > 0) s = s.slice(0, cut);
   return s.replace(/\s*(?:сезон|season)\s*$/i, '').replace(/[\s.,:;-]+$/, '').replace(/\s+/g, ' ').trim();
 }
 
@@ -82,11 +89,11 @@ export function latinTitle(sources: string[]): string {
   return '';
 }
 
-/** The first year (19xx, 20xx) found in the sources, 0 when none. */
+/** The release year of the first source that names one, 0 when none does. */
 export function sourcesYear(sources: string[]): number {
   for (let i = 0; i < sources.length; i++) {
-    const m = /(?:^|[^0-9])((?:19|20)\d\d)(?![0-9])/.exec(sources[i] || '');
-    if (m) return +m[1];
+    const y = yearInTitle(sources[i] || '');
+    if (y) return y;
   }
   return 0;
 }
@@ -187,6 +194,10 @@ function titleFirst(rows: { [k: string]: unknown }[], query: string | undefined)
  * The poster of the TMDB result that matches `year`: the same year first, then a year off by one (a release dated a
  * year later); with no year, the first result with a poster. Within those, a result titled like `query` (ё read as е)
  * comes first. '' when none matches: the caller tries the next search.
+ *
+ * One exception: when exactly one result carries the asked name, that is the work, whatever the release line said
+ * about its year. «Бегущий по лезвию 2049» is dated 2017 by TMDB, and a release line whose year we misread must not
+ * send us to another film. Two results of one name (a remake) leave the decision to the year, as before.
  */
 export function yearPoster(cfg: TmdbConfig, results: unknown, year: number, query?: string): string {
   if (!Array.isArray(results)) return '';
@@ -195,6 +206,16 @@ export function yearPoster(cfg: TmdbConfig, results: unknown, year: number, quer
     return typeof p === 'string' && !!p;
   }) as { [k: string]: unknown }[];
   if (!rows.length) return '';
+  const q = normTitle(query || '');
+  if (q) {
+    // counted over every answer, not only the ones with a picture: a remake of another year must not win because
+    // the asked work happens to have no poster
+    const namedAll = (results as unknown[]).filter((r) => r && typeof r === 'object' && resultTitles(r as { [k: string]: unknown }).indexOf(q) >= 0);
+    if (namedAll.length === 1) {
+      const named = rows.filter((r) => resultTitles(r).indexOf(q) >= 0);
+      return named.length === 1 ? firstPoster(cfg, named) : '';
+    }
+  }
   if (!year) return firstPoster(cfg, titleFirst(rows, query));
   const same = rows.filter((r) => resultYear(r) === year);
   if (same.length) return firstPoster(cfg, titleFirst(same, query));

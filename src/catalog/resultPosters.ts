@@ -136,11 +136,11 @@ function pump(): void {
 
 /**
  * Asks for the poster of a release title; `done` gets the URL ('' when none). Returns a cancel function: a lookup
- * nobody waits for any more leaves the queue before it starts.
+ * nobody waits for any more leaves the queue before it starts. `metaYear` is the year the indexer reported for the
+ * row; it stands in for the year of the title, which a name like «1917 (2019)» reads wrong.
  */
-function requestOne(query: string, title: string, series: boolean, done: (url: string) => void): () => void {
-  const y = yearOf((title || '').replace(/[._]+/g, ' '));
-  const key = query.toLowerCase().replace(/\s+/g, ' ').trim() + '\u0000' + (y || '0') + (series ? '\u0000tv' : '');
+function requestOne(query: string, title: string, series: boolean, year: number, done: (url: string) => void): () => void {
+  const key = query.toLowerCase().replace(/\s+/g, ' ').trim() + '\u0000' + (year || '0') + (series ? '\u0000tv' : '');
   if (!key) {
     done('');
     return () => undefined;
@@ -151,8 +151,7 @@ function requestOne(query: string, title: string, series: boolean, done: (url: s
     return () => undefined;
   }
   if (!e) {
-    const y = yearOf((title || '').replace(/[._]+/g, ' '));
-    e = { key, query, year: y ? +y : 0, series, state: 'queued', url: '', waiters: [] };
+    e = { key, query, year, series, state: 'queued', url: '', waiters: [] };
     entries[key] = e;
     queue.push(e);
   }
@@ -181,9 +180,10 @@ function requestOne(query: string, title: string, series: boolean, done: (url: s
  * Asks for the poster of a release title; `done` gets the URL ('' when none). A series title tries the Latin
  * name when the local one has no TV poster. Returns a cancel function.
  */
-export function requestPoster(title: string, done: (url: string) => void): () => void {
+export function requestPoster(title: string, done: (url: string) => void, metaYear?: number): () => void {
   const queries = posterQueries(title);
   const series = releaseIsSeries(title);
+  const year = metaYear || titleYear(title);
   if (!queries.length) {
     done('');
     return () => undefined;
@@ -196,7 +196,7 @@ export function requestPoster(title: string, done: (url: string) => void): () =>
       done('');
       return;
     }
-    cancelCurrent = requestOne(queries[i], title, series, (url) => {
+    cancelCurrent = requestOne(queries[i], title, series, year, (url) => {
       if (dead) return;
       if (url || i + 1 >= queries.length) done(url);
       else step(i + 1);
@@ -221,6 +221,12 @@ export function setPosterLookup(fn: PosterLookup | null): void {
   generation++;
 }
 
+/** The year a release line names for itself (dots as separators: «1917.2019.1080p»). */
+function titleYear(title: string): number {
+  const y = yearOf((title || '').replace(/[._]+/g, ' '));
+  return y ? +y : 0;
+}
+
 /** TMDB show a release resolved to. `poster` is '' when the page had the show but no image. */
 export interface ShowHit {
   id: number;
@@ -241,6 +247,7 @@ let showLookup: ShowLookup = defaultShowLookup;
 interface ShowEntry {
   key: string;
   title: string;
+  year: number;
   state: 'queued' | 'running' | 'done';
   hit: ShowHit | null;
   waiters: ((hit: ShowHit | null) => void)[];
@@ -254,10 +261,9 @@ function posterOf(hit: CatalogTitle | null): string {
   return hit && /^https?:\/\//i.test(hit.poster || '') ? hit.poster : '';
 }
 
-function resolveShow(title: string): Promise<ShowHit | null> {
+function resolveShow(title: string, metaYear: number): Promise<ShowHit | null> {
   const series = releaseIsSeries(title);
-  const y = yearOf((title || '').replace(/[._]+/g, ' '));
-  const year = y ? +y : 0;
+  const year = metaYear || titleYear(title);
   const queries = posterQueries(title);
   const step = (i: number, fallback: ShowHit | null): Promise<ShowHit | null> => {
     if (i >= queries.length) return Promise.resolve(fallback);
@@ -280,7 +286,7 @@ function pumpShows(): void {
     const e = showQueue.shift()!;
     e.state = 'running';
     showRunning++;
-    resolveShow(e.title).then((hit) => {
+    resolveShow(e.title, e.year).then((hit) => {
       showRunning--;
       if (showEntries[e.key] !== e) {
         pumpShows();
@@ -297,10 +303,10 @@ function pumpShows(): void {
 }
 
 /** The show (id, title, poster) for a release title. The same title shares one lookup. */
-export function requestShow(title: string, done: (hit: ShowHit | null) => void): () => void {
+export function requestShow(title: string, done: (hit: ShowHit | null) => void, metaYear?: number): () => void {
   const queries = posterQueries(title);
-  const y = yearOf((title || '').replace(/[._]+/g, ' '));
-  const key = (queries.join('\n') + '\u0000' + (y || '0') + (releaseIsSeries(title) ? '\u0000tv' : '')).toLowerCase();
+  const year = metaYear || titleYear(title);
+  const key = (queries.join('\n') + '\u0000' + (year || '0') + (releaseIsSeries(title) ? '\u0000tv' : '')).toLowerCase();
   if (!queries.length) {
     done(null);
     return () => undefined;
@@ -311,7 +317,7 @@ export function requestShow(title: string, done: (hit: ShowHit | null) => void):
     return () => undefined;
   }
   if (!e) {
-    e = { key, title, state: 'queued', hit: null, waiters: [] };
+    e = { key, title, year, state: 'queued', hit: null, waiters: [] };
     showEntries[key] = e;
     showQueue.push(e);
     pumpShows();
