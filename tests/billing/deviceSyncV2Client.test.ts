@@ -90,7 +90,8 @@ describe('HTTP sync V2', () => {
     let allowed = true;
     vi.stubGlobal('fetch', vi.fn(() => new Promise((resolve) => { release = resolve; })));
     const running = runV2('acc-1', 0, () => allowed);
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    // runV2 reaches fetch only after its storage reads: a fixed 20 ms wait lost on a loaded runner
+    for (let i = 0; i < 100 && !release; i++) await new Promise((resolve) => setTimeout(resolve, 10));
     allowed = false;
     release(answer({ ok: true, records: [], nextRevision: 1, ack: [{ recordId: row.id, mutationId: 'wrong', revision: 1 }] }));
     expect(await running).toBe('error');
