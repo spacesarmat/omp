@@ -28,6 +28,8 @@ import { tvGlyphs } from '../../ui/tvText';
 import { scrollToShow } from '../../ui/focus';
 import { posterInitials } from './Poster';
 import { DISCOVER_TILE_PX, focusedRow, keepBand, keepRows, keepsImage, rowOf } from '../../lib/gridWindow';
+import { prefetchImages } from '../../lib/imageCache';
+import { CachedImg } from '../../ui/CachedImg';
 import { withAds } from '../../ads/ads';
 import { TV_PER_SCREEN, useTvAds } from '../../ads/useTvAds';
 import { TvAdCell } from './TvAdCell';
@@ -403,6 +405,19 @@ export function DiscoverGrid(p: DiscoverGridProps) {
       if (gridRows[i].item !== undefined) n++;
     }
   }
+  /** Posters of the two rows below the focused one, asked while the remote is still moving: rows the window has
+   * not rendered yet come from the cache instead of the network when the person gets there. */
+  const prefetchAhead = (visual: number) => {
+    if (!gridRows) return;
+    const row = rowOf(visual, DISCOVER_COLS);
+    const urls: string[] = [];
+    for (let i = visual + 1; i < gridRows.length && urls.length < DISCOVER_COLS * 2; i++) {
+      if (rowOf(i, DISCOVER_COLS) > row + 2) break;
+      const it = gridRows[i].item;
+      if (it && it.poster) urls.push(posterUrlFor(it.poster, DISCOVER_TILE_PX));
+    }
+    prefetchImages(urls);
+  };
   // another list (kind, search, the want list, a new page): the window follows the focused poster where it is now
   const shownKeys = gridRows ? gridRows.map((e) => (e.item === undefined ? 'ad-disc-' + e.ad : tileKey(e.item))) : [];
   const shownId = shownKeys.join('|');
@@ -521,11 +536,12 @@ export function DiscoverGrid(p: DiscoverGridProps) {
                 if (p.onFocused) p.onFocused();
                 setRow(keepBand(rowRef.current, rowOf(visual, DISCOVER_COLS), keep));
                 focused.current = x;
+                prefetchAhead(visual);
                 if (!isWant && !search && shown && itemBefore[visual] >= lastRowStart(shown.length)) loadMore();
               }}
             >
               <div class="disc-poster">
-                {x.poster ? (keepsImage(visual, focusRow, DISCOVER_COLS, keep) ? <img src={posterUrlFor(x.poster, DISCOVER_TILE_PX)} alt="" /> : null) : <div class={'disc-ph disc-ph-' + (x.id % 4)}>{tvGlyphs(posterInitials(x.title))}</div>}
+                {x.poster ? (keepsImage(visual, focusRow, DISCOVER_COLS, keep) ? <CachedImg src={posterUrlFor(x.poster, DISCOVER_TILE_PX)} w={DISCOVER_TILE_PX} /> : null) : <div class={'disc-ph disc-ph-' + (x.id % 4)}>{tvGlyphs(posterInitials(x.title))}</div>}
                 {x.rating > 0 && <span class="disc-rating">{ratingText(x.rating)}</span>}
                 {wantedFn(x.kind, x.id) ? (
                   <span class="disc-mark disc-mark-want">{t('tv.discover.wantMark')}</span>

@@ -4,6 +4,7 @@ import { useRef } from 'preact/hooks';
 import { t } from '../i18n';
 import { CAST_LIMIT, type Person } from '../catalog/tmdb';
 import { FocusGroup, Focusable } from './components';
+import { CachedImg } from './CachedImg';
 import { arrowUpToAbove, scrollToShow } from './focus';
 import { navigate } from './nav';
 import { tvGlyphs } from './tvText';
@@ -47,7 +48,7 @@ export function CastRow({ cast, groupKey, focusPrefix }: { cast: Person[]; group
               onArrow={arrowUpToAbove(focusPrefix + i)}
               onFocused={() => showInRow(rowRef.current, focusPrefix + i)}
             >
-              <div class="tc-photo">{p.photo ? <img src={p.photo} alt="" /> : <span class="tc-initials">{tvGlyphs(initials(p.name))}</span>}</div>
+              <div class="tc-photo">{p.photo ? <CachedImg src={p.photo} /> : <span class="tc-initials">{tvGlyphs(initials(p.name))}</span>}</div>
               <div class="tc-person-name">{tvGlyphs(p.name)}</div>
               {roleOf(p) ? <div class="tc-person-role">{tvGlyphs(roleOf(p))}</div> : null}
             </Focusable>

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { useTorrentCast } from '../lib/useTorrentCast';
 import { CastRow } from '../ui/CastRow';
+import { CachedImg } from '../ui/CachedImg';
 import { client } from '../store/servers';
 import { torrents } from '../store/library';
 import { getLocalProgress, progressVersion, serverViewed, refreshViewed, isWatched, resumePosition, progressRatio, clearProgress } from '../store/progress';
@@ -374,7 +375,7 @@ export function TorrentScreen({ hash }: { hash: string }) {
   return (
     <FocusGroup focusKey="TORRENT" className="screen torrent">
       <div class="torrent-head">
-        {tor && tor.poster ? <img src={sharpPosterUrl(tor.poster)} alt="" /> : null}
+        {tor && tor.poster ? <CachedImg src={sharpPosterUrl(tor.poster)} /> : null}
         <div class="info">
           {(() => {
             const n = tor ? headerNames(tor, list) : { name: hash, raw: '' };

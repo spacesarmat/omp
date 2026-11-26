@@ -4,6 +4,11 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## Unreleased
+
+- [tv] Posters stay in the app's memory: scrolling back to a row no longer downloads it again, and the rows below the focus load ahead of time
+- [phone] Posters in Discover and in a filmography are no longer re-downloaded when the person returns to a row they already saw
+
 ## 0.30.4-beta.2
 
 - The "In library" mark no longer picks up the second work's English alias from a bundled release: a translation counts only while it follows its own title

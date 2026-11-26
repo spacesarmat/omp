@@ -5,6 +5,7 @@ import { posterColor, shortTitle } from '../../lib/libraryView';
 import { posterUrlFor } from '../../catalog/tmdb';
 import { displayTitle } from '../../lib/torrentName';
 import { tvGlyphs } from '../../ui/tvText';
+import { CachedImg } from '../../ui/CachedImg';
 
 /** Two letters for a posterless tile. The name itself is the line under the poster, not painted on it again. */
 export function posterInitials(title: string): string {
@@ -27,7 +28,7 @@ export function Poster(p: { t: Torrent; showTitle?: boolean; unload?: boolean; b
   const img = !!poster && !broken;
   return (
     <div class="art" style={{ background: 'linear-gradient(160deg, ' + posterColor(t.hash) + ', #14161c)' }}>
-      {img && !p.unload && <img src={posterUrlFor(poster, p.box || 230)} alt="" onError={() => setBroken(true)} />}
+      {img && !p.unload && <CachedImg src={posterUrlFor(poster, p.box || 230)} w={p.box || 230} onError={() => setBroken(true)} />}
       {!img && <div class="art-initials">{tvGlyphs(posterInitials(displayTitle(t)))}</div>}
       {p.children}
     </div>
