@@ -133,14 +133,14 @@ export function loadImage(url: string): Promise<string> {
   misses++;
   const job = fetch(url)
     .then((res) => {
-      if (!res.ok) throw new HttpStatus('image ' + res.status);
+      if (!res.ok) throw httpAnswer(res.status);
       return res.blob();
     })
     .then((blob) => remember(url, blob))
     .catch((err: unknown) => {
       // show the URL the way it was shown before the cache existed
       falls++;
-      if (err instanceof HttpStatus) {
+      if (isHttpAnswer(err)) {
         // this poster is missing or broken; the host itself is still fine
         return refuse(url);
       }
@@ -162,8 +162,19 @@ export function loadImage(url: string): Promise<string> {
   );
 }
 
-/** A poster the server answered for with an error of its own: the host still allows reads. */
-class HttpStatus extends Error {}
+/**
+ * Marks an answer the server gave for itself (404, 500). A plain object, not an Error subclass: the shared sources
+ * of this app run on webOS 3, where extending Error does not work (see src/sources/types.ts).
+ */
+const HTTP_ANSWER = 'image-status';
+
+function httpAnswer(status: number): { code: string; status: number } {
+  return { code: HTTP_ANSWER, status: status };
+}
+
+function isHttpAnswer(err: unknown): boolean {
+  return !!err && typeof err === 'object' && (err as { code?: unknown }).code === HTTP_ANSWER;
+}
 
 /** Asks the next posters in the shared background queue; every caller adds to the same two workers. */
 function pump(): void {
