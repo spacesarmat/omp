@@ -21,6 +21,7 @@ import { addFindings, findingsOf } from '../../src/monitor/subs';
 import { acceptConfirm, confirmText, declineConfirm, mountConfirmHost, unmountConfirmHost } from './confirmHost';
 import { rememberSeasonTotals, resetSeasonTotals } from '../../src/lib/episodesOutOf';
 import { seriesKey } from '../../src/lib/seriesGroups';
+import { resetTorrentWrites } from '../../src/lib/dataQueue';
 
 const EPS = ['Show.S02E01.mkv', 'Show.S02E02.mkv', 'Show.S02E03.mkv', 'Show.S02E04.mkv'];
 const tor: T = {
@@ -71,6 +72,8 @@ beforeEach(() => {
   torrents.value = [tor];
   serverViewed.value = [];
   toast.value = '';
+  // a write queued by an earlier test for the same hash would hold the chain and the rename would never start
+  resetTorrentWrites();
   launch.mockReset().mockResolvedValue(undefined);
   open.mockReset().mockResolvedValue(undefined);
   copy.mockReset().mockResolvedValue(undefined);
