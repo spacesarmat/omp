@@ -7,6 +7,23 @@ describe('library matching', () => {
     expect(libraryKey('Abc', 0)).toBe('abc|0');
   });
 
+  it('a work named by a number is matched by its real year', () => {
+    // the first number is the name: «1917» (2019), not a release of 1917
+    const film = libraryIndex([{ title: '1917 (2019) 2160p UHD BDRemux' }]);
+    expect(inLibrary(film, { title: '1917', original: '1917', year: 2019, kind: 'movie' })).toBe(true);
+    expect(inLibrary(film, { title: '1917', original: '1917', year: 1917, kind: 'movie' })).toBe(false);
+    const dots = libraryIndex([{ title: '1983 2018 WEB-DL 1080p' }]);
+    expect(inLibrary(dots, { title: '1983', original: '1983', year: 2018, kind: 'tv' })).toBe(true);
+    // a number that no release could be dated for stays inside the name
+    const blade = libraryIndex([{ title: 'Бегущий по лезвию 2049 (2017) 1080p' }]);
+    expect(inLibrary(blade, { title: 'Бегущий по лезвию 2049', original: 'Blade Runner 2049', year: 2017, kind: 'movie' })).toBe(true);
+    expect(inLibrary(blade, { title: 'Бегущий по лезвию', original: 'Blade Runner', year: 1982, kind: 'movie' })).toBe(false);
+    // a title that is only a number names no year of its own: it cannot claim a remake of another year
+    const alone = libraryIndex([{ title: '1992' }]);
+    expect(inLibrary(alone, { title: '1992', original: '1992', year: 2015, kind: 'movie' })).toBe(false);
+    expect(inLibrary(alone, { title: '1992', original: '1992', year: 2015, kind: 'tv' })).toBe(true);
+  });
+
   it('matches a torrent with the year in the title', () => {
     const idx = libraryIndex([{ title: 'Северный ветер (2026) WEB-DL 1080p' }]);
     expect(inLibrary(idx, { title: 'Северный ветер', original: 'North Wind', year: 2026 })).toBe(true);

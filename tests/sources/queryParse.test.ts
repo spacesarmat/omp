@@ -1,17 +1,44 @@
 import { describe, expect, it } from 'vitest';
-import { dropSubtitle, parseSearchQuery, yearInTitle } from '../../src/sources/queryParse';
+import { dropSubtitle, parseSearchQuery, yearFits, yearInTitle, yearPosition } from '../../src/sources/queryParse';
 import { normalizeTitle } from '../../src/sources/merge';
 
 describe('parseSearchQuery', () => {
   it('reads a year and searches the title without it', () => {
     expect(parseSearchQuery('Локи 2023')).toEqual({ raw: 'Локи 2023', title: 'Локи', year: 2023, season: 0, episode: 0 });
     expect(parseSearchQuery('Локи (2021)')).toMatchObject({ title: 'Локи', year: 2021 });
-    expect(parseSearchQuery('Blade Runner 2049')).toMatchObject({ title: 'Blade Runner', year: 2049 });
+    // 2049 cannot be a release year yet, so it is part of the name: searching «Blade Runner» by 2049 finds nothing
+    expect(parseSearchQuery('Blade Runner 2049')).toMatchObject({ title: 'Blade Runner 2049', year: 0 });
     expect(yearInTitle('Blade Runner 2049 (2017)')).toBe(2017);
     expect(yearInTitle('Локи 2021')).toBe(2021);
     expect(parseSearchQuery('1917')).toMatchObject({ title: '1917', year: 0 });
     expect(parseSearchQuery('(1917)')).toMatchObject({ title: '1917', year: 0 });
     expect(parseSearchQuery('The Matrix')).toMatchObject({ title: 'The Matrix', year: 0, season: 0, episode: 0 });
+  });
+
+  it('a film or a series named by a number keeps its name and takes the year of the brackets', () => {
+    expect(yearInTitle('1917 (2019) 2160p UHD BDRemux')).toBe(2019);
+    expect(yearInTitle('1983 (2018) 1 сезон 1-8 серия')).toBe(2018);
+    expect(yearInTitle('1992 (2015) фильм')).toBe(2015);
+    expect(yearInTitle('2001: Космическая одиссея (1968) 2160p')).toBe(1968);
+    // a dot instead of a space: the first number is the name, the second the year
+    expect(yearInTitle('1917.2019.1080p.BluRay')).toBe(2019);
+    expect(yearInTitle('1983 2018 WEB-DL 1080p')).toBe(2018);
+    // no year of its own: a work named by a number, dated next year, is searched by its name
+    expect(yearInTitle('Бегущий по лезвию 2099')).toBe(0);
+    // where the name ends: at the bracket, not inside it
+    expect(yearPosition('1917 (2019) 2160p')).toBe(5);
+    expect(yearPosition('1917.2019.1080p')).toBe(5);
+    expect(yearPosition('1917')).toBe(-1);
+  });
+
+  it('yearFits counts a release that names the asked number, and no year at all for a bare one', () => {
+    expect(yearFits('1917 (2019) 1080p', 2019)).toBe('yes');
+    expect(yearFits('Северный ветер (2019)', 2026)).toBe('no');
+    expect(yearFits('Локи', 2023)).toBe('none');
+    // the number is the name: such a release names no year and fits any asked one
+    expect(yearFits('1917', 2019)).toBe('none');
+    expect(yearFits('Сериал 2019-2023', 2021)).toBe('yes');
+    expect(yearFits('Сериал 2019-2023', 2025)).toBe('no');
   });
 
   it('ignores years outside 1900-2099 and resolutions', () => {

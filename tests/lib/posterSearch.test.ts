@@ -15,6 +15,17 @@ describe('posterQuery', () => {
     expect(posterQuery('Oppenheimer.2023.1080p.BluRay')).toBe('Oppenheimer');
   });
 
+  it('a work named by a number keeps that number in the query', () => {
+    expect(posterQuery('Бегущий по лезвию 2049 (2017) 2160p')).toBe('Бегущий по лезвию 2049');
+    expect(posterQuery('Blade Runner 2049 2017 1080p')).toBe('Blade Runner 2049');
+    expect(posterQuery('1917 (2019) 2160p UHD BDRemux')).toBe('1917');
+    expect(posterQuery('1917.2019.1080p.BluRay')).toBe('1917');
+    expect(posterQuery('2001: Космическая одиссея 1968 BDRip')).toBe('2001: Космическая одиссея');
+    expect(posterQuery('1983 2018 WEB-DL 1080p')).toBe('1983');
+    // a year-shaped number and a detail mark: the mark still ends the name
+    expect(posterQuery('Теория всего 2014 S01 1080p')).toBe('Теория всего');
+  });
+
   it('limits the query to four words', () => {
     expect(posterQuery('Один два три четыре пять шесть')).toBe('Один два три четыре');
   });

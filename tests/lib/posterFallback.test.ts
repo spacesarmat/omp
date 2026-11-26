@@ -75,6 +75,15 @@ describe('search fallbacks: ё and the English title', () => {
     expect(yearPoster(cfg, rows, 2026)).toBe(img('/other.jpg'));
   });
 
+  it('one TMDB result of the exact name is the work, whatever the release line said about its year', () => {
+    const one = [{ title: 'Бегущий по лезвию 2049', original_title: 'Blade Runner 2049', poster_path: '/2017.jpg', release_date: '2017-10-04' }];
+    expect(yearPoster(cfg, one, 2049, 'Бегущий по лезвию 2049')).toBe(img('/2017.jpg'));
+    // two results of one name (a remake): the year still decides
+    const pair = one.concat([{ title: 'Бегущий по лезвию 2049', original_title: 'Blade Runner 2049', poster_path: '/later.jpg', release_date: '2030-01-01' }]);
+    expect(yearPoster(cfg, pair, 2017, 'Бегущий по лезвию 2049')).toBe(img('/2017.jpg'));
+    expect(yearPoster(cfg, pair, 2049, 'Бегущий по лезвию 2049')).toBe('');
+  });
+
   it('«Супергерл / Supergirl / 2026» resolves to the 2026 film through the ё variant, not the 2015 series', async () => {
     const f = tmdb({ yo: true });
     expect(await findPoster(cfg, f, 'Супергерл / Supergirl / 2026', 'movie')).toBe(img('/2026.jpg'));

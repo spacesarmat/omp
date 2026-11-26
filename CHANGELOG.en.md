@@ -4,6 +4,11 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## Unreleased
+
+- The "In library" mark, the poster search and the year line no longer mix a title up with a year: a release of "1917 (2019)" is dated 2019, and "Blade Runner 2049" is searched by its whole name
+- [tech] One reading of a release year instead of five different ones; when the indexer reports a year of its own, it is used
+
 ## 0.30.4-beta.2
 
 - The "In library" mark no longer picks up the second work's English alias from a bundled release: a translation counts only while it follows its own title
