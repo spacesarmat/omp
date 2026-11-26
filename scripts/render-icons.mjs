@@ -13,6 +13,15 @@ for (const [file, size] of [['webos/icon.png', 80], ['webos/largeIcon.png', 130]
   console.log('wrote', file, size + 'x' + size, 'transparent-before-flatten', flat.transparent);
 }
 
+// The beta band art is drawn by hand and keeps its rounded corners transparent: LG would paint its own light card
+// behind them at launch. The same brand tile as above, no alpha, so the packaged icon matches the release one.
+for (const [file, size] of [['webos/beta/icon.png', 80], ['webos/beta/largeIcon.png', 130]]) {
+  if (!existsSync(file)) continue;
+  const flat = flattenToOpaquePng(Buffer.from(readFileSync(file)), ICON_BG);
+  writeFileSync(file, flat.png);
+  console.log('flattened', file, size + 'x' + size, 'transparent-before-flatten', flat.transparent);
+}
+
 // Android launcher icons (Capacitor project in android/)
 const res = 'android/app/src/main/res';
 if (existsSync(res)) {
