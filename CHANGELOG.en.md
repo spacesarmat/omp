@@ -15,6 +15,7 @@ The English translation covers the latest versions only; the full history (in Ru
 - [phone] Settings are even now: one gap between sections instead of double, the name of a row follows its icon, and the second line of a row is no longer centered
 - [phone] "OMP account" is rebuilt: sections are stacks of rows like settings instead of a card inside a card, the subscription time and its price share one row, buttons and links sit at the edges of the block, and the promo code and its button share a row
 - [phone] In the help, opening a question keeps its section heading on screen: a short section comes to the top whole, a long one moves only as far as the answer needs
+- [phone] Covers are kept on the device between runs: grids do not download them again after a restart, and settings now show how much they weigh with a «Clear» button
 - [tech] One reading of a release year instead of five different ones; when the indexer reports a year of its own, it is used
 - [tech] A stalled poster request frees the prefetch worker after 15 s: two silent addresses no longer stop the rows ahead from loading
 - [tech] The TV shell scale test waits for the scale to be applied instead of sleeping 30 ms: on a loaded runner it failed without anything being broken

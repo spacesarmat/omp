@@ -1009,6 +1009,35 @@ describe('Settings: the TV row', () => {
 });
 
 
+describe('Poster storage', () => {
+  it('shows what the device keeps and offers to clear it only when there is something', async () => {
+    const el = mount();
+    const row = el.querySelector('[data-row="poster-storage"]')!;
+    expect(row.textContent).toContain('Обложки на устройстве');
+    // jsdom has no IndexedDB: the honest answer is that nothing is kept, and the button has nothing to do
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 30));
+    });
+    expect(row.textContent).toContain('Пока нечего хранить');
+    expect((row.querySelector('button') as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('is found by the settings search', async () => {
+    const el = mount();
+    const type = async (text: string) => {
+      await act(async () => {
+        const i = el.querySelector('[data-settings-search]') as HTMLInputElement;
+        i.value = text;
+        i.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+    };
+    await type('обложки');
+    expect(el.querySelector('[data-row="poster-storage"]')).not.toBeNull();
+    await type('абсолютно несущественный запрос');
+    expect(el.querySelector('[data-row="poster-storage"]')).toBeNull();
+  });
+});
+
 describe('Sync V2 status', () => {
   it('shows offline queue size and a synchronized state', async () => {
     const { resetSyncV2Status, updateSyncV2Status } = await import('../../src/billing/syncV2Status');

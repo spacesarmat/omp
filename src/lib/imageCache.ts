@@ -7,6 +7,11 @@
 // paste any URL at all. So a failed fetch is not an error: the plain URL is used, exactly like before this cache
 // existed. A host that refused a read is not asked again for a cooldown (a network that is down must recover),
 // and a poster the server itself answered for with an error is not asked again at all.
+//
+// The second level is the device itself (src/lib/imageStore.ts): the memory cache dies with the app, so after a
+// restart every grid would download the same pictures again. A picture is read from IndexedDB before the network
+// and written to it after a download, and the settings offer to wipe both levels together.
+import { clearStoredImages, readImage, resetImageStore, saveImage, storedStats } from './imageStore';
 
 /** How many decoded bytes the cache holds before it drops the oldest picture. */
 const DEFAULT_BUDGET = 24 * 1024 * 1024;
@@ -37,6 +42,8 @@ let inFlight = 0;
 let budget = DEFAULT_BUDGET;
 let used = 0;
 let hits = 0;
+/** Pictures that came from the device store instead of the network: kept apart, they are the traffic not spent. */
+let diskHits = 0;
 let misses = 0;
 let falls = 0;
 
@@ -132,13 +139,23 @@ export function loadImage(url: string): Promise<string> {
   }
   const going = pending.get(url);
   if (going) return going;
-  misses++;
-  const job = fetch(url)
-    .then((res) => {
-      if (!res.ok) throw httpAnswer(res.status);
-      return res.blob();
+  const job = readImage(url)
+    .then((held) => {
+      if (held) {
+        diskHits++;
+        return remember(url, held);
+      }
+      misses++;
+      return fetch(url)
+        .then((res) => {
+          if (!res.ok) throw httpAnswer(res.status);
+          return res.blob();
+        })
+        .then((blob) => {
+          saveImage(url, blob);
+          return remember(url, blob);
+        });
     })
-    .then((blob) => remember(url, blob))
     .catch((err: unknown) => {
       // show the URL the way it was shown before the cache existed
       falls++;
@@ -146,7 +163,7 @@ export function loadImage(url: string): Promise<string> {
         // this poster is missing or broken; the host itself is still fine
         return refuse(url);
       }
-      // no CORS, or the network is down right now: stop asking this host for a while, not forever
+      // no CORS, no stored copy, or the network is down right now: stop asking this host for a while, not forever
       const host = hostOf(url);
       if (host) hosts.set(host, { fails: (hosts.get(host)?.fails || 0) + 1, at: Date.now() });
       return refuse(url);
@@ -211,8 +228,22 @@ export function prefetchImages(urls: string[]): void {
 }
 
 /** Numbers for the test-mode overlay: what the cache holds and how often it had to fall back. */
-export function imageCacheStats(): { items: number; bytes: number; hits: number; misses: number; falls: number; blocked: string[] } {
-  return { items: store.size, bytes: used, hits, misses, falls, blocked: Array.from(hosts.keys()).filter(hostBlocked) };
+export function imageCacheStats(): { items: number; bytes: number; hits: number; disk: number; misses: number; falls: number; blocked: string[] } {
+  return { items: store.size, bytes: used, hits, disk: diskHits, misses, falls, blocked: Array.from(hosts.keys()).filter(hostBlocked) };
+}
+
+/** What the device itself keeps: for the settings row that says how much a person can free. */
+export function imageStoreStats(): Promise<{ items: number; bytes: number; available: boolean }> {
+  return storedStats();
+}
+
+/**
+ * Wipes both levels: the memory cache and the pictures kept on the device. The «Очистить данные» button in the
+ * settings awaits this, so the number it shows afterwards is already the new one.
+ */
+export async function clearAllImages(): Promise<void> {
+  clearImageCache();
+  await clearStoredImages();
 }
 
 /** Forgets everything: the pictures are asked again next time they are shown. */
@@ -232,6 +263,7 @@ export function clearImageCache(): void {
   inFlight = 0;
   used = 0;
   hits = 0;
+  diskHits = 0;
   misses = 0;
   falls = 0;
 }
@@ -249,5 +281,6 @@ export function imageCacheBudget(): number {
 /** Tests start from a clean room. */
 export function resetImageCache(): void {
   clearImageCache();
+  resetImageStore();
   setImageCacheBudget(DEFAULT_BUDGET);
 }
