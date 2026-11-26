@@ -21,6 +21,10 @@ describe('posterQuery', () => {
     expect(titleCore('Stranger Things 4 (2022) 2160p')).toBe('Stranger Things 4');
     expect(titleCore('Loki Season: 2 Episode 3')).toBe('Loki');
     expect(titleCore('Loki Season 2 Episode 3')).toBe('Loki');
+    expect(titleCore('Loki: Season 2')).toBe('Loki');
+    // a series named by a number keeps that number: the tail never takes the last token with it
+    expect(titleCore('1983 1 сезон')).toBe('1983');
+    expect(titleCore('24 1 сезон 1-8 серия')).toBe('24');
     // a separator left by the technical cut does not stop the tail from being read
     expect(titleCore('Dark Matter · Серии: 1-6 из 9 · S02 1080p')).toBe('Dark Matter');
     expect(titleCore('Сваты 4 сезон 1-8 серии из 8 WEBRip')).toBe('Сваты');

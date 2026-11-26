@@ -48,14 +48,15 @@ function trimMarks(s: string): string {
   const num = (w: string): boolean => MARK_NUM.test(bare(w));
   const intro = (w: string): boolean => MARK_INTRO.test(bare(w));
   const en = (w: string): boolean => MARK_EN.test(bare(w));
-  // an English word written as a label: «Season:», or one that a separator brings («· Season 2»)
+  // an English word written as a label: «Season:», or one that a separator or a preceding colon brings («Loki: Season 2»)
   const labelled = (i: number): boolean =>
-    en(words[i]) && (/:/.test(words[i]) || i === 0 || MARK_SEP.test(bare(words[i - 1])) || /:$/.test(bare(words[i - 1])));
+    en(words[i]) && (/:/.test(words[i]) || i === 0 || MARK_SEP.test(bare(words[i - 1])) || /:$/.test(words[i - 1] || ''));
   const candidate = (i: number): boolean => ru(words[i]) || en(words[i]) || intro(words[i]) || num(words[i]) || MARK_SEP.test(bare(words[i]));
   let from = words.length;
-  while (from > 0 && candidate(from - 1)) from--;
-  if (from === 0) return s;
+  // the first token always stays: «1983 1 сезон» is named «1983», not nothing
+  while (from > 1 && candidate(from - 1)) from--;
   const tail = words.slice(from);
+  if (!tail.length || !words.length) return s;
   const kinds: string[] = [];
   for (let i = 0; i < tail.length; i++) {
     const k = bare(tail[i]).toLowerCase();

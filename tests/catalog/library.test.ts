@@ -18,6 +18,9 @@ describe('library matching', () => {
     expect(inLibrary(named, { title: 'Два холма', original: 'Hill of Two', year: 2020, kind: 'tv' })).toBe(true);
     const two = libraryIndex([{ title: 'Два холма 2 (2024) 1 сезон' }]);
     expect(inLibrary(two, { title: 'Два холма 2', original: '', year: 2024, kind: 'tv' })).toBe(true);
+    // a series named by a number keeps that number as its key
+    const num = libraryIndex([{ title: '1983 1 сезон 1-8 серия WEB-DL' }]);
+    expect(inLibrary(num, { title: '1983', original: '1983', year: 2018, kind: 'tv' })).toBe(true);
   });
 
   it('a work named by a number is matched by its real year', () => {
