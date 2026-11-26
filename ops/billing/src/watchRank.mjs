@@ -314,15 +314,18 @@ export function parseFeed(xml) {
   return { original: src, items, head, tail, truncated: chunks.length > items.length ? chunks.slice(items.length) : [] };
 }
 
+/** An omp attribute of ours, written any way XML allows: both quote styles and any spaces around the `=`. */
+const OMP_SELF = /<[^>]*\battr\b[^>]*\bname\s*=\s*["']omp_(?:rank|reason|voice)["'][^>]*\/>/gi;
+const OMP_BLOCK = /<[^>]*\battr\b[^>]*\bname\s*=\s*["']omp_(?:rank|reason|voice)["'][^>]*>[\s\S]*?<\/[^>]*attr>/gi;
+
 export function stripOmp(item) {
   // One pass is not enough: a tag that never closes, or an omp attribute behind a quote the pattern did not
-  // expect, survives a single replace and comes back into the feed we are about to sign. The two passes repeat
-  // until the string stops changing, so what is left carries none of our omp attributes.
+  // expect, survives a single replace and comes back into the feed we are about to sign. The passes repeat
+  // until the string stops changing, so what is left carries none of our omp attributes. They must all go:
+  // the app keeps the first value of each name, so an upstream omp_rank would win over the one we append.
   let out = item;
   for (let i = 0; i < 8; i++) {
-    const next = out
-      .replace(/<[^>]*\battr\b[^>]*\bname="omp_(?:rank|reason|voice)"[^>]*\/>/gi, '')
-      .replace(/<[^>]*\battr\b[^>]*\bname="omp_(?:rank|reason|voice)"[^>]*>[\s\S]*?<\/[^>]*attr>/gi, '');
+    const next = out.replace(OMP_SELF, '').replace(OMP_BLOCK, '');
     if (next === out) break;
     out = next;
   }

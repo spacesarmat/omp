@@ -137,6 +137,14 @@ describe('watch rank score', () => {
     // an omp attribute hidden behind an unbalanced tag: one pass leaves the tail, so the passes repeat
     const nested = '<item><title>S</title><scr<torznab:attr name="omp_rank" value="9"/>ipt></item>';
     expect(stripOmp(nested)).not.toContain('omp_rank');
+    // XML allows single quotes and spaces around `=`: those forms are ours to remove too, because the app
+    // keeps the first value of a name and an upstream omp_rank would win over the one we append
+    const single = "<item><title>S</title><torznab:attr name='omp_rank' value='999999'/></item>";
+    expect(stripOmp(single)).not.toContain('omp_rank');
+    const spaced = '<item><title>S</title><torznab:attr name = "omp_reason" value="up"/></item>';
+    expect(stripOmp(spaced)).not.toContain('omp_reason');
+    const mixed = "<item><title>S</title><torznab:attr name ='omp_voice' value = 'Up'/>x</item>";
+    expect(stripOmp(mixed)).not.toContain('omp_voice');
   });
 
   it('never lets an annotation value break out of its attribute', () => {
