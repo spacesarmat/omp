@@ -566,3 +566,39 @@ describe('FAQ screen chrome in English', () => {
     expect(el2.querySelector('.m-faq-hint')!.textContent).toBe('For your LG OLED');
   });
 });
+
+describe('an opened answer keeps its section heading', () => {
+  let scrolled: { what: string; block: string }[];
+
+  beforeEach(() => {
+    scrolled = [];
+    Element.prototype.scrollIntoView = function (this: Element, arg?: boolean | ScrollIntoViewOptions) {
+      const n = this as HTMLElement;
+      const what = n.dataset.faqGroup !== undefined ? 'group' : n.classList.contains('m-faq-item') ? 'item' : 'other';
+      scrolled.push({ what, block: typeof arg === 'object' && arg ? String(arg.block || '') : '' });
+    };
+  });
+  afterEach(() => {
+    delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView;
+  });
+
+  it('brings the whole section to the top line when it fits on the screen', async () => {
+    const el = mount(<Faq />);
+    await act(async () => (el.querySelector('.m-faq-q') as HTMLElement).click());
+    expect(el.querySelector('.m-faq-item.open')).toBeTruthy();
+    expect(scrolled).toEqual([{ what: 'group', block: 'start' }]);
+  });
+
+  it('moves only the item when the section is taller than the screen', async () => {
+    const el = mount(<Faq />);
+    const group = el.querySelector('[data-faq-group]') as HTMLElement;
+    Object.defineProperty(group, 'offsetHeight', { value: 4000, configurable: true });
+    await act(async () => (group.querySelector('.m-faq-q') as HTMLElement).click());
+    expect(scrolled).toEqual([{ what: 'item', block: 'nearest' }]);
+  });
+
+  it('scrolls nothing while every answer is closed', async () => {
+    mount(<Faq />);
+    expect(scrolled).toEqual([]);
+  });
+});

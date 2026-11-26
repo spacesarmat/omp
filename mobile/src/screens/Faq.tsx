@@ -32,6 +32,8 @@ export function setFaqVote(id: string, vote: FaqVote): void {
   saveJson(VOTE_KEY, cur);
 }
 const deviceLabel = (d: Device) => DEVICES.find((x) => x.id === d)!.label;
+/** Air above a section that is brought to the top line, so the heading does not sit on the edge. */
+const GROUP_GAP = 12;
 const sectionLabel = (it: FaqItem) => SECTIONS.find((s) => s.id === it.section)!.label;
 const isDevice = (v: unknown): v is Device => typeof v === 'string' && DEVICES.some((d) => d.id === v);
 
@@ -122,10 +124,19 @@ export function Faq(p: { q?: string } = {}) {
   const [open, setOpen] = useState<string | null>(link ? link.id : null);
   const [moreOpen, setMoreOpen] = useState<string | null>(null);
   const [votes, setVotes] = useState(faqVotes);
+  // The heading of the section says what the answer is about, so it must stay on the screen: a section that fits
+  // comes to the top line whole, and a long one moves as little as possible instead of pinning the item to the top.
   useEffect(() => {
     if (!open) return;
-    const el = document.querySelector('.m-faq-item.open');
-    if (el && typeof (el as HTMLElement).scrollIntoView === 'function') (el as HTMLElement).scrollIntoView({ block: 'start' });
+    const el = document.querySelector('.m-faq-item.open') as HTMLElement | null;
+    if (!el || typeof el.scrollIntoView !== 'function') return;
+    const group = el.closest('[data-faq-group]') as HTMLElement | null;
+    const view = document.documentElement.clientHeight || window.innerHeight;
+    if (group && typeof group.scrollIntoView === 'function' && group.offsetHeight <= view - GROUP_GAP) {
+      group.scrollIntoView({ block: 'start' });
+      return;
+    }
+    el.scrollIntoView({ block: 'nearest' });
   }, [open, device]);
 
   const searching = query.trim() !== '';
@@ -298,7 +309,7 @@ export function Faq(p: { q?: string } = {}) {
           </div>
           {fromTv && tvName && <div class="m-faq-hint">{t('faq.fromTv', { name: tvName })}</div>}
           {ordered.map((g) => (
-            <section class="m-set-group" key={g.s.id}>
+            <section class="m-set-group" data-faq-group={g.s.id} key={g.s.id}>
               <div class="m-set-label">{g.s.label}</div>
               <div class="m-faq-list">{g.items.map((it) => row(it, device, false))}</div>
             </section>
