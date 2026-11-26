@@ -1,11 +1,16 @@
+const DESKTOP = ['windows', 'macos', 'linux'];
+
 const FEEDS = [
-  { url: '/omp/update-android.json', kind: 'stable-android', channel: 'stable' },
-  { url: '/omp/update.json', kind: 'stable-webos', channel: 'stable' },
-  { url: '/omp/update-android-beta.json', kind: 'beta-android', channel: 'beta' },
-  { url: '/omp/update-beta.json', kind: 'beta-webos', channel: 'beta' },
-  { url: '/omp/update-windows.json', kind: 'stable-windows', channel: 'stable', versionKey: 'stable-windows' },
-  { url: '/omp/update-macos.json', kind: 'stable-macos', channel: 'stable', versionKey: 'stable-macos' },
-  { url: '/omp/update-linux.json', kind: 'stable-linux', channel: 'stable', versionKey: 'stable-linux' },
+  { url: '/omp/update-android.json', kind: 'stable-android', versionKey: 'stable' },
+  { url: '/omp/update.json', kind: 'stable-webos', versionKey: 'stable' },
+  { url: '/omp/update-android-beta.json', kind: 'beta-android', versionKey: 'beta' },
+  { url: '/omp/update-beta.json', kind: 'beta-webos', versionKey: 'beta' },
+  { url: '/omp/update-windows.json', kind: 'stable-windows', versionKey: 'stable-windows' },
+  { url: '/omp/update-windows.json', kind: 'beta-windows', versionKey: 'beta-windows' },
+  { url: '/omp/update-macos.json', kind: 'stable-macos', versionKey: 'stable-macos' },
+  { url: '/omp/update-macos.json', kind: 'beta-macos', versionKey: 'beta-macos' },
+  { url: '/omp/update-linux.json', kind: 'stable-linux', versionKey: 'stable-linux' },
+  { url: '/omp/update-linux.json', kind: 'beta-linux', versionKey: 'beta-linux' },
 ];
 
 const RELEASE_API = 'https://api.github.com/repos/spacesarmat/omp/releases/tags/';
@@ -66,6 +71,14 @@ function setText(root, selector, text, reveal) {
   });
 }
 
+// Desktop feeds are shared between channels, so a version decides which pane may use it.
+function feedPasses(kind, feed) {
+  const version = feed && typeof feed.version === 'string' ? feed.version : '';
+  if (!DESKTOP.some((platform) => kind.endsWith('-' + platform))) return true;
+  if (kind.startsWith('beta-')) return /-beta/i.test(version);
+  return Boolean(version) && !/-beta/i.test(version);
+}
+
 function applyFeed(root, kind, versionKey, feed) {
   if (!feed || typeof feed !== 'object') return;
   if (typeof feed.version === 'string' && feed.version) {
@@ -77,6 +90,18 @@ function applyFeed(root, kind, versionKey, feed) {
     root.querySelectorAll(`[data-download="${kind}"]:not([data-abi]):not([data-asset])`).forEach((link) => {
       link.href = fileUrl;
     });
+    if (kind.startsWith('beta-')) {
+      // Buttons with data-asset or data-abi open only after their own file is assigned below.
+      root.querySelectorAll(`[data-download="${kind}"][data-direct]:not([data-abi]):not([data-asset])`).forEach((link) => {
+        link.hidden = false;
+        const pane = link.closest('.beta');
+        const note = pane && pane.querySelector('.beta-empty');
+        if (note) note.hidden = true;
+      });
+      root.querySelectorAll(`[data-version="${kind}"]`).forEach((el) => {
+        el.hidden = false;
+      });
+    }
   }
   const assets = feed.assets && typeof feed.assets === 'object' ? feed.assets : null;
   if (assets) {
@@ -86,6 +111,14 @@ function applyFeed(root, kind, versionKey, feed) {
       if (!entry || typeof entry.url !== 'string' || !entry.url) return;
       link.href = entry.url;
       link.hidden = false;
+      if (kind.startsWith('beta-')) {
+        const pane = link.closest('.beta');
+        const note = pane && pane.querySelector('.beta-empty');
+        if (note) note.hidden = true;
+        root.querySelectorAll(`[data-version="${kind}"]`).forEach((el) => {
+          el.hidden = false;
+        });
+      }
     });
   }
   const tile = root.querySelector(`[data-optional="${kind}"]`);
@@ -184,20 +217,100 @@ function bindHashButtons(root) {
   });
 }
 
+export function setChannel(root, channel) {
+  const next = channel === 'beta' ? 'beta' : 'stable';
+  root.documentElement.setAttribute('data-channel', next);
+  root.querySelectorAll('[data-channel]').forEach((button) => {
+    const active = button.getAttribute('data-channel') === next;
+    button.classList.toggle('selected', active);
+    button.setAttribute('aria-pressed', String(active));
+  });
+  try {
+    if (typeof localStorage !== 'undefined') localStorage.setItem('omp-channel', next);
+  } catch {
+    // Private mode or blocked storage: the choice stays for this page view only.
+  }
+}
+
+export function initUi(root) {
+  const stored = (() => {
+    try {
+      return typeof localStorage !== 'undefined' ? localStorage.getItem('omp-channel') : '';
+    } catch {
+      return '';
+    }
+  })();
+  setChannel(root, stored === 'beta' ? 'beta' : 'stable');
+
+  root.querySelectorAll('[data-channel]').forEach((button) => {
+    if (button.dataset.uiBound) return;
+    button.dataset.uiBound = '1';
+    button.addEventListener('click', () => setChannel(root, button.getAttribute('data-channel')));
+  });
+
+  const toggle = root.querySelector('.menu-toggle');
+  const header = root.querySelector('.site-header');
+  if (toggle && header && !toggle.dataset.uiBound) {
+    toggle.dataset.uiBound = '1';
+    toggle.addEventListener('click', () => {
+      const open = header.classList.toggle('menu-open');
+      toggle.setAttribute('aria-expanded', String(open));
+      toggle.setAttribute('aria-label', open
+        ? (pageLang(root) === 'en' ? 'Close menu' : 'Закрыть меню')
+        : (pageLang(root) === 'en' ? 'Open menu' : 'Открыть меню'));
+    });
+  }
+
+  const dialog = root.querySelector('#helper-dialog');
+  if (dialog && !dialog.dataset.uiBound) {
+    dialog.dataset.uiBound = '1';
+    const opener = root.querySelector('#open-helper');
+    if (opener) opener.addEventListener('click', () => dialog.showModal());
+    const close = dialog.querySelector('.dialog-close');
+    if (close) close.addEventListener('click', () => dialog.close());
+    dialog.addEventListener('click', (event) => {
+      if (event.target === dialog) dialog.close();
+    });
+    const result = root.querySelector('#helper-result');
+    dialog.querySelectorAll('[data-choice]').forEach((button) => {
+      button.addEventListener('click', () => {
+        const tile = root.querySelector(`[data-platform="${button.getAttribute('data-choice')}"]`);
+        if (!tile) return;
+        root.querySelectorAll('.tile.is-recommended').forEach((other) => other.classList.remove('is-recommended'));
+        tile.classList.add('is-recommended');
+        if (result) {
+          result.textContent = pageLang(root) === 'en'
+            ? `Recommended build: ${button.textContent.trim()}. The card is highlighted on the page.`
+            : `Подходит сборка: ${button.textContent.trim()}. Карточка выделена на странице.`;
+          result.hidden = false;
+        }
+        dialog.close();
+        tile.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      });
+    });
+  }
+}
+
 export async function updateDownloads(root, fetchImpl) {
   highlightPlatform(root, typeof navigator !== 'undefined' ? navigator.userAgent : '');
   bindHashButtons(root);
   const dates = new Map();
-  await Promise.all(FEEDS.map(async ({ url, kind, channel, versionKey }) => {
+  const byUrl = new Map();
+  for (const feed of FEEDS) {
+    const group = byUrl.get(feed.url) || [];
+    group.push(feed);
+    byUrl.set(feed.url, group);
+  }
+  await Promise.all([...byUrl.entries()].map(async ([url, entries]) => {
     try {
       const response = await fetchImpl(url);
       if (!response || !response.ok) return;
       const feed = await response.json();
-      // Desktop workflow publishes betas into the same feeds. Stable buttons keep their fallback until the feed version is not a beta.
-      if ((kind === 'stable-windows' || kind === 'stable-macos' || kind === 'stable-linux')
-        && (!feed || typeof feed.version !== 'string' || /-beta/.test(feed.version))) return;
-      applyFeed(root, kind, versionKey || channel, feed);
-      await fillDate(root, kind, feed && feed.releaseUrl, fetchImpl, dates);
+      for (const { kind, versionKey } of entries) {
+        if (!feedPasses(kind, feed)) continue;
+        applyFeed(root, kind, versionKey, feed);
+        await fillDate(root, kind, feed && feed.releaseUrl, fetchImpl, dates);
+      }
     } catch {
       // The release-page fallback remains available when a feed cannot be loaded.
     }
@@ -205,5 +318,6 @@ export async function updateDownloads(root, fetchImpl) {
 }
 
 if (typeof document !== 'undefined' && document.querySelector('script[type="module"][src$="download.js"]')) {
+  initUi(document);
   void updateDownloads(document, fetch);
 }
