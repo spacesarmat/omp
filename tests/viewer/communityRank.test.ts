@@ -18,6 +18,18 @@ describe('community rank on the client', () => {
     expect(communityLabel({ communityReason: 'blend', suggestedVoice: 'LostFilm' })).toContain('LostFilm');
   });
 
+  it('never lets a rank bigger than billing ever sends buy more place', () => {
+    // scoreOf sends score 0..100 times 100: 10000 is the largest honest number
+    const honest = { communityReason: 'community', communityRank: 10000 };
+    const forged = { communityReason: 'community', communityRank: 999999 };
+    const negative = { communityReason: 'pinned', communityRank: -5000 };
+    expect(communityBoost(forged)).toBe(communityBoost(honest));
+    expect(communityBoost(negative)).toBe(communityBoost({ communityReason: 'pinned', communityRank: 0 }));
+    expect(communityBoost({ communityReason: 'community', communityRank: 10001 })).toBe(communityBoost(honest));
+    // an ordinary rank still moves by its own amount
+    expect(communityBoost({ communityReason: 'community', communityRank: 5000 })).toBeLessThan(communityBoost(honest));
+  });
+
   it('puts the community row first and remembers the voice', () => {
     clearCommunityVoices();
     const weak = row('Weak', 100, { communityReason: 'community', communityRank: 9000, hash: 'ab' });

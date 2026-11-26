@@ -9,6 +9,7 @@ The English translation covers the latest versions only; the full history (in Ru
 - [tech] The pairing link and the language switcher on the site follow only omp-player.online: an address that merely starts with our domain no longer reaches the intent or the href
 - [tech] The Telegram invoice description is turned into plain text in the right order: entities are restored first, then tags are cut, and the tag pass repeats until nothing is left, so a nested tag can no longer survive as markup
 - [tech] Billing now writes all three of its feed attributes on every row, with neutral values where it has no opinion: the app keeps the first value of each name, so an omp_rank planted by a release can no longer override ours and there is no need to cut it out of somebody else's XML at all; the values are escaped and every billing answer carries `x-content-type-options: nosniff`
+- [tech] The app accepts a community rank only inside the range billing itself ever sends (0..10000): a value planted by a release cannot buy more place than the most honest row has
 - [tech] A Postgres schema name for `search_path` is accepted only as a plain identifier: a quote, a space or a backslash in the name never reaches the server options
 
 ## 0.30.4-beta.3

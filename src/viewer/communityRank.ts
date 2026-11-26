@@ -4,6 +4,13 @@
 import { t } from '../i18n';
 
 const BOOST = 50000000;
+/**
+ * Billing's own rank is its 0..100 score times 100 (scoreOf in ops/billing/src/watchRank.mjs), so 10000 is the
+ * largest number billing ever sends. A feed that brings a bigger one did not get it from billing's decision -
+ * an indexer can put anything in an attribute - and it must not buy more place than the most honest row has.
+ */
+const RANK_MIN = 0;
+const RANK_MAX = 10000;
 
 export interface CommunityRow {
   communityRank?: number;
@@ -18,7 +25,7 @@ export function communityBoost(r: CommunityRow | null | undefined): number {
   if (reason !== 'community' && reason !== 'blend' && reason !== 'pinned' && reason !== 'seeds' && reason !== 'dht') return 0;
   if (typeof r.communityRank !== 'number' || !isFinite(r.communityRank)) return 0;
   const rank = Math.round(r.communityRank);
-  return BOOST + rank * 100;
+  return BOOST + Math.max(RANK_MIN, Math.min(RANK_MAX, rank)) * 100;
 }
 
 /** Short reason for the row. Empty when billing left the ordinary seed order. */
