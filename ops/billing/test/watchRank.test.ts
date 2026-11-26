@@ -140,15 +140,20 @@ describe('watch rank score', () => {
     expect(out.slice(out.indexOf('<title>'))).toBe(forged.slice(forged.indexOf('<title>')));
   });
 
-  it('leaves a row we do not annotate exactly as it came', () => {
-    // every odd way of writing an attribute is somebody else's business now: we add nothing, we change nothing
-    const odd =
-      "<item><title>S</title><torznab:attr name='omp_rank' value='9'/><torznab:attr name=\"other\" value='name=\"omp_rank\"'/></item>";
-    expect(annotate({ xml: odd }, { reorder: false, voice: '' })).toBe(odd);
+  it('writes all three names on every row it touches, neutral where it has no opinion', () => {
+    // prepending only what billing happens to say would leave a forged omp_rank first on the silent rows
+    const forged = '<item><title>S</title><torznab:attr name="omp_rank" value="999999"/><torznab:attr name="omp_reason" value="pinned"/><torznab:attr name="infohash" value="' + B + '"/></item>';
+    const silent = annotate({ xml: forged }, { reorder: false, voice: '' });
+    expect(silent.indexOf('name="omp_rank" value="0"')).toBeGreaterThanOrEqual(0);
+    expect(silent.indexOf('name="omp_rank" value="0"')).toBeLessThan(silent.indexOf('name="omp_rank" value="999999"'));
+    expect(silent.indexOf('name="omp_reason" value="none"')).toBeLessThan(silent.indexOf('name="omp_reason" value="pinned"'));
+    expect(silent).toContain('name="omp_voice" value=""');
+    // the rest of the row is the upstream bytes, untouched, however odd they are written
+    expect(silent.slice(silent.indexOf('<title>'))).toBe(forged.slice(forged.indexOf('<title>')));
     // a `>` inside a quoted value of the opening tag must not move where our attributes land
     const head = '<item kind="a>b"><title>S</title></item>';
     expect(annotate({ xml: head }, { reorder: true, rank: 1, reason: 'seeds', voice: '' })).toBe(
-      '<item kind="a>b"><torznab:attr name="omp_rank" value="1"/><torznab:attr name="omp_reason" value="seeds"/><title>S</title></item>',
+      '<item kind="a>b"><torznab:attr name="omp_rank" value="1"/><torznab:attr name="omp_reason" value="seeds"/><torznab:attr name="omp_voice" value=""/><title>S</title></item>',
     );
   });
 

@@ -334,19 +334,19 @@ function openingTagEnd(text) {
 }
 
 export function annotate(item, fields) {
-  const bits = [];
-  if (fields.reorder) {
-    // both values go into an XML attribute, so both are escaped: today the reason comes from a closed list and
-    // the rank is a number, but the feed must stay well formed even if either of that ever changes
-    bits.push('<torznab:attr name="omp_rank" value="' + xmlAttr(Math.round(Number(fields.rank) || 0)) + '"/>');
-    bits.push('<torznab:attr name="omp_reason" value="' + xmlAttr(fields.reason) + '"/>');
-  }
-  if (fields.voice) bits.push('<torznab:attr name="omp_voice" value="' + xmlAttr(fields.voice) + '"/>');
-  if (!bits.length) return item.xml;
-  // Ours go first inside the row, and nothing of the upstream XML is rewritten: the app reads the first value
-  // of each attribute name (src/sources/indexer.ts), so an omp_rank the indexer brought with it loses to ours
-  // on its own. Removing the upstream ones was a sanitizer, and a sanitizer over foreign XML is what kept
-  // finding new ways to be incomplete.
+  // All three names are always written, with a neutral value where billing has no opinion: rank 0, reason
+  // "none" (not one of the five the app boosts), voice empty. Prepending only what we happen to say would
+  // leave a forged omp_rank="999999" omp_reason="pinned" first on the rows we say nothing about, and the app
+  // reads the first value of each name (src/sources/indexer.ts). Writing all three is what makes "ours first"
+  // a rule rather than a coincidence - and it needs no reading of the upstream XML at all.
+  const bits = [
+    '<torznab:attr name="omp_rank" value="' + xmlAttr(fields.reorder ? Math.round(Number(fields.rank) || 0) : 0) + '"/>',
+    '<torznab:attr name="omp_reason" value="' + xmlAttr(fields.reorder ? fields.reason : 'none') + '"/>',
+    '<torznab:attr name="omp_voice" value="' + xmlAttr(fields.voice || '') + '"/>',
+  ];
+  // Ours go first inside the row, and nothing of the upstream XML is rewritten. Removing the upstream
+  // attributes was a sanitizer, and a sanitizer over foreign XML is what kept finding new ways to be
+  // incomplete (a pattern over the whole string, then a walk over its tags - both wrong).
   const head = openingTagEnd(item.xml);
   if (head > 0) return item.xml.slice(0, head) + bits.join('') + item.xml.slice(head);
   return item.xml.replace(/<\/item>\s*$/i, bits.join('') + '</item>');
