@@ -92,7 +92,7 @@ import {
   serviceDownNotices,
   telegramOf,
 } from './bot.mjs';
-import { copyText, normalizeLang, str } from './botCopy.mjs';
+import { copyText, normalizeLang, plainText, str } from './botCopy.mjs';
 import {
   botPollDisabledLine,
   botPollEnabled,
@@ -507,7 +507,9 @@ function adsCors(headers) {
 
 function send(res, status, body, headers) {
   const buf = Buffer.isBuffer(body) ? body : Buffer.from(body);
-  res.writeHead(status, { 'content-length': buf.length, ...(headers || {}) });
+  // nosniff on every answer, not only on the ad images: the search feed goes out as application/xml and the
+  // exports as text/csv, and a browser that opens one of those directly must never decide it is HTML
+  res.writeHead(status, { 'content-length': buf.length, 'x-content-type-options': 'nosniff', ...(headers || {}) });
   // HEAD is routed as GET. Content-Length stays the GET size; the body does not.
   if (res.headOnly) return res.end();
   res.end(buf);
@@ -1164,15 +1166,8 @@ async function sendBotRow(token, row, net, timeoutMs, store) {
   if (row && row.invoice) {
     const applied = await applyCopy(store, row.copy, { text: row.text || '', parseMode: row.parseMode });
     if (applied.used === 'template') {
-      // The invoice description is plain text: drop the HTML tags and restore the escaped characters.
-      const plain = String(applied.text || '')
-        .replace(/<[^>]+>/g, '')
-        .replace(/&lt;/g, '<')
-        .replace(/&gt;/g, '>')
-        .replace(/&quot;/g, '"')
-        .replace(/&#39;/g, "'")
-        .replace(/&amp;/g, '&')
-        .slice(0, 255);
+      // The invoice description is plain text: markup goes away, entities come back, in that order (plainText).
+      const plain = plainText(applied.text || '').slice(0, 255);
       const invoice = { ...row.invoice };
       if (plain) invoice.description = plain;
       return telegramMethod(token, 'sendInvoice', invoice, net, timeoutMs);

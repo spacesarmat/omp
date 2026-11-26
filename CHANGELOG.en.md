@@ -4,6 +4,12 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## Unreleased
+
+- [tech] The Telegram invoice description is turned into plain text in the right order: entities are restored first, then tags are cut, and the tag pass repeats until nothing is left, so a nested tag can no longer survive as markup
+- [tech] Rating attributes in the Torznab feed are escaped, foreign omp attributes are stripped by a repeated pass, and every billing answer now carries `x-content-type-options: nosniff`
+- [tech] A Postgres schema name for `search_path` is accepted only as a plain identifier: a quote, a space or a backslash in the name never reaches the server options
+
 ## 0.30.4-beta.3
 
 - The "In library" mark, the poster search and the year line no longer mix a title up with a year: a release of "1917 (2019)" is dated 2019, and "Blade Runner 2049" is searched by its whole name
