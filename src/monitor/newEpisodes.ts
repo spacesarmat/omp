@@ -7,6 +7,7 @@ import { fileKind, parseEpisode } from '../lib/episodes';
 import { watchesNewEpisodes } from '../lib/journal';
 import { posterQuery, titleCore } from '../lib/posterSearch';
 import { normalizeTitle } from '../sources/merge';
+import { yearInTitle } from '../sources/queryParse';
 import { searchAll, type SearchHandle } from '../sources/search';
 import { qualityOf } from '../sources/view';
 import type { SourceContext, SourceResult } from '../sources/types';
@@ -42,9 +43,6 @@ export interface NewEpisodesOptions extends CheckOptions {
   /** Precomputed infohash from billing. It wins when that release is in the results. */
   bestHash?: string;
 }
-
-// a year, not a resolution like 1920x1080
-const YEAR = /(?:^|[^0-9])((?:19|20)\d\d)(?![0-9])(?!\s*[xх*×])/;
 
 function head(title: string): string {
   const t = (title || '').trim();
@@ -167,10 +165,10 @@ export function releaseGroups(title: string): string[] {
   return out;
 }
 
-/** The release year (19xx / 20xx); null when none. */
+/** The release year (1900-2099); null when the line names none. A number that is the name is not a year. */
 export function yearOf(title: string): number | null {
-  const m = YEAR.exec(title || '');
-  return m ? parseInt(m[1], 10) : null;
+  const y = yearInTitle(title || '');
+  return y ? y : null;
 }
 
 export interface LibraryRange {

@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { posterQuery, tmdbSearchUrl, tmdbSearchRequest, firstPoster } from '../../src/lib/posterSearch';
 import { posterChoice, posterName, posterQueries, requestPoster, requestShow, setPosterLookup, setShowLookup, showChoice, type ShowHit } from '../../src/catalog/resultPosters';
 import { posterImageSize } from '../../src/catalog/tmdb';
+import { yearInTitle } from '../../src/sources/queryParse';
 
 describe('posterQuery', () => {
   it('keeps the title before the year, translation and release details', () => {
@@ -13,6 +14,40 @@ describe('posterQuery', () => {
     expect(posterQuery('The.Last.of.Us.S02.2160p.WEB-DL.x265')).toBe('The Last of Us');
     expect(posterQuery('Severance.S01E03.1080p')).toBe('Severance');
     expect(posterQuery('Oppenheimer.2023.1080p.BluRay')).toBe('Oppenheimer');
+  });
+
+  it('a work named by a number keeps that number in the query', () => {
+    expect(posterQuery('Бегущий по лезвию 2049 (2017) 2160p')).toBe('Бегущий по лезвию 2049');
+    expect(posterQuery('Blade Runner 2049 2017 1080p')).toBe('Blade Runner 2049');
+    expect(posterQuery('1917 (2019) 2160p UHD BDRemux')).toBe('1917');
+    expect(posterQuery('1917.2019.1080p.BluRay')).toBe('1917');
+    expect(posterQuery('2001: Космическая одиссея 1968 BDRip')).toBe('2001: Космическая одиссея');
+    expect(posterQuery('1983 2018 WEB-DL 1080p')).toBe('1983');
+    // a year-shaped number and a detail mark: the mark still ends the name
+    expect(posterQuery('Теория всего 2014 S01 1080p')).toBe('Теория всего');
+  });
+
+  it('a run of years ends the name too, without becoming one year', () => {
+    expect(posterQuery('Dark Matter 2015-2017 S01')).toBe('Dark Matter');
+    expect(posterQuery('Тест 2019-2023 1 сезон')).toBe('Тест');
+    expect(yearInTitle('Dark Matter 2015-2017 S01')).toBe(0);
+  });
+
+  it('the poster request keeps the number of a name (through the library name, not only posterQuery)', async () => {
+    const asked: string[] = [];
+    setPosterLookup((q) => {
+      asked.push(q);
+      return Promise.resolve(q === 'Бегущий по лезвию 2049' ? 'https://img/blade.jpg' : '');
+    });
+    try {
+      const url = await new Promise<string>((resolve) => {
+        requestPoster('Бегущий по лезвию 2049 (2017) 1080p', resolve);
+      });
+      expect(asked[0]).toBe('Бегущий по лезвию 2049');
+      expect(url).toBe('https://img/blade.jpg');
+    } finally {
+      setPosterLookup(null);
+    }
   });
 
   it('limits the query to four words', () => {
@@ -74,6 +109,22 @@ describe('posterQuery', () => {
       expect(oldShow && oldShow.id).toBe(1);
       expect(reboot && reboot.id).toBe(2);
       expect(film).toBeNull();
+    } finally {
+      setShowLookup(null);
+    }
+  });
+
+  it('a show lookup asks with the year the indexer reported for the row', async () => {
+    const years: number[] = [];
+    setShowLookup((_q, year) => {
+      years.push(year);
+      return Promise.resolve([{ kind: 'tv', id: year || 1963, title: '1983', original: '1983', year: year || 1963, poster: 'https://img/' + (year || 1963) + '.jpg', rating: 7 }]);
+    });
+    try {
+      // the release line carries no year of its own: only the site can say that «1983» is of 2018
+      const hit = await new Promise<ShowHit | null>((resolve) => { requestShow('1983 1 сезон', resolve, 2018); });
+      expect(hit && hit.id).toBe(2018);
+      expect(years[years.length - 1]).toBe(2018);
     } finally {
       setShowLookup(null);
     }

@@ -116,12 +116,12 @@ function resolveError(e: unknown): string {
 const cssUrl = (u: string) => u.replace(/["()\\\s]/g, (c) => '%' + c.charCodeAt(0).toString(16).toUpperCase());
 
 /** 72×104 poster: the colour block at once, the poster once `want` is set and the lookup answered. */
-function Thumb({ title, want }: { title: string; want: boolean }) {
+function Thumb({ title, want, year }: { title: string; want: boolean; year?: number }) {
   const [url, setUrl] = useState('');
   const cancel = useRef<(() => void) | null>(null);
   useEffect(() => {
     if (!want || cancel.current) return;
-    cancel.current = requestPoster(title, (u) => setUrl(/^https?:\/\//i.test(u) ? u : ''));
+    cancel.current = requestPoster(title, (u) => setUrl(/^https?:\/\//i.test(u) ? u : ''), year);
   }, [want]);
   useEffect(
     () => () => {
@@ -632,7 +632,7 @@ export function AddScreen() {
             return (
               // focus key from the row identity, not its place: rows stream in and the cursor must stay on its row
               <Focusable key={key} focusKey={'res-' + key} className={'list-item search-result' + (key === pickKey ? ' is-pick' : '')} onPress={() => addResult(r)} onFocused={() => setFocusedKey(key)}>
-                <Thumb title={r.Title} want={want} />
+                <Thumb title={r.Title} want={want} year={r.year} />
                 <div class="search-main">
                   <div class="search-line1">
                     <span class="title">{tvGlyphs(s.title)}</span>

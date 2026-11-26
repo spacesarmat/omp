@@ -52,6 +52,19 @@ describe('parseTorznab', () => {
     expect(rows[1].qualityHint).toBe('720');
   });
 
+  it('keeps the year the indexer reported, and none when it is not a year', () => {
+    const xml = RSS(
+      '<item><title>1917</title><link>magnet:?xt=urn:btih:' + H1 + '</link>' +
+      '<torznab:attr name="year" value="2019"/></item>' +
+      '<item><title>1983</title><link>magnet:?xt=urn:btih:' + H2 + '</link>' +
+      '<torznab:attr name="year" value="1899"/></item>',
+    );
+    const rows = parseTorznab(xml, 'x');
+    // the site knows the film called «1917» is of 2019: the title alone cannot say that
+    expect(rows[0].year).toBe(2019);
+    expect(rows[1].year).toBeUndefined();
+  });
+
   it('keeps billing reasons seeds and dht', () => {
     const xml = RSS(
       '<item><title>Cold</title><link>magnet:?xt=urn:btih:' + H1 + '</link>' +

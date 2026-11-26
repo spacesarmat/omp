@@ -6,8 +6,10 @@ The English translation covers the latest versions only; the full history (in Ru
 
 ## Unreleased
 
+- The "In library" mark, the poster search and the year line no longer mix a title up with a year: a release of "1917 (2019)" is dated 2019, and "Blade Runner 2049" is searched by its whole name
 - [tv] Posters stay in the app's memory: scrolling back to a row no longer downloads it again, and the rows below the focus load ahead of time
 - [phone] Posters in Discover and in a filmography are no longer re-downloaded when the person returns to a row they already saw
+- [tech] One reading of a release year instead of five different ones; when the indexer reports a year of its own, it is used
 - [tech] The TV shell scale test waits for the scale to be applied instead of sleeping 30 ms: on a loaded runner it failed without anything being broken
 
 ## 0.30.4-beta.2

@@ -1,6 +1,7 @@
 import { parseEpisode, playableFiles, baseName, stripExt, type TorrentFile } from './episodes';
 import { knownFiles } from './knownFiles';
 import { titleCore } from './posterSearch';
+import { yearInTitle } from '../sources/queryParse';
 import { ru } from '../i18n/ru';
 
 // the title is written to TorrServer and read by every device: its season suffix is always Russian
@@ -25,10 +26,13 @@ export function isPlaceholderTitle(title: string | undefined | null, hash?: stri
   return false;
 }
 
-/** The release year (193x-204x) in a title or file name; '' when none. */
+/**
+ * The release year (1900-2099) in a title or file name; '' when none. A number that is the whole name, or one that
+ * stands inside it («Бегущий по лезвию 2049»), is the title: «1917 (2019)» is 2019, not 1917.
+ */
 export function yearOf(s: string): string {
-  const m = /(?:^|[^0-9])((?:19[3-9]|20[0-4])[0-9])(?:[^0-9]|$)/.exec(s);
-  return m ? m[1] : '';
+  const y = yearInTitle(s);
+  return y ? String(y) : '';
 }
 
 // the name of the release: the top folder when there is one (it names the whole release), else the file itself
