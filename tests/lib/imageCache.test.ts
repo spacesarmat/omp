@@ -197,6 +197,20 @@ describe('prefetchImages', () => {
     expect(peak).toBeLessThanOrEqual(2);
     expect(imageCacheStats().items).toBe(6);
   });
+
+  it('gives up a stalled request instead of holding both workers', async () => {
+    vi.useFakeTimers();
+    fetcher.mockImplementation((u: string) => (String(u).indexOf('stall.') >= 0 ? new Promise(() => undefined) : Promise.resolve(picture(2))));
+    prefetchImages(['https://stall.test/a.jpg', 'https://stall.test/b.jpg']);
+    prefetchImages(['https://img.test/live.jpg']);
+    await vi.advanceTimersByTimeAsync(1000);
+    // both workers are stuck on the pair that never answers
+    expect(imageSrc('https://img.test/live.jpg')).toBe('https://img.test/live.jpg');
+    // after the stall window the worker is free and the healthy host is served again
+    await vi.advanceTimersByTimeAsync(16000);
+    expect(imageSrc('https://img.test/live.jpg')).not.toBe('https://img.test/live.jpg');
+    vi.useRealTimers();
+  });
 });
 
 describe('without object URLs', () => {
