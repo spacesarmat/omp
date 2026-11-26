@@ -20,30 +20,56 @@ export function posterQuery(title: string): string {
   return q;
 }
 
-// The words of a release line that say which episodes it holds, not what the work is called.
-const MARK_WORD = /^(?:сезон[аеуы]*|сезонов|seasons?|серии|серий|серия|серийный|эпизод[аы]*|эпизодов|episodes?|из|of|от|by)$/i;
+// The words of a release line that say which episodes it holds. Russian forms are always marks; the English ones
+// only where the line punctuates them («Season: 2», « · Season 2 »), because «Open Season 2» is a name.
+const MARK_RU = /^(?:сезон[аеуы]*|сезонов|серии|серий|серия|серийный|эпизод[аы]*|эпизодов)$/i;
+// words that introduce a count: «Серии: 1-6 из 9», «Episodes 1-10 of 24»
+const MARK_INTRO = /^(?:из|of|от|by|и|and)$/i;
+const MARK_EN = /^(?:seasons?|episodes?)$/i;
 const MARK_NUM = /^\d{1,4}(?:[.\u2013-]\d{1,4})?(?:й|ый|я|ая)?$/i;
 const MARK_SEP = /^[-.,:;/|&·•\u2013\u2014]+$/;
+const MARK_PUNCT = /[\s:.,;-]+$/;
 
-// Nothing to trim unless the line ends with a number or one of those words: titleCore runs for every torrent.
-const MAYBE_TAIL = /(?:\d|сезон[аеуы]*|сезонов|seasons?|серии|серий|серия|эпизод[аы]*|эпизодов|episodes?|из|of|от|by)[\s:.,;-]*$/i;
+// Nothing to trim unless the line ends with a number, a mark word or a separator: titleCore runs for every torrent.
+const MAYBE_TAIL = /(?:\d|сезон[аеуы]*|сезонов|seasons?|серии|серий|серия|эпизод[аы]*|эпизодов|episodes?|из|of|от|by|[-.,:;/|&·•\u2013\u2014])\s*$/i;
 
 /**
- * The season and episode tail of a name: «Тест 1 сезон 1-8 серия» is named «Тест», «Dark Matter · Серии: 1-6 из 9 ·
- * 2 сезон» is «Dark Matter». It starts only at a mark word, or at a number that such a word introduces («из 9»), so
- * a number belonging to the name («Два холма 2», «S2E1-10») is left alone, and it never eats the whole line.
+ * The season and episode tail of a name: «Тест 1 сезон 1-8 серия» is named «Тест», «Dark Matter · Серии: 1-6 из 9 · S02»
+ * is «Dark Matter». It starts only at evidence - a season word, or a number such a word introduces («из 9») - so a
+ * number that belongs to the name («Два холма 2», «Open Season 2», «S2E1-10») stays, and the line is never eaten whole.
  */
 function trimMarks(s: string): string {
   if (!MAYBE_TAIL.test(s)) return s;
   const words = s.split(/\s+/).filter(Boolean);
-  const word = (w: string): boolean => MARK_WORD.test((w || '').replace(/[\s:.,;-]+$/, ''));
-  const droppable = (w: string): boolean => word(w) || MARK_NUM.test(w) || MARK_SEP.test(w);
+  const bare = (w: string): string => (w || '').replace(MARK_PUNCT, '');
+  const ru = (w: string): boolean => MARK_RU.test(bare(w));
+  const num = (w: string): boolean => MARK_NUM.test(bare(w));
+  const intro = (w: string): boolean => MARK_INTRO.test(bare(w));
+  // an English mark word counts when the line writes it as one: «Season:», «· Season 2», not «Open Season 2»
+  const en = (w: string, before: string): boolean =>
+    MARK_EN.test(bare(w)) && (/:/.test(w) || before === '' || MARK_SEP.test(bare(before)) || /:$/.test(before));
+  const markAt = (i: number): boolean => ru(words[i]) || en(words[i], words[i - 1] || '');
   let end = words.length;
-  if (!end) return s;
+  while (end > 1 && MARK_SEP.test(bare(words[end - 1]))) end--;
   const last = words[end - 1];
-  if (!word(last) && !(MARK_NUM.test(last) && word(words[end - 2] || ''))) return s;
-  while (end > 1 && droppable(words[end - 1])) end--;
-  return words.slice(0, end).join(' ');
+  const before = words[end - 2] || '';
+  // the tail begins at a mark word, or at a number that a mark word or an introducer («из», «of») stands behind
+  if (!last || !(markAt(end - 1) || (num(last) && (markAt(end - 2) || intro(before))))) return s;
+  let droppedNum = false;
+  while (end > 1) {
+    const w = words[end - 1];
+    if (num(w)) {
+      droppedNum = true;
+      end--;
+    } else if (markAt(end - 1)) {
+      end--;
+    } else if (intro(w) && droppedNum) {
+      end--;
+    } else if (MARK_SEP.test(bare(w))) {
+      end--;
+    } else break;
+  }
+  return end > 0 && end < words.length ? words.slice(0, end).join(' ') : s;
 }
 
 /** The title proper of a torrent title: before « [», « (», « / », « | », the release year or its details. */
