@@ -19,8 +19,11 @@ describe('TV boot screen', () => {
   });
 
   it('the layer is sized for 1920x1080 and uses the TV font stack', () => {
-    // the logo is 200 wide, and the wordmark is well above the 24px floor of the TV interface
-    expect(html).toMatch(/<svg width="200" height="200"/);
+    // the mark is at least a fifth of the declared 1920 frame, the wordmark well above the 24px TV floor
+    const mark = /<svg width="(\d+)" height="(\d+)"/.exec(html);
+    expect(mark).not.toBeNull();
+    expect(Number(mark![1])).toBeGreaterThanOrEqual(1920 / 5);
+    expect(mark![1]).toBe(mark![2]);
     expect(html).toMatch(/#omp-boot b \{[^}]*font: 700 44px/);
     expect(html).toMatch(/'LG Smart UI', 'Museo Sans', Roboto, Arial, sans-serif/);
     // no web font is fetched for the launch screen: an unreachable host must not hold the first frame
