@@ -4,7 +4,7 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
-## Unreleased
+## 0.30.4-beta.4
 
 - [tv] The launch screen logo got bigger: the mark now takes a fifth of the screen width, the same on 1080p and on 4K
 - [tech] The pairing link and the language switcher on the site follow only omp-player.online: an address that merely starts with our domain no longer reaches the intent or the href
