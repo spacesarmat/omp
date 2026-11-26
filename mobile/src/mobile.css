@@ -1501,9 +1501,11 @@ button.m-now-chtext { border: none; background: none; color: inherit; display: f
    chevron, a switch or a value: rows that grew the text by hand looked different from rows that did not */
 .m-screen[data-route='settings'] .m-set-row .m-set-text,
 .m-screen[data-route='advanced'] .m-set-row .m-set-text { flex: 1 1 auto; }
-/* the second line of a row is a value, not a title: rows spelled it two ways, 13px and the inherited 16px */
-.m-screen[data-route='settings'] .m-set-row .m-muted,
-.m-screen[data-route='advanced'] .m-set-row .m-muted { font-size: 13px; }
+/* the second line under a name is a value, not a title: rows spelled it two ways, 13px and the inherited 16px.
+   Only inside the stacked column: a row can also wear m-muted on its main label for color alone (the account row
+   does exactly that while it checks), and that text is a title and keeps the title size */
+.m-screen[data-route='settings'] .m-set-text .m-muted,
+.m-screen[data-route='advanced'] .m-set-text .m-muted { font-size: 13px; }
 .m-screen[data-route='settings'] .m-set-group > .m-btn { margin: 0; align-self: stretch; width: 100%; border-radius: 0; }
 .m-screen[data-route='settings'] .m-set-group > .m-set-label + .m-set-row,
 .m-screen[data-route='advanced'] .m-set-group > .m-set-label + .m-set-row,
