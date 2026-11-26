@@ -316,27 +316,109 @@ export function parseFeed(xml) {
 
 const OMP_ATTRS = ['omp_rank', 'omp_reason', 'omp_voice'];
 
-/** Whether this one tag is an attribute of ours, however the name is quoted and whatever sits before it. */
-function isOmpAttr(tag) {
-  const m = /(?:^|\s)name\s*=\s*(?:"([^"]*)"|'([^']*)')/i.exec(tag);
-  if (!m) return false;
-  return OMP_ATTRS.indexOf(String(m[1] !== undefined ? m[1] : m[2] || '').toLowerCase()) >= 0;
+/**
+ * Where the tag that starts at `from` ends - past its `>` - or -1 when it is not a tag at all. A `>` inside a
+ * quoted attribute value is text, so `<torznab:attr name="title" value="a>b"/>` is one tag, not two; a `<`
+ * before any `>` means this `<` was not opening a tag.
+ */
+function tagEnd(text, from) {
+  let quote = '';
+  for (let i = from + 1; i < text.length; i++) {
+    const ch = text.charAt(i);
+    if (quote) {
+      if (ch === quote) quote = '';
+      continue;
+    }
+    if (ch === '"' || ch === "'") quote = ch;
+    else if (ch === '>') return i + 1;
+    else if (ch === '<') return -1;
+  }
+  return -1;
 }
 
-/** Where the next closing tag ends (past its `>`), or -1 when there is none. */
-function closingTagEnd(text, from) {
-  const lt = text.indexOf('</', from);
-  if (lt < 0) return -1;
-  const gt = text.indexOf('>', lt);
-  return gt < 0 ? -1 : gt + 1;
+/** The local name of an element as written, without its prefix: `torznab:attr` is `attr`. */
+function localName(tag) {
+  const m = /^<\s*\/?\s*(?:[A-Za-z_][\w.-]*:)?([A-Za-z_][\w.-]*)/.exec(tag);
+  return m ? m[1].toLowerCase() : '';
+}
+
+/**
+ * The attributes of one tag, read outside quoted values so that a `name=` sitting inside somebody's value is
+ * not taken for an attribute. Names come back lower-cased.
+ */
+function attributesOf(tag) {
+  const inner = tag.slice(1, tag.charAt(tag.length - 2) === '/' ? -2 : -1);
+  const found = {};
+  let i = 0;
+  while (i < inner.length) {
+    while (i < inner.length && /[\s/]/.test(inner.charAt(i))) i++;
+    let name = '';
+    while (i < inner.length && !/[\s=/"']/.test(inner.charAt(i))) {
+      name += inner.charAt(i);
+      i++;
+    }
+    if (!name) break;
+    while (i < inner.length && /\s/.test(inner.charAt(i))) i++;
+    let value = '';
+    if (inner.charAt(i) === '=') {
+      i++;
+      while (i < inner.length && /\s/.test(inner.charAt(i))) i++;
+      const quote = inner.charAt(i);
+      if (quote === '"' || quote === "'") {
+        i++;
+        const start = i;
+        while (i < inner.length && inner.charAt(i) !== quote) i++;
+        value = inner.slice(start, i);
+        i++;
+      } else {
+        const start = i;
+        while (i < inner.length && !/[\s>]/.test(inner.charAt(i))) i++;
+        value = inner.slice(start, i);
+      }
+    }
+    found[name.toLowerCase()] = value;
+  }
+  return found;
+}
+
+/** Whether this tag is one of our omp attributes: an `attr` element whose own name attribute says so. */
+function isOmpAttr(tag) {
+  if (localName(tag) !== 'attr') return false;
+  return OMP_ATTRS.indexOf(String(attributesOf(tag).name || '').toLowerCase()) >= 0;
+}
+
+/**
+ * Index past the closing tag of the element that opens at `openEnd`, counting nested elements of the same
+ * name, or -1 when it never closes. Stopping at the first `</` would leave the outer closing tag of
+ * `<attr ...><attr .../></attr>` dangling and the feed would no longer parse.
+ */
+function blockEnd(text, openEnd, name) {
+  let depth = 1;
+  let i = openEnd;
+  while (i < text.length) {
+    const lt = text.indexOf('<', i);
+    if (lt < 0) return -1;
+    const end = tagEnd(text, lt);
+    if (end < 0) {
+      i = lt + 1;
+      continue;
+    }
+    const tag = text.slice(lt, end);
+    if (localName(tag) === name) {
+      if (tag.charAt(1) === '/') depth--;
+      else if (tag.charAt(tag.length - 2) !== '/') depth++;
+      if (depth === 0) return end;
+    }
+    i = end;
+  }
+  return -1;
 }
 
 export function stripOmp(item) {
-  // Tags are walked one at a time instead of being erased by a pattern over the whole string. A pattern leaves
-  // whatever it did not expect - an attribute in single quotes, a tag that never closes, an omp name behind a
+  // Tags are walked one at a time instead of erased by a pattern over the whole string: a pattern leaves
+  // whatever it did not expect - an attribute in single quotes, a `>` inside a value, an omp name behind a
   // broken neighbour - and one leftover upstream omp_rank wins over the one we append, because the app keeps
-  // the first value of each name. Here every `<` is looked at on its own, so nothing can hide behind the
-  // previous match, and the block form loses its content and its closing tag together with the opening one.
+  // the first value of each name. Everything that is not ours is given back byte for byte.
   let out = '';
   let at = 0;
   while (at < item.length) {
@@ -346,24 +428,27 @@ export function stripOmp(item) {
       break;
     }
     out += item.slice(at, lt);
-    const gt = item.indexOf('>', lt);
-    if (gt < 0) {
-      // nothing closes this tag: the rest of the string is text as far as we are concerned
-      out += item.slice(lt);
-      break;
+    const end = tagEnd(item, lt);
+    if (end < 0) {
+      // this `<` opens nothing: it is text, and the tag we are looking for starts later
+      out += '<';
+      at = lt + 1;
+      continue;
     }
-    const tag = item.slice(lt, gt + 1);
+    const tag = item.slice(lt, end);
     if (!isOmpAttr(tag)) {
       out += tag;
-      at = gt + 1;
+      at = end;
       continue;
     }
     if (tag.charAt(tag.length - 2) === '/') {
-      at = gt + 1;
+      at = end;
       continue;
     }
-    const end = closingTagEnd(item, gt + 1);
-    at = end < 0 ? item.length : end;
+    // an element that never closes gives up its opening tag only: taking the rest of the item with it would
+    // drop the sibling fields of a row that is still worth showing
+    const closed = blockEnd(item, end, localName(tag));
+    at = closed < 0 ? end : closed;
   }
   return out;
 }

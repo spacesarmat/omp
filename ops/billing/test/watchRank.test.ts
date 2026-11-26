@@ -153,6 +153,34 @@ describe('watch rank score', () => {
     expect(stripOmp(mixed)).not.toContain('omp_voice');
   });
 
+  it('reads attributes of the tag, not of the text around them', () => {
+    // a name= sitting inside somebody else's value is not an attribute: the row is not ours to remove
+    const decoy = `<item><title>S</title><torznab:attr name="other" value='name="omp_rank"'/><torznab:attr name="infohash" value="${B}"/></item>`;
+    expect(stripOmp(decoy)).toBe(decoy);
+    // and a real omp attribute behind a decoy value still goes
+    const real = '<item><title>S</title><torznab:attr name="other" value=\'name="omp_rank"\'/><torznab:attr name="omp_rank" value="9"/></item>';
+    expect(stripOmp(real).indexOf('name="omp_rank" value="9"')).toBe(-1);
+    expect(stripOmp(real)).toContain('name="other"');
+  });
+
+  it('keeps a tag whose value contains a `>` whole', () => {
+    // `>` is legal inside an attribute value: cutting the tag at it would eat the rest of the row
+    const keep = `<item><title>S</title><torznab:attr name="seeders" value="a>b"/><torznab:attr name="infohash" value="${B}"/></item>`;
+    expect(stripOmp(keep)).toBe(keep);
+    const drop = '<item><title>S</title><torznab:attr name="omp_rank" value="a>b"/><torznab:attr name="infohash" value="' + B + '"/></item>';
+    expect(stripOmp(drop)).not.toContain('omp_rank');
+    expect(stripOmp(drop)).not.toContain('a>b');
+    expect(stripOmp(drop)).toContain('infohash');
+  });
+
+  it('removes a nested block by the closing tag of its own element', () => {
+    const nestedBlock =
+      '<item><title>S</title><torznab:attr name="omp_reason" value="x"><torznab:attr name="seeders" value="1"/></torznab:attr>y</item>';
+    expect(stripOmp(nestedBlock)).not.toContain('omp_reason');
+    expect(stripOmp(nestedBlock)).not.toContain('</torznab:attr>');
+    expect(stripOmp(nestedBlock)).toContain('<item><title>S</title>y</item>');
+  });
+
   it('never lets an annotation value break out of its attribute', () => {
     const row = parseFeed(feed(item('Show', B, '5'))).items[0];
     const out = annotate(row, { reorder: true, rank: 12.7, reason: 'x" evil="<script>', voice: 'Lost"Film' });
