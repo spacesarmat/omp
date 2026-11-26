@@ -314,18 +314,32 @@ export function parseFeed(xml) {
   return { original: src, items, head, tail, truncated: chunks.length > items.length ? chunks.slice(items.length) : [] };
 }
 
-function stripOmp(item) {
-  return item
-    .replace(/<[^>]*\battr\b[^>]*\bname="omp_(?:rank|reason|voice)"[^>]*\/>/gi, '')
-    .replace(/<[^>]*\battr\b[^>]*\bname="omp_(?:rank|reason|voice)"[^>]*>[\s\S]*?<\/[^>]*attr>/gi, '');
+/** An omp attribute of ours, written any way XML allows: both quote styles and any spaces around the `=`. */
+const OMP_SELF = /<[^>]*\battr\b[^>]*\bname\s*=\s*["']omp_(?:rank|reason|voice)["'][^>]*\/>/gi;
+const OMP_BLOCK = /<[^>]*\battr\b[^>]*\bname\s*=\s*["']omp_(?:rank|reason|voice)["'][^>]*>[\s\S]*?<\/[^>]*attr>/gi;
+
+export function stripOmp(item) {
+  // One pass is not enough: a tag that never closes, or an omp attribute behind a quote the pattern did not
+  // expect, survives a single replace and comes back into the feed we are about to sign. The passes repeat
+  // until the string stops changing, so what is left carries none of our omp attributes. They must all go:
+  // the app keeps the first value of each name, so an upstream omp_rank would win over the one we append.
+  let out = item;
+  for (let i = 0; i < 8; i++) {
+    const next = out.replace(OMP_SELF, '').replace(OMP_BLOCK, '');
+    if (next === out) break;
+    out = next;
+  }
+  return out;
 }
 
-function annotate(item, fields) {
+export function annotate(item, fields) {
   let xml = stripOmp(item.xml);
   const bits = [];
   if (fields.reorder) {
-    bits.push('<torznab:attr name="omp_rank" value="' + String(fields.rank) + '"/>');
-    bits.push('<torznab:attr name="omp_reason" value="' + fields.reason + '"/>');
+    // both values go into an XML attribute, so both are escaped: today the reason comes from a closed list and
+    // the rank is a number, but the feed must stay well formed even if either of that ever changes
+    bits.push('<torznab:attr name="omp_rank" value="' + xmlAttr(Math.round(Number(fields.rank) || 0)) + '"/>');
+    bits.push('<torznab:attr name="omp_reason" value="' + xmlAttr(fields.reason) + '"/>');
   }
   if (fields.voice) bits.push('<torznab:attr name="omp_voice" value="' + xmlAttr(fields.voice) + '"/>');
   if (!bits.length) return xml;

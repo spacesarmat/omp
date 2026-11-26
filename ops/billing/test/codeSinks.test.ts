@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { formatCode, safeCode, appSchemeUrl } from '../src/logic.mjs';
+import { formatCode, safeCode, appSchemeUrl, searchPathOption } from '../src/logic.mjs';
 import { goPage } from '../src/go.mjs';
 import { normalizeCode, randomCode } from '../src/crypto.mjs';
+import { plainText } from '../src/botCopy.mjs';
 
 const CODE_OK = /^[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}$/;
 
@@ -53,5 +54,34 @@ describe('subscription codes', () => {
     }
     // 32^8 possibilities: 500 draws must not collapse into a few
     expect(seen.size).toBeGreaterThan(480);
+  });
+});
+
+describe('plain text of an invoice description', () => {
+  it('restores entities before the tags go away', () => {
+    expect(plainText('<b>Оплата</b> 300 ₽')).toBe('Оплата 300 ₽');
+    // "&lt;b&gt;" is markup only after the unescape: stripping first would let it back in
+    expect(plainText('&lt;script&gt;alert(1)&lt;/script&gt;')).toBe('alert(1)');
+    expect(plainText('&lt;script&gt;alert(1)&lt;/script&gt;')).not.toContain('<script');
+    expect(plainText('&amp;lt;script&amp;gt;')).toBe('&lt;script&gt;');
+  });
+
+  it('repeats the tag pass until nothing is left of a nested tag', () => {
+    const nested = '<scr<script>ipt>alert(1)</ipt>';
+    expect(plainText(nested)).not.toContain('<script');
+    expect(plainText(nested)).toContain('alert(1)');
+    expect(plainText('')).toBe('');
+    expect(plainText(null)).toBe('');
+  });
+});
+
+describe('a schema name for the server options', () => {
+  it('accepts only a plain identifier', () => {
+    expect(searchPathOption('http_lz1a2b_9f8e7d6c')).toBe('-c search_path="http_lz1a2b_9f8e7d6c"');
+    // the value is parsed by Postgres before any SQL quoting, so a quote or a space here would be a second option
+    expect(() => searchPathOption('a" -c log_min_messages=debug1')).toThrow(/plain identifier/);
+    expect(() => searchPathOption('a\\b')).toThrow(/plain identifier/);
+    expect(() => searchPathOption('схема')).toThrow(/plain identifier/);
+    expect(() => searchPathOption('1abc')).toThrow(/plain identifier/);
   });
 });

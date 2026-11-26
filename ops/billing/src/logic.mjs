@@ -3467,4 +3467,16 @@ export function releaseReminder(state, { subscriptionId, kind, paidUntil }) {
   return { ...state, subscriptions };
 }
 
+/**
+ * A schema name for the libpq `search_path` option, as `-c search_path="name"`. The option string is parsed by
+ * the server before any SQL quoting applies, so a quote, a space or a backslash inside the name would be read as
+ * more options: only a plain identifier passes. Every schema this code creates is one (tests name them
+ * `http_<base36>_<hex>`).
+ */
+export function searchPathOption(schema) {
+  const name = String(schema);
+  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) throw new Error('pg schema must be a plain identifier: ' + name);
+  return '-c search_path="' + name + '"';
+}
+
 export { liveSub };

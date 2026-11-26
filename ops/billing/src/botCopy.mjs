@@ -287,6 +287,27 @@ export function escapeHtml(value) {
 }
 
 /**
+ * Bot markup as plain text, for the places Telegram takes no markup at all (an invoice description).
+ * Entities are restored first: stripping tags while "&lt;b&gt;" is still an entity brings that markup back
+ * in the unescape that follows. The tag pass then repeats until the string stops changing, because one pass
+ * leaves a tag that hides behind an unbalanced neighbour.
+ */
+export function plainText(value) {
+  let out = String(value ?? '')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&amp;/g, '&');
+  for (let i = 0; i < 8; i++) {
+    const next = out.replace(/<[^>]*>/g, '');
+    if (next === out) break;
+    out = next;
+  }
+  return out;
+}
+
+/**
  * `raw` lists the keys whose value is already safe HTML built by the code (a rendered fragment or a
  * <code> block). Every other value is escaped, so user and admin data never becomes markup.
  */

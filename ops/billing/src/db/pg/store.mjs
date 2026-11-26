@@ -10,6 +10,7 @@
 import { createHash } from 'node:crypto';
 import pg from 'pg';
 import { normalizeState } from '../../state.mjs';
+import { searchPathOption } from '../../logic.mjs';
 import { LOG_TABLES, expiredLogCounts, pruneLogs, retentionCutoffs } from '../../retention.mjs';
 import { decodeRow, encodeRow } from './mapper.mjs';
 import * as reg from './registry.mjs';
@@ -247,7 +248,7 @@ export async function storeVersion(q) {
 /** A migrated pool. `schema` (tests) puts every table in that schema. Shared by the store and the data migration. */
 export async function openPool({ connectionString, schema, max }) {
   const config = { connectionString, types, max: max || 5 };
-  if (schema) config.options = '-c search_path=' + quoteIdent(schema).replace(/ /g, '\\ ');
+  if (schema) config.options = searchPathOption(schema);
   if (schema) {
     const boot = new pg.Client({ connectionString, types });
     await boot.connect();
