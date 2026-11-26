@@ -4,6 +4,10 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## Unreleased
+
+- [tech] The pairing link and the language switcher on the site follow only omp-player.online: an address that merely starts with our domain no longer reaches the intent or the href
+
 ## 0.30.4-beta.3
 
 - The "In library" mark, the poster search and the year line no longer mix a title up with a year: a release of "1917 (2019)" is dated 2019, and "Blade Runner 2049" is searched by its whole name
