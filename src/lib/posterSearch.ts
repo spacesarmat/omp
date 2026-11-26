@@ -18,6 +18,32 @@ export function posterQuery(title: string): string {
   return q;
 }
 
+// The words of a release line that say which episodes it holds, not what the work is called.
+const MARK_WORD = /^(?:сезон[аеуы]*|сезонов|seasons?|серии|серий|серия|серийный|эпизод[аы]*|эпизодов|episodes?|из|of|от|by)$/i;
+const MARK_NUM = /^\d{1,4}(?:[.\u2013-]\d{1,4})?(?:й|ый|я|ая)?$/i;
+const MARK_SEP = /^[-.,:;/|&·•\u2013\u2014]+$/;
+
+// Nothing to trim unless the line ends with a number or one of those words: titleCore runs for every torrent.
+const MAYBE_TAIL = /(?:\d|сезон[аеуы]*|сезонов|seasons?|серии|серий|серия|эпизод[аы]*|эпизодов|episodes?|из|of|от|by)[\s:.,;-]*$/i;
+
+/**
+ * The season and episode tail of a name: «Тест 1 сезон 1-8 серия» is named «Тест», «Dark Matter · Серии: 1-6 из 9 ·
+ * 2 сезон» is «Dark Matter». It starts only at a mark word, or at a number that such a word introduces («из 9»), so
+ * a number belonging to the name («Два холма 2», «S2E1-10») is left alone, and it never eats the whole line.
+ */
+function trimMarks(s: string): string {
+  if (!MAYBE_TAIL.test(s)) return s;
+  const words = s.split(/\s+/).filter(Boolean);
+  const word = (w: string): boolean => MARK_WORD.test((w || '').replace(/[\s:.,;-]+$/, ''));
+  const droppable = (w: string): boolean => word(w) || MARK_NUM.test(w) || MARK_SEP.test(w);
+  let end = words.length;
+  if (!end) return s;
+  const last = words[end - 1];
+  if (!word(last) && !(MARK_NUM.test(last) && word(words[end - 2] || ''))) return s;
+  while (end > 1 && droppable(words[end - 1])) end--;
+  return words.slice(0, end).join(' ');
+}
+
 /** The title proper of a torrent title: before « [», « (», « / », « | », the year, season or release details. */
 export function titleCore(title: string): string {
   let s = (title || '').trim();
@@ -30,6 +56,9 @@ export function titleCore(title: string): string {
   if (s.indexOf(' ') < 0) s = s.replace(/[._]+/g, ' ');
   const tail = TAIL.exec(s);
   if (tail && tail.index > 0) s = s.slice(0, tail.index);
+  // what the cut left behind still ends with the season and the episodes: the key of the work is its name alone
+  const named = trimMarks(s);
+  if (named) s = named;
   return s.replace(/\s*(?:сезон|season)\s*$/i, '').replace(/[\s.,:;-]+$/, '').replace(/\s+/g, ' ').trim();
 }
 

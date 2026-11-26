@@ -7,6 +7,19 @@ describe('library matching', () => {
     expect(libraryKey('Abc', 0)).toBe('abc|0');
   });
 
+  it('a season pack that writes no year is found by its name', () => {
+    // «1 сезон 1-8 серия» is a mark, not part of the name: the key of the work stays «Орбитальная станция»
+    const idx = libraryIndex([{ title: 'Орбитальная станция 1 сезон 1-8 серия WEB-DL 1080p' }]);
+    expect(inLibrary(idx, { title: 'Орбитальная станция', original: 'Orbit Station', year: 2024, kind: 'tv' })).toBe(true);
+    const dot = libraryIndex([{ title: 'Первый отдел 1 сезон 8 серия 1080p' }]);
+    expect(inLibrary(dot, { title: 'Первый отдел', original: '', year: 2023, kind: 'tv' })).toBe(true);
+    // a number of its own name is not a mark
+    const named = libraryIndex([{ title: 'Два холма 2 сезон 10 серия' }]);
+    expect(inLibrary(named, { title: 'Два холма', original: 'Hill of Two', year: 2020, kind: 'tv' })).toBe(true);
+    const two = libraryIndex([{ title: 'Два холма 2 (2024) 1 сезон' }]);
+    expect(inLibrary(two, { title: 'Два холма 2', original: '', year: 2024, kind: 'tv' })).toBe(true);
+  });
+
   it('matches a torrent with the year in the title', () => {
     const idx = libraryIndex([{ title: 'Северный ветер (2026) WEB-DL 1080p' }]);
     expect(inLibrary(idx, { title: 'Северный ветер', original: 'North Wind', year: 2026 })).toBe(true);

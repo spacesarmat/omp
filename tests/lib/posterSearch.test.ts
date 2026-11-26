@@ -1,9 +1,21 @@
 import { describe, it, expect } from 'vitest';
-import { posterQuery, tmdbSearchUrl, tmdbSearchRequest, firstPoster } from '../../src/lib/posterSearch';
+import { posterQuery, titleCore, tmdbSearchUrl, tmdbSearchRequest, firstPoster } from '../../src/lib/posterSearch';
 import { posterChoice, posterName, posterQueries, requestPoster, requestShow, setPosterLookup, setShowLookup, showChoice, type ShowHit } from '../../src/catalog/resultPosters';
 import { posterImageSize } from '../../src/catalog/tmdb';
 
 describe('posterQuery', () => {
+  it('a name that ends with the season and the episodes is the name alone', () => {
+    expect(titleCore('Тест 1 сезон 1-8 серия WEB-DL 1080p')).toBe('Тест');
+    expect(titleCore('Мажор 3 сезон')).toBe('Мажор');
+    expect(titleCore('Dark Matter · Серии: 1-6 из 9 · 2 сезон')).toBe('Dark Matter');
+    expect(titleCore('Рагнарек · 1 сезон · серии 1-6 из 6')).toBe('Рагнарек');
+    expect(titleCore('Слово пацана 1-8 серии')).toBe('Слово пацана');
+    // a number that belongs to the name stays: it is not a season mark
+    expect(titleCore('Два холма 2')).toBe('Два холма 2');
+    expect(titleCore('S2E1-10')).toBe('S2E1-10');
+    expect(titleCore('Сезон дождя')).toBe('Сезон дождя');
+  });
+
   it('keeps the title before the year, translation and release details', () => {
     expect(posterQuery('Дюна: Часть вторая / Dune: Part Two (2024) WEB-DL 1080p')).toBe('Дюна: Часть вторая');
     expect(posterQuery('Интерстеллар [2014, BDRip]')).toBe('Интерстеллар');
