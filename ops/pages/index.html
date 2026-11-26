@@ -1,275 +1,488 @@
 <!doctype html>
-<html lang="ru">
+<html lang="ru" data-channel="stable">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="text-scale" content="scale">
   <meta name="description" content="Скачать OMP для Android, Android TV, Windows, macOS, Linux и LG webOS. Стабильная версия и бета с прямыми ссылками на APK, EXE, DMG, AppImage и IPK.">
-  <meta name="theme-color" content="#111310">
+  <meta name="theme-color" content="#101114">
   <link rel="canonical" href="/omp/">
   <link rel="alternate" hreflang="ru" href="/omp/">
   <link rel="alternate" hreflang="en" href="/omp/en/">
   <title>Скачать OMP - Android, webOS, Windows, macOS и Linux</title>
   <style>
-    :root { color-scheme: dark; --bg: #111310; --panel: #181a15; --text: #f2f2e9; --muted: #b3b8a8; --subtle: #8d927f; --yellow: #f9c400; --line: #31342c; }
+    :root {
+      color-scheme: dark;
+      --bg: #101114;
+      --panel: #191b20;
+      --panel-2: #1d1f25;
+      --text: #f4f5f7;
+      --muted: #a4a8b2;
+      --subtle: #777c87;
+      --line: #30333b;
+      --accent: #f07835;
+      --accent-hover: #ff8a45;
+    }
     @font-face { font-family: Manrope; font-style: normal; font-weight: 400 800; font-display: swap; src: url("./assets/manrope-latin.woff2") format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
     @font-face { font-family: Manrope; font-style: normal; font-weight: 400 800; font-display: swap; src: url("./assets/manrope-cyrillic.woff2") format("woff2"); unicode-range: U+0301, U+0400-045F, U+0490-0491, U+04B0-04B1, U+2116; }
     * { box-sizing: border-box; }
-    body { margin: 0; background: var(--bg); color: var(--text); font-family: Manrope, "Segoe UI", sans-serif; line-height: 1.55; }
+    [hidden] { display: none !important; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background: radial-gradient(ellipse at 78% 12%, rgba(240, 120, 53, 0.075), transparent 30%), var(--bg);
+      color: var(--text);
+      font-family: Manrope, "Segoe UI", sans-serif;
+      line-height: 1.55;
+    }
     a { color: inherit; text-decoration: none; }
-    a:focus-visible, button:focus-visible { outline: 2px solid var(--yellow); outline-offset: 3px; }
-    a:hover { color: var(--yellow); }
+    a:hover { color: var(--accent-hover); }
+    a:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
     .wrap { width: min(1200px, calc(100% - 40px)); margin-inline: auto; }
-    .header { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding-block: 28px; border-bottom: 1px solid var(--line); }
-    .brand { display: flex; align-items: center; gap: 12px; font-size: 24px; font-weight: 800; letter-spacing: -0.8px; }
-    .brand:hover { color: inherit; }
+    .site-header {
+      position: sticky; top: 0; z-index: 10;
+      display: flex; align-items: center; justify-content: space-between; gap: 20px;
+      min-height: 76px; padding-block: 14px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.09);
+      background: rgba(16, 17, 20, 0.88); backdrop-filter: blur(14px);
+    }
+    .site-header .wrap { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+    .brand { display: flex; align-items: center; gap: 12px; font-size: 26px; font-weight: 800; letter-spacing: -1px; }
+    .brand:hover { color: var(--text); }
     .brand-logo { display: block; width: 40px; height: 40px; }
-    .header nav { display: flex; align-items: center; gap: 20px; }
-    .header nav a { color: var(--muted); font-size: 13px; font-weight: 500; }
-    .header nav a[aria-current="page"] { color: var(--yellow); }
-    .hero { padding-block: 56px 32px; }
-    .eyebrow { color: var(--yellow); font-size: 11px; font-weight: 700; letter-spacing: 2px; line-height: 16px; }
-    h1 { margin: 16px 0; font-size: 56px; font-weight: 500; line-height: 62px; letter-spacing: -2px; overflow-wrap: anywhere; }
-    .hero p { max-width: 40rem; margin: 0 0 24px; color: var(--muted); font-size: 18px; line-height: 30px; }
-    .main-site { display: inline-block; border-bottom: 1px solid var(--yellow); padding-bottom: 2px; color: var(--yellow); font-weight: 600; }
-    .main-site:hover { color: var(--yellow); }
-    .tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; padding-bottom: 28px; }
-    .tile { display: grid; grid-template-rows: subgrid; grid-row: span 6; gap: 12px; min-width: 0; padding: 24px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); }
-    .tile[hidden] { display: none; }
-    .tile.is-yours { order: -1; border-color: var(--yellow); }
+    .brand-divider { height: 30px; width: 1px; background: var(--line); }
+    .brand-caption { font-size: 10px; line-height: 1.25; color: var(--subtle); letter-spacing: 0.8px; font-weight: 700; }
+    .main-nav { display: flex; align-items: center; gap: 26px; }
+    .main-nav a { color: var(--muted); font-size: 14px; font-weight: 600; }
+    .main-nav a:hover { color: var(--accent-hover); }
+    .language-switch { display: flex; align-items: center; gap: 10px; border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; }
+    .language-switch a { color: var(--subtle); font-size: 12px; font-weight: 700; padding: 2px; }
+    .language-switch a[aria-current="page"] { color: var(--accent); }
+    .language-switch i { width: 1px; height: 14px; background: var(--line); }
+    .menu-toggle { display: none; background: none; border: 1px solid var(--line); color: var(--text); border-radius: 8px; padding: 8px 11px; font-size: 18px; cursor: pointer; }
+    .hero { position: relative; display: flex; align-items: center; min-height: 320px; padding-block: 46px 34px; }
+    .hero-copy { position: relative; z-index: 2; max-width: 720px; }
+    .eyebrow { display: flex; align-items: center; gap: 14px; margin: 0; color: var(--accent); font-size: 12px; font-weight: 800; letter-spacing: 1.8px; line-height: 16px; }
+    .eyebrow i { width: 76px; height: 1px; background: linear-gradient(90deg, var(--accent), transparent); }
+    h1 { margin: 16px 0 14px; font-size: 56px; font-weight: 800; line-height: 1.08; letter-spacing: -2px; overflow-wrap: anywhere; }
+    .hero-lead { max-width: 42rem; margin: 0 0 22px; color: var(--muted); font-size: 18px; line-height: 30px; }
+    .open-source { display: inline-flex; align-items: center; gap: 10px; padding: 9px 16px; border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 999px; background: rgba(255, 255, 255, 0.055); color: #e1e2e6; font-size: 13px; font-weight: 600; }
+    .open-source:hover { border-color: rgba(240, 120, 53, 0.5); color: var(--text); }
+    .open-source span { color: var(--accent); font-size: 16px; }
+    .hero-art { position: absolute; right: 0; top: 0; width: 440px; height: 320px; display: grid; place-items: center; opacity: 0.95; pointer-events: none; }
+    .art-glow { position: absolute; width: 330px; height: 240px; background: radial-gradient(ellipse, rgba(240, 120, 53, 0.2), transparent 68%); filter: blur(15px); }
+    .art-orbit { position: absolute; border: 1px solid rgba(240, 120, 53, 0.15); transform: rotate(-25deg); border-radius: 35px; }
+    .orbit-one { width: 420px; height: 200px; }
+    .orbit-two { width: 520px; height: 260px; }
+    .play-frame { width: 180px; height: 180px; border: 3px solid var(--accent); border-radius: 38px; transform: rotate(45deg); display: grid; place-items: center; box-shadow: 0 0 38px rgba(240, 120, 53, 0.18), inset 0 0 30px rgba(240, 120, 53, 0.08); }
+    .play-frame svg { width: 116px; height: 116px; transform: rotate(-45deg); fill: rgba(240, 120, 53, 0.2); stroke: var(--accent); stroke-width: 5; stroke-linejoin: round; }
+    .section-top { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; margin-bottom: 20px; }
+    .kicker { margin: 0 0 5px; color: var(--accent); font-size: 10px; font-weight: 800; letter-spacing: 1.8px; line-height: 14px; }
+    .section-top h2 { margin: 0; font-size: 23px; letter-spacing: -0.7px; }
+    .channel-switch { display: flex; align-items: center; border: 1px solid var(--line); border-radius: 999px; padding: 4px; background: #17191e; }
+    .channel-switch button { display: flex; align-items: center; gap: 8px; border: 0; border-radius: 999px; padding: 10px 17px; background: transparent; color: var(--muted); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+    .channel-switch button.selected { background: var(--accent); color: #fff; box-shadow: 0 2px 12px rgba(240, 120, 53, 0.2); }
+    .channel-switch .switch-dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+    .channel-switch .beta-symbol { font-size: 16px; font-weight: 800; }
+    .tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; padding-bottom: 28px; }
+    .tile { display: grid; grid-template-rows: subgrid; grid-row: span 6; gap: 12px; min-width: 0; padding: 22px; border: 1px solid var(--line); border-radius: 13px; background: linear-gradient(145deg, #1d1f25, #191b20); }
+    .tile.is-yours, .tile.is-recommended { border-color: var(--accent); box-shadow: 0 0 0 1px rgba(240, 120, 53, 0.08); }
     .tile-top { display: flex; gap: 14px; align-items: flex-start; }
-    .icon { flex: 0 0 36px; width: 36px; height: 36px; color: var(--yellow); }
-    .icon svg { display: block; width: 36px; height: 36px; }
-    .tile h2 { margin: 0; font-size: 20px; line-height: 28px; letter-spacing: -0.3px; font-weight: 600; }
+    .icon { flex: 0 0 46px; width: 46px; height: 46px; color: var(--accent); }
+    .icon svg { display: block; width: 46px; height: 46px; }
+    .tile[data-platform="android"] .icon { color: #91d34f; }
+    .tile[data-platform="android-tv"] .icon { color: #50c66a; }
+    .tile[data-platform="webos"] .icon { color: #ef315b; }
+    .tile[data-platform="windows"] .icon { color: #19a9ef; }
+    .tile[data-platform="macos"] .icon { color: #e8eaee; }
+    .tile[data-platform="linux"] .icon { color: #f3d54b; }
+    .tile h2 { margin: 0; font-size: 20px; line-height: 28px; letter-spacing: -0.3px; font-weight: 700; }
+    .os { margin: 2px 0 0; color: var(--subtle); font-size: 12px; font-weight: 700; letter-spacing: 0.6px; }
     .lead { margin: 4px 0 0; color: var(--muted); font-size: 14px; line-height: 22px; }
-    .you { margin: 0 0 4px; color: var(--yellow); font-size: 11px; font-weight: 700; letter-spacing: 2px; line-height: 16px; }
+    .you { margin: 0 0 4px; color: var(--accent); font-size: 10px; font-weight: 800; letter-spacing: 1.6px; line-height: 14px; }
     .meta { display: flex; flex-wrap: wrap; gap: 8px 12px; margin: 0; align-items: baseline; }
     .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13px; line-height: 20px; color: var(--text); white-space: normal; overflow-wrap: anywhere; }
-    .button { display: block; padding: 14px 22px; border-radius: 6px; text-align: center; font-weight: 600; overflow-wrap: anywhere; }
-    .button.primary { background: var(--yellow); color: #111310; }
-    .button.primary:hover { background: #ffd24a; color: #111310; }
+    .button { display: block; padding: 13px 20px; border-radius: 8px; text-align: center; font-weight: 700; font-size: 14px; overflow-wrap: anywhere; }
+    .button.primary { background: var(--accent); color: #fff; }
+    .button.primary:hover { background: var(--accent-hover); color: #fff; }
     .button.secondary { border: 1px solid var(--line); color: var(--text); }
-    .button.secondary:hover { border-color: var(--yellow); color: var(--text); }
+    .button.secondary:hover { border-color: var(--accent); color: var(--text); }
     .hash { align-self: flex-start; max-width: 100%; margin: 0; padding: 6px 10px; border: 1px solid var(--line); border-radius: 999px; background: transparent; color: var(--muted); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; line-height: 16px; overflow-wrap: anywhere; cursor: pointer; }
-    .hash:hover { border-color: var(--yellow); color: var(--text); }
+    .hash:hover { border-color: var(--accent); color: var(--text); }
     .abis { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 8px; }
     .chip { padding: 6px 10px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); font-size: 12px; font-weight: 600; }
-    .chip:hover { border-color: var(--yellow); color: var(--text); }
-    .abis .button { flex: 1 1 12rem; text-align: center; }
-    .beta { border-top: 1px solid var(--line); padding-top: 12px; display: flex; flex-direction: column; gap: 12px; }
-    .beta summary { cursor: pointer; color: var(--yellow); font-size: 13px; font-weight: 600; }
+    .chip:hover { border-color: var(--accent); color: var(--text); }
+    .beta { grid-row: 6; border-top: 1px solid var(--line); padding-top: 12px; display: flex; flex-direction: column; gap: 12px; }
+    .beta-flag { display: inline-block; padding: 2px 10px; border: 1px solid var(--accent); border-radius: 999px; color: var(--accent); font-size: 11px; font-weight: 800; letter-spacing: 1px; line-height: 18px; }
+    .beta-empty { margin: 0; color: var(--subtle); font-size: 13px; line-height: 20px; }
+    .beta-empty a { text-decoration: underline; text-underline-offset: 3px; }
+    .beta-empty a:hover { color: var(--accent-hover); }
+    [data-channel="stable"] .beta { display: none; }
+    [data-channel="beta"] .tile-top { grid-row: 1; }
+    [data-channel="beta"] .beta { display: flex; }
+    .help-strip { display: grid; grid-template-columns: 1fr 1fr; align-items: center; gap: 20px; margin-bottom: 18px; padding: 14px 20px; border: 1px solid #2c2f36; border-radius: 12px; background: linear-gradient(110deg, #1a1c22, #1d1f24); }
+    .help-left, .help-note { display: flex; align-items: center; gap: 13px; min-width: 0; }
+    .help-left strong { font-size: 13px; }
+    .help-icon { width: 30px; height: 30px; flex: 0 0 30px; border-radius: 50%; display: grid; place-items: center; background: var(--accent); color: #fff; font-size: 19px; font-weight: 800; }
+    .helper-link { border: 0; background: none; color: var(--accent); font: inherit; font-size: 13px; font-weight: 800; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; white-space: nowrap; }
+    .helper-link:hover { color: var(--accent-hover); }
+    .helper-link span { font-size: 18px; text-decoration: none; margin-left: 5px; }
+    .help-note { border-left: 1px solid #454851; padding-left: 22px; color: var(--muted); font-size: 12px; }
+    .info-icon { width: 21px; height: 21px; flex: 0 0 21px; border-radius: 50%; display: grid; place-items: center; background: #555b68; color: #17191e; font-size: 13px; font-weight: 900; }
     .fallback { margin: 0 0 40px; color: var(--subtle); font-size: 13px; line-height: 20px; }
     .fallback a { text-decoration: underline; text-underline-offset: 3px; }
-    footer { padding-block: 32px 40px; border-top: 1px solid var(--line); color: var(--muted); }
-    footer nav { display: flex; flex-wrap: wrap; gap: 12px 28px; }
-    footer a { font-size: 13px; font-weight: 500; }
-    @media (max-width: 40em) {
+    .fallback a:hover { color: var(--accent-hover); }
+    .site-footer { border-top: 1px solid rgba(255, 255, 255, 0.1); padding-block: 24px; }
+    .site-footer .wrap { display: flex; align-items: center; justify-content: space-between; gap: 24px; flex-wrap: wrap; }
+    .footer-brand { display: flex; align-items: center; gap: 10px; font-size: 20px; font-weight: 800; letter-spacing: -0.8px; }
+    .footer-brand img { width: 30px; height: 30px; }
+    .footer-brand span { font-size: 10px; color: var(--subtle); letter-spacing: 0.5px; font-weight: 700; }
+    .site-footer nav { display: flex; align-items: center; gap: 26px; flex-wrap: wrap; }
+    .site-footer nav a { color: var(--muted); font-size: 13px; font-weight: 500; }
+    .helper-dialog { width: min(520px, calc(100% - 32px)); border: 1px solid #3a3d45; border-radius: 18px; background: #1a1c22; color: var(--text); padding: 28px; box-shadow: 0 24px 80px rgba(0, 0, 0, 0.6); }
+    .helper-dialog::backdrop { background: rgba(0, 0, 0, 0.7); backdrop-filter: blur(5px); }
+    .dialog-close { float: right; border: 0; background: none; color: var(--muted); font-size: 27px; line-height: 1; cursor: pointer; }
+    .dialog-close:hover { color: var(--accent); }
+    .helper-dialog h2 { clear: both; font-size: 24px; line-height: 1.2; margin: 8px 0 18px; letter-spacing: -0.8px; }
+    .helper-options { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+    .helper-options button { background: #242730; border: 1px solid #393d47; color: var(--text); border-radius: 9px; padding: 13px; text-align: left; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+    .helper-options button:hover { border-color: var(--accent); }
+    .helper-result { min-height: 24px; color: var(--accent); font-size: 13px; font-weight: 700; margin: 18px 0 0; }
+    @media (max-width: 1100px) {
+      .hero-art { right: -110px; opacity: 0.55; }
+      .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .main-nav { gap: 18px; }
+    }
+    @media (max-width: 720px) {
+      .site-header { min-height: 64px; }
+      .main-nav { display: none; position: absolute; top: 100%; left: 0; right: 0; background: #17191e; padding: 18px 24px; border-bottom: 1px solid var(--line); flex-direction: column; align-items: flex-start; gap: 16px; }
+      .site-header.menu-open .main-nav { display: flex; }
+      .menu-toggle { display: block; }
+      .brand-divider, .brand-caption { display: none; }
+      .brand { font-size: 22px; }
+      .language-switch { margin-left: auto; }
+      .hero { min-height: 260px; padding-block: 38px 30px; }
+      .hero-art { display: none; }
       h1 { font-size: 36px; line-height: 42px; letter-spacing: -1.2px; }
-      .header { padding-block: 16px; }
-      .tiles { display: grid; grid-template-columns: 1fr; }
-      .tile { padding: 20px; }
+      .hero-lead { font-size: 16px; line-height: 26px; }
+      .section-top { flex-direction: column; align-items: flex-start; gap: 14px; }
+      .channel-switch { width: 100%; }
+      .channel-switch button { flex: 1; justify-content: center; }
+      .tiles { grid-template-columns: 1fr; }
+      .help-strip { grid-template-columns: 1fr; gap: 13px; }
+      .help-note { border-left: 0; border-top: 1px solid #454851; padding: 13px 0 0; }
+      .helper-options { grid-template-columns: 1fr; }
+      .site-footer .wrap { flex-direction: column; align-items: flex-start; }
     }
   </style>
 </head>
 <body>
-  <header class="header wrap">
-    <a class="brand" href="/omp/" aria-label="OMP - страница загрузки"><img class="brand-logo" src="./assets/logo.svg" width="40" height="40" alt="">OMP</a>
-    <nav aria-label="Язык и ссылки">
-      <a href="/omp/" hreflang="ru" lang="ru" aria-current="page">RU</a>
-      <a href="/omp/en/" hreflang="en" lang="en">EN</a>
-      <a href="https://github.com/spacesarmat/omp">GitHub</a>
-    </nav>
+  <header class="site-header">
+    <div class="wrap">
+      <a class="brand" href="/omp/" aria-label="OMP - страница загрузки">
+        <img class="brand-logo" src="./assets/logo.svg" width="40" height="40" alt="">
+        <span class="brand-name">OMP</span>
+        <span class="brand-divider" aria-hidden="true"></span>
+        <span class="brand-caption">OPEN MOVIE<br>PLAYER</span>
+      </a>
+      <nav class="main-nav" aria-label="Разделы и ссылки">
+        <a href="https://omp-player.online">Возможности</a>
+        <a href="https://github.com/spacesarmat/omp#установка">Установка</a>
+        <a href="https://github.com/spacesarmat/omp">GitHub</a>
+        <a href="/omp/en/" hreflang="en" lang="en">EN</a>
+      </nav>
+      <div class="language-switch" aria-label="Язык">
+        <a href="/omp/" hreflang="ru" lang="ru" aria-current="page">RU</a><i aria-hidden="true"></i><a href="/omp/en/" hreflang="en" lang="en">EN</a>
+      </div>
+      <button class="menu-toggle" type="button" aria-label="Открыть меню" aria-expanded="false">☰</button>
+    </div>
   </header>
 
   <main class="wrap">
     <section class="hero">
-      <div class="eyebrow">OPEN MOVIE PLAYER</div>
-      <h1>Скачать OMP</h1>
-      <p>Фильмы и сериалы на Android, Android TV, Windows, macOS, Linux и LG webOS. Выберите стабильную версию или попробуйте новые возможности в бете.</p>
-      <a class="main-site" href="https://omp-player.online">Перейти на основной сайт</a>
-      <span data-version="stable" hidden>Актуальный релиз</span>
-      <span data-version="beta" hidden>Последняя бета</span>
+      <div class="hero-copy">
+        <p class="eyebrow">OPEN MOVIE PLAYER<i aria-hidden="true"></i>ЗАГРУЗКИ</p>
+        <h1>OMP для ваших устройств.</h1>
+        <p class="hero-lead">Один медиаплеер для телевизора, смартфона и компьютера. Выберите платформу и скачайте подходящую сборку: версия, размер и sha256 подставляются из актуального релиза.</p>
+        <a class="open-source" href="https://github.com/spacesarmat/omp"><span aria-hidden="true">▶</span>Open Source · Без рекламы</a>
+        <span data-version="stable" hidden>Актуальный релиз</span>
+        <span data-version="beta" hidden>Последняя бета</span>
+      </div>
+      <div class="hero-art" aria-hidden="true">
+        <span class="art-glow"></span>
+        <span class="art-orbit orbit-one"></span>
+        <span class="art-orbit orbit-two"></span>
+        <span class="play-frame"><svg viewBox="0 0 180 180"><path d="M63 38c-8-5-18 1-18 10v84c0 9 10 15 18 10l72-42c8-5 8-15 0-20z"/></svg></span>
+      </div>
     </section>
 
-    <div class="tiles">
-      <article class="tile" data-platform="android">
-        <div class="tile-top">
-          <span class="icon" aria-hidden="true"><svg viewBox="0 0 36 36" width="36" height="36"><rect x="11" y="3" width="14" height="30" rx="3" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="18" cy="28" r="1.3" fill="currentColor"/></svg></span>
-          <div>
-            <p class="you" hidden>ВАШЕ УСТРОЙСТВО</p>
-            <h2>Android</h2>
-            <p class="lead">Телефон: пульт и каталог. Тот же universal APK, что для Android TV.</p>
+    <section aria-labelledby="downloads-title">
+      <div class="section-top">
+        <div>
+          <p class="kicker">ВЫБЕРИТЕ ПЛАТФОРМУ</p>
+          <h2 id="downloads-title">Загрузки</h2>
+        </div>
+        <div class="channel-switch" role="group" aria-label="Канал релиза">
+          <button type="button" class="selected" data-channel="stable"><span class="switch-dot" aria-hidden="true"></span>Стабильная версия</button>
+          <button type="button" data-channel="beta"><span class="beta-symbol" aria-hidden="true">β</span>Бета</button>
+        </div>
+      </div>
+
+      <div class="tiles">
+        <article class="tile" data-platform="android">
+          <div class="tile-top">
+            <span class="icon" aria-hidden="true"><svg viewBox="0 0 36 36" width="36" height="36"><rect x="11" y="3" width="14" height="30" rx="3" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="18" cy="28" r="1.3" fill="currentColor"/></svg></span>
+            <div>
+              <p class="you" hidden>ВАШЕ УСТРОЙСТВО</p>
+              <h2>Android</h2>
+              <p class="os">ANDROID 8+</p>
+              <p class="lead">Телефон: пульт и каталог. Тот же universal APK, что для Android TV.</p>
+            </div>
           </div>
-        </div>
-        <p class="meta">
-          <span class="mono" data-version="stable-android">Актуальный релиз</span>
-          <span class="mono" data-date="stable-android" hidden></span>
-          <span class="mono" data-size="stable-android" hidden></span>
-        </p>
-        <a class="button primary" data-download="stable-android" href="https://github.com/spacesarmat/omp/releases/latest">Скачать APK</a>
-        <div class="abis" aria-label="Сборки Android по архитектуре">
-          <a class="chip" data-download="stable-android" data-abi="arm64" href="https://github.com/spacesarmat/omp/releases/latest">ARM64</a>
-          <a class="chip" data-download="stable-android" data-abi="armv7" href="https://github.com/spacesarmat/omp/releases/latest">ARMv7</a>
-        </div>
-        <button type="button" class="hash" data-sha-for="stable-android" data-label-copied="Скопировано" hidden>sha256</button>
-        <details class="beta">
-          <summary>Бета</summary>
           <p class="meta">
-            <span class="mono" data-version="beta-android">Последняя бета</span>
-            <span class="mono" data-date="beta-android" hidden></span>
-            <span class="mono" data-size="beta-android" hidden></span>
+            <span class="mono" data-version="stable-android">Актуальный релиз</span>
+            <span class="mono" data-date="stable-android" hidden></span>
+            <span class="mono" data-size="stable-android" hidden></span>
           </p>
-          <a class="button secondary" data-download="beta-android" href="https://github.com/spacesarmat/omp/releases">Скачать бету</a>
-          <button type="button" class="hash" data-sha-for="beta-android" data-label-copied="Скопировано" hidden>sha256</button>
-          <div class="abis" aria-label="Сборки бета-версии Android по архитектуре">
-            <a class="chip" data-download="beta-android" data-abi="arm64" href="https://github.com/spacesarmat/omp/releases">ARM64</a>
-            <a class="chip" data-download="beta-android" data-abi="armv7" href="https://github.com/spacesarmat/omp/releases">ARMv7</a>
+          <a class="button primary" data-download="stable-android" href="https://github.com/spacesarmat/omp/releases/latest">Скачать APK</a>
+          <div class="abis" aria-label="Сборки Android по архитектуре">
+            <a class="chip" data-download="stable-android" data-abi="arm64" href="https://github.com/spacesarmat/omp/releases/latest">ARM64</a>
+            <a class="chip" data-download="stable-android" data-abi="armv7" href="https://github.com/spacesarmat/omp/releases/latest">ARMv7</a>
           </div>
-        </details>
-      </article>
+          <button type="button" class="hash" data-sha-for="stable-android" data-label-copied="Скопировано" hidden>sha256</button>
+          <div class="beta">
+            <p class="meta">
+              <span class="beta-flag">Бета</span>
+              <span class="mono" data-version="beta-android">Последняя бета</span>
+              <span class="mono" data-date="beta-android" hidden></span>
+              <span class="mono" data-size="beta-android" hidden></span>
+            </p>
+            <a class="button secondary" data-download="beta-android" href="https://github.com/spacesarmat/omp/releases">Скачать бету</a>
+            <div class="abis" aria-label="Сборки бета-версии Android по архитектуре">
+              <a class="chip" data-download="beta-android" data-abi="arm64" href="https://github.com/spacesarmat/omp/releases">ARM64</a>
+              <a class="chip" data-download="beta-android" data-abi="armv7" href="https://github.com/spacesarmat/omp/releases">ARMv7</a>
+            </div>
+            <button type="button" class="hash" data-sha-for="beta-android" data-label-copied="Скопировано" hidden>sha256</button>
+          </div>
+        </article>
 
-      <article class="tile" data-platform="android-tv">
-        <div class="tile-top">
-          <span class="icon" aria-hidden="true"><svg viewBox="0 0 36 36" width="36" height="36"><rect x="3" y="7" width="30" height="18" rx="2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M12 29h12M18 25v4" fill="none" stroke="currentColor" stroke-width="1.6"/></svg></span>
-          <div>
-            <p class="you" hidden>ВАШЕ УСТРОЙСТВО</p>
-            <h2>Android TV</h2>
-            <p class="lead">Тот же universal APK, что для телефона. Отдельно ARM64 и ARMv7.</p>
+        <article class="tile" data-platform="android-tv">
+          <div class="tile-top">
+            <span class="icon" aria-hidden="true"><svg viewBox="0 0 36 36" width="36" height="36"><rect x="3" y="7" width="30" height="18" rx="2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M12 29h12M18 25v4" fill="none" stroke="currentColor" stroke-width="1.6"/></svg></span>
+            <div>
+              <p class="you" hidden>ВАШЕ УСТРОЙСТВО</p>
+              <h2>Android TV</h2>
+              <p class="os">ANDROID 8+ · GOOGLE TV</p>
+              <p class="lead">Тот же universal APK, что для телефона. Отдельно ARM64 и ARMv7.</p>
+            </div>
           </div>
-        </div>
-        <p class="meta">
-          <span class="mono" data-version="stable-android">Актуальный релиз</span>
-          <span class="mono" data-date="stable-android" hidden></span>
-          <span class="mono" data-size="stable-android" hidden></span>
-        </p>
-        <a class="button primary" data-download="stable-android" href="https://github.com/spacesarmat/omp/releases/latest">Скачать APK</a>
-        <div class="abis" aria-label="Сборки Android TV по архитектуре">
-          <a class="chip" data-download="stable-android" data-abi="arm64" href="https://github.com/spacesarmat/omp/releases/latest">ARM64</a>
-          <a class="chip" data-download="stable-android" data-abi="armv7" href="https://github.com/spacesarmat/omp/releases/latest">ARMv7</a>
-        </div>
-        <button type="button" class="hash" data-sha-for="stable-android" data-label-copied="Скопировано" hidden>sha256</button>
-        <details class="beta">
-          <summary>Бета</summary>
           <p class="meta">
-            <span class="mono" data-version="beta-android">Последняя бета</span>
-            <span class="mono" data-date="beta-android" hidden></span>
-            <span class="mono" data-size="beta-android" hidden></span>
+            <span class="mono" data-version="stable-android">Актуальный релиз</span>
+            <span class="mono" data-date="stable-android" hidden></span>
+            <span class="mono" data-size="stable-android" hidden></span>
           </p>
-          <a class="button secondary" data-download="beta-android" href="https://github.com/spacesarmat/omp/releases">Скачать бету</a>
-          <button type="button" class="hash" data-sha-for="beta-android" data-label-copied="Скопировано" hidden>sha256</button>
-          <div class="abis" aria-label="Сборки бета-версии Android TV по архитектуре">
-            <a class="chip" data-download="beta-android" data-abi="arm64" href="https://github.com/spacesarmat/omp/releases">ARM64</a>
-            <a class="chip" data-download="beta-android" data-abi="armv7" href="https://github.com/spacesarmat/omp/releases">ARMv7</a>
+          <a class="button primary" data-download="stable-android" href="https://github.com/spacesarmat/omp/releases/latest">Скачать APK</a>
+          <div class="abis" aria-label="Сборки Android TV по архитектуре">
+            <a class="chip" data-download="stable-android" data-abi="arm64" href="https://github.com/spacesarmat/omp/releases/latest">ARM64</a>
+            <a class="chip" data-download="stable-android" data-abi="armv7" href="https://github.com/spacesarmat/omp/releases/latest">ARMv7</a>
           </div>
-        </details>
-      </article>
+          <button type="button" class="hash" data-sha-for="stable-android" data-label-copied="Скопировано" hidden>sha256</button>
+          <div class="beta">
+            <p class="meta">
+              <span class="beta-flag">Бета</span>
+              <span class="mono" data-version="beta-android">Последняя бета</span>
+              <span class="mono" data-date="beta-android" hidden></span>
+              <span class="mono" data-size="beta-android" hidden></span>
+            </p>
+            <a class="button secondary" data-download="beta-android" href="https://github.com/spacesarmat/omp/releases">Скачать бету</a>
+            <div class="abis" aria-label="Сборки бета-версии Android TV по архитектуре">
+              <a class="chip" data-download="beta-android" data-abi="arm64" href="https://github.com/spacesarmat/omp/releases">ARM64</a>
+              <a class="chip" data-download="beta-android" data-abi="armv7" href="https://github.com/spacesarmat/omp/releases">ARMv7</a>
+            </div>
+            <button type="button" class="hash" data-sha-for="beta-android" data-label-copied="Скопировано" hidden>sha256</button>
+          </div>
+        </article>
 
-      <article class="tile" data-platform="webos">
-        <div class="tile-top">
-          <span class="icon" aria-hidden="true"><svg viewBox="0 0 36 36" width="36" height="36"><rect x="3" y="7" width="30" height="18" rx="2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M15 12l8 4-8 4z" fill="currentColor"/></svg></span>
-          <div>
-            <p class="you" hidden>ВАШЕ УСТРОЙСТВО</p>
-            <h2>LG webOS</h2>
-            <p class="lead">Пакет IPK для установки на телевизор LG.</p>
+        <article class="tile" data-platform="webos">
+          <div class="tile-top">
+            <span class="icon" aria-hidden="true"><svg viewBox="0 0 36 36" width="36" height="36"><rect x="3" y="7" width="30" height="18" rx="2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M15 12l8 4-8 4z" fill="currentColor"/></svg></span>
+            <div>
+              <p class="you" hidden>ВАШЕ УСТРОЙСТВО</p>
+              <h2>LG webOS</h2>
+              <p class="os">WEBOS · IPK</p>
+              <p class="lead">Пакет IPK для установки на телевизор LG.</p>
+            </div>
           </div>
-        </div>
-        <p class="meta">
-          <span class="mono" data-version="stable-webos">Актуальный релиз</span>
-          <span class="mono" data-date="stable-webos" hidden></span>
-          <span class="mono" data-size="stable-webos" hidden></span>
-        </p>
-        <a class="button primary" data-download="stable-webos" href="https://github.com/spacesarmat/omp/releases/latest">Скачать IPK</a>
-        <div class="abis" aria-hidden="true"></div>
-        <button type="button" class="hash" data-sha-for="stable-webos" data-label-copied="Скопировано" hidden>sha256</button>
-        <details class="beta">
-          <summary>Бета</summary>
           <p class="meta">
-            <span class="mono" data-version="beta-webos">Последняя бета</span>
-            <span class="mono" data-date="beta-webos" hidden></span>
-            <span class="mono" data-size="beta-webos" hidden></span>
+            <span class="mono" data-version="stable-webos">Актуальный релиз</span>
+            <span class="mono" data-date="stable-webos" hidden></span>
+            <span class="mono" data-size="stable-webos" hidden></span>
           </p>
-          <a class="button secondary" data-download="beta-webos" href="https://github.com/spacesarmat/omp/releases">Скачать бету</a>
-          <button type="button" class="hash" data-sha-for="beta-webos" data-label-copied="Скопировано" hidden>sha256</button>
-        </details>
-      </article>
-
-      <article class="tile" data-platform="windows">
-        <div class="tile-top">
-          <span class="icon" aria-hidden="true"><svg viewBox="0 0 36 36" width="36" height="36"><path fill="currentColor" d="M5 8l11-1.6V17H5zm13-1.9L31 4v13H18zM5 19h11v10.6L5 28zm13 0h13v14l-13-1.8z"/></svg></span>
-          <div>
-            <p class="you" hidden>ВАШЕ УСТРОЙСТВО</p>
-            <h2>Windows</h2>
-            <p class="lead">Установщик NSIS и portable для Windows 10 и 11 (x64).</p>
+          <a class="button primary" data-download="stable-webos" href="https://github.com/spacesarmat/omp/releases/latest">Скачать IPK</a>
+          <div class="abis" aria-hidden="true"></div>
+          <button type="button" class="hash" data-sha-for="stable-webos" data-label-copied="Скопировано" hidden>sha256</button>
+          <div class="beta">
+            <p class="meta">
+              <span class="beta-flag">Бета</span>
+              <span class="mono" data-version="beta-webos">Последняя бета</span>
+              <span class="mono" data-date="beta-webos" hidden></span>
+              <span class="mono" data-size="beta-webos" hidden></span>
+            </p>
+            <a class="button secondary" data-download="beta-webos" href="https://github.com/spacesarmat/omp/releases">Скачать бету</a>
+            <div class="abis" aria-hidden="true"></div>
+            <button type="button" class="hash" data-sha-for="beta-webos" data-label-copied="Скопировано" hidden>sha256</button>
           </div>
-        </div>
-        <p class="meta">
-          <span class="mono" data-version="stable-windows">0.30.0</span>
-          <span class="mono" data-date="stable-windows" hidden></span>
-          <span class="mono" data-size="stable-windows" hidden></span>
-        </p>
-        <a class="button primary" data-download="stable-windows" href="https://github.com/spacesarmat/omp/releases/download/v0.30.0/OMP-0.30.0-setup.exe">Скачать установщик</a>
-        <div class="abis" aria-label="Другие сборки Windows">
-          <a class="button secondary" data-download="stable-windows" data-asset="portable" href="https://github.com/spacesarmat/omp/releases/download/v0.30.0/OMP-0.30.0-portable.exe">Portable</a>
-        </div>
-        <button type="button" class="hash" data-sha-for="stable-windows" data-label-copied="Скопировано" hidden>sha256</button>
-        <div class="beta-slot" aria-hidden="true"></div>
-      </article>
+        </article>
 
-      <article class="tile" data-platform="macos" data-optional="stable-macos">
-        <div class="tile-top">
-          <span class="icon" aria-hidden="true"><svg viewBox="0 0 36 36" width="36" height="36"><path fill="currentColor" d="M24 6c-1.4 1.1-2.3 2.6-2.1 4.3 1.7.1 3.3-.9 4.3-2.2-1.5-1.6-3.6-2.6-2.2-2.1zM24.4 11.2c-2.3-.1-4.3 1.3-5.4 1.3s-2.8-1.3-4.7-1.2c-2.4.1-4.6 1.4-5.8 3.5-2.5 4.3-.6 10.7 1.8 14.2 1.2 1.7 2.6 3.6 4.5 3.5 1.8-.1 2.5-1.1 4.6-1.1s2.8 1.1 4.7 1c1.9 0 3.2-1.7 4.4-3.4 1.4-2 1.9-3.9 2-4-.1 0-3.8-1.5-3.8-5.8 0-3.6 3-5.4 3.1-5.5-1.7-2.5-4.3-2.8-5.4-2.5z"/></svg></span>
-          <div>
-            <p class="you" hidden>ВАШЕ УСТРОЙСТВО</p>
-            <h2>macOS</h2>
-            <p class="lead">DMG для Apple Silicon и Intel. Сборка без подписи Apple: правый клик по приложению и «Открыть», или в Терминале: xattr -d com.apple.quarantine "/Applications/OMP.app".</p>
+        <article class="tile" data-platform="windows">
+          <div class="tile-top">
+            <span class="icon" aria-hidden="true"><svg viewBox="0 0 36 36" width="36" height="36"><path fill="currentColor" d="M5 8l11-1.6V17H5zm13-1.9L31 4v13H18zM5 19h11v10.6L5 28zm13 0h13v14l-13-1.8z"/></svg></span>
+            <div>
+              <p class="you" hidden>ВАШЕ УСТРОЙСТВО</p>
+              <h2>Windows</h2>
+              <p class="os">WINDOWS 10 / 11 · X64</p>
+              <p class="lead">Установщик NSIS и portable для Windows 10 и 11 (x64).</p>
+            </div>
           </div>
-        </div>
-        <p class="meta">
-          <span class="mono" data-version="stable-macos">0.30.0</span>
-          <span class="mono" data-date="stable-macos" hidden></span>
-          <span class="mono" data-size="stable-macos" hidden></span>
-        </p>
-        <a class="button primary" data-download="stable-macos" data-asset="arm64" href="https://github.com/spacesarmat/omp/releases/download/v0.30.0/OMP-0.30.0-macos-arm64.dmg">Apple Silicon</a>
-        <div class="abis" aria-label="Сборки macOS">
-          <a class="button secondary" data-download="stable-macos" data-asset="x64" href="https://github.com/spacesarmat/omp/releases/download/v0.30.0/OMP-0.30.0-macos-x64.dmg">Intel</a>
-        </div>
-        <button type="button" class="hash" data-sha-for="stable-macos" data-label-copied="Скопировано" hidden>sha256</button>
-        <div class="beta-slot" aria-hidden="true"></div>
-      </article>
-
-      <article class="tile" data-platform="linux" data-optional="stable-linux">
-        <div class="tile-top">
-          <span class="icon" aria-hidden="true"><svg viewBox="0 0 36 36" width="36" height="36"><circle cx="18" cy="18" r="12" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="18" cy="18" r="4" fill="currentColor"/><path d="M18 6v4M18 26v4M6 18h4M26 18h4" stroke="currentColor" stroke-width="1.6"/></svg></span>
-          <div>
-            <p class="you" hidden>ВАШЕ УСТРОЙСТВО</p>
-            <h2>Linux</h2>
-            <p class="lead">AppImage запускается без установки. Пакет deb ставится через apt. Автообновление заменяет AppImage.</p>
+          <p class="meta">
+            <span class="mono" data-version="stable-windows">0.30.0</span>
+            <span class="mono" data-date="stable-windows" hidden></span>
+            <span class="mono" data-size="stable-windows" hidden></span>
+          </p>
+          <a class="button primary" data-download="stable-windows" href="https://github.com/spacesarmat/omp/releases/download/v0.30.0/OMP-0.30.0-setup.exe">Скачать установщик</a>
+          <div class="abis" aria-label="Другие сборки Windows">
+            <a class="chip" data-download="stable-windows" data-asset="portable" href="https://github.com/spacesarmat/omp/releases/download/v0.30.0/OMP-0.30.0-portable.exe">Portable</a>
           </div>
-        </div>
-        <p class="meta">
-          <span class="mono" data-version="stable-linux">0.30.0</span>
-          <span class="mono" data-date="stable-linux" hidden></span>
-          <span class="mono" data-size="stable-linux" hidden></span>
-        </p>
-        <a class="button primary" data-download="stable-linux" href="https://github.com/spacesarmat/omp/releases/download/v0.30.0/OMP-0.30.0-linux-x64.AppImage">Скачать AppImage</a>
-        <div class="abis" aria-label="Сборки Linux">
-          <a class="button secondary" data-download="stable-linux" data-asset="deb" href="https://github.com/spacesarmat/omp/releases/download/v0.30.0/OMP-0.30.0-linux-x64.deb">deb</a>
-        </div>
-        <button type="button" class="hash" data-sha-for="stable-linux" data-label-copied="Скопировано" hidden>sha256</button>
-        <div class="beta-slot" aria-hidden="true"></div>
-      </article>
-    </div>
+          <button type="button" class="hash" data-sha-for="stable-windows" data-label-copied="Скопировано" hidden>sha256</button>
+          <div class="beta">
+            <p class="meta">
+              <span class="beta-flag">Бета</span>
+              <span class="mono" data-version="beta-windows" hidden></span>
+              <span class="mono" data-date="beta-windows" hidden></span>
+              <span class="mono" data-size="beta-windows" hidden></span>
+            </p>
+            <a class="button secondary" data-download="beta-windows" data-direct hidden href="https://github.com/spacesarmat/omp/releases">Скачать бету</a>
+            <div class="abis" aria-hidden="true"></div>
+            <button type="button" class="hash" data-sha-for="beta-windows" data-label-copied="Скопировано" hidden>sha256</button>
+            <p class="beta-empty">Бета-сборки Windows выходят на GitHub: <a href="https://github.com/spacesarmat/omp/releases">список релизов</a>.</p>
+          </div>
+        </article>
 
-    <p class="fallback">Если прямая ссылка недоступна, <a href="https://github.com/spacesarmat/omp/releases/latest">откройте страницу стабильного релиза</a> или <a href="https://github.com/spacesarmat/omp/releases">список релизов</a>.</p>
+        <article class="tile" data-platform="macos" data-optional="stable-macos">
+          <div class="tile-top">
+            <span class="icon" aria-hidden="true"><svg viewBox="0 0 36 36" width="36" height="36"><path fill="currentColor" d="M24 6c-1.4 1.1-2.3 2.6-2.1 4.3 1.7.1 3.3-.9 4.3-2.2-1.5-1.6-3.6-2.6-2.2-2.1zM24.4 11.2c-2.3-.1-4.3 1.3-5.4 1.3s-2.8-1.3-4.7-1.2c-2.4.1-4.6 1.4-5.8 3.5-2.5 4.3-.6 10.7 1.8 14.2 1.2 1.7 2.6 3.6 4.5 3.5 1.8-.1 2.5-1.1 4.6-1.1s2.8 1.1 4.7 1c1.9 0 3.2-1.7 4.4-3.4 1.4-2 1.9-3.9 2-4-.1 0-3.8-1.5-3.8-5.8 0-3.6 3-5.4 3.1-5.5-1.7-2.5-4.3-2.8-5.4-2.5z"/></svg></span>
+            <div>
+              <p class="you" hidden>ВАШЕ УСТРОЙСТВО</p>
+              <h2>macOS</h2>
+              <p class="os">APPLE SILICON · INTEL</p>
+              <p class="lead">DMG для Apple Silicon и Intel. Сборка без подписи Apple: правый клик по приложению и «Открыть», или в Терминале: xattr -d com.apple.quarantine "/Applications/OMP.app".</p>
+            </div>
+          </div>
+          <p class="meta">
+            <span class="mono" data-version="stable-macos">0.30.0</span>
+            <span class="mono" data-date="stable-macos" hidden></span>
+            <span class="mono" data-size="stable-macos" hidden></span>
+          </p>
+          <a class="button primary" data-download="stable-macos" data-asset="arm64" href="https://github.com/spacesarmat/omp/releases/download/v0.30.0/OMP-0.30.0-macos-arm64.dmg">Apple Silicon</a>
+          <div class="abis" aria-label="Сборки macOS">
+            <a class="chip" data-download="stable-macos" data-asset="x64" href="https://github.com/spacesarmat/omp/releases/download/v0.30.0/OMP-0.30.0-macos-x64.dmg">Intel</a>
+          </div>
+          <button type="button" class="hash" data-sha-for="stable-macos" data-label-copied="Скопировано" hidden>sha256</button>
+          <div class="beta">
+            <p class="meta">
+              <span class="beta-flag">Бета</span>
+              <span class="mono" data-version="beta-macos" hidden></span>
+              <span class="mono" data-date="beta-macos" hidden></span>
+              <span class="mono" data-size="beta-macos" hidden></span>
+            </p>
+            <a class="button secondary" data-download="beta-macos" data-direct hidden href="https://github.com/spacesarmat/omp/releases">Скачать бету</a>
+            <div class="abis" aria-hidden="true"></div>
+            <button type="button" class="hash" data-sha-for="beta-macos" data-label-copied="Скопировано" hidden>sha256</button>
+            <p class="beta-empty">Бета-сборки macOS выходят на GitHub: <a href="https://github.com/spacesarmat/omp/releases">список релизов</a>.</p>
+          </div>
+        </article>
+
+        <article class="tile" data-platform="linux" data-optional="stable-linux">
+          <div class="tile-top">
+            <span class="icon" aria-hidden="true"><svg viewBox="0 0 36 36" width="36" height="36"><circle cx="18" cy="18" r="12" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="18" cy="18" r="4" fill="currentColor"/><path d="M18 6v4M18 26v4M6 18h4M26 18h4" stroke="currentColor" stroke-width="1.6"/></svg></span>
+            <div>
+              <p class="you" hidden>ВАШЕ УСТРОЙСТВО</p>
+              <h2>Linux</h2>
+              <p class="os">X64 · APPIMAGE · DEB</p>
+              <p class="lead">AppImage запускается без установки. Пакет deb ставится через apt. Автообновление заменяет AppImage.</p>
+            </div>
+          </div>
+          <p class="meta">
+            <span class="mono" data-version="stable-linux">0.30.0</span>
+            <span class="mono" data-date="stable-linux" hidden></span>
+            <span class="mono" data-size="stable-linux" hidden></span>
+          </p>
+          <a class="button primary" data-download="stable-linux" href="https://github.com/spacesarmat/omp/releases/download/v0.30.0/OMP-0.30.0-linux-x64.AppImage">Скачать AppImage</a>
+          <div class="abis" aria-label="Сборки Linux">
+            <a class="chip" data-download="stable-linux" data-asset="deb" href="https://github.com/spacesarmat/omp/releases/download/v0.30.0/OMP-0.30.0-linux-x64.deb">deb</a>
+          </div>
+          <button type="button" class="hash" data-sha-for="stable-linux" data-label-copied="Скопировано" hidden>sha256</button>
+          <div class="beta">
+            <p class="meta">
+              <span class="beta-flag">Бета</span>
+              <span class="mono" data-version="beta-linux" hidden></span>
+              <span class="mono" data-date="beta-linux" hidden></span>
+              <span class="mono" data-size="beta-linux" hidden></span>
+            </p>
+            <a class="button secondary" data-download="beta-linux" data-direct hidden href="https://github.com/spacesarmat/omp/releases">Скачать бету</a>
+            <div class="abis" aria-hidden="true"></div>
+            <button type="button" class="hash" data-sha-for="beta-linux" data-label-copied="Скопировано" hidden>sha256</button>
+            <p class="beta-empty">Бета-сборки Linux выходят на GitHub: <a href="https://github.com/spacesarmat/omp/releases">список релизов</a>.</p>
+          </div>
+        </article>
+      </div>
+
+      <aside class="help-strip">
+        <div class="help-left">
+          <span class="help-icon" aria-hidden="true">?</span>
+          <strong>Не знаете, какую версию выбрать?</strong>
+          <button class="helper-link" id="open-helper" type="button">Помощник выбора <span aria-hidden="true">›</span></button>
+        </div>
+        <div class="help-note">
+          <span class="info-icon" aria-hidden="true">i</span>
+          <span>Samsung Tizen пока не поддерживается.</span>
+        </div>
+      </aside>
+
+      <p class="fallback">Если прямая ссылка недоступна, <a href="https://github.com/spacesarmat/omp/releases/latest">откройте страницу стабильного релиза</a> или <a href="https://github.com/spacesarmat/omp/releases">список релизов</a>.</p>
+    </section>
   </main>
 
-  <footer class="wrap">
-    <nav aria-label="Дополнительные ссылки">
-      <a href="https://github.com/spacesarmat/omp#установка">Инструкция по установке</a>
-      <a href="https://github.com/spacesarmat/omp">Исходный код на GitHub</a>
-      <a href="https://omp-player.online">Основной сайт OMP</a>
-    </nav>
+  <footer class="site-footer">
+    <div class="wrap">
+      <a class="footer-brand" href="/omp/">
+        <img src="./assets/logo.svg" width="40" height="40" alt="">
+        <b>OMP</b><span>OPEN MOVIE PLAYER</span>
+      </a>
+      <nav aria-label="Дополнительные ссылки">
+        <a href="https://github.com/spacesarmat/omp#установка">Инструкция по установке</a>
+        <a href="https://github.com/spacesarmat/omp/releases">Журнал изменений</a>
+        <a href="https://github.com/spacesarmat/omp">Исходный код</a>
+        <a href="https://github.com/spacesarmat/omp/discussions">Сообщество</a>
+        <a href="https://omp-player.online">Основной сайт OMP</a>
+      </nav>
+    </div>
   </footer>
+
+  <dialog class="helper-dialog" id="helper-dialog">
+    <button class="dialog-close" type="button" aria-label="Закрыть">×</button>
+    <p class="kicker">БЫСТРАЯ ПОМОЩЬ</p>
+    <h2>Для какого устройства нужен OMP?</h2>
+    <div class="helper-options">
+      <button type="button" data-choice="android">Android телефон или планшет</button>
+      <button type="button" data-choice="android-tv">Android TV или Google TV</button>
+      <button type="button" data-choice="webos">Телевизор LG webOS</button>
+      <button type="button" data-choice="windows">Windows компьютер</button>
+      <button type="button" data-choice="macos">Mac</button>
+      <button type="button" data-choice="linux">Linux компьютер</button>
+    </div>
+    <p class="helper-result" id="helper-result" aria-live="polite"></p>
+  </dialog>
   <script type="module" src="./download.js"></script>
 </body>
 </html>
