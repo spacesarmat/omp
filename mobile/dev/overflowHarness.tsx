@@ -215,6 +215,16 @@ const seriesKey = () => {
   const g = groupLibrary(LIBRARY).find((x) => x.kind === 'series' && 'key' in x);
   return g && 'key' in g ? String(g.key) : '';
 };
+// A signed-in billing state with no server: the card reads the session and the seen account from storage when it
+// mounts, and a failed refresh keeps what is on screen, so the paid layout is the one the person with a plan sees.
+function seedBilling(): void {
+  const until = Date.now() + 21 * 86400000;
+  const id = 'a'.repeat(32);
+  localStorage.setItem('tsp.billingDevice', JSON.stringify(id));
+  localStorage.setItem('tsp.billingSession', JSON.stringify({ id: id, token: 'overflow-token', paidUntil: until }));
+  localStorage.setItem('tsp.billingAccountSeen', JSON.stringify({ paidUntil: until }));
+}
+
 const SCENES: { [name: string]: () => Scene } = {
   mine: () => ({ route: { name: 'library' }, tab: true, then: () => setCatalogMode('mine') }),
   discover: () => ({ route: { name: 'library' }, tab: true, then: () => setCatalogMode('discover') }),
@@ -226,6 +236,12 @@ const SCENES: { [name: string]: () => Scene } = {
   'remote-buttons': () => ({ route: { name: 'remote' }, tab: true }),
   'remote-touchpad': () => ({ route: { name: 'remote' }, tab: true, then: clickTab(1) }),
   settings: () => ({ route: { name: 'settings' }, tab: true }),
+  account: () => {
+    seedBilling();
+    return { route: { name: 'account' } };
+  },
+  // the same screen with no plan yet: the code entry, not the subscription block
+  'account-new': () => ({ route: { name: 'account' } }),
   watchFrom: () => ({ route: { name: 'watchFrom' } }),
   sources: () => ({ route: { name: 'sources' } }),
   sourceSite: () => ({ route: { name: 'sourceSite', id: 'nnmclub' } }),
@@ -289,6 +305,11 @@ function setTextZoom(k: number): void {
 
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 async function go(name: string): Promise<void> {
+  // a scene that seeds a billing session must not leave it for the next one: with a session the settings screen
+  // grows a retry row and the numbers of that scene stop meaning what they meant before
+  localStorage.removeItem('tsp.billingSession');
+  localStorage.removeItem('tsp.billingAccountSeen');
+  localStorage.removeItem('tsp.billingDevice');
   const s = SCENES[name]();
   closeWhatsNew();
   // through another screen: the same screen with new props (Add with a query) mounts afresh

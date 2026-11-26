@@ -188,71 +188,76 @@ export function OmpJackettCard() {
   const limited = !!(account && (account.overLimit || account.inGrace));
   const on = !!session && left > 0 && !limited;
   return (
-    <section class="m-set-group" data-billing="jackett">
-      <div class="m-set-card m-src-card">
-        <div class="m-src-row m-note m-muted">{t('sources.billing.text')}</div>
+    <section class="m-set-group m-bill" data-billing="jackett">
+      <p class="m-note m-muted m-bill-lead">{t('sources.billing.text')}</p>
 
-        <div class="m-set-label">{t('sources.billing.telegramTitle')}</div>
-        <div class="m-acct-card" data-row="billing-telegram">
-          {linked ? (
+      <div class="m-set-label">{t('sources.billing.telegramTitle')}</div>
+      <div class="m-bill-block" data-row="billing-telegram">
+        {linked ? (
+          <>
             <button type="button" class="m-set-row m-set-pick" data-tg-menu aria-expanded={tgMenu} onClick={() => setTgMenu(!tgMenu)}>
               <span>{t('sources.billing.telegramTitle')}</span>
               <span class="m-muted">{tgMenu ? t('sources.billing.unlinkTelegram') : t('sources.billing.openBot')}</span>
             </button>
-          ) : (
-            <button type="button" class="m-btn m-btn-primary m-acct-wide" disabled={linkBusy} onClick={() => void linkTelegram()}>
-              {linkBusy ? t('sources.billing.linking') : t('sources.billing.linkTelegram')}
-            </button>
-          )}
-          {linked && tgMenu && (
-            <div class="m-acct-links" data-tg-actions>
-              <button type="button" class="m-btn-text" onClick={() => window.open(BILLING_BOT_URL, '_system')}>
-                {t('sources.billing.openBot')}
-              </button>
-              <button type="button" class="m-btn-text" disabled={linkBusy} onClick={() => void unlinkTelegram()}>
-                {linkBusy ? t('sources.billing.unlinking') : t('sources.billing.unlinkTelegram')}
-              </button>
-            </div>
-          )}
-        </div>
+            {tgMenu && (
+              <div class="m-acct-links" data-tg-actions>
+                <button type="button" class="m-btn-text" onClick={() => window.open(BILLING_BOT_URL, '_system')}>
+                  {t('sources.billing.openBot')}
+                </button>
+                <button type="button" class="m-btn-text" disabled={linkBusy} onClick={() => void unlinkTelegram()}>
+                  {linkBusy ? t('sources.billing.unlinking') : t('sources.billing.unlinkTelegram')}
+                </button>
+              </div>
+            )}
+          </>
+        ) : (
+          <button type="button" class="m-btn m-btn-primary m-acct-wide" disabled={linkBusy} onClick={() => void linkTelegram()}>
+            {linkBusy ? t('sources.billing.linking') : t('sources.billing.linkTelegram')}
+          </button>
+        )}
+      </div>
 
-        {session ? (
-          <>
-            <div class="m-set-label">{t('sources.billing.subHead')}</div>
-            <div class="m-acct-card">
-            <div class="m-bill-status" data-bill-status data-paid-until={day(until)}>
-              {on ? <span class="m-bill-dot" data-bill-dot /> : null}
-              <span class="m-bill-days" data-bill-days>{left > 0 ? tp('sources.billing.daysLeft', left) : t('sources.billing.expired')}</span>
+      {session ? (
+        <>
+          <div class="m-set-label">{t('sources.billing.subHead')}</div>
+          <div class="m-bill-block">
+            <div class="m-set-row" data-bill-status data-paid-until={day(until)}>
+              <div class="m-set-text">
+                <span>
+                  {on ? <span class="m-bill-dot" data-bill-dot /> : null}
+                  <span class="m-bill-days" data-bill-days>{left > 0 ? tp('sources.billing.daysLeft', left) : t('sources.billing.expired')}</span>
+                </span>
+                {account && account.bill && billShown(account.bill.priceRub, account.bill.feeRub, account.bill.totalRub).mode !== 'hide' && (
+                  <span class="m-muted m-small" data-bill-price>
+                    {(() => {
+                      const shown = billShown(account.bill!.priceRub, account.bill!.feeRub, account.bill!.totalRub);
+                      return shown.mode === 'full'
+                        ? t('sources.billing.priceLine', { price: shown.price, fee: shown.fee, total: shown.total })
+                        : t('sources.billing.priceOnly', { price: shown.price });
+                    })()}
+                  </span>
+                )}
+              </div>
               <button type="button" class="m-bill-info" data-bill-info aria-expanded={info} aria-label={t('sources.billing.about')} onClick={() => setInfo(!info)}>
                 i
               </button>
             </div>
-            {account && account.bill && billShown(account.bill.priceRub, account.bill.feeRub, account.bill.totalRub).mode !== 'hide' && (
-              <p class="m-small" data-bill-price>
-                {(() => {
-                  const shown = billShown(account.bill!.priceRub, account.bill!.feeRub, account.bill!.totalRub);
-                  return shown.mode === 'full'
-                    ? t('sources.billing.priceLine', { price: shown.price, fee: shown.fee, total: shown.total })
-                    : t('sources.billing.priceOnly', { price: shown.price });
-                })()}
-              </p>
-            )}
             {info && (
-              <div class="m-src-row m-note m-muted" data-bill-about>
+              <p class="m-bill-note m-muted" data-bill-about>
                 {account && account.inGrace
                   ? t('sources.billing.grace', { date: day(account.paidUntil), until: day(account.accessUntil || 0) || '-' })
                   : t('sources.billing.paidUntil', { date: day(until) || '-' })}
-              </div>
+              </p>
             )}
-            {account && account.overLimit ? <div class="m-src-row m-note">{t('sources.billing.overLimit')}</div> : null}
-            {account && account.supporter ? <div class="m-src-row m-note" data-supporter="1">{t('sources.billing.supporter')}</div> : null}
+            {account && account.overLimit ? <p class="m-bill-note">{t('sources.billing.overLimit')}</p> : null}
+            {account && account.supporter ? <p class="m-bill-note" data-supporter="1">{t('sources.billing.supporter')}</p> : null}
             {cryptoError ? (
-              <div class="m-src-row m-note" role="alert">
+              <p class="m-bill-note" role="alert">
                 {cryptoError}
-              </div>
+              </p>
             ) : null}
-            {cryptoLinks.length ? (
-              <div class="m-src-row" style="gap: 8px; flex-wrap: wrap">
+            {cryptoLinks.length > 0 && (
+              <div class="m-pay-methods">
                 {cryptoLinks.map((link) => (
                   <button
                     type="button"
@@ -264,7 +269,7 @@ export function OmpJackettCard() {
                   </button>
                 ))}
               </div>
-            ) : null}
+            )}
             <button
               type="button"
               class="m-btn m-btn-primary m-acct-wide"
@@ -275,7 +280,7 @@ export function OmpJackettCard() {
               {t('sources.billing.renew')}
             </button>
             {payOpen && (
-              <div class="m-src-row" data-pay-methods>
+              <div class="m-pay-methods" data-pay-methods>
                 <button type="button" class="m-btn m-btn-secondary" data-pay="card" onClick={() => window.open(BILLING_BOT_URL + '?start=renew', '_system')}>
                   {t('sources.billing.payCard')}
                 </button>
@@ -307,41 +312,44 @@ export function OmpJackettCard() {
                 </button>
               </div>
             )}
-            {account && account.bill && account.bill.autoRenew && (
-              <button type="button" class="m-btn-text" data-bill-cancel onClick={() => void cancelRenew()}>
-                {t('sources.billing.cancelRenew')}
+            <div class="m-acct-links">
+              {account && account.bill && account.bill.autoRenew ? (
+                <button type="button" class="m-btn-text" data-bill-cancel onClick={() => void cancelRenew()}>
+                  {t('sources.billing.cancelRenew')}
+                </button>
+              ) : null}
+              <button type="button" class="m-btn-text" data-action="disconnect" onClick={() => void disconnect()}>
+                {t('sources.billing.disconnect')}
               </button>
-            )}
-            <button type="button" class="m-btn-text" data-action="disconnect" onClick={() => void disconnect()}>
-              {t('sources.billing.disconnect')}
-            </button>
             </div>
-            {account && account.bill && account.bill.payments.length > 0 && (
-              <>
-                <div class="m-set-label">{t('sources.billing.payments')}</div>
-                <div class="m-acct-card" data-bill-payments>
-                  {account.bill.payments.map((p) => {
-                    const kind = paymentKind(p.title, p.currency);
-                    const label = kind === 'card' ? t('sources.billing.payLineCard')
-                      : kind === 'stars' ? t('sources.billing.payLineStars')
-                      : kind === 'crypto' ? t('sources.billing.payLineCrypto')
-                      : kind === 'promo' ? t('sources.billing.payLinePromo')
-                      : p.title;
-                    return (
-                      <div class="m-set-row" key={p.at + ':' + p.amount} data-payment>
-                        <span class="m-set-text">
-                          <span>{label}</span>
-                          {p.at ? <span class="m-muted m-small">{paymentDate(p.at)}</span> : null}
-                        </span>
-                        <span>{formatPayAmount(p.amount, p.currency)}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </>
-            )}
-          </>
-        ) : (
+          </div>
+          {account && account.bill && account.bill.payments.length > 0 && (
+            <>
+              <div class="m-set-label">{t('sources.billing.payments')}</div>
+              <div class="m-bill-block" data-bill-payments>
+                {account.bill.payments.map((p) => {
+                  const kind = paymentKind(p.title, p.currency);
+                  const label = kind === 'card' ? t('sources.billing.payLineCard')
+                    : kind === 'stars' ? t('sources.billing.payLineStars')
+                    : kind === 'crypto' ? t('sources.billing.payLineCrypto')
+                    : kind === 'promo' ? t('sources.billing.payLinePromo')
+                    : p.title;
+                  return (
+                    <div class="m-set-row" key={p.at + ':' + p.amount} data-payment>
+                      <span class="m-set-text">
+                        <span>{label}</span>
+                        {p.at ? <span class="m-muted m-small">{paymentDate(p.at)}</span> : null}
+                      </span>
+                      <span>{formatPayAmount(p.amount, p.currency)}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
+        </>
+      ) : (
+        <div class="m-bill-block">
           <div class="m-field">
             <label for="omp-code">{t('sources.billing.code')}</label>
             <TextField
@@ -360,17 +368,17 @@ export function OmpJackettCard() {
                 {billingNotice() === 'keystore' ? t('sources.billing.keystoreLost') : t('sources.billing.revoked')}
               </div>
             ) : null}
-            <button type="button" class="m-btn m-btn-primary" disabled={busy} onClick={() => void connect()}>
-              {busy ? t('sources.billing.connecting') : t('sources.billing.connect')}
-            </button>
           </div>
-        )}
-        {error && session ? (
-          <div class="m-error" role="alert">
-            {error}
-          </div>
-        ) : null}
-      </div>
+          <button type="button" class="m-btn m-btn-primary m-acct-wide" disabled={busy} onClick={() => void connect()}>
+            {busy ? t('sources.billing.connecting') : t('sources.billing.connect')}
+          </button>
+        </div>
+      )}
+      {error && session ? (
+        <div class="m-error" role="alert">
+          {error}
+        </div>
+      ) : null}
     </section>
   );
 }
