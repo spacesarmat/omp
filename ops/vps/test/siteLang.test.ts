@@ -156,7 +156,7 @@ function langLinkHrefs(bases: string[], hash: string): (string | null)[] {
 
 describe('language links', () => {
   it('keep the path of the site and the visitor fragment', () => {
-    expect(langLinkHrefs(['/', '/en/'], '#how')).toEqual(['/#how', '/en/#how']);
+    expect(langLinkHrefs(['/', '/en/'], '#how')).toEqual(['https://omp-player.online/#how', 'https://omp-player.online/en/#how']);
   });
 
   it('never point outside this origin', () => {
@@ -164,6 +164,10 @@ describe('language links', () => {
     expect(langLinkHrefs(['//evil.example/x'], '#how')).toEqual([null]);
     expect(langLinkHrefs(['javascript:alert(1)'], '#how')).toEqual([null]);
     expect(langLinkHrefs(['https://omp-player.online/en/'], '#how')).toEqual([null]);
-    expect(langLinkHrefs([''], '#how')).toEqual(['/#how']);
+    expect(langLinkHrefs([''], '#how')).toEqual(['https://omp-player.online/#how']);
+    // dots normalize: "/a/..//evil.example/x" is a pathname of "//evil.example/x", so the href must stay absolute
+    expect(langLinkHrefs(['/a/..//evil.example/x'], '#how')).toEqual(['https://omp-player.online//evil.example/x#how']);
+    const folded = langLinkHrefs(['/en/../..//evil.example'], '')[0] || '';
+    expect(folded.startsWith('https://omp-player.online/')).toBe(true);
   });
 });

@@ -70,10 +70,12 @@ function syncLangLinks() {
     } catch {
       return;
     }
-    // "//host" is a path too, but it belongs to somebody else: only this origin may end up in the href
+    // "//host" is a path too, but it belongs to somebody else: only this origin may end up in the href.
+    // The full href is written, not the path: "/a/..//evil.example/x" normalizes to a pathname of
+    // "//evil.example/x", and that, dropped into href, is a protocol-relative link to another host again.
     if (url.origin !== location.origin) return;
     url.hash = hash;
-    a.setAttribute("href", url.pathname + url.search + url.hash);
+    a.setAttribute("href", url.href);
   });
 }
 
