@@ -70,4 +70,55 @@ describe('imageStore', () => {
     expect(st.items).toBe(1);
     expect(st.bytes).toBe(9);
   });
+
+  it('counts from the size register without reading the pictures', async () => {
+    const seen: string[] = [];
+    const original = IDBObjectStore.prototype.getAll;
+    IDBObjectStore.prototype.getAll = function (this: IDBObjectStore, ...args: Parameters<IDBObjectStore['getAll']>) {
+      seen.push(this.name);
+      return original.apply(this, args);
+    };
+    try {
+      saveImage('https://img/a.jpg', bytes(10));
+      await flushImageWrites();
+      const st = await storedStats();
+      expect(st.items).toBe(1);
+      expect(st.bytes).toBe(10);
+      expect(seen.length).toBeGreaterThan(0);
+      expect(seen.filter((n) => n === 'images').length).toBe(0);
+    } finally {
+      IDBObjectStore.prototype.getAll = original;
+    }
+  });
+
+  it('a clear wins over a flush that was already running', async () => {
+    saveImage('https://img/late.jpg', bytes(12));
+    // no await in between: the flush and the clear race, and the clear must be the one that stands
+    const clearing = clearStoredImages();
+    await Promise.all([flushImageWrites(), clearing]);
+    const st = await storedStats();
+    expect(st.items).toBe(0);
+    expect(await readImage('https://img/late.jpg')).toBeNull();
+  });
+
+  it('a database that refuses to open is not reported as a broken picture', async () => {
+    const original = indexedDB.open.bind(indexedDB);
+    // the same fake request every time: openDb hangs its handlers on it, and the error fires on the next tick
+    const fake = {} as IDBOpenDBRequest;
+    (indexedDB as unknown as { open: IDBFactory['open'] }).open = (() => {
+      setTimeout(() => {
+        if (fake.onerror) fake.onerror(new Event('error'));
+      }, 0);
+      return fake;
+    }) as IDBFactory['open'];
+    resetImageStore();
+    try {
+      expect(await readImage('https://img/x.jpg')).toBeNull();
+      expect((await storedStats()).available).toBe(false);
+      await expect(clearStoredImages()).resolves.toBeUndefined();
+    } finally {
+      (indexedDB as unknown as { open: IDBFactory['open'] }).open = original;
+      resetImageStore();
+    }
+  });
 });

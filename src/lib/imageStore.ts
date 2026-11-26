@@ -1,43 +1,36 @@
 // Posters kept on the device between runs. The memory cache of src/lib/imageCache.ts dies with the app, so after a
-// restart every grid downloads its pictures again; on a phone on mobile data that is the traffic the person already
-// paid for once. This is the second level: the same Blob, stored in IndexedDB, with a quota of its own and the
-// oldest picture dropped first.
+// restart every grid downloads its pictures again; on a phone on mobile data that is traffic the person already
+// paid for once. This is the second level: the same bytes in IndexedDB, with a quota of their own and the oldest
+// picture dropped first.
 //
-// Everything here is best effort. A browser without IndexedDB (webOS 3 in a strict mode), a private window that
-// refuses it, or a full disk must leave the app working exactly as it did before: the memory cache and the network
-// still answer, only without persistence.
+// Everything here is best effort and nothing here throws: a browser without IndexedDB (webOS 3 in a strict mode),
+// a private window that refuses it, or a full disk must leave the app exactly where it was before this module
+// existed. An entry point that threw would be read by the caller as "the picture host is broken".
+//
+// Two stores. `images` holds the bytes, `meta` holds only the size and the touch stamp, so counting what is kept
+// and choosing what to drop never reads the pictures themselves.
 
 const DB_NAME = 'omp-images';
 const IMAGES = 'images';
+const META = 'meta';
 /** 60 MB: about 1500 posters of the size the grids ask for. */
 export const STORE_QUOTA = 60 * 1024 * 1024;
-/** A row touched within this window is not rewritten on read: the seen stamp only has to be roughly right. */
+/** A row touched within this window is not re-stamped on read: the stamp only has to be roughly right. */
 const TOUCH_MS = 10 * 60 * 1000;
 /** Writes are gathered and committed together: a grid asks for dozens of posters in one second. */
 const FLUSH_ITEMS = 12;
 const FLUSH_MS = 800;
 
-// A row holds an ArrayBuffer, not the Blob: structured cloning of Blob is uneven across engines (it is missing in
-// the jsdom we test with, and shaky on old webOS), while ArrayBuffer is cloned everywhere. The Blob is rebuilt on
-// read, which costs nothing next to a download.
-interface Row {
+interface ImageRow {
   url: string;
   type: string;
   data: ArrayBuffer;
-  bytes: number;
-  seen: number;
 }
 
-/** The bytes of a picture as an ArrayBuffer, on every engine this app runs on. */
-function toBuffer(blob: Blob): Promise<ArrayBuffer> {
-  const asBuffer = (blob as unknown as { arrayBuffer?: () => Promise<ArrayBuffer> }).arrayBuffer;
-  if (typeof asBuffer === 'function') return asBuffer.call(blob);
-  return new Promise<ArrayBuffer>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as ArrayBuffer);
-    reader.onerror = () => reject(reader.error || new Error('read'));
-    reader.readAsArrayBuffer(blob);
-  });
+interface MetaRow {
+  url: string;
+  bytes: number;
+  seen: number;
 }
 
 let opening: Promise<IDBDatabase> | null = null;
@@ -67,6 +60,7 @@ function openDb(): Promise<IDBDatabase> {
     req.onupgradeneeded = () => {
       const db = req.result;
       if (!db.objectStoreNames.contains(IMAGES)) db.createObjectStore(IMAGES, { keyPath: 'url' });
+      if (!db.objectStoreNames.contains(META)) db.createObjectStore(META, { keyPath: 'url' });
     };
     req.onsuccess = () => resolve((opened = req.result));
     req.onerror = () => reject(req.error || new Error('indexeddb_open'));
@@ -79,130 +73,155 @@ function openDb(): Promise<IDBDatabase> {
   return opening;
 }
 
-function giveUp(err: unknown): never {
-  // one broken attempt is enough for the whole run
-  usable = false;
-  throw err instanceof Error ? err : new Error('indexeddb');
+/** The A bytes of a picture as an ArrayBuffer, on every engine this app runs on. */
+function toBuffer(blob: Blob): Promise<ArrayBuffer> {
+  const asBuffer = (blob as unknown as { arrayBuffer?: () => Promise<ArrayBuffer> }).arrayBuffer;
+  if (typeof asBuffer === 'function') return asBuffer.call(blob);
+  return new Promise<ArrayBuffer>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as ArrayBuffer);
+    reader.onerror = () => reject(reader.error || new Error('read'));
+    reader.readAsArrayBuffer(blob);
+  });
 }
 
-/** All rows, oldest touched first - the order the quota drops them in. */
-async function allRows(): Promise<Row[]> {
-  const db = await openDb();
-  const tx = db.transaction(IMAGES, 'readonly');
-  const done = completion(tx);
-  try {
-    const rows = await request(tx.objectStore(IMAGES).getAll() as IDBRequest<Row[]>);
-    await done;
-    return rows;
-  } catch (err) {
-    return giveUp(err);
-  }
+/**
+ * One queue for everything that changes the store. A clear that ran in the middle of a flush would otherwise put
+ * the pictures of that flush back, and a flush started before a clear must not commit afterwards.
+ */
+let chain: Promise<void> = Promise.resolve();
+function enqueue<T>(task: () => Promise<T>): Promise<T> {
+  const next = chain.then(task, task);
+  // the queue itself never carries a rejection into the next task
+  chain = next.then(() => undefined, () => undefined);
+  return next;
 }
 
-/** Drops the oldest pictures until the store fits the quota again. */
-async function trim(db: IDBDatabase, rows: Row[], extra: number): Promise<void> {
-  let bytes = rows.reduce((sum, r) => sum + r.bytes, 0) + extra;
+/** Rows are dropped oldest touched first until the store fits the quota again. */
+async function trimToQuota(db: IDBDatabase, extra: number): Promise<void> {
+  const metaTx = db.transaction(META, 'readonly');
+  const metaDone = completion(metaTx);
+  const rows = await request(metaTx.objectStore(META).getAll() as IDBRequest<MetaRow[]>);
+  await metaDone;
+  let bytes = rows.reduce((sum, r) => sum + (r.bytes || 0), 0) + extra;
   if (bytes <= STORE_QUOTA) return;
-  const sorted = rows.slice().sort((a, b) => a.seen - b.seen);
-  const tx = db.transaction(IMAGES, 'readwrite');
+  const sorted = rows.slice().sort((a, b) => (a.seen || 0) - (b.seen || 0));
+  const tx = db.transaction([IMAGES, META], 'readwrite');
   const done = completion(tx);
-  const store = tx.objectStore(IMAGES);
+  const images = tx.objectStore(IMAGES);
+  const meta = tx.objectStore(META);
   for (const row of sorted) {
     if (bytes <= STORE_QUOTA) break;
-    store.delete(row.url);
-    bytes -= row.bytes;
+    images.delete(row.url);
+    meta.delete(row.url);
+    bytes -= row.bytes || 0;
   }
   await done;
 }
 
-const writes = new Map<string, Row>();
-/** Pictures whose byte copy has not finished yet: a flush waits for them, or it would commit an empty batch. */
-const staged = new Map<string, Promise<void>>();
+const staged = new Map<string, { epoch: number; ready: Promise<void> }>();
+const pending = new Map<string, { row: ImageRow; meta: MetaRow; epoch: number }>();
+let epoch = 0;
 let timer: ReturnType<typeof setTimeout> | null = null;
 
-/** Commits everything gathered since the last call. Awaiting it is only needed by tests and by the clear button. */
-export async function flushImageWrites(): Promise<void> {
+function schedule(): void {
+  if (timer === null) timer = setTimeout(() => void flushImageWrites().catch(() => undefined), FLUSH_MS);
+}
+
+/** Commits everything gathered so far. Awaiting it is what tests and the clear button do. */
+export function flushImageWrites(): Promise<void> {
   if (timer !== null) {
     clearTimeout(timer);
     timer = null;
   }
-  await Promise.all(Array.from(staged.values()));
-  staged.clear();
-  const rows = Array.from(writes.values());
-  writes.clear();
-  if (!rows.length || !usable) return;
-  try {
+  return enqueue(async () => {
+    const mine = epoch;
+    await Promise.all(Array.from(staged.values()).map((s) => s.ready.catch(() => undefined)));
+    // rows staged before a clear are no longer ours to keep
+    for (const [url, entry] of Array.from(pending)) {
+      if (entry.epoch !== mine) pending.delete(url);
+    }
+    staged.clear();
+    const rows = Array.from(pending.values());
+    pending.clear();
+    if (!rows.length || !usable) return;
     const db = await openDb();
-    const existing = await allRows();
-    await trim(db, existing, 0);
-    const tx = db.transaction(IMAGES, 'readwrite');
+    await trimToQuota(db, 0);
+    const tx = db.transaction([IMAGES, META], 'readwrite');
     const done = completion(tx);
-    const store = tx.objectStore(IMAGES);
-    for (const row of rows) store.put(row);
+    const images = tx.objectStore(IMAGES);
+    const meta = tx.objectStore(META);
+    for (const item of rows) {
+      images.put(item.row);
+      meta.put(item.meta);
+    }
     await done;
-    // a picture that alone is bigger than what is left goes straight back out
-    await trim(db, await allRows(), 0);
-  } catch (err) {
-    giveUp(err);
-  }
+    await trimToQuota(db, 0);
+  });
 }
 
 /** Remembers a picture for the next run. Fire and forget: the caller already has the bytes on screen. */
 export function saveImage(url: string, blob: Blob): void {
   if (!usable || !url) return;
-  const seen = Date.now();
+  const mine = epoch;
   const bytes = blob.size || 0;
+  const seen = Date.now();
   const ready = toBuffer(blob).then(
     (data) => {
-      writes.set(url, { url, type: blob.type || 'image/jpeg', data, bytes, seen });
-      staged.delete(url);
-      if (writes.size >= FLUSH_ITEMS) void flushImageWrites();
+      if (mine !== epoch) return;
+      pending.set(url, { row: { url, type: blob.type || 'image/jpeg', data }, meta: { url, bytes, seen }, epoch: mine });
+      if (pending.size >= FLUSH_ITEMS) void flushImageWrites().catch(() => undefined);
     },
     () => {
       /* the bytes did not survive the copy: the memory cache still has them */
-      staged.delete(url);
     },
   );
-  staged.set(url, ready);
-  if (timer === null) timer = setTimeout(() => void flushImageWrites(), FLUSH_MS);
+  staged.set(url, { epoch: mine, ready });
+  schedule();
 }
 
 /** The bytes of a stored picture, or null. A hit refreshes the touch stamp when it has grown stale. */
 export async function readImage(url: string): Promise<Blob | null> {
   if (!usable || !url) return null;
   try {
-    const db = await openDb();
-    const tx = db.transaction(IMAGES, 'readonly');
-    const done = completion(tx);
-    const row = await request(tx.objectStore(IMAGES).get(url) as IDBRequest<Row | undefined>);
-    await done;
-    // not `instanceof ArrayBuffer`: the bytes come back from another realm under the test worker
-    if (!row || typeof row.data?.byteLength !== 'number') {
-      if (row && row.url) await dropRow(row.url);
-      return null;
-    }
-    if (Date.now() - row.seen > TOUCH_MS) {
-      writes.set(url, { ...row, seen: Date.now() });
-      if (timer === null) timer = setTimeout(() => void flushImageWrites(), FLUSH_MS);
-    }
-    return new Blob([row.data], { type: row.type || 'image/jpeg' });
+    return await enqueue(async () => {
+      const db = await openDb();
+      const tx = db.transaction(IMAGES, 'readonly');
+      const done = completion(tx);
+      const row = await request(tx.objectStore(IMAGES).get(url) as IDBRequest<ImageRow | undefined>);
+      await done;
+      if (!row || typeof row.data?.byteLength !== 'number') {
+        if (row && row.url) await dropRows([row.url]);
+        return null;
+      }
+      const metaTx = db.transaction(META, 'readonly');
+      const metaDone = completion(metaTx);
+      const meta = await request(metaTx.objectStore(META).get(url) as IDBRequest<MetaRow | undefined>);
+      await metaDone;
+      if (meta && Date.now() - (meta.seen || 0) > TOUCH_MS) {
+        pending.set(url, { row: { url, type: row.type, data: row.data }, meta: { url, bytes: row.data.byteLength, seen: Date.now() }, epoch });
+        schedule();
+      }
+      return new Blob([row.data], { type: row.type || 'image/jpeg' });
+    });
   } catch (err) {
-    giveUp(err);
+    // a store that cannot answer is not a broken picture host: the caller goes to the network
+    usable = false;
     return null;
   }
 }
 
-/** Removes one row: a picture that cannot be read back is not worth keeping. */
-async function dropRow(url: string): Promise<void> {
-  try {
-    const db = await openDb();
-    const tx = db.transaction(IMAGES, 'readwrite');
-    const done = completion(tx);
+/** Removes rows by url: a picture that cannot be read back is not worth keeping. */
+async function dropRows(urls: string[]): Promise<void> {
+  if (!urls.length) return;
+  const db = await openDb();
+  const tx = db.transaction([IMAGES, META], 'readwrite');
+  const done = completion(tx);
+  for (const url of urls) {
     tx.objectStore(IMAGES).delete(url);
-    await done;
-  } catch (err) {
-    giveUp(err);
+    tx.objectStore(META).delete(url);
   }
+  await done;
 }
 
 export interface StoredStats {
@@ -212,43 +231,56 @@ export interface StoredStats {
   available: boolean;
 }
 
+/** Counts what is kept from the size register only - the pictures themselves are not read. */
 export async function storedStats(): Promise<StoredStats> {
   if (!usable) return { items: 0, bytes: 0, available: false };
   try {
-    const rows = await allRows();
-    return { items: rows.length, bytes: rows.reduce((sum, r) => sum + r.bytes, 0), available: true };
+    return await enqueue(async () => {
+      const db = await openDb();
+      const tx = db.transaction(META, 'readonly');
+      const done = completion(tx);
+      const rows = await request(tx.objectStore(META).getAll() as IDBRequest<MetaRow[]>);
+      await done;
+      return { items: rows.length, bytes: rows.reduce((sum, r) => sum + (r.bytes || 0), 0), available: true };
+    });
   } catch (err) {
-    giveUp(err);
+    usable = false;
     return { items: 0, bytes: 0, available: false };
   }
 }
 
-/** Wipes the stored pictures: the «Очистить данные» button in the settings. */
-export async function clearStoredImages(): Promise<void> {
-  writes.clear();
+/** Wipes the stored pictures: the «Очистить» button in the settings. */
+export function clearStoredImages(): Promise<void> {
+  // anything staged or gathered before this moment belongs to the old state and must not be committed
+  epoch++;
   staged.clear();
+  pending.clear();
   if (timer !== null) {
     clearTimeout(timer);
     timer = null;
   }
-  if (!usable) return;
-  try {
-    const db = await openDb();
-    const tx = db.transaction(IMAGES, 'readwrite');
-    const done = completion(tx);
-    tx.objectStore(IMAGES).clear();
-    await done;
-  } catch (err) {
-    giveUp(err);
-  }
+  if (!usable) return Promise.resolve();
+  return enqueue(async () => {
+    try {
+      const db = await openDb();
+      const tx = db.transaction([IMAGES, META], 'readwrite');
+      const done = completion(tx);
+      tx.objectStore(IMAGES).clear();
+      tx.objectStore(META).clear();
+      await done;
+    } catch (err) {
+      usable = false;
+    }
+  }).catch(() => undefined);
 }
 
 /** Test seam: forgets the open database so a case can start from an empty one. */
 export function resetImageStore(): void {
   opened = null;
   opening = null;
-  writes.clear();
   staged.clear();
+  pending.clear();
+  epoch++;
   if (timer !== null) {
     clearTimeout(timer);
     timer = null;
