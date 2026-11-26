@@ -14,6 +14,7 @@ The English translation covers the latest versions only; the full history (in Ru
 - [phone] The remote's "Power and IR" block is folded into one line and opens on tap - it used to take the deck's room; discovered network TVs are shown as a card with the MAC field full width and the keys in a row of their own
 - [tech] CodeQL no longer reports files from node_modules as first-party (the SARIF is filtered before upload), and CI jobs now state their permissions
 - [tech] Billing: a subscription code can no longer reach a page or a link as written - the /go/ page and the app link are built only from code characters, and the code itself is drawn uniformly from the alphabet
+- [tech] The HTTP sync client test no longer relies on 20 ms: it waits until runV2 actually reaches fetch, so a loaded runner does not fail with "release is not a function"
 
 ## 0.30.4-beta.1
 
