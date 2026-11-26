@@ -7,6 +7,7 @@ The English translation covers the latest versions only; the full history (in Ru
 ## Unreleased
 
 - [tech] The download page is redesigned: dark theme with an orange accent, six platform cards, a Stable/Beta switch and a device helper. Versions, sizes and sha256 still come from the same feeds
+- [tech] The download page has an SVG favicon from the already published assets/logo.svg: the browser no longer requests the missing /favicon.ico and no longer logs a console 404
 
 ## 0.30.4-beta.4
 
