@@ -15,6 +15,8 @@ import { tvGlyphs } from '../../ui/tvText';
 import { seriesName } from '../../lib/cleanNames';
 import { requestSeriesMatch, cachedSeriesMatch, seriesMatchVersion } from '../../lib/seriesMatch';
 import { focusedRow, keepBand, keepRows, keepsImage, rowOf } from '../../lib/gridWindow';
+import { prefetchImages } from '../../lib/imageCache';
+import { posterUrlFor } from '../../catalog/tmdb';
 import { getCurrentFocusKey } from '@noriginmedia/norigin-spatial-navigation';
 import { withAds } from '../../ads/ads';
 import { TV_PER_SCREEN, useTvAds } from '../../ads/useTvAds';
@@ -191,7 +193,6 @@ export function TorrentViews(p: {
     rowRef.current = r;
     setFocusRow(r);
   };
-  const focusAt = (i: number) => setRow(keepBand(rowRef.current, rowOf(i, cols), keep));
   const adsOn = p.ads !== false && items.length > 0;
   const ads = useTvAds({
     section: 'mine',
@@ -208,6 +209,26 @@ export function TorrentViews(p: {
     },
   });
   const rows = withAds(items, ads.admitted);
+  /** Posters of the two rows below the focused tile, asked while the remote is still moving, so a row the window
+   * has not rendered yet comes from the cache instead of the network once the person gets there. */
+  const prefetchAhead = (i: number) => {
+    if (p.view !== 'large' && p.view !== 'small' && p.view !== 'list') return;
+    const box = p.view === 'large' ? 253 : p.view === 'small' ? 160 : 72;
+    const row = rowOf(i, cols);
+    const urls: string[] = [];
+    for (let k = i + 1; k < rows.length && urls.length < cols * 2; k++) {
+      if (rowOf(k, cols) > row + 2) break;
+      const it = rows[k].item;
+      if (!it) continue;
+      const tor = it.kind === 'torrent' ? it.tor : it.lead;
+      if (tor && tor.poster) urls.push(posterUrlFor(tor.poster, box));
+    }
+    prefetchImages(urls);
+  };
+  const focusAt = (i: number) => {
+    setRow(keepBand(rowRef.current, rowOf(i, cols), keep));
+    prefetchAhead(i);
+  };
   // another tab, a search or a refresh: the window follows the focused tile where it is now (the top when none)
   const keys = rows.map((e) => {
     if (e.item === undefined) return 'ad-mine-' + e.ad;

@@ -49,7 +49,7 @@ export default defineConfig({
     // one jsdom per worker instead of per file (each file still gets its own context): about twice as fast
     pool: 'vmThreads',
     // pins the Russian UI (and a Russian browser language) so the assertions stay in Russian
-    setupFiles: ['tests/setup/tmdb.ts', 'tests/setup/i18n.ts'],
+    setupFiles: ['tests/setup/tmdb.ts', 'tests/setup/i18n.ts', 'tests/setup/imageCache.ts'],
     include: ['tests/**/*.test.ts', 'tests/**/*.test.tsx', 'mobile/tests/**/*.test.{ts,tsx}', 'desktop/tests/**/*.test.{ts,tsx}', 'ops/*/test/**/*.test.ts'],
     // Billing uses node:sqlite, which the jsdom bundle cannot load. ops/billing/vitest.config.ts runs those tests in Node.
     exclude: ['ops/billing/**'],

@@ -45,6 +45,7 @@ import { TvSearchSize } from '../../ui/LiveSeeds';
 import { sourceBadge } from '../../sources/view';
 import { posterUrlFor } from '../../catalog/tmdb';
 import { posterInitials } from './Poster';
+import { CachedImg } from '../../ui/CachedImg';
 import { removeWantByQuery } from '../../store/wantList';
 
 export type NewsSeg = 'feed' | 'subs';
@@ -781,7 +782,7 @@ function SubsTv(p: { link: PhoneLink; onFocused: () => void }) {
           <div key={s.id} class={'news-sub' + (s.paused ? ' news-sub-paused' : '')} data-sub={s.id} data-paused={s.paused ? '' : undefined}>
             <div class="news-sub-art">
               {poster ? (
-                <img src={posterUrlFor(poster, 72)} alt="" />
+                <CachedImg src={posterUrlFor(poster, 72)} w={72} />
               ) : s.noPoster ? (
                 <div class={'disc-ph disc-ph-' + hue}>{tvGlyphs(posterInitials(s.query))}</div>
               ) : null}

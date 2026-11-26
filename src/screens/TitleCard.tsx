@@ -21,6 +21,7 @@ import { navigate, type Route } from '../ui/nav';
 import { toast } from '../ui/toast';
 import { tvGlyphs } from '../ui/tvText';
 import { CastRow, initials, showInRow } from '../ui/CastRow';
+import { CachedImg } from '../ui/CachedImg';
 import { seasonPlan } from './Series';
 import { SeriesPill } from './library/SeriesTile';
 import { posterInitials } from './library/Poster';
@@ -149,7 +150,7 @@ function Body({ card, want, season }: { card: CatalogCard; want: TitleWantProps;
           </div>
         ) : null}
         <div class="series-poster">
-          {card.poster ? <img src={sharpPosterUrl(card.poster)} alt="" /> : <div class={'disc-ph disc-ph-' + (card.id % 4)}>{tvGlyphs(posterInitials(card.title))}</div>}
+          {card.poster ? <CachedImg src={sharpPosterUrl(card.poster)} /> : <div class={'disc-ph disc-ph-' + (card.id % 4)}>{tvGlyphs(posterInitials(card.title))}</div>}
         </div>
         <div class="series-info">
           <h1>{tvGlyphs(card.title)}</h1>

@@ -19,7 +19,9 @@ import { navigate } from '../ui/nav';
 import { textDialog } from '../ui/dialog';
 import { tvGlyphs } from '../ui/tvText';
 import { DISCOVER_TILE_PX, focusedRow, keepBand, keepRows, keepsImage, rowOf } from '../lib/gridWindow';
+import { prefetchImages } from '../lib/imageCache';
 import { posterInitials } from './library/Poster';
+import { CachedImg } from '../ui/CachedImg';
 import { DISCOVER_COLS, ratingText } from './library/DiscoverGrid';
 import { initials, routeOf } from './TitleCard';
 
@@ -103,7 +105,7 @@ function Body({ card }: { card: PersonCard }) {
   return (
     <>
       <div class="person-head">
-        <div class="person-photo">{card.photo ? <img src={card.photo} alt="" /> : <span class="tc-initials">{tvGlyphs(initials(card.name))}</span>}</div>
+        <div class="person-photo">{card.photo ? <CachedImg src={card.photo} w={220} /> : <span class="tc-initials">{tvGlyphs(initials(card.name))}</span>}</div>
         <div class="person-info">
           <div class="person-crumb">{tvGlyphs(t('person.crumb'))}</div>
           <h1 class="person-name">{tvGlyphs(card.name)}</h1>
@@ -162,10 +164,17 @@ function Body({ card }: { card: PersonCard }) {
                 onFocused={() => {
                   focused.current = c;
                   setFocusRow((prev) => keepBand(prev, rowOf(i, DISCOVER_COLS), keep));
+                  const row = rowOf(i, DISCOVER_COLS);
+                  const ahead: string[] = [];
+                  for (let k = i + 1; k < items.length && ahead.length < DISCOVER_COLS * 2; k++) {
+                    if (rowOf(k, DISCOVER_COLS) > row + 2) break;
+                    if (items[k].credit.poster) ahead.push(posterUrlFor(items[k].credit.poster, DISCOVER_TILE_PX));
+                  }
+                  prefetchImages(ahead);
                 }}
               >
                 <div class="disc-poster">
-                  {c.poster ? (keepsImage(i, focusRow, DISCOVER_COLS, keep) ? <img src={posterUrlFor(c.poster, DISCOVER_TILE_PX)} alt="" /> : null) : <div class={'disc-ph disc-ph-' + (c.id % 4)}>{tvGlyphs(posterInitials(c.title))}</div>}
+                  {c.poster ? (keepsImage(i, focusRow, DISCOVER_COLS, keep) ? <CachedImg src={posterUrlFor(c.poster, DISCOVER_TILE_PX)} w={DISCOVER_TILE_PX} /> : null) : <div class={'disc-ph disc-ph-' + (c.id % 4)}>{tvGlyphs(posterInitials(c.title))}</div>}
                   {c.rating > 0 && <span class="disc-rating">{ratingText(c.rating)}</span>}
                   {isWanted(c.kind, c.id) ? (
                     <span class="disc-mark disc-mark-want">{tvGlyphs(t('tv.discover.wantMark'))}</span>
