@@ -1587,8 +1587,14 @@ html.m-kb-open .m-sheet-host:has(textarea) { bottom: var(--kb-inset, 0px); }
 .m-faq-a { padding: 0 16px 14px; font-size: 14px; line-height: 1.5; color: var(--muted); }
 .m-faq-a p { margin: 0 0 8px; overflow-wrap: anywhere; }
 .m-faq-a p:last-child { margin-bottom: 0; }
-/* an opened answer stops short of the screen edge and of the bottom navigation, so nothing hides under them */
-.m-screen[data-route='faq'] [data-faq-group], .m-faq-item { scroll-margin-top: 12px; scroll-margin-bottom: 16px; }
+/* an opened answer stops short of the screen edge and of the bottom navigation, so nothing hides under them.
+   The top margin adds the same safe-area inset .m-screen pads its content with: after a scroll the section sits at
+   the top of the viewport, not at the top of the padded box, and on a notched phone the heading would go under the
+   status bar. */
+.m-screen[data-route='faq'] [data-faq-group], .m-faq-item {
+  scroll-margin-top: calc(12px + env(safe-area-inset-top));
+  scroll-margin-bottom: calc(16px + env(safe-area-inset-bottom));
+}
 
 /* ---- torrent card: «Пропуск» ---- */
 .m-skip { display: flex; flex-direction: column; gap: 2px; padding: 12px 14px; border-radius: 14px; background: var(--panel); }
