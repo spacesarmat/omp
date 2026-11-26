@@ -58,9 +58,10 @@ const cssUrl = (u: string) => u.replace(/["()\\\s]/g, (c) => '%' + c.charCodeAt(
 
 /**
  * A fixed-size poster thumbnail: the colour placeholder at once, the poster once the row has been on screen and the
- * lookup answered. `poster` (a library torrent's own) skips the lookup.
+ * lookup answered. `poster` (a library torrent's own) skips the lookup. `year` is what the indexer reported for the
+ * row: a release named «1917 (2019)» carries a number that is not its year, and the site knows better.
  */
-export function ResultThumb({ title, poster }: { title: string; poster?: string }) {
+export function ResultThumb({ title, poster, year }: { title: string; poster?: string; year?: number }) {
   const own = /^https?:\/\//i.test(poster || '') ? poster! : '';
   const [url, setUrl] = useState(own);
   const ref = useRef<HTMLDivElement>(null);
@@ -74,7 +75,7 @@ export function ResultThumb({ title, poster }: { title: string; poster?: string 
       (list) => {
         if (!list.some((x) => x.isIntersecting)) return;
         io.disconnect();
-        if (!cancel) cancel = requestPoster(title, (u) => setUrl(/^https?:\/\//i.test(u) ? u : ''));
+        if (!cancel) cancel = requestPoster(title, (u) => setUrl(/^https?:\/\//i.test(u) ? u : ''), year);
       },
       { rootMargin: '200px 0px' },
     );
@@ -83,7 +84,7 @@ export function ResultThumb({ title, poster }: { title: string; poster?: string 
       io.disconnect();
       if (cancel) cancel();
     };
-  }, [title, own]);
+  }, [title, own, year]);
   const named = libraryTitle({ hash: '', title: title || '' }).title.split(' · ')[0] || title || '?';
   const letter = named.trim().charAt(0).toUpperCase() || '?';
   const color = posterColor(posterKey(title) || title || '?');

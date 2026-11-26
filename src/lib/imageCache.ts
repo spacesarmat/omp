@@ -29,6 +29,8 @@ const HOST_COOLDOWN_MS = 5 * 60 * 1000;
 const REFUSED_MAX = 400;
 /** A background prefetch backlog longer than this is not worth keeping: the person has scrolled away. */
 const QUEUE_MAX = 64;
+/** Neither fetch nor the body read has a timeout of its own; a stalled poster gives its worker up to this. */
+const STALL_MS = 15000;
 
 let inFlight = 0;
 
@@ -182,11 +184,19 @@ function pump(): void {
     const url = queue.shift() as string;
     if (!canCache(url) || store.has(url) || pending.has(url)) continue;
     inFlight++;
-    const done = (): void => {
+    // a request that never answers must not hold a worker: after STALL_MS it is left to finish on its own
+    // (the pending entry stays, so the poster is not asked twice), and the worker takes the next address
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let released = false;
+    const release = (): void => {
+      if (released) return;
+      released = true;
+      if (timer !== undefined) clearTimeout(timer);
       inFlight--;
       pump();
     };
-    loadImage(url).then(done, done);
+    timer = setTimeout(release, STALL_MS);
+    loadImage(url).then(release, release);
   }
 }
 

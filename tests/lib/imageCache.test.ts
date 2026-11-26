@@ -197,6 +197,45 @@ describe('prefetchImages', () => {
     expect(peak).toBeLessThanOrEqual(2);
     expect(imageCacheStats().items).toBe(6);
   });
+
+  it('gives up a stalled request, still caches it when it answers late, and frees each worker once', async () => {
+    vi.useFakeTimers();
+    const late: (() => void)[] = [];
+    let live = 0;
+    let peak = 0;
+    fetcher.mockImplementation((u: string) => {
+      if (String(u).indexOf('stall.') >= 0) return new Promise((res) => late.push(() => res(picture(3))));
+      live++;
+      peak = Math.max(peak, live);
+      return Promise.resolve(picture(2)).then((r) => {
+        live--;
+        return r;
+      });
+    });
+    prefetchImages(['https://stall.test/a.jpg', 'https://stall.test/b.jpg']);
+    prefetchImages(['https://img.test/live.jpg']);
+    // the same silent address asked again shares the one request that is already out
+    const alsoA = loadImage('https://stall.test/a.jpg');
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(fetcher.mock.calls.filter((c) => c[0] === 'https://stall.test/a.jpg').length).toBe(1);
+    // both workers are stuck on the pair that has not answered, so the healthy poster waits
+    expect(imageSrc('https://img.test/live.jpg')).toBe('https://img.test/live.jpg');
+    // after the stall window the worker is free and the healthy host is served again
+    await vi.advanceTimersByTimeAsync(16000);
+    expect(imageSrc('https://img.test/live.jpg')).not.toBe('https://img.test/live.jpg');
+    // the late answers still land in the cache, and the waiter gets the same copy
+    late.forEach((release) => release());
+    await vi.advanceTimersByTimeAsync(0);
+    const held = await alsoA;
+    expect(held).not.toBe('https://stall.test/a.jpg');
+    expect(imageSrc('https://stall.test/a.jpg')).toBe(held);
+    // two late releases must not have handed out more workers than there are
+    prefetchImages(['https://img.test/1.jpg', 'https://img.test/2.jpg', 'https://img.test/3.jpg', 'https://img.test/4.jpg']);
+    await vi.advanceTimersByTimeAsync(20);
+    expect(peak).toBeLessThanOrEqual(2);
+    expect(imageSrc('https://img.test/4.jpg')).not.toBe('https://img.test/4.jpg');
+    vi.useRealTimers();
+  });
 });
 
 describe('without object URLs', () => {

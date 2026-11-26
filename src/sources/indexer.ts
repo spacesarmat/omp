@@ -65,6 +65,13 @@ function firstNum(list: (string | null | undefined)[]): number | undefined {
   return undefined;
 }
 
+/** A year an indexer reported: 1900 to next year, anything else is not a release year. */
+function reportYear(v: string | null | undefined): number | undefined {
+  const n = num(v);
+  if (n === undefined || n < 1900 || n > new Date().getFullYear() + 1) return undefined;
+  return n;
+}
+
 function magnetFor(hash: string | undefined, title: string): string {
   return hash ? 'magnet:?xt=urn:btih:' + hash + '&dn=' + encodeURIComponent(title) : '';
 }
@@ -83,6 +90,8 @@ interface Fields {
   detailUrl?: string;
   categories?: string;
   quality?: string;
+  /** Release year the indexer reported: never read out of the title. */
+  year?: number;
 }
 
 function toResult(sourceId: string, f: Fields): SourceResult | null {
@@ -118,6 +127,7 @@ function toResult(sourceId: string, f: Fields): SourceResult | null {
   if (f.date !== undefined) r.date = f.date;
   if (f.sizeBytes !== undefined) r.sizeBytes = f.sizeBytes;
   if (f.quality) r.qualityHint = f.quality;
+  if (f.year) r.year = f.year;
   return r;
 }
 
@@ -200,6 +210,7 @@ export function parseTorznab(xml: string, sourceId: string, kind: Kind = 'jacket
       detailUrl: childText(item, 'comments') || undefined,
       categories: cats.join(', '),
       quality: attrs.video_resolution || attrs.resolution || attrs.quality || '',
+      year: reportYear(attrs.year),
     });
     if (r) {
       const rank = num(attrs.omp_rank);

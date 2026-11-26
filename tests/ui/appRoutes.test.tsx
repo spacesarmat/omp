@@ -119,8 +119,9 @@ describe('App scale safety net', () => {
     routeStack.value = [{ name: 'connect' }];
     const app = mountApp();
     const root = app.querySelector('.app') as HTMLElement;
-    await new Promise((r) => setTimeout(r, 30));
-    const w = window.innerWidth;
-    expect(root.style.transform).toBe(Math.abs(w - 1920) <= 2 ? '' : 'scale(' + w / 1920 + ')');
+    const width = Math.abs(window.innerWidth - 1920) > 2;
+    // the scale lands after the first frame: a fixed sleep misses it on a loaded runner and the test turns red
+    if (width) await until(() => root.style.transform !== '');
+    expect(root.style.transform).toBe(width ? 'scale(' + window.innerWidth / 1920 + ')' : '');
   });
 });
