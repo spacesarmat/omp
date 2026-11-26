@@ -4,6 +4,10 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
+## Unreleased
+
+- [tech] The download page is redesigned: dark theme with an orange accent, six platform cards, a Stable/Beta switch and a device helper. Versions, sizes and sha256 still come from the same feeds
+
 ## 0.30.4-beta.4
 
 - [tv] The launch screen logo got bigger: the mark now takes a fifth of the screen width, the same on 1080p and on 4K

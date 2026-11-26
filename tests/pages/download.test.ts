@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 // @ts-ignore node builtins
 import { readFileSync } from 'node:fs';
-import { detectPlatform, formatReleaseDate, formatSize, highlightPlatform, updateDownloads } from '../../ops/pages/download';
+import { detectPlatform, formatReleaseDate, formatSize, highlightPlatform, initUi, setChannel, updateDownloads } from '../../ops/pages/download';
 
 const KINDS = ['stable-android', 'stable-webos', 'beta-android', 'beta-webos', 'stable-windows'] as const;
 
@@ -90,6 +90,95 @@ describe('download page feeds', () => {
     expect(link('stable-windows').href).toBe('https://github.com/spacesarmat/omp/releases/download/v0.30.0/OMP-0.30.0-setup.exe');
     expect(document.querySelector('[data-version="stable-windows"]')!.textContent).toBe('0.30.0');
     expect(link('beta-android').href).toBe('https://example.test/beta.apk');
+  });
+
+  it('reveals the desktop beta pane only when the shared feed carries a beta', async () => {
+    document.body.innerHTML = `
+      <div class="beta">
+        <a data-download="beta-windows" data-direct hidden href="https://github.com/spacesarmat/omp/releases">beta</a>
+        <span data-version="beta-windows" hidden></span>
+        <p class="beta-empty">list</p>
+      </div>
+      <a data-download="stable-windows" href="https://github.com/spacesarmat/omp/releases/download/v0.30.0/OMP-0.30.0-setup.exe">setup</a>
+      <span data-version="stable-windows">0.30.0</span>
+    `;
+    const fetchImpl = vi.fn((url: string) => Promise.resolve(response(
+      String(url).endsWith('update-windows.json')
+        ? { version: '0.31.0-beta.1', url: 'https://example.test/beta-setup.exe', releaseUrl: 'https://github.com/spacesarmat/omp/releases/tag/v0.31.0-beta.1' }
+        : {},
+    )));
+    await updateDownloads(document, fetchImpl as unknown as typeof fetch);
+    const direct = document.querySelector('[data-download="beta-windows"]') as HTMLAnchorElement;
+    expect(direct.hidden).toBe(false);
+    expect(direct.href).toBe('https://example.test/beta-setup.exe');
+    expect((document.querySelector('[data-version="beta-windows"]') as HTMLElement).hidden).toBe(false);
+    expect(document.querySelector('[data-version="beta-windows"]')!.textContent).toBe('0.31.0-beta.1');
+    expect((document.querySelector('.beta-empty') as HTMLElement).hidden).toBe(true);
+    expect(link('stable-windows').href).toBe('https://github.com/spacesarmat/omp/releases/download/v0.30.0/OMP-0.30.0-setup.exe');
+    expect(document.querySelector('[data-version="stable-windows"]')!.textContent).toBe('0.30.0');
+  });
+
+  it('gives an Intel Mac its own beta link', async () => {
+    document.body.innerHTML = `
+      <div class="beta">
+        <a data-download="beta-macos" data-asset="arm64" data-direct hidden href="https://github.com/spacesarmat/omp/releases">beta arm</a>
+        <a data-download="beta-macos" data-asset="x64" hidden href="https://github.com/spacesarmat/omp/releases">beta intel</a>
+        <span data-version="beta-macos" hidden></span>
+        <p class="beta-empty">list</p>
+      </div>
+    `;
+    const fetchImpl = vi.fn((url: string) => Promise.resolve(response(
+      String(url).endsWith('update-macos.json')
+        ? {
+          version: '0.31.0-beta.1',
+          url: 'https://example.test/arm-beta.dmg',
+          assets: {
+            arm64: { url: 'https://example.test/arm-beta.dmg' },
+            x64: { url: 'https://example.test/intel-beta.dmg' },
+          },
+          releaseUrl: 'https://github.com/spacesarmat/omp/releases/tag/v0.31.0-beta.1',
+        }
+        : {},
+    )));
+    await updateDownloads(document, fetchImpl as unknown as typeof fetch);
+    const arm = document.querySelector('[data-download="beta-macos"][data-asset="arm64"]') as HTMLAnchorElement;
+    const intel = document.querySelector('[data-download="beta-macos"][data-asset="x64"]') as HTMLAnchorElement;
+    expect(arm.hidden).toBe(false);
+    expect(arm.href).toBe('https://example.test/arm-beta.dmg');
+    expect(intel.hidden).toBe(false);
+    expect(intel.href).toBe('https://example.test/intel-beta.dmg');
+    expect((document.querySelector('.beta-empty') as HTMLElement).hidden).toBe(true);
+    expect((document.querySelector('[data-version="beta-macos"]') as HTMLElement).hidden).toBe(false);
+  });
+
+  it('keeps the Apple Silicon beta button hidden when the feed has only Intel', async () => {
+    document.body.innerHTML = `
+      <div class="beta">
+        <a data-download="beta-macos" data-asset="arm64" data-direct hidden href="https://github.com/spacesarmat/omp/releases">beta arm</a>
+        <a data-download="beta-macos" data-asset="x64" hidden href="https://github.com/spacesarmat/omp/releases">beta intel</a>
+        <span data-version="beta-macos" hidden></span>
+        <p class="beta-empty">list</p>
+      </div>
+    `;
+    const fetchImpl = vi.fn((url: string) => Promise.resolve(response(
+      String(url).endsWith('update-macos.json')
+        ? {
+          version: '0.31.0-beta.1',
+          url: 'https://example.test/intel-beta.dmg',
+          assets: { x64: { url: 'https://example.test/intel-beta.dmg' } },
+          releaseUrl: 'https://github.com/spacesarmat/omp/releases/tag/v0.31.0-beta.1',
+        }
+        : {},
+    )));
+    await updateDownloads(document, fetchImpl as unknown as typeof fetch);
+    const arm = document.querySelector('[data-download="beta-macos"][data-asset="arm64"]') as HTMLAnchorElement;
+    const intel = document.querySelector('[data-download="beta-macos"][data-asset="x64"]') as HTMLAnchorElement;
+    expect(arm.hidden).toBe(true);
+    expect(arm.href).toBe('https://github.com/spacesarmat/omp/releases');
+    expect(intel.hidden).toBe(false);
+    expect(intel.href).toBe('https://example.test/intel-beta.dmg');
+    expect((document.querySelector('.beta-empty') as HTMLElement).hidden).toBe(true);
+    expect((document.querySelector('[data-version="beta-macos"]') as HTMLElement).hidden).toBe(false);
   });
 
   it('keeps release-page fallbacks when feeds cannot be loaded', async () => {
@@ -210,6 +299,55 @@ describe('download page platform highlight', () => {
   });
 });
 
+describe('download page channel switch', () => {
+  it('marks the selected channel button and remembers the attribute', () => {
+    document.body.innerHTML = `
+      <button data-channel="stable" class="selected" aria-pressed="true"></button>
+      <button data-channel="beta" aria-pressed="false"></button>
+    `;
+    setChannel(document, 'beta');
+    expect(document.documentElement.getAttribute('data-channel')).toBe('beta');
+    expect((document.querySelector('[data-channel="beta"]') as HTMLElement).classList.contains('selected')).toBe(true);
+    expect((document.querySelector('[data-channel="stable"]') as HTMLElement).classList.contains('selected')).toBe(false);
+    expect(document.querySelector('[data-channel="beta"]')!.getAttribute('aria-pressed')).toBe('true');
+    expect(document.querySelector('[data-channel="stable"]')!.getAttribute('aria-pressed')).toBe('false');
+    setChannel(document, 'anything-else');
+    expect(document.documentElement.getAttribute('data-channel')).toBe('stable');
+    expect(document.querySelector('[data-channel="stable"]')!.getAttribute('aria-pressed')).toBe('true');
+  });
+});
+
+describe('download page device helper', () => {
+  it('keeps the answer outside the dialog and highlights one card', () => {
+    document.documentElement.lang = 'ru';
+    document.body.innerHTML = `
+      <aside class="help-strip"><p class="helper-result" id="helper-result" aria-live="polite" hidden></p></aside>
+      <dialog id="helper-dialog">
+        <button class="dialog-close"></button>
+        <button data-choice="macos">Mac</button>
+        <button data-choice="webos">Телевизор LG webOS</button>
+      </dialog>
+      <article class="tile" data-platform="macos"></article>
+      <article class="tile" data-platform="webos"></article>
+    `;
+    const dialog = document.querySelector('#helper-dialog') as HTMLDialogElement;
+    dialog.close = () => {
+      // jsdom has no dialog methods; the browser closes it for real
+    };
+    for (const tile of document.querySelectorAll('article')) tile.scrollIntoView = () => {};
+    initUi(document);
+    (dialog.querySelector('[data-choice="webos"]') as HTMLButtonElement).click();
+    const result = document.querySelector('#helper-result') as HTMLElement;
+    expect(result.hidden).toBe(false);
+    expect(result.textContent).toContain('Телевизор LG webOS');
+    expect(document.querySelector('[data-platform="webos"]')!.classList.contains('is-recommended')).toBe(true);
+    (dialog.querySelector('[data-choice="macos"]') as HTMLButtonElement).click();
+    expect(document.querySelector('[data-platform="webos"]')!.classList.contains('is-recommended')).toBe(false);
+    expect(document.querySelector('[data-platform="macos"]')!.classList.contains('is-recommended')).toBe(true);
+    expect(result.textContent).toContain('Mac');
+  });
+});
+
 describe('download page languages and fallbacks', () => {
   const pages = [
     { file: 'ops/pages/index.html', lang: 'ru', title: 'Скачать OMP', otherLang: 'en', otherPath: '/omp/en/', script: './download.js', guide: 'https://github.com/spacesarmat/omp#установка', mainSite: 'https://omp-player.online', logo: './assets/logo.svg' },
@@ -220,7 +358,7 @@ describe('download page languages and fallbacks', () => {
     it(`${page.lang} keeps language switching and all release fallbacks`, () => {
       const doc = new DOMParser().parseFromString(readFileSync(page.file, 'utf8'), 'text/html');
       expect(doc.documentElement.lang).toBe(page.lang);
-      expect(doc.body.textContent).toContain(page.title);
+      expect(doc.querySelector('title')!.textContent).toContain(page.title);
       const switchLink = doc.querySelector(`a[hreflang="${page.otherLang}"]`)!;
       expect(switchLink.getAttribute('href')).toBe(page.otherPath);
       expect(doc.querySelector(`link[rel="alternate"][hreflang="${page.otherLang}"]`)!.getAttribute('href')).toBe(page.otherPath);
@@ -255,8 +393,31 @@ describe('download page languages and fallbacks', () => {
       expect(doc.querySelector('[data-download="stable-linux"][data-asset="deb"]')!.hasAttribute('hidden')).toBe(false);
       expect(doc.querySelector('[data-platform="macos"]')!.textContent).toContain('xattr -d com.apple.quarantine "/Applications/OMP.app"');
       for (const platform of ['windows', 'macos', 'linux']) {
-        expect(doc.querySelector(`[data-platform="${platform}"]`)!.textContent!.toLowerCase()).not.toMatch(/beta|бета/);
+        const tile = doc.querySelector(`[data-platform="${platform}"]`)!;
+        for (const slot of [...tile.children].slice(0, 5)) {
+          expect(slot.textContent!.toLowerCase()).not.toMatch(/beta|бета/);
+        }
+        const direct = doc.querySelector(`[data-download="beta-${platform}"][data-direct]`)!;
+        expect(direct.hasAttribute('hidden')).toBe(true);
+        expect(direct.getAttribute('href')).toBe('https://github.com/spacesarmat/omp/releases');
+        expect(doc.querySelector(`[data-version="beta-${platform}"]`)!.hasAttribute('hidden')).toBe(true);
       }
+      const dialog = doc.querySelector('#helper-dialog')!;
+      expect([...dialog.querySelectorAll('[data-choice]')].map((button) => button.getAttribute('data-choice')))
+        .toEqual(['android', 'android-tv', 'webos', 'windows', 'macos', 'linux']);
+      for (const choice of ['android', 'android-tv', 'webos', 'windows', 'macos', 'linux']) {
+        expect(doc.querySelector(`article[data-platform="${choice}"]`)).not.toBeNull();
+      }
+      const betaIntelMac = doc.querySelector('[data-download="beta-macos"][data-asset="x64"]')!;
+      expect(betaIntelMac.hasAttribute('hidden')).toBe(true);
+      expect(betaIntelMac.getAttribute('href')).toBe('https://github.com/spacesarmat/omp/releases');
+      expect(doc.querySelector('[data-download="beta-macos"][data-asset="arm64"]')).not.toBeNull();
+      const helperResult = doc.querySelector('#helper-result')!;
+      expect(dialog.contains(helperResult)).toBe(false);
+      expect(helperResult.closest('.help-strip')).not.toBeNull();
+      expect(helperResult.hasAttribute('hidden')).toBe(true);
+      expect(doc.querySelector('button[data-channel="stable"]')!.getAttribute('aria-pressed')).toBe('true');
+      expect(doc.querySelector('button[data-channel="beta"]')!.getAttribute('aria-pressed')).toBe('false');
       expect(doc.querySelectorAll(`a[href="${page.mainSite}"]`)).toHaveLength(2);
       expect(doc.querySelector('a[href="https://github.com/spacesarmat/omp"]')).not.toBeNull();
       expect(doc.querySelector(`a[href="${page.guide}"]`)).not.toBeNull();
@@ -288,9 +449,15 @@ describe('download page languages and fallbacks', () => {
           rule.type === CSSRule.STYLE_RULE && (rule as CSSStyleRule).selectorText === selector
         ));
         const tiles = styleRule('.tiles');
-        expect(tiles).toHaveLength(2);
-        for (const rule of tiles) expect(rule.style.display).toBe('grid');
-        expect(tiles[1].style.gridTemplateColumns).toBe('1fr');
+        expect(tiles).toHaveLength(3);
+        expect(tiles[0].style.display).toBe('grid');
+        expect(tiles[0].style.gridTemplateColumns).toBe('repeat(3, minmax(0, 1fr))');
+        expect(tiles[tiles.length - 1].style.gridTemplateColumns).toBe('1fr');
+        const paneRules = rules.filter((rule): rule is CSSStyleRule => (
+          rule.type === CSSRule.STYLE_RULE && (rule as CSSStyleRule).selectorText.includes('[data-channel') && /\.beta($|[^-])/.test((rule as CSSStyleRule).selectorText)
+        ));
+        expect(paneRules.some((rule) => rule.style.display === 'none')).toBe(true);
+        expect(paneRules.some((rule) => rule.style.display === 'flex')).toBe(true);
         const mono = styleRule('.mono')[0];
         expect(mono.style.fontFamily).toMatch(/monospace/);
         expect(mono.style.whiteSpace).toBe('normal');
