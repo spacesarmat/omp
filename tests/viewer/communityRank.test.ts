@@ -18,6 +18,19 @@ describe('community rank on the client', () => {
     expect(communityLabel({ communityReason: 'blend', suggestedVoice: 'LostFilm' })).toContain('LostFilm');
   });
 
+  it('never lets a rank bigger than billing ever sends buy more place', () => {
+    // scoreOf sends score 0..100 times 100, plus a band of 100000 for an admin pin: 110000 is the honest ceiling
+    const pinned = { communityReason: 'pinned', communityRank: 105000 };
+    const honest = { communityReason: 'community', communityRank: 110000 };
+    const forged = { communityReason: 'community', communityRank: 999999 };
+    expect(communityBoost(forged)).toBe(communityBoost(honest));
+    expect(communityBoost({ communityReason: 'community', communityRank: 110001 })).toBe(communityBoost(honest));
+    expect(communityBoost({ communityReason: 'pinned', communityRank: -5000 })).toBe(communityBoost({ communityReason: 'pinned', communityRank: 0 }));
+    // the pin band keeps its advantage over an ordinary rating, which is why the ceiling is not 10000
+    expect(communityBoost(pinned)).toBeGreaterThan(communityBoost({ communityReason: 'community', communityRank: 10000 }));
+    expect(communityBoost({ communityReason: 'community', communityRank: 5000 })).toBeLessThan(communityBoost(honest));
+  });
+
   it('puts the community row first and remembers the voice', () => {
     clearCommunityVoices();
     const weak = row('Weak', 100, { communityReason: 'community', communityRank: 9000, hash: 'ab' });

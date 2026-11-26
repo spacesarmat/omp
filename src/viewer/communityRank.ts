@@ -4,6 +4,14 @@
 import { t } from '../i18n';
 
 const BOOST = 50000000;
+/**
+ * What billing can send: scoreOf gives its 0..100 score times 100, and an admin pin adds a band of 100000 on
+ * top, so the honest numbers run from 0 to 110000 and a pinned row always sits above an ordinary one.
+ * Anything outside that did not come from billing's decision - an indexer can put any number in an attribute -
+ * and it must not buy more place than the most honest row has.
+ */
+const RANK_MIN = 0;
+const RANK_MAX = 110000;
 
 export interface CommunityRow {
   communityRank?: number;
@@ -18,7 +26,7 @@ export function communityBoost(r: CommunityRow | null | undefined): number {
   if (reason !== 'community' && reason !== 'blend' && reason !== 'pinned' && reason !== 'seeds' && reason !== 'dht') return 0;
   if (typeof r.communityRank !== 'number' || !isFinite(r.communityRank)) return 0;
   const rank = Math.round(r.communityRank);
-  return BOOST + rank * 100;
+  return BOOST + Math.max(RANK_MIN, Math.min(RANK_MAX, rank)) * 100;
 }
 
 /** Short reason for the row. Empty when billing left the ordinary seed order. */

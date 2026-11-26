@@ -314,36 +314,42 @@ export function parseFeed(xml) {
   return { original: src, items, head, tail, truncated: chunks.length > items.length ? chunks.slice(items.length) : [] };
 }
 
-/** An omp attribute of ours, written any way XML allows: both quote styles and any spaces around the `=`. */
-const OMP_SELF = /<[^>]*\battr\b[^>]*\bname\s*=\s*["']omp_(?:rank|reason|voice)["'][^>]*\/>/gi;
-const OMP_BLOCK = /<[^>]*\battr\b[^>]*\bname\s*=\s*["']omp_(?:rank|reason|voice)["'][^>]*>[\s\S]*?<\/[^>]*attr>/gi;
-
-export function stripOmp(item) {
-  // One pass is not enough: a tag that never closes, or an omp attribute behind a quote the pattern did not
-  // expect, survives a single replace and comes back into the feed we are about to sign. The passes repeat
-  // until the string stops changing, so what is left carries none of our omp attributes. They must all go:
-  // the app keeps the first value of each name, so an upstream omp_rank would win over the one we append.
-  let out = item;
-  for (let i = 0; i < 8; i++) {
-    const next = out.replace(OMP_SELF, '').replace(OMP_BLOCK, '');
-    if (next === out) break;
-    out = next;
+/**
+ * Where the opening tag of an item ends - past its `>` - or -1 when the fragment does not start with one. A `>`
+ * inside a quoted attribute value is text, so `<item kind="a>b">` is still one tag.
+ */
+function openingTagEnd(text) {
+  let quote = '';
+  for (let i = 1; i < text.length; i++) {
+    const ch = text.charAt(i);
+    if (quote) {
+      if (ch === quote) quote = '';
+      continue;
+    }
+    if (ch === '"' || ch === "'") quote = ch;
+    else if (ch === '>') return i + 1;
+    else if (ch === '<') return -1;
   }
-  return out;
+  return -1;
 }
 
 export function annotate(item, fields) {
-  let xml = stripOmp(item.xml);
-  const bits = [];
-  if (fields.reorder) {
-    // both values go into an XML attribute, so both are escaped: today the reason comes from a closed list and
-    // the rank is a number, but the feed must stay well formed even if either of that ever changes
-    bits.push('<torznab:attr name="omp_rank" value="' + xmlAttr(Math.round(Number(fields.rank) || 0)) + '"/>');
-    bits.push('<torznab:attr name="omp_reason" value="' + xmlAttr(fields.reason) + '"/>');
-  }
-  if (fields.voice) bits.push('<torznab:attr name="omp_voice" value="' + xmlAttr(fields.voice) + '"/>');
-  if (!bits.length) return xml;
-  return xml.replace(/<\/item>\s*$/i, bits.join('') + '</item>');
+  // All three names are always written, with a neutral value where billing has no opinion: rank 0, reason
+  // "none" (not one of the five the app boosts), voice empty. Prepending only what we happen to say would
+  // leave a forged omp_rank="999999" omp_reason="pinned" first on the rows we say nothing about, and the app
+  // reads the first value of each name (src/sources/indexer.ts). Writing all three is what makes "ours first"
+  // a rule rather than a coincidence - and it needs no reading of the upstream XML at all.
+  const bits = [
+    '<torznab:attr name="omp_rank" value="' + xmlAttr(fields.reorder ? Math.round(Number(fields.rank) || 0) : 0) + '"/>',
+    '<torznab:attr name="omp_reason" value="' + xmlAttr(fields.reorder ? fields.reason : 'none') + '"/>',
+    '<torznab:attr name="omp_voice" value="' + xmlAttr(fields.voice || '') + '"/>',
+  ];
+  // Ours go first inside the row, and nothing of the upstream XML is rewritten. Removing the upstream
+  // attributes was a sanitizer, and a sanitizer over foreign XML is what kept finding new ways to be
+  // incomplete (a pattern over the whole string, then a walk over its tags - both wrong).
+  const head = openingTagEnd(item.xml);
+  if (head > 0) return item.xml.slice(0, head) + bits.join('') + item.xml.slice(head);
+  return item.xml.replace(/<\/item>\s*$/i, bits.join('') + '</item>');
 }
 
 /**

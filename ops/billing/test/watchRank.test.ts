@@ -14,7 +14,6 @@ import {
   removeDelta,
   renderFeed,
   scoreOf,
-  stripOmp,
   titleKeyOf,
   voteDelta,
   voterHash,
@@ -126,25 +125,36 @@ describe('watch rank score', () => {
     expect(banned.xml).toContain(B);
   });
 
-  it('strips every omp attribute of the upstream item, however it is written', () => {
+  it('puts our attributes first, so the app reads ours and not the indexer ones', () => {
+    // src/sources/indexer.ts keeps the first value of each attribute name: ours at the head of the row wins
+    // over anything the upstream row carries, and the upstream XML is not rewritten at all
     const forged =
-      '<item><title>Show</title><torznab:attr name="omp_reason" value="x"/><torznab:attr name="omp_rank" value="9"/><torznab:attr name="infohash" value="' +
+      '<item><title>Show</title><torznab:attr name="omp_rank" value="999999"/><torznab:attr name="omp_reason" value="x"/><torznab:attr name="infohash" value="' +
       B +
       '"/></item>';
-    expect(stripOmp(forged)).not.toContain('omp_reason');
-    expect(stripOmp(forged)).not.toContain('omp_rank');
-    expect(stripOmp(forged)).toContain('infohash');
-    // an omp attribute hidden behind an unbalanced tag: one pass leaves the tail, so the passes repeat
-    const nested = '<item><title>S</title><scr<torznab:attr name="omp_rank" value="9"/>ipt></item>';
-    expect(stripOmp(nested)).not.toContain('omp_rank');
-    // XML allows single quotes and spaces around `=`: those forms are ours to remove too, because the app
-    // keeps the first value of a name and an upstream omp_rank would win over the one we append
-    const single = "<item><title>S</title><torznab:attr name='omp_rank' value='999999'/></item>";
-    expect(stripOmp(single)).not.toContain('omp_rank');
-    const spaced = '<item><title>S</title><torznab:attr name = "omp_reason" value="up"/></item>';
-    expect(stripOmp(spaced)).not.toContain('omp_reason');
-    const mixed = "<item><title>S</title><torznab:attr name ='omp_voice' value = 'Up'/>x</item>";
-    expect(stripOmp(mixed)).not.toContain('omp_voice');
+    const out = annotate({ xml: forged }, { reorder: true, rank: 12.7, reason: 'community', voice: '' });
+    expect(out.indexOf('name="omp_rank" value="13"')).toBeGreaterThanOrEqual(0);
+    expect(out.indexOf('name="omp_rank" value="13"')).toBeLessThan(out.indexOf('name="omp_rank" value="999999"'));
+    expect(out.indexOf('name="omp_reason" value="community"')).toBeLessThan(out.indexOf('name="omp_reason" value="x"'));
+    expect(out).toContain('infohash');
+    expect(out.slice(out.indexOf('<title>'))).toBe(forged.slice(forged.indexOf('<title>')));
+  });
+
+  it('writes all three names on every row it touches, neutral where it has no opinion', () => {
+    // prepending only what billing happens to say would leave a forged omp_rank first on the silent rows
+    const forged = '<item><title>S</title><torznab:attr name="omp_rank" value="999999"/><torznab:attr name="omp_reason" value="pinned"/><torznab:attr name="infohash" value="' + B + '"/></item>';
+    const silent = annotate({ xml: forged }, { reorder: false, voice: '' });
+    expect(silent.indexOf('name="omp_rank" value="0"')).toBeGreaterThanOrEqual(0);
+    expect(silent.indexOf('name="omp_rank" value="0"')).toBeLessThan(silent.indexOf('name="omp_rank" value="999999"'));
+    expect(silent.indexOf('name="omp_reason" value="none"')).toBeLessThan(silent.indexOf('name="omp_reason" value="pinned"'));
+    expect(silent).toContain('name="omp_voice" value=""');
+    // the rest of the row is the upstream bytes, untouched, however odd they are written
+    expect(silent.slice(silent.indexOf('<title>'))).toBe(forged.slice(forged.indexOf('<title>')));
+    // a `>` inside a quoted value of the opening tag must not move where our attributes land
+    const head = '<item kind="a>b"><title>S</title></item>';
+    expect(annotate({ xml: head }, { reorder: true, rank: 1, reason: 'seeds', voice: '' })).toBe(
+      '<item kind="a>b"><torznab:attr name="omp_rank" value="1"/><torznab:attr name="omp_reason" value="seeds"/><torznab:attr name="omp_voice" value=""/><title>S</title></item>',
+    );
   });
 
   it('never lets an annotation value break out of its attribute', () => {
