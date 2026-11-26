@@ -20,6 +20,7 @@ The English translation covers the latest versions only; the full history (in Ru
 - [tech] The TV shell scale test waits for the scale to be applied instead of sleeping 30 ms: on a loaded runner it failed without anything being broken
 - [tech] The torrent screen test drops the torrent write queue before every case: a write left by the previous test on the same hash hung "Rename" forever
 - [tech] The desktop feed publish test got a 90 s budget: it cold-starts three PowerShell processes, which is over 30 s on a loaded Windows runner against 4 s locally
+- [tech] The native player test unmounts the screen through act() instead of sleeping 60 ms: Preact runs unmount cleanups after paint, so on a loaded runner presence reporting still started after the screen closed
 
 ## 0.30.4-beta.2
 

@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from 'vitest';
 import { render, h } from 'preact';
+import { act } from 'preact/test-utils';
 import { init } from '@noriginmedia/norigin-spatial-navigation';
 import { NativePlayerScreen } from '../../src/screens/NativePlayer';
 import { DialogHost } from '../../src/ui/dialog';
@@ -49,9 +50,13 @@ async function until(cond: () => boolean) {
 }
 
 /** Unmounts and lets deferred effect cleanups (final progress save) run before the next test. */
+/**
+ * Unmounts and lets the deferred effect cleanups run. Preact 11 performs them after paint, so a sleep here was a
+ * guess at the frame time (60 ms against a claimed 35) and lost on a loaded runner; act() flushes them.
+ */
 async function unmount(host: HTMLElement) {
-  render(null, host);
-  await new Promise((r) => setTimeout(r, 60)); // Preact 11 runs unmount cleanups after paint (≤ 35 ms)
+  act(() => render(null, host));
+  await new Promise((r) => setTimeout(r, 0));
 }
 
 function mount(node: any) {
@@ -93,7 +98,8 @@ describe('NativePlayerScreen with 2160 Player', () => {
     await until(() => (f.plugin as any).player2160.mock.calls.length === 1);
     await unmount(host);
     resolvePackage({ package: 'tv.p2160.player' });
-    await new Promise((resolve) => setTimeout(resolve, 80));
+    // the answer is a promise chain with no timer in it: one macrotask tick means it has run to the guard
+    await new Promise((resolve) => setTimeout(resolve, 0));
     expect(start).not.toHaveBeenCalled();
     start.mockRestore();
     resetSettings();
