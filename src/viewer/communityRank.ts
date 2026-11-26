@@ -5,12 +5,13 @@ import { t } from '../i18n';
 
 const BOOST = 50000000;
 /**
- * Billing's own rank is its 0..100 score times 100 (scoreOf in ops/billing/src/watchRank.mjs), so 10000 is the
- * largest number billing ever sends. A feed that brings a bigger one did not get it from billing's decision -
- * an indexer can put anything in an attribute - and it must not buy more place than the most honest row has.
+ * What billing can send: scoreOf gives its 0..100 score times 100, and an admin pin adds a band of 100000 on
+ * top, so the honest numbers run from 0 to 110000 and a pinned row always sits above an ordinary one.
+ * Anything outside that did not come from billing's decision - an indexer can put any number in an attribute -
+ * and it must not buy more place than the most honest row has.
  */
 const RANK_MIN = 0;
-const RANK_MAX = 10000;
+const RANK_MAX = 110000;
 
 export interface CommunityRow {
   communityRank?: number;
