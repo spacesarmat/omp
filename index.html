@@ -4,9 +4,28 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=1920, height=1080" />
     <title>OMP</title>
+    <!-- The bundle boots for a moment before the app paints, and webOS shows a black frame all that time: the brand
+         screen is inline so the logo is there from the first frame. src/main.tsx removes it in the same task as the
+         first render. Sizes are the TV ones (1920x1080), the same colors as --bg/--accent/--text in src/styles.css. -->
+    <style>
+      html { background: #0F1115; }
+      #omp-boot { position: fixed; left: 0; right: 0; top: 0; bottom: 0; background: #0F1115; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+      #omp-boot b { margin-top: 28px; font: 700 44px/1 'LG Smart UI', 'Museo Sans', Roboto, Arial, sans-serif; letter-spacing: 10px; color: #E8EAF0; }
+    </style>
   </head>
   <body>
     <div id="app"></div>
+    <div id="omp-boot" aria-hidden="true">
+      <svg width="200" height="200" viewBox="0 0 100 100">
+        <rect x="14" y="22" width="72" height="56" rx="10" fill="none" stroke="#F5B700" stroke-width="7"/>
+        <g fill="#F5B700">
+          <rect x="23" y="29" width="6" height="5" rx="1.5"/><rect x="35" y="29" width="6" height="5" rx="1.5"/><rect x="47" y="29" width="6" height="5" rx="1.5"/><rect x="59" y="29" width="6" height="5" rx="1.5"/><rect x="71" y="29" width="6" height="5" rx="1.5"/>
+          <rect x="23" y="66" width="6" height="5" rx="1.5"/><rect x="35" y="66" width="6" height="5" rx="1.5"/><rect x="47" y="66" width="6" height="5" rx="1.5"/><rect x="59" y="66" width="6" height="5" rx="1.5"/><rect x="71" y="66" width="6" height="5" rx="1.5"/>
+        </g>
+        <path d="M44 41 L59 50 L44 59 Z" fill="#E8EAF0" stroke="#E8EAF0" stroke-width="4" stroke-linejoin="round"/>
+      </svg>
+      <b>OMP</b>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
