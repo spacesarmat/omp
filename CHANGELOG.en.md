@@ -4,7 +4,7 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
-## Unreleased
+## 0.30.4-beta.3
 
 - The "In library" mark, the poster search and the year line no longer mix a title up with a year: a release of "1917 (2019)" is dated 2019, and "Blade Runner 2049" is searched by its whole name
 - [tv] Posters stay in the app's memory: scrolling back to a row no longer downloads it again, and the rows below the focus load ahead of time
