@@ -1,10 +1,35 @@
 import { describe, it, expect } from 'vitest';
-import { posterQuery, tmdbSearchUrl, tmdbSearchRequest, firstPoster } from '../../src/lib/posterSearch';
+import { posterQuery, titleCore, tmdbSearchUrl, tmdbSearchRequest, firstPoster } from '../../src/lib/posterSearch';
 import { posterChoice, posterName, posterQueries, requestPoster, requestShow, setPosterLookup, setShowLookup, showChoice, type ShowHit } from '../../src/catalog/resultPosters';
 import { posterImageSize } from '../../src/catalog/tmdb';
 import { yearInTitle } from '../../src/sources/queryParse';
 
 describe('posterQuery', () => {
+  it('a name that ends with the season and the episodes is the name alone', () => {
+    expect(titleCore('Тест 1 сезон 1-8 серия WEB-DL 1080p')).toBe('Тест');
+    expect(titleCore('Мажор 3 сезон')).toBe('Мажор');
+    expect(titleCore('Dark Matter · Серии: 1-6 из 9 · 2 сезон')).toBe('Dark Matter');
+    expect(titleCore('Рагнарек · 1 сезон · серии 1-6 из 6')).toBe('Рагнарек');
+    expect(titleCore('Слово пацана 1-8 серии')).toBe('Слово пацана');
+    // a number that belongs to the name stays: it is not a season mark
+    expect(titleCore('Два холма 2')).toBe('Два холма 2');
+    expect(titleCore('S2E1-10')).toBe('S2E1-10');
+    expect(titleCore('Сезон дождя')).toBe('Сезон дождя');
+    // one English word inside a name is the name; a punctuated label or two labels together are metadata
+    expect(titleCore('Open Season 2 (2008) BDRip')).toBe('Open Season 2');
+    expect(titleCore('Сезон охоты 2 / Open Season 2 (2008) BDRip')).toBe('Сезон охоты 2');
+    expect(titleCore('Stranger Things 4 (2022) 2160p')).toBe('Stranger Things 4');
+    expect(titleCore('Loki Season: 2 Episode 3')).toBe('Loki');
+    expect(titleCore('Loki Season 2 Episode 3')).toBe('Loki');
+    expect(titleCore('Loki: Season 2')).toBe('Loki');
+    // a series named by a number keeps that number: the tail never takes the last token with it
+    expect(titleCore('1983 1 сезон')).toBe('1983');
+    expect(titleCore('24 1 сезон 1-8 серия')).toBe('24');
+    // a separator left by the technical cut does not stop the tail from being read
+    expect(titleCore('Dark Matter · Серии: 1-6 из 9 · S02 1080p')).toBe('Dark Matter');
+    expect(titleCore('Сваты 4 сезон 1-8 серии из 8 WEBRip')).toBe('Сваты');
+  });
+
   it('keeps the title before the year, translation and release details', () => {
     expect(posterQuery('Дюна: Часть вторая / Dune: Part Two (2024) WEB-DL 1080p')).toBe('Дюна: Часть вторая');
     expect(posterQuery('Интерстеллар [2014, BDRip]')).toBe('Интерстеллар');

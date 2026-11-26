@@ -7,6 +7,22 @@ describe('library matching', () => {
     expect(libraryKey('Abc', 0)).toBe('abc|0');
   });
 
+  it('a season pack that writes no year is found by its name', () => {
+    // «1 сезон 1-8 серия» is a mark, not part of the name: the key of the work stays «Орбитальная станция»
+    const idx = libraryIndex([{ title: 'Орбитальная станция 1 сезон 1-8 серия WEB-DL 1080p' }]);
+    expect(inLibrary(idx, { title: 'Орбитальная станция', original: 'Orbit Station', year: 2024, kind: 'tv' })).toBe(true);
+    const dot = libraryIndex([{ title: 'Первый отдел 1 сезон 8 серия 1080p' }]);
+    expect(inLibrary(dot, { title: 'Первый отдел', original: '', year: 2023, kind: 'tv' })).toBe(true);
+    // a number of its own name is not a mark
+    const named = libraryIndex([{ title: 'Два холма 2 сезон 10 серия' }]);
+    expect(inLibrary(named, { title: 'Два холма', original: 'Hill of Two', year: 2020, kind: 'tv' })).toBe(true);
+    const two = libraryIndex([{ title: 'Два холма 2 (2024) 1 сезон' }]);
+    expect(inLibrary(two, { title: 'Два холма 2', original: '', year: 2024, kind: 'tv' })).toBe(true);
+    // a series named by a number keeps that number as its key
+    const num = libraryIndex([{ title: '1983 1 сезон 1-8 серия WEB-DL' }]);
+    expect(inLibrary(num, { title: '1983', original: '1983', year: 2018, kind: 'tv' })).toBe(true);
+  });
+
   it('a work named by a number is matched by its real year', () => {
     // the first number is the name: «1917» (2019), not a release of 1917
     const film = libraryIndex([{ title: '1917 (2019) 2160p UHD BDRemux' }]);

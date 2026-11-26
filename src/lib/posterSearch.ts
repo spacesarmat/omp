@@ -20,6 +20,52 @@ export function posterQuery(title: string): string {
   return q;
 }
 
+// The words of a release line that say which episodes it holds. Russian forms are always marks; the English ones
+// only where the line punctuates them («Season: 2», « · Season 2 »), because «Open Season 2» is a name.
+const MARK_RU = /^(?:сезон[аеуы]*|сезонов|серии|серий|серия|серийный|эпизод[аы]*|эпизодов)$/i;
+// words that introduce a count: «Серии: 1-6 из 9», «Episodes 1-10 of 24»
+const MARK_INTRO = /^(?:из|of|от|by|и|and)$/i;
+const MARK_EN = /^(?:seasons?|episodes?)$/i;
+const MARK_NUM = /^\d{1,4}(?:[.\u2013-]\d{1,4})?(?:й|ый|я|ая)?$/i;
+const MARK_SEP = /^[-.,:;/|&·•\u2013\u2014]+$/;
+const MARK_PUNCT = /[\s:.,;-]+$/;
+
+// Nothing to trim unless the line ends with a number, a mark word or a separator: titleCore runs for every torrent.
+const MAYBE_TAIL = /(?:\d|сезон[аеуы]*|сезонов|seasons?|серии|серий|серия|эпизод[аы]*|эпизодов|episodes?|из|of|от|by|[-.,:;/|&·•\u2013\u2014])\s*$/i;
+
+/**
+ * The season and episode tail of a name: «Тест 1 сезон 1-8 серия» is named «Тест», «Loki Season: 2 Episode 3» is
+ * «Loki». The tail is read from the right over numbers, separators and mark words; it is dropped only where the
+ * line proves it is release metadata: a count and a Russian mark («4 сезон», «1-8 серии»), a punctuated English
+ * label («Season: 2») or two English labels together («Season 2 Episode 3»). A single English word inside a name
+ * («Open Season 2», «Два холма 2») is not evidence, and a line that is nothing but a tail is left alone.
+ */
+function trimMarks(s: string): string {
+  if (!MAYBE_TAIL.test(s)) return s;
+  const words = s.split(/\s+/).filter(Boolean);
+  const bare = (w: string): string => (w || '').replace(MARK_PUNCT, '');
+  const ru = (w: string): boolean => MARK_RU.test(bare(w));
+  const num = (w: string): boolean => MARK_NUM.test(bare(w));
+  const intro = (w: string): boolean => MARK_INTRO.test(bare(w));
+  const en = (w: string): boolean => MARK_EN.test(bare(w));
+  // an English word written as a label: «Season:», or one that a separator or a preceding colon brings («Loki: Season 2»)
+  const labelled = (i: number): boolean =>
+    en(words[i]) && (/:/.test(words[i]) || i === 0 || MARK_SEP.test(bare(words[i - 1])) || /:$/.test(words[i - 1] || ''));
+  const candidate = (i: number): boolean => ru(words[i]) || en(words[i]) || intro(words[i]) || num(words[i]) || MARK_SEP.test(bare(words[i]));
+  let from = words.length;
+  // the first token always stays: «1983 1 сезон» is named «1983», not nothing
+  while (from > 1 && candidate(from - 1)) from--;
+  const tail = words.slice(from);
+  if (!tail.length || !words.length) return s;
+  const kinds: string[] = [];
+  for (let i = 0; i < tail.length; i++) {
+    const k = bare(tail[i]).toLowerCase();
+    if (en(tail[i]) && kinds.indexOf(k) < 0) kinds.push(k);
+  }
+  const evidence = tail.some((w) => num(w)) && (tail.some((w) => ru(w)) || tail.some((w, i) => labelled(from + i)) || kinds.length >= 2 || tail.some((w) => intro(w)));
+  return evidence ? words.slice(0, from).join(' ') : s;
+}
+
 /** The title proper of a torrent title: before « [», « (», « / », « | », the release year or its details. */
 export function titleCore(title: string): string {
   let s = (title || '').trim();
@@ -37,6 +83,9 @@ export function titleCore(title: string): string {
   const year = yearPosition(s);
   if (year > 0 && (cut < 0 || year < cut)) cut = year;
   if (cut > 0) s = s.slice(0, cut);
+  // what the cut left behind still ends with the season and the episodes: the key of the work is its name alone
+  const named = trimMarks(s);
+  if (named) s = named;
   return s.replace(/\s*(?:сезон|season)\s*$/i, '').replace(/[\s.,:;-]+$/, '').replace(/\s+/g, ' ').trim();
 }
 
