@@ -19,8 +19,14 @@ describe('TV boot screen', () => {
   });
 
   it('the layer is sized for 1920x1080 and uses the TV font stack', () => {
-    // the logo is 200 wide, and the wordmark is well above the 24px floor of the TV interface
-    expect(html).toMatch(/<svg width="200" height="200"/);
+    // the mark is sized from the viewport: a fifth of whatever width the panel reports, so webOS 4K - where
+    // this layer sits outside the root that src/platform/androidScale.ts scales - gets the same fifth
+    expect(html).toMatch(/#omp-boot svg \{ width: 20vw; height: 20vw; \}/);
+    // the attribute is the fallback for an engine without vw units, and must already be a fifth of 1920
+    const mark = /<svg width="(\d+)" height="(\d+)"/.exec(html);
+    expect(mark).not.toBeNull();
+    expect(Number(mark![1])).toBeGreaterThanOrEqual(1920 / 5);
+    expect(mark![1]).toBe(mark![2]);
     expect(html).toMatch(/#omp-boot b \{[^}]*font: 700 44px/);
     expect(html).toMatch(/'LG Smart UI', 'Museo Sans', Roboto, Arial, sans-serif/);
     // no web font is fetched for the launch screen: an unreachable host must not hold the first frame

@@ -6,17 +6,23 @@
     <title>OMP</title>
     <!-- The bundle boots for a moment before the app paints, and webOS shows a black frame all that time: the brand
          screen is inline so the logo is there from the first frame. src/main.tsx removes it in the same task as the
-         first render. Sizes are the TV ones (1920x1080), the same colors as --bg/--accent/--text in src/styles.css. -->
+         first render. Sizes are the TV ones (1920x1080), the same colors as --bg/--accent/--text in src/styles.css.
+         The mark is 20vw - a fifth of whatever width the panel reports - so it reads from the sofa on both 1080p
+         and 4K, where this layer is outside the root that src/platform/androidScale.ts scales. -->
     <style>
       html { background: #0F1115; }
       #omp-boot { position: fixed; left: 0; right: 0; top: 0; bottom: 0; background: #0F1115; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+      /* the mark is sized from the viewport, not in pixels: src/platform/androidScale.ts scales the .app root
+         by innerWidth/1920 for the panels that report 3840 (webOS 4K), and this layer sits outside .app, so a
+         fixed 384 would be a tenth of the screen there. 20vw is a fifth on every panel. */
+      #omp-boot svg { width: 20vw; height: 20vw; }
       #omp-boot b { margin-top: 28px; font: 700 44px/1 'LG Smart UI', 'Museo Sans', Roboto, Arial, sans-serif; letter-spacing: 10px; color: #E8EAF0; }
     </style>
   </head>
   <body>
     <div id="app"></div>
     <div id="omp-boot" aria-hidden="true">
-      <svg width="200" height="200" viewBox="0 0 100 100">
+      <svg width="384" height="384" viewBox="0 0 100 100">
         <rect x="14" y="22" width="72" height="56" rx="10" fill="none" stroke="#F5B700" stroke-width="7"/>
         <g fill="#F5B700">
           <rect x="23" y="29" width="6" height="5" rx="1.5"/><rect x="35" y="29" width="6" height="5" rx="1.5"/><rect x="47" y="29" width="6" height="5" rx="1.5"/><rect x="59" y="29" width="6" height="5" rx="1.5"/><rect x="71" y="29" width="6" height="5" rx="1.5"/>
