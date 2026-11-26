@@ -2,7 +2,7 @@
 
 <!-- Markers [phone] [tv] [lg] [atv] [tech]: see docs/changelog-markers.md. [tech] bullets are technical or admin-only and never reach users. -->
 
-## Не выпущено
+## 0.30.4-beta.4
 
 - [tv] Логотип на заставке запуска стал крупнее: знак занимает пятую часть ширины экрана, одинаково на 1080p и на 4K
 - [tech] Ссылка сопряжения и переключатель языка на сайте ведут только на omp-player.online: адрес, который лишь начинается с нашего домена, больше не попадает в intent и в href
