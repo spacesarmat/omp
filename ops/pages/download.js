@@ -110,6 +110,14 @@ function applyFeed(root, kind, versionKey, feed) {
       if (!entry || typeof entry.url !== 'string' || !entry.url) return;
       link.href = entry.url;
       link.hidden = false;
+      if (kind.startsWith('beta-')) {
+        const pane = link.closest('.beta');
+        const note = pane && pane.querySelector('.beta-empty');
+        if (note) note.hidden = true;
+        root.querySelectorAll(`[data-version="${kind}"]`).forEach((el) => {
+          el.hidden = false;
+        });
+      }
     });
   }
   const tile = root.querySelector(`[data-optional="${kind}"]`);
@@ -212,7 +220,9 @@ export function setChannel(root, channel) {
   const next = channel === 'beta' ? 'beta' : 'stable';
   root.documentElement.setAttribute('data-channel', next);
   root.querySelectorAll('[data-channel]').forEach((button) => {
-    button.classList.toggle('selected', button.getAttribute('data-channel') === next);
+    const active = button.getAttribute('data-channel') === next;
+    button.classList.toggle('selected', active);
+    button.setAttribute('aria-pressed', String(active));
   });
   try {
     if (typeof localStorage !== 'undefined') localStorage.setItem('omp-channel', next);
@@ -260,18 +270,21 @@ export function initUi(root) {
     dialog.addEventListener('click', (event) => {
       if (event.target === dialog) dialog.close();
     });
-    const result = dialog.querySelector('#helper-result');
+    const result = root.querySelector('#helper-result');
     dialog.querySelectorAll('[data-choice]').forEach((button) => {
       button.addEventListener('click', () => {
         const tile = root.querySelector(`[data-platform="${button.getAttribute('data-choice')}"]`);
         if (!tile) return;
-        dialog.close();
+        root.querySelectorAll('.tile.is-recommended').forEach((other) => other.classList.remove('is-recommended'));
         tile.classList.add('is-recommended');
+        if (result) {
+          result.textContent = pageLang(root) === 'en'
+            ? `Recommended build: ${button.textContent.trim()}. The card is highlighted on the page.`
+            : `Подходит сборка: ${button.textContent.trim()}. Карточка выделена на странице.`;
+          result.hidden = false;
+        }
+        dialog.close();
         tile.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        setTimeout(() => tile.classList.remove('is-recommended'), 2400);
-        if (result) result.textContent = pageLang(root) === 'en'
-          ? `Recommended build: ${button.textContent.trim()}. The card is highlighted on the page.`
-          : `Подходит сборка: ${button.textContent.trim()}. Карточка выделена на странице.`;
       });
     });
   }

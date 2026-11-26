@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 // @ts-ignore node builtins
 import { readFileSync } from 'node:fs';
-import { detectPlatform, formatReleaseDate, formatSize, highlightPlatform, setChannel, updateDownloads } from '../../ops/pages/download';
+import { detectPlatform, formatReleaseDate, formatSize, highlightPlatform, initUi, setChannel, updateDownloads } from '../../ops/pages/download';
 
 const KINDS = ['stable-android', 'stable-webos', 'beta-android', 'beta-webos', 'stable-windows'] as const;
 
@@ -116,6 +116,39 @@ describe('download page feeds', () => {
     expect((document.querySelector('.beta-empty') as HTMLElement).hidden).toBe(true);
     expect(link('stable-windows').href).toBe('https://github.com/spacesarmat/omp/releases/download/v0.30.0/OMP-0.30.0-setup.exe');
     expect(document.querySelector('[data-version="stable-windows"]')!.textContent).toBe('0.30.0');
+  });
+
+  it('gives an Intel Mac its own beta link', async () => {
+    document.body.innerHTML = `
+      <div class="beta">
+        <a data-download="beta-macos" data-asset="arm64" data-direct hidden href="https://github.com/spacesarmat/omp/releases">beta arm</a>
+        <a data-download="beta-macos" data-asset="x64" hidden href="https://github.com/spacesarmat/omp/releases">beta intel</a>
+        <span data-version="beta-macos" hidden></span>
+        <p class="beta-empty">list</p>
+      </div>
+    `;
+    const fetchImpl = vi.fn((url: string) => Promise.resolve(response(
+      String(url).endsWith('update-macos.json')
+        ? {
+          version: '0.31.0-beta.1',
+          url: 'https://example.test/arm-beta.dmg',
+          assets: {
+            arm64: { url: 'https://example.test/arm-beta.dmg' },
+            x64: { url: 'https://example.test/intel-beta.dmg' },
+          },
+          releaseUrl: 'https://github.com/spacesarmat/omp/releases/tag/v0.31.0-beta.1',
+        }
+        : {},
+    )));
+    await updateDownloads(document, fetchImpl as unknown as typeof fetch);
+    const arm = document.querySelector('[data-download="beta-macos"][data-asset="arm64"]') as HTMLAnchorElement;
+    const intel = document.querySelector('[data-download="beta-macos"][data-asset="x64"]') as HTMLAnchorElement;
+    expect(arm.hidden).toBe(false);
+    expect(arm.href).toBe('https://example.test/arm-beta.dmg');
+    expect(intel.hidden).toBe(false);
+    expect(intel.href).toBe('https://example.test/intel-beta.dmg');
+    expect((document.querySelector('.beta-empty') as HTMLElement).hidden).toBe(true);
+    expect((document.querySelector('[data-version="beta-macos"]') as HTMLElement).hidden).toBe(false);
   });
 
   it('keeps release-page fallbacks when feeds cannot be loaded', async () => {
@@ -239,15 +272,49 @@ describe('download page platform highlight', () => {
 describe('download page channel switch', () => {
   it('marks the selected channel button and remembers the attribute', () => {
     document.body.innerHTML = `
-      <button data-channel="stable" class="selected"></button>
-      <button data-channel="beta"></button>
+      <button data-channel="stable" class="selected" aria-pressed="true"></button>
+      <button data-channel="beta" aria-pressed="false"></button>
     `;
     setChannel(document, 'beta');
     expect(document.documentElement.getAttribute('data-channel')).toBe('beta');
     expect((document.querySelector('[data-channel="beta"]') as HTMLElement).classList.contains('selected')).toBe(true);
     expect((document.querySelector('[data-channel="stable"]') as HTMLElement).classList.contains('selected')).toBe(false);
+    expect(document.querySelector('[data-channel="beta"]')!.getAttribute('aria-pressed')).toBe('true');
+    expect(document.querySelector('[data-channel="stable"]')!.getAttribute('aria-pressed')).toBe('false');
     setChannel(document, 'anything-else');
     expect(document.documentElement.getAttribute('data-channel')).toBe('stable');
+    expect(document.querySelector('[data-channel="stable"]')!.getAttribute('aria-pressed')).toBe('true');
+  });
+});
+
+describe('download page device helper', () => {
+  it('keeps the answer outside the dialog and highlights one card', () => {
+    document.documentElement.lang = 'ru';
+    document.body.innerHTML = `
+      <aside class="help-strip"><p class="helper-result" id="helper-result" aria-live="polite" hidden></p></aside>
+      <dialog id="helper-dialog">
+        <button class="dialog-close"></button>
+        <button data-choice="macos">Mac</button>
+        <button data-choice="webos">Телевизор LG webOS</button>
+      </dialog>
+      <article class="tile" data-platform="macos"></article>
+      <article class="tile" data-platform="webos"></article>
+    `;
+    const dialog = document.querySelector('#helper-dialog') as HTMLDialogElement;
+    dialog.close = () => {
+      // jsdom has no dialog methods; the browser closes it for real
+    };
+    for (const tile of document.querySelectorAll('article')) tile.scrollIntoView = () => {};
+    initUi(document);
+    (dialog.querySelector('[data-choice="webos"]') as HTMLButtonElement).click();
+    const result = document.querySelector('#helper-result') as HTMLElement;
+    expect(result.hidden).toBe(false);
+    expect(result.textContent).toContain('Телевизор LG webOS');
+    expect(document.querySelector('[data-platform="webos"]')!.classList.contains('is-recommended')).toBe(true);
+    (dialog.querySelector('[data-choice="macos"]') as HTMLButtonElement).click();
+    expect(document.querySelector('[data-platform="webos"]')!.classList.contains('is-recommended')).toBe(false);
+    expect(document.querySelector('[data-platform="macos"]')!.classList.contains('is-recommended')).toBe(true);
+    expect(result.textContent).toContain('Mac');
   });
 });
 
@@ -311,6 +378,16 @@ describe('download page languages and fallbacks', () => {
       for (const choice of ['android', 'android-tv', 'webos', 'windows', 'macos', 'linux']) {
         expect(doc.querySelector(`article[data-platform="${choice}"]`)).not.toBeNull();
       }
+      const betaIntelMac = doc.querySelector('[data-download="beta-macos"][data-asset="x64"]')!;
+      expect(betaIntelMac.hasAttribute('hidden')).toBe(true);
+      expect(betaIntelMac.getAttribute('href')).toBe('https://github.com/spacesarmat/omp/releases');
+      expect(doc.querySelector('[data-download="beta-macos"][data-asset="arm64"]')).not.toBeNull();
+      const helperResult = doc.querySelector('#helper-result')!;
+      expect(dialog.contains(helperResult)).toBe(false);
+      expect(helperResult.closest('.help-strip')).not.toBeNull();
+      expect(helperResult.hasAttribute('hidden')).toBe(true);
+      expect(doc.querySelector('button[data-channel="stable"]')!.getAttribute('aria-pressed')).toBe('true');
+      expect(doc.querySelector('button[data-channel="beta"]')!.getAttribute('aria-pressed')).toBe('false');
       expect(doc.querySelectorAll(`a[href="${page.mainSite}"]`)).toHaveLength(2);
       expect(doc.querySelector('a[href="https://github.com/spacesarmat/omp"]')).not.toBeNull();
       expect(doc.querySelector(`a[href="${page.guide}"]`)).not.toBeNull();

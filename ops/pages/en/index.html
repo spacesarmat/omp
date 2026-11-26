@@ -147,7 +147,7 @@
     .helper-options { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
     .helper-options button { background: #242730; border: 1px solid #393d47; color: var(--text); border-radius: 9px; padding: 13px; text-align: left; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
     .helper-options button:hover { border-color: var(--accent); }
-    .helper-result { min-height: 24px; color: var(--accent); font-size: 13px; font-weight: 700; margin: 18px 0 0; }
+    .helper-result { grid-column: 1 / -1; margin: 0; color: var(--accent); font-size: 13px; font-weight: 700; }
     @media (max-width: 1100px) {
       .hero-art { right: -110px; opacity: 0.55; }
       .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -223,8 +223,8 @@
           <h2 id="downloads-title">Downloads</h2>
         </div>
         <div class="channel-switch" role="group" aria-label="Release channel">
-          <button type="button" class="selected" data-channel="stable"><span class="switch-dot" aria-hidden="true"></span>Stable release</button>
-          <button type="button" data-channel="beta"><span class="beta-symbol" aria-hidden="true">β</span>Beta</button>
+          <button type="button" class="selected" data-channel="stable" aria-pressed="true"><span class="switch-dot" aria-hidden="true"></span>Stable release</button>
+          <button type="button" data-channel="beta" aria-pressed="false"><span class="beta-symbol" aria-hidden="true">β</span>Beta</button>
         </div>
       </div>
 
@@ -395,8 +395,10 @@
               <span class="mono" data-date="beta-macos" hidden></span>
               <span class="mono" data-size="beta-macos" hidden></span>
             </p>
-            <a class="button secondary" data-download="beta-macos" data-direct hidden href="https://github.com/spacesarmat/omp/releases">Download beta</a>
-            <div class="abis" aria-hidden="true"></div>
+            <a class="button secondary" data-download="beta-macos" data-asset="arm64" data-direct hidden href="https://github.com/spacesarmat/omp/releases">Download beta · Apple Silicon</a>
+            <div class="abis" aria-label="macOS beta builds">
+              <a class="chip" data-download="beta-macos" data-asset="x64" hidden href="https://github.com/spacesarmat/omp/releases">Intel</a>
+            </div>
             <button type="button" class="hash" data-sha-for="beta-macos" data-label-copied="Copied" hidden>sha256</button>
             <p class="beta-empty">macOS beta builds are published on GitHub: <a href="https://github.com/spacesarmat/omp/releases">the release list</a>.</p>
           </div>
@@ -447,6 +449,7 @@
           <span class="info-icon" aria-hidden="true">i</span>
           <span>Samsung Tizen is not supported yet.</span>
         </div>
+        <p class="helper-result" id="helper-result" aria-live="polite" hidden></p>
       </aside>
 
       <p class="fallback">If a direct link is unavailable, <a href="https://github.com/spacesarmat/omp/releases/latest">open the stable release page</a> or <a href="https://github.com/spacesarmat/omp/releases">the release list</a>.</p>
@@ -481,7 +484,6 @@
       <button type="button" data-choice="macos">Mac</button>
       <button type="button" data-choice="linux">Linux PC</button>
     </div>
-    <p class="helper-result" id="helper-result" aria-live="polite"></p>
   </dialog>
   <script type="module" src="../download.js"></script>
 </body>
