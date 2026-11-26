@@ -16,6 +16,7 @@ The English translation covers the latest versions only; the full history (in Ru
 - [tech] A stalled poster request frees the prefetch worker after 15 s: two silent addresses no longer stop the rows ahead from loading
 - [tech] The TV shell scale test waits for the scale to be applied instead of sleeping 30 ms: on a loaded runner it failed without anything being broken
 - [tech] The torrent screen test drops the torrent write queue before every case: a write left by the previous test on the same hash hung "Rename" forever
+- [tech] The desktop feed publish test got a 90 s budget: it cold-starts three PowerShell processes, which is over 30 s on a loaded Windows runner against 4 s locally
 
 ## 0.30.4-beta.2
 

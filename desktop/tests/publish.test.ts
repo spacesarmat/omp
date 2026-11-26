@@ -100,5 +100,7 @@ describe('desktop publish workflow', () => {
     const failure = runPublish('500');
     expect(failure.status, failure.output).not.toBe(0);
     expect(failure.log).not.toContain('Windows desktop feed');
-  }, 30_000);
+  // three cold starts of powershell.exe, each spawning the batch gh stub per API call: 4 s on a dev machine,
+  // over 30 s on a loaded Windows runner, so the budget is the cold start, not the assertions
+  }, 90_000);
 });
