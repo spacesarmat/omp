@@ -145,18 +145,24 @@ export function flushImageWrites(): Promise<void> {
     const rows = Array.from(pending.values());
     pending.clear();
     if (!rows.length || !usable) return;
-    const db = await openDb();
-    await trimToQuota(db, 0);
-    const tx = db.transaction([IMAGES, META], 'readwrite');
-    const done = completion(tx);
-    const images = tx.objectStore(IMAGES);
-    const meta = tx.objectStore(META);
-    for (const item of rows) {
-      images.put(item.row);
-      meta.put(item.meta);
+    try {
+      const db = await openDb();
+      await trimToQuota(db, 0);
+      const tx = db.transaction([IMAGES, META], 'readwrite');
+      const done = completion(tx);
+      const images = tx.objectStore(IMAGES);
+      const meta = tx.objectStore(META);
+      for (const item of rows) {
+        images.put(item.row);
+        meta.put(item.meta);
+      }
+      await done;
+      await trimToQuota(db, 0);
+    } catch (err) {
+      // a disk that is full answers the same way every time: switching the level off here is what stops the next
+      // batch from copying its bytes again and retrying the write that just failed
+      usable = false;
     }
-    await done;
-    await trimToQuota(db, 0);
   });
 }
 

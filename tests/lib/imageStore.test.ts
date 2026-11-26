@@ -121,4 +121,27 @@ describe('imageStore', () => {
       resetImageStore();
     }
   });
+
+  it('a write the disk refuses switches the level off instead of being retried', async () => {
+    const original = IDBObjectStore.prototype.put;
+    let attempts = 0;
+    IDBObjectStore.prototype.put = function (this: IDBObjectStore) {
+      attempts++;
+      throw new Error('QuotaExceededError');
+    };
+    try {
+      saveImage('https://img/full.jpg', bytes(10));
+      await flushImageWrites();
+      expect(attempts).toBeGreaterThan(0);
+      expect((await storedStats()).available).toBe(false);
+      const after = attempts;
+      // the next batch must not copy its bytes and try the same failing write again
+      saveImage('https://img/full2.jpg', bytes(10));
+      await flushImageWrites();
+      expect(attempts).toBe(after);
+    } finally {
+      IDBObjectStore.prototype.put = original;
+      resetImageStore();
+    }
+  });
 });
