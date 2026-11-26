@@ -56,6 +56,7 @@ import { SeriesPill } from './library/SeriesTile';
 import { CastRow } from '../ui/CastRow';
 import { ComingRows, revealComing } from '../ui/ComingRows';
 import { useSeriesDub } from '../ui/seriesDub';
+import { CachedImg } from '../ui/CachedImg';
 
 // the chosen season of each open series screen (its route entry): kept while the player or a torrent is on top
 const chosenSeason = new WeakMap<Route, number>();
@@ -508,7 +509,7 @@ function Body({ group, asked }: { group: SeriesGroup; asked?: number }) {
             <div class="series-shade" />
           </div>
         ) : null}
-        <div class="series-poster">{posterUrl ? <img src={posterUrlFor(posterUrl, 280)} alt="" /> : <Poster t={group.lead} showTitle box={280} />}</div>
+        <div class="series-poster">{posterUrl ? <CachedImg src={posterUrlFor(posterUrl, 280)} w={280} /> : <Poster t={group.lead} showTitle box={280} />}</div>
         <div class="series-info">
           <h1>{tvGlyphs(title)}</h1>
           <div class="series-kicker">{season !== NO_SEASON ? t('library.season', { n: season }) : t('series.noSeason')}</div>

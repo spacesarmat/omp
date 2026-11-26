@@ -34,6 +34,7 @@ import { tvs } from './tv/tvStore';
 import { installCleartextSync } from '../../src/cleartextSync';
 import { nativeTlsProbe, setTlsProbe } from '../../src/api/tlsProbe';
 import { installPhoneTls } from './torrServerTls';
+import { setImageCacheBudget } from '../../src/lib/imageCache';
 import { expectBetaGate } from '../../src/store/updates';
 import { installProductionDesign } from '../../design/production.ts';
 import { installProductionFlow } from '../../design/production-flow.ts';
@@ -69,6 +70,9 @@ if (native.available) setTlsProbe(nativeTlsProbe((req) => native.http(req)));
 
 // a TorrServer over https goes through the native trust; a self-signed certificate asks first
 installPhoneTls();
+
+// the phone keeps fewer posters in memory than the TV: its WebView shares the device with the player
+setImageCacheBudget(12 * 1024 * 1024);
 
 installErrorHooks();
 hydrateDeviceDb(() => { reapplyDeviceRecords(); runDeviceSync(); });
