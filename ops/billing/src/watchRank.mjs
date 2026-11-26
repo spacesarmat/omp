@@ -314,16 +314,13 @@ export function parseFeed(xml) {
   return { original: src, items, head, tail, truncated: chunks.length > items.length ? chunks.slice(items.length) : [] };
 }
 
-const OMP_ATTRS = ['omp_rank', 'omp_reason', 'omp_voice'];
-
 /**
- * Where the tag that starts at `from` ends - past its `>` - or -1 when it is not a tag at all. A `>` inside a
- * quoted attribute value is text, so `<torznab:attr name="title" value="a>b"/>` is one tag, not two; a `<`
- * before any `>` means this `<` was not opening a tag.
+ * Where the opening tag of an item ends - past its `>` - or -1 when the fragment does not start with one. A `>`
+ * inside a quoted attribute value is text, so `<item kind="a>b">` is still one tag.
  */
-function tagEnd(text, from) {
+function openingTagEnd(text) {
   let quote = '';
-  for (let i = from + 1; i < text.length; i++) {
+  for (let i = 1; i < text.length; i++) {
     const ch = text.charAt(i);
     if (quote) {
       if (ch === quote) quote = '';
@@ -336,125 +333,7 @@ function tagEnd(text, from) {
   return -1;
 }
 
-/** The local name of an element as written, without its prefix: `torznab:attr` is `attr`. */
-function localName(tag) {
-  const m = /^<\s*\/?\s*(?:[A-Za-z_][\w.-]*:)?([A-Za-z_][\w.-]*)/.exec(tag);
-  return m ? m[1].toLowerCase() : '';
-}
-
-/**
- * The attributes of one tag, read outside quoted values so that a `name=` sitting inside somebody's value is
- * not taken for an attribute. Names come back lower-cased.
- */
-function attributesOf(tag) {
-  const inner = tag.slice(1, tag.charAt(tag.length - 2) === '/' ? -2 : -1);
-  const found = {};
-  let i = 0;
-  while (i < inner.length) {
-    while (i < inner.length && /[\s/]/.test(inner.charAt(i))) i++;
-    let name = '';
-    while (i < inner.length && !/[\s=/"']/.test(inner.charAt(i))) {
-      name += inner.charAt(i);
-      i++;
-    }
-    if (!name) break;
-    while (i < inner.length && /\s/.test(inner.charAt(i))) i++;
-    let value = '';
-    if (inner.charAt(i) === '=') {
-      i++;
-      while (i < inner.length && /\s/.test(inner.charAt(i))) i++;
-      const quote = inner.charAt(i);
-      if (quote === '"' || quote === "'") {
-        i++;
-        const start = i;
-        while (i < inner.length && inner.charAt(i) !== quote) i++;
-        value = inner.slice(start, i);
-        i++;
-      } else {
-        const start = i;
-        while (i < inner.length && !/[\s>]/.test(inner.charAt(i))) i++;
-        value = inner.slice(start, i);
-      }
-    }
-    found[name.toLowerCase()] = value;
-  }
-  return found;
-}
-
-/** Whether this tag is one of our omp attributes: an `attr` element whose own name attribute says so. */
-function isOmpAttr(tag) {
-  if (localName(tag) !== 'attr') return false;
-  return OMP_ATTRS.indexOf(String(attributesOf(tag).name || '').toLowerCase()) >= 0;
-}
-
-/**
- * Index past the closing tag of the element that opens at `openEnd`, counting nested elements of the same
- * name, or -1 when it never closes. Stopping at the first `</` would leave the outer closing tag of
- * `<attr ...><attr .../></attr>` dangling and the feed would no longer parse.
- */
-function blockEnd(text, openEnd, name) {
-  let depth = 1;
-  let i = openEnd;
-  while (i < text.length) {
-    const lt = text.indexOf('<', i);
-    if (lt < 0) return -1;
-    const end = tagEnd(text, lt);
-    if (end < 0) {
-      i = lt + 1;
-      continue;
-    }
-    const tag = text.slice(lt, end);
-    if (localName(tag) === name) {
-      if (tag.charAt(1) === '/') depth--;
-      else if (tag.charAt(tag.length - 2) !== '/') depth++;
-      if (depth === 0) return end;
-    }
-    i = end;
-  }
-  return -1;
-}
-
-export function stripOmp(item) {
-  // Tags are walked one at a time instead of erased by a pattern over the whole string: a pattern leaves
-  // whatever it did not expect - an attribute in single quotes, a `>` inside a value, an omp name behind a
-  // broken neighbour - and one leftover upstream omp_rank wins over the one we append, because the app keeps
-  // the first value of each name. Everything that is not ours is given back byte for byte.
-  let out = '';
-  let at = 0;
-  while (at < item.length) {
-    const lt = item.indexOf('<', at);
-    if (lt < 0) {
-      out += item.slice(at);
-      break;
-    }
-    out += item.slice(at, lt);
-    const end = tagEnd(item, lt);
-    if (end < 0) {
-      // this `<` opens nothing: it is text, and the tag we are looking for starts later
-      out += '<';
-      at = lt + 1;
-      continue;
-    }
-    const tag = item.slice(lt, end);
-    if (!isOmpAttr(tag)) {
-      out += tag;
-      at = end;
-      continue;
-    }
-    if (tag.charAt(tag.length - 2) === '/') {
-      at = end;
-      continue;
-    }
-    // an element that never closes gives up its opening tag only: taking the rest of the item with it would
-    // drop the sibling fields of a row that is still worth showing
-    const closed = blockEnd(item, end, localName(tag));
-    at = closed < 0 ? end : closed;
-  }
-  return out;
-}
-
 export function annotate(item, fields) {
-  let xml = stripOmp(item.xml);
   const bits = [];
   if (fields.reorder) {
     // both values go into an XML attribute, so both are escaped: today the reason comes from a closed list and
@@ -463,8 +342,14 @@ export function annotate(item, fields) {
     bits.push('<torznab:attr name="omp_reason" value="' + xmlAttr(fields.reason) + '"/>');
   }
   if (fields.voice) bits.push('<torznab:attr name="omp_voice" value="' + xmlAttr(fields.voice) + '"/>');
-  if (!bits.length) return xml;
-  return xml.replace(/<\/item>\s*$/i, bits.join('') + '</item>');
+  if (!bits.length) return item.xml;
+  // Ours go first inside the row, and nothing of the upstream XML is rewritten: the app reads the first value
+  // of each attribute name (src/sources/indexer.ts), so an omp_rank the indexer brought with it loses to ours
+  // on its own. Removing the upstream ones was a sanitizer, and a sanitizer over foreign XML is what kept
+  // finding new ways to be incomplete.
+  const head = openingTagEnd(item.xml);
+  if (head > 0) return item.xml.slice(0, head) + bits.join('') + item.xml.slice(head);
+  return item.xml.replace(/<\/item>\s*$/i, bits.join('') + '</item>');
 }
 
 /**
