@@ -3,6 +3,7 @@ import { titleCore } from '../lib/posterSearch';
 import { rawReleaseOf } from '../lib/journal';
 import { identityText } from '../lib/keptQuality';
 import { parseRelease } from '../sources/filters';
+import { yearInTitle } from '../sources/queryParse';
 import { titleSaysSeries } from '../lib/seriesGroups';
 import type { Kind } from './tmdb';
 
@@ -58,10 +59,12 @@ function releaseTag(tr: { title: string; data?: string; category?: string }): st
   return tr.category === 'tv' ? SERIES_TAG : FILM_TAG;
 }
 
+/**
+ * The year of a release line: the same reading the search uses. A number that is the whole name («1917») or stands
+ * inside it («Бегущий по лезвию 2049») is not the year, so such a release carries no year and cannot claim a remake.
+ */
 export function yearOf(title: string): number {
-  const re = /(?:^|[^0-9])((?:19|20)\d\d)(?![0-9])/;
-  const m = re.exec(title || '');
-  return m ? +m[1] : 0;
+  return yearInTitle(title);
 }
 
 /** A Russian release name: the script that separates a translation from another work. */

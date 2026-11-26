@@ -665,8 +665,20 @@ export function Add({
   const searchedNow = memo.searched;
   const [shows, setShows] = useState<{ q: string; map: { [title: string]: ShowHit } }>({ q: '', map: {} });
   const askedShow = useRef<{ q: string; titles: { [title: string]: boolean } }>({ q: '', titles: {} });
-  const showTitles = visible.map((r) => r.Title || '').concat(similarVisible.map((r) => r.Title || '')).join('\n');
   const showMap = shows.q === searchedNow ? shows.map : {};
+  // one show lookup per name, asked with the year the indexer reported for that row: a work named by a number
+  // («1917 (2019)») would otherwise be looked up by a year read out of its own name
+  const showYears: { [title: string]: number } = {};
+  const showList: string[] = [];
+  const collectShow = (r: { Title?: string; year?: number }): void => {
+    const title = r.Title || '';
+    if (!title || showYears[title] !== undefined) return;
+    showYears[title] = r.year || 0;
+    showList.push(title);
+  };
+  visible.forEach(collectShow);
+  similarVisible.forEach(collectShow);
+  const showTitles = showList.join('\n');
   useEffect(() => {
     if (askedShow.current.q !== searchedNow) askedShow.current = { q: searchedNow, titles: {} };
     const stops: (() => void)[] = [];
@@ -682,7 +694,7 @@ export function Add({
           next[title] = hit;
           return { q: searchedNow, map: next };
         });
-      }));
+      }, showYears[title] || 0));
     });
     return () => {
       stops.forEach((stop) => stop());

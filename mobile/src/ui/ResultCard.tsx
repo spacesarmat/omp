@@ -152,7 +152,7 @@ export function ResultCard(p: {
             setOpen(true);
           }}
         />
-        <ResultThumb title={r.Title} poster={p.poster} />
+        <ResultThumb title={r.Title} poster={p.poster} year={r.year} />
         <div class="m-rc-text">
           {!p.nested && <ReleaseName raw={r.Title} />}
           <ReleaseChips raw={r.Title} kind={kind} quality={r.qualityHint} sizeBytes={resultBytes(r)} />

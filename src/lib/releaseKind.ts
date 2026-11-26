@@ -9,6 +9,7 @@
 // Chromium 53 rules (no lookbehind, no u flag, no \b next to Cyrillic).
 // Step 2 (grouping the results by TMDB title) builds on `year` and the short name of the release (releaseRow.ts).
 import { parseEpisodeRange } from '../monitor/episodes';
+import { yearInTitle } from '../sources/queryParse';
 
 export type ReleaseKindName = 'series' | 'movie' | 'audiobook' | 'ebook';
 
@@ -176,11 +177,11 @@ export function movieCategoryAudiobook(title: string, categories: string | undef
   if (VIDEO_MARKS.test(raw) || MUSIC_ALBUM.test(raw)) return false;
   return true;
 }
-const YEAR = /(?:^|[^0-9])(19[0-9][0-9]|20[0-4][0-9])(?:[^0-9]|$)/;
 
+/** The release year of a title, undefined when it names none («1917» alone names none: it is the name). */
 function yearOf(title: string): number | undefined {
-  const m = YEAR.exec(title);
-  return m ? parseInt(m[1], 10) : undefined;
+  const y = yearInTitle(title);
+  return y ? y : undefined;
 }
 
 /** Season and episodes of a series title (the parts that are known). */

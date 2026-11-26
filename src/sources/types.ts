@@ -67,6 +67,11 @@ export interface SourceResult extends SearchResult {
   /** Resolution from the indexer (bitmagnet video_resolution, JacRed quality), not from the title. */
   qualityHint?: string;
   /**
+   * Release year the indexer reported (a Torznab `year` attr), not read from the title. It settles a work whose name
+   * carries a number («1917 (2019)», «Бегущий по лезвию 2049») where the title alone cannot be trusted.
+   */
+  year?: number;
+  /**
    * Server seed check for this search. `live`: scrape answered. `dht`: a seed estimate, not a verified
    * count - BEP 33, bitmagnet counts (seedSource 'bitmagnet') or the devices' crowd median
    * (seedSource 'crowd') carried by Seed/Peer.
