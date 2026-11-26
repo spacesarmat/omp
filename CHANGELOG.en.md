@@ -8,6 +8,7 @@ The English translation covers the latest versions only; the full history (in Ru
 
 - [tv] Posters stay in the app's memory: scrolling back to a row no longer downloads it again, and the rows below the focus load ahead of time
 - [phone] Posters in Discover and in a filmography are no longer re-downloaded when the person returns to a row they already saw
+- [tech] The TV shell scale test waits for the scale to be applied instead of sleeping 30 ms: on a loaded runner it failed without anything being broken
 
 ## 0.30.4-beta.2
 
