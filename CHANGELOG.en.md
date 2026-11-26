@@ -6,8 +6,9 @@ The English translation covers the latest versions only; the full history (in Ru
 
 ## Unreleased
 
+- [tech] The pairing link and the language switcher on the site follow only omp-player.online: an address that merely starts with our domain no longer reaches the intent or the href
 - [tech] The Telegram invoice description is turned into plain text in the right order: entities are restored first, then tags are cut, and the tag pass repeats until nothing is left, so a nested tag can no longer survive as markup
-- [tech] Rating attributes in the Torznab feed are escaped, foreign omp attributes are stripped by a repeated pass, and every billing answer now carries `x-content-type-options: nosniff`
+- [tech] Rating attributes in the Torznab feed are escaped, foreign omp attributes are stripped in every way XML allows writing an attribute, and every billing answer now carries `x-content-type-options: nosniff`
 - [tech] A Postgres schema name for `search_path` is accepted only as a plain identifier: a quote, a space or a backslash in the name never reaches the server options
 
 ## 0.30.4-beta.3
