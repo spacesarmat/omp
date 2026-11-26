@@ -91,7 +91,8 @@ function applyFeed(root, kind, versionKey, feed) {
       link.href = fileUrl;
     });
     if (kind.startsWith('beta-')) {
-      root.querySelectorAll(`[data-download="${kind}"][data-direct]`).forEach((link) => {
+      // Buttons with data-asset or data-abi open only after their own file is assigned below.
+      root.querySelectorAll(`[data-download="${kind}"][data-direct]:not([data-abi]):not([data-asset])`).forEach((link) => {
         link.hidden = false;
         const pane = link.closest('.beta');
         const note = pane && pane.querySelector('.beta-empty');

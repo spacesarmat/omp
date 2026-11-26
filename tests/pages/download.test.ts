@@ -151,6 +151,36 @@ describe('download page feeds', () => {
     expect((document.querySelector('[data-version="beta-macos"]') as HTMLElement).hidden).toBe(false);
   });
 
+  it('keeps the Apple Silicon beta button hidden when the feed has only Intel', async () => {
+    document.body.innerHTML = `
+      <div class="beta">
+        <a data-download="beta-macos" data-asset="arm64" data-direct hidden href="https://github.com/spacesarmat/omp/releases">beta arm</a>
+        <a data-download="beta-macos" data-asset="x64" hidden href="https://github.com/spacesarmat/omp/releases">beta intel</a>
+        <span data-version="beta-macos" hidden></span>
+        <p class="beta-empty">list</p>
+      </div>
+    `;
+    const fetchImpl = vi.fn((url: string) => Promise.resolve(response(
+      String(url).endsWith('update-macos.json')
+        ? {
+          version: '0.31.0-beta.1',
+          url: 'https://example.test/intel-beta.dmg',
+          assets: { x64: { url: 'https://example.test/intel-beta.dmg' } },
+          releaseUrl: 'https://github.com/spacesarmat/omp/releases/tag/v0.31.0-beta.1',
+        }
+        : {},
+    )));
+    await updateDownloads(document, fetchImpl as unknown as typeof fetch);
+    const arm = document.querySelector('[data-download="beta-macos"][data-asset="arm64"]') as HTMLAnchorElement;
+    const intel = document.querySelector('[data-download="beta-macos"][data-asset="x64"]') as HTMLAnchorElement;
+    expect(arm.hidden).toBe(true);
+    expect(arm.href).toBe('https://github.com/spacesarmat/omp/releases');
+    expect(intel.hidden).toBe(false);
+    expect(intel.href).toBe('https://example.test/intel-beta.dmg');
+    expect((document.querySelector('.beta-empty') as HTMLElement).hidden).toBe(true);
+    expect((document.querySelector('[data-version="beta-macos"]') as HTMLElement).hidden).toBe(false);
+  });
+
   it('keeps release-page fallbacks when feeds cannot be loaded', async () => {
     const fetchImpl = vi.fn(() => Promise.reject(new Error('offline')));
     await updateDownloads(document, fetchImpl as unknown as typeof fetch);
