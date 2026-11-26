@@ -11,6 +11,7 @@ The English translation covers the latest versions only; the full history (in Ru
 - [phone] Posters in Discover and in a filmography are no longer re-downloaded when the person returns to a row they already saw
 - [tech] One reading of a release year instead of five different ones; when the indexer reports a year of its own, it is used
 - [tech] A stalled poster request frees the prefetch worker after 15 s: two silent addresses no longer stop the rows ahead from loading
+- [tech] The TV shell scale test waits for the scale to be applied instead of sleeping 30 ms: on a loaded runner it failed without anything being broken
 
 ## 0.30.4-beta.2
 
