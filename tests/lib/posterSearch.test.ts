@@ -15,11 +15,12 @@ describe('posterQuery', () => {
     expect(titleCore('Два холма 2')).toBe('Два холма 2');
     expect(titleCore('S2E1-10')).toBe('S2E1-10');
     expect(titleCore('Сезон дождя')).toBe('Сезон дождя');
-    // «Season» inside an English name is the name; only a punctuated mark («Season: 2», «· Season 2») is dropped
+    // one English word inside a name is the name; a punctuated label or two labels together are metadata
     expect(titleCore('Open Season 2 (2008) BDRip')).toBe('Open Season 2');
     expect(titleCore('Сезон охоты 2 / Open Season 2 (2008) BDRip')).toBe('Сезон охоты 2');
     expect(titleCore('Stranger Things 4 (2022) 2160p')).toBe('Stranger Things 4');
-    expect(titleCore('Loki Season: 2 Episode: 3')).toBe('Loki');
+    expect(titleCore('Loki Season: 2 Episode 3')).toBe('Loki');
+    expect(titleCore('Loki Season 2 Episode 3')).toBe('Loki');
     // a separator left by the technical cut does not stop the tail from being read
     expect(titleCore('Dark Matter · Серии: 1-6 из 9 · S02 1080p')).toBe('Dark Matter');
     expect(titleCore('Сваты 4 сезон 1-8 серии из 8 WEBRip')).toBe('Сваты');

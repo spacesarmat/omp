@@ -34,9 +34,11 @@ const MARK_PUNCT = /[\s:.,;-]+$/;
 const MAYBE_TAIL = /(?:\d|сезон[аеуы]*|сезонов|seasons?|серии|серий|серия|эпизод[аы]*|эпизодов|episodes?|из|of|от|by|[-.,:;/|&·•\u2013\u2014])\s*$/i;
 
 /**
- * The season and episode tail of a name: «Тест 1 сезон 1-8 серия» is named «Тест», «Dark Matter · Серии: 1-6 из 9 · S02»
- * is «Dark Matter». It starts only at evidence - a season word, or a number such a word introduces («из 9») - so a
- * number that belongs to the name («Два холма 2», «Open Season 2», «S2E1-10») stays, and the line is never eaten whole.
+ * The season and episode tail of a name: «Тест 1 сезон 1-8 серия» is named «Тест», «Loki Season: 2 Episode 3» is
+ * «Loki». The tail is read from the right over numbers, separators and mark words; it is dropped only where the
+ * line proves it is release metadata: a count and a Russian mark («4 сезон», «1-8 серии»), a punctuated English
+ * label («Season: 2») or two English labels together («Season 2 Episode 3»). A single English word inside a name
+ * («Open Season 2», «Два холма 2») is not evidence, and a line that is nothing but a tail is left alone.
  */
 function trimMarks(s: string): string {
   if (!MAYBE_TAIL.test(s)) return s;
@@ -45,31 +47,22 @@ function trimMarks(s: string): string {
   const ru = (w: string): boolean => MARK_RU.test(bare(w));
   const num = (w: string): boolean => MARK_NUM.test(bare(w));
   const intro = (w: string): boolean => MARK_INTRO.test(bare(w));
-  // an English mark word counts when the line writes it as one: «Season:», «· Season 2», not «Open Season 2»
-  const en = (w: string, before: string): boolean =>
-    MARK_EN.test(bare(w)) && (/:/.test(w) || before === '' || MARK_SEP.test(bare(before)) || /:$/.test(before));
-  const markAt = (i: number): boolean => ru(words[i]) || en(words[i], words[i - 1] || '');
-  let end = words.length;
-  while (end > 1 && MARK_SEP.test(bare(words[end - 1]))) end--;
-  const last = words[end - 1];
-  const before = words[end - 2] || '';
-  // the tail begins at a mark word, or at a number that a mark word or an introducer («из», «of») stands behind
-  if (!last || !(markAt(end - 1) || (num(last) && (markAt(end - 2) || intro(before))))) return s;
-  let droppedNum = false;
-  while (end > 1) {
-    const w = words[end - 1];
-    if (num(w)) {
-      droppedNum = true;
-      end--;
-    } else if (markAt(end - 1)) {
-      end--;
-    } else if (intro(w) && droppedNum) {
-      end--;
-    } else if (MARK_SEP.test(bare(w))) {
-      end--;
-    } else break;
+  const en = (w: string): boolean => MARK_EN.test(bare(w));
+  // an English word written as a label: «Season:», or one that a separator brings («· Season 2»)
+  const labelled = (i: number): boolean =>
+    en(words[i]) && (/:/.test(words[i]) || i === 0 || MARK_SEP.test(bare(words[i - 1])) || /:$/.test(bare(words[i - 1])));
+  const candidate = (i: number): boolean => ru(words[i]) || en(words[i]) || intro(words[i]) || num(words[i]) || MARK_SEP.test(bare(words[i]));
+  let from = words.length;
+  while (from > 0 && candidate(from - 1)) from--;
+  if (from === 0) return s;
+  const tail = words.slice(from);
+  const kinds: string[] = [];
+  for (let i = 0; i < tail.length; i++) {
+    const k = bare(tail[i]).toLowerCase();
+    if (en(tail[i]) && kinds.indexOf(k) < 0) kinds.push(k);
   }
-  return end > 0 && end < words.length ? words.slice(0, end).join(' ') : s;
+  const evidence = tail.some((w) => num(w)) && (tail.some((w) => ru(w)) || tail.some((w, i) => labelled(from + i)) || kinds.length >= 2 || tail.some((w) => intro(w)));
+  return evidence ? words.slice(0, from).join(' ') : s;
 }
 
 /** The title proper of a torrent title: before « [», « (», « / », « | », the release year or its details. */
