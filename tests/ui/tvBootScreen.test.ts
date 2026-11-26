@@ -19,7 +19,10 @@ describe('TV boot screen', () => {
   });
 
   it('the layer is sized for 1920x1080 and uses the TV font stack', () => {
-    // the mark is at least a fifth of the declared 1920 frame, the wordmark well above the 24px TV floor
+    // the mark is sized from the viewport: a fifth of whatever width the panel reports, so webOS 4K - where
+    // this layer sits outside the root that src/platform/androidScale.ts scales - gets the same fifth
+    expect(html).toMatch(/#omp-boot svg \{ width: 20vw; height: 20vw; \}/);
+    // the attribute is the fallback for an engine without vw units, and must already be a fifth of 1920
     const mark = /<svg width="(\d+)" height="(\d+)"/.exec(html);
     expect(mark).not.toBeNull();
     expect(Number(mark![1])).toBeGreaterThanOrEqual(1920 / 5);
