@@ -371,6 +371,9 @@ describe('download page languages and fallbacks', () => {
       expect(logo.getAttribute('width')).toBe('40');
       expect(logo.getAttribute('height')).toBe('40');
       expect(logo.getAttribute('alt')).toBe('');
+      const icon = doc.querySelector('link[rel="icon"]')!;
+      expect(icon.getAttribute('href')).toBe(page.logo);
+      expect(icon.getAttribute('type')).toBe('image/svg+xml');
 
       for (const kind of KINDS) {
         expect(doc.querySelector(`[data-download="${kind}"]:not([data-abi])`)).not.toBeNull();
