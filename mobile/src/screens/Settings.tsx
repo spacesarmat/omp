@@ -43,6 +43,8 @@ import { phonePlayerName } from './videoPlayerSettings';
 import { localServer, canRun } from '../server/localServer';
 import { loadWifiPrefs, wifiPrefsVersion } from '../servers/wifiRun';
 import { ReportRow } from './Advanced';
+import { fmtBytes } from '../../../src/i18n';
+import { clearAllImages, imageStoreStats } from '../../../src/lib/imageCache';
 
 const YO = '\u0451';
 const YE = '\u0435';
@@ -179,6 +181,50 @@ function VideoPlayerRow() {
       <span class="m-muted">{settings.value.phonePlayer === 'chooser' ? t('player.askShort') : phonePlayerName(settings.value.phonePlayer)}</span>
       <Icon d={CHEVRON} size={20} />
     </button>
+  );
+}
+
+/**
+ * Posters kept on the device. The memory cache dies with the app, so this is the part that saves traffic after a
+ * restart - and the part a person may ask to give back when the phone runs out of room.
+ */
+function PosterStorageRow() {
+  const [st, setSt] = useState<{ items: number; bytes: number; available: boolean } | null>(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    imageStoreStats().then((v) => {
+      if (alive) setSt(v);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
+  async function wipe() {
+    setBusy(true);
+    await clearAllImages();
+    const next = await imageStoreStats();
+    setSt(next);
+    setBusy(false);
+    showToast(t('settings.storageCleared'));
+  }
+  // a device that cannot keep anything has nothing: the same line as an empty cache, and no promise to clear
+  const line = !st ? '' : st.items === 0 ? t('settings.storageEmpty') : tp('settings.storageSize', st.items, { size: fmtBytes(st.bytes) });
+  return (
+    <div class="m-set-row" data-row="poster-storage">
+      <div class="m-set-text">
+        <span>{t('settings.storageTitle')}</span>
+        {line ? <span class="m-muted m-small">{line}</span> : null}
+      </div>
+      <button
+        type="button"
+        class="m-btn m-btn-secondary"
+        disabled={busy || !st || !st.available || st.items === 0}
+        onClick={() => void wipe()}
+      >
+        {t('settings.storageClear')}
+      </button>
+    </div>
   );
 }
 
@@ -589,6 +635,7 @@ export function Settings() {
     check: rowOn([t('updateScreen.check'), t('updateScreen.latest')].join(' ')),
     report: rowOn([t('settings.reportTitle'), t('settings.reportSend')].join(' ')),
     help: rowOn(t('settings.help')),
+    storage: rowOn([t('settings.storageTitle'), t('settings.storageEmpty'), t('settings.storageClear')].join(' ')),
     friends: rowOn(t('settings.tellFriends')),
     onboarding: rowOn(t('settings.showOnboarding')),
     hints: rowOn([t('settings.resetHints'), t('settings.hintsAgain')].join(' ')),
@@ -756,7 +803,7 @@ export function Settings() {
       </section>
       )}
 
-      {(rows.testMode || rows.testSize || rows.version || rows.check || rows.report || rows.help || rows.friends || rows.onboarding || rows.hints || rows.support) && (
+      {(rows.testMode || rows.testSize || rows.version || rows.check || rows.report || rows.help || rows.storage || rows.friends || rows.onboarding || rows.hints || rows.support) && (
       <section class="m-set-group" data-section="app">
         <div class="m-set-label">{t('settings.app')}</div>
         {isBetaBuild() && rows.testMode && (
@@ -819,6 +866,7 @@ export function Settings() {
           <span>{t('settings.help')}</span>
           <Icon d={CHEVRON} size={20} />
         </button>}
+        {rows.storage && <PosterStorageRow />}
         {rows.friends && <button type="button" class="m-set-row m-set-pick tm" data-code="P11.22" data-row="tell-friends" onClick={() => void sendShare(friendsShare())}>
           <span>{t('settings.tellFriends')}</span>
           <Icon d={CHEVRON} size={20} />
