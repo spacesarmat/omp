@@ -12,6 +12,7 @@ The English translation covers the latest versions only; the full history (in Ru
 - The "In library" mark and the poster search see a series whose release reads "Title 1 season 1-8 episodes": the season tail is no longer part of the name
 - [tv] Launching on the TV now shows the brand screen instead of a black frame: the OMP logo on the dark background while the app loads
 - [lg] Launching on LG no longer flashes a light rectangle: the app icon sits on the brand background with no transparent corners
+- [phone] Settings are even now: one gap between sections instead of double, the name of a row follows its icon, and the second line of a row is no longer centered
 - [phone] In the help, opening a question keeps its section heading on screen: a short section comes to the top whole, a long one moves only as far as the answer needs
 - [tech] One reading of a release year instead of five different ones; when the indexer reports a year of its own, it is used
 - [tech] A stalled poster request frees the prefetch worker after 15 s: two silent addresses no longer stop the rows ahead from loading

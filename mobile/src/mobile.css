@@ -1149,7 +1149,7 @@ textarea.m-input, textarea.m-area {
 .m-set-label { margin: 0 0 8px; padding-left: 14px; font-size: 13px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
 .m-set-row > .m-link, .m-set-row > .m-btn { flex-shrink: 0; }
 .m-set-row > .m-link { white-space: nowrap; }
-.m-set-text > .m-link { margin: 0; padding: 0; min-width: 0; min-height: 0; align-self: flex-start; }
+.m-set-text > .m-link { margin: 0; padding: 0; min-width: 0; min-height: 0; align-self: flex-start; text-align: left; }
 .m-set-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 52px; padding: 4px 14px; border-radius: 12px; background: var(--panel); }
 .m-set-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; overflow-wrap: anywhere; }
 .m-set-row .m-btn { flex-shrink: 0; }
@@ -1484,15 +1484,26 @@ button.m-now-chtext { border: none; background: none; color: inherit; display: f
 .m-hint-ok svg { flex-shrink: 0; }
 
 .m-set-pick { width: 100%; border: none; color: var(--text); text-align: left; font: inherit; }
-.m-set-pick > span:first-child, .m-ss-row > span:first-child { flex: 1 1 0; min-width: 0; overflow-wrap: anywhere; }
+/* the label of a row takes the room between the icon and the chevron: with an icon in front the span is not
+   first-child, and space-between used to push the name into the middle of the row */
+.m-set-pick > span:first-child, .m-set-pick > .m-set-ico + span, .m-ss-row > span:first-child { flex: 1 1 0; min-width: 0; overflow-wrap: anywhere; }
 .m-set-pick > .m-muted { flex: 0 1 auto; max-width: 46%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .m-set-pick > span.m-set-name { flex: 0 0 auto; min-width: max-content; white-space: nowrap; overflow-wrap: normal; }
 .m-set-pick > .m-muted.m-set-version { flex: 1 1 auto; max-width: none; min-width: 0; overflow: visible; text-overflow: clip; white-space: normal; text-align: right; }
 .m-set-ico { flex: 0 0 auto; display: flex; margin-right: 10px; color: var(--muted); }
+/* no bottom margin here: the screen already spaces its children with gap: 20px, and adding 20px more made the
+   distance between two sections twice the distance from the search box to the first one */
 .m-screen[data-route='settings'] .m-set-group,
-.m-screen[data-route='advanced'] .m-set-group { margin: 0 0 20px; padding: 0; gap: 0; background: none; border-radius: 0; }
+.m-screen[data-route='advanced'] .m-set-group { margin: 0; padding: 0; gap: 0; background: none; border-radius: 0; }
 .m-screen[data-route='settings'] .m-set-group .m-set-row,
 .m-screen[data-route='advanced'] .m-set-group .m-set-row { background: var(--panel); border-radius: 0; min-height: 56px; padding: 12px 14px; }
+/* the name takes the room and the control sits at the right edge in every row, whether the row ends with a
+   chevron, a switch or a value: rows that grew the text by hand looked different from rows that did not */
+.m-screen[data-route='settings'] .m-set-row .m-set-text,
+.m-screen[data-route='advanced'] .m-set-row .m-set-text { flex: 1 1 auto; }
+/* the second line of a row is a value, not a title: rows spelled it two ways, 13px and the inherited 16px */
+.m-screen[data-route='settings'] .m-set-row .m-muted,
+.m-screen[data-route='advanced'] .m-set-row .m-muted { font-size: 13px; }
 .m-screen[data-route='settings'] .m-set-group > .m-btn { margin: 0; align-self: stretch; width: 100%; border-radius: 0; }
 .m-screen[data-route='settings'] .m-set-group > .m-set-label + .m-set-row,
 .m-screen[data-route='advanced'] .m-set-group > .m-set-label + .m-set-row,

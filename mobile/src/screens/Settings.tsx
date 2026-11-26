@@ -187,7 +187,7 @@ function TvSearchRow() {
   const on = tvSearchOn.value;
   return (
     <div class="m-set-row tm" data-code="P11.4" data-row="tv-search-service">
-      <div class="m-set-text" style="flex-grow: 1">
+      <div class="m-set-text">
         <span>{t('settings.tvSearch')}</span>
         <span class="m-muted m-small">{on ? t('settings.tvSearchHint') : t('settings.tvSearchOff')}</span>
       </div>
@@ -390,7 +390,7 @@ function PhoneServerRow() {
   const state = st.running ? t('sources.flare.works') : !canRun(st) ? t('settings.localNotDownloaded') : t('settings.localStopped');
   return (
     <button type="button" class="m-set-row m-set-pick tm" data-code="P11.21" data-row="phone-server" onClick={() => navigate({ name: 'localServer' })}>
-      <div class="m-set-text" style="flex-grow: 1">
+      <div class="m-set-text">
         <span>{t('settings.phoneServer')}</span>
         <span class="m-muted m-small">{state}</span>
       </div>
@@ -661,7 +661,7 @@ export function Settings() {
       <section class="m-set-group" data-section="watch">
         <div class="m-set-label">{t('settings.watch')}</div>
         {rows.watchFrom && <button type="button" class="m-set-row m-set-pick tm" data-code="P11.5" data-row="watch-from" onClick={() => navigate({ name: 'watchFrom' })}>
-          <div class="m-set-text" style="flex-grow: 1">
+          <div class="m-set-text">
             <span>{t('settings.watchFrom')}</span>
             <span class="m-muted m-small">{whereLine}</span>
           </div>
@@ -761,7 +761,7 @@ export function Settings() {
         <div class="m-set-label">{t('settings.app')}</div>
         {isBetaBuild() && rows.testMode && (
           <div class="m-set-row tm" data-code="P11.19">
-            <div class="m-set-text" style="flex-grow: 1">
+            <div class="m-set-text">
               <span>{t('settings.testModeTitle')}</span>
               <span class="m-muted m-small">{t('settings.testModeHint')}</span>
             </div>
