@@ -135,3 +135,35 @@ describe('public site languages', () => {
     expect(decide({ ...home, pathname: '/en/index.html', language: 'en' })).toBeNull();
   });
 });
+
+/** The hrefs the visitor actually clicks: syncLangLinks runs in app.js with a document and a location. */
+function langLinkHrefs(bases: string[], hash: string): (string | null)[] {
+  const doc = new DOMParser().parseFromString(
+    `<div class="lang-switch">${bases.map((b) => `<a data-lang-href="${b}">X</a>`).join('')}</div>`,
+    'text/html',
+  );
+  const start = appJs.indexOf('function syncLangLinks');
+  const end = appJs.indexOf('\n}', start);
+  if (start < 0 || end < 0) throw new Error('syncLangLinks missing');
+  const context = {
+    document: doc,
+    location: { hash, origin: 'https://omp-player.online' },
+    URL,
+  };
+  vm.runInNewContext(`${appJs.slice(start, end + 2)}\nsyncLangLinks();`, context);
+  return [...doc.querySelectorAll('a')].map((a) => a.getAttribute('href'));
+}
+
+describe('language links', () => {
+  it('keep the path of the site and the visitor fragment', () => {
+    expect(langLinkHrefs(['/', '/en/'], '#how')).toEqual(['/#how', '/en/#how']);
+  });
+
+  it('never point outside this origin', () => {
+    // a protocol-relative address is a path as far as the first character goes, but it belongs to another host
+    expect(langLinkHrefs(['//evil.example/x'], '#how')).toEqual([null]);
+    expect(langLinkHrefs(['javascript:alert(1)'], '#how')).toEqual([null]);
+    expect(langLinkHrefs(['https://omp-player.online/en/'], '#how')).toEqual([null]);
+    expect(langLinkHrefs([''], '#how')).toEqual(['/#how']);
+  });
+});

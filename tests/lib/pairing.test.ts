@@ -34,4 +34,18 @@ describe('pairing uri', () => {
     expect(parsePairUri(PAIR_ORIGIN + '/pair?v=1')).toBeNull();
     expect(parsePairUri('omp://pair?v=1&url=%E0%A4%A')).toBeNull();
   });
+
+  it('the intent carries only our own host: a lookalike address gives the plain /pair', () => {
+    const evil = 'https://omp-player.online.attacker.example/pair?v=1&url=' + encodeURIComponent('http://evil:8090') + '#user=admin&password=secret';
+    const intent = pairIntentUri(evil);
+    // what the app receives is only the path; the original address stays in the browser fallback, encoded
+    expect(intent.slice('intent://omp-player.online'.length, intent.indexOf('#Intent;'))).toBe('/pair');
+    expect(intent).not.toContain('password=secret');
+    expect(intent).toContain('S.browser_fallback_url=' + encodeURIComponent(evil));
+    // plain http and an odd port are ours neither
+    expect(pairIntentUri('http://omp-player.online/pair?v=1&url=x')).toContain('intent://omp-player.online/pair#Intent;');
+    expect(pairIntentUri('https://omp-player.online:8443/pair?v=1&url=x')).toContain('intent://omp-player.online/pair#Intent;');
+    // and a real pair link still reaches the app with its credentials
+    expect(parsePairUri(pairIntentUri(buildPairUri({ url: 'http://h:1', name: 'LG', user: 'u', password: 'p' })))).toEqual({ url: 'http://h:1', name: 'LG', user: 'u', password: 'p' });
+  });
 });

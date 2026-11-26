@@ -45,9 +45,26 @@ export function pairIntentUri(httpsUrl: string): string {
   const frag = hashAt >= 0 ? httpsUrl.slice(hashAt + 1) : '';
   // The view intent is not an HTTP request. Credentials ride on it so the app can pair,
   // while the browser fallback keeps them in the fragment only.
-  const appUrl = frag ? base + (base.indexOf('?') >= 0 ? '&' : '?') + frag : base;
-  const path = appUrl.indexOf(PAIR_ORIGIN) === 0 ? appUrl.slice(PAIR_ORIGIN.length) : '/pair';
-  return 'intent://omp-player.online' + path + '#Intent;scheme=https;package=' + PAIR_PACKAGE + ';S.browser_fallback_url=' + encodeURIComponent(httpsUrl) + ';end';
+  return 'intent://omp-player.online' + pairPathOf(base, frag) + '#Intent;scheme=https;package=' + PAIR_PACKAGE + ';S.browser_fallback_url=' + encodeURIComponent(httpsUrl) + ';end';
+}
+
+/**
+ * Path and query of our own pair page, with the credential fragment moved into the query. A host that only starts
+ * with the pair origin (omp-player.online.attacker.example) is not ours: the intent then carries the plain /pair,
+ * so nothing an outside page put in its address reaches the app.
+ */
+function pairPathOf(base: string, frag: string): string {
+  let url: URL;
+  try {
+    url = new URL(base);
+  } catch (e) {
+    return '/pair';
+  }
+  if (url.protocol !== 'https:' || url.hostname.toLowerCase() !== 'omp-player.online' || url.port) return '/pair';
+  const query = url.search.charAt(0) === '?' ? url.search.slice(1) : url.search;
+  const carried = frag ? (query ? query + '&' + frag : frag) : query;
+  const path = url.pathname.replace(/\/+$/, '') || '/';
+  return path + (carried ? '?' + carried : '');
 }
 
 function queryFrom(raw: string): string | null {

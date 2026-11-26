@@ -64,7 +64,16 @@ function syncLangLinks() {
     const base = a.getAttribute("data-lang-href") || "/";
     // the language links keep their own path: a URL that starts with the visitor's fragment is not ours to follow
     if (base.charAt(0) !== "/") return;
-    a.setAttribute("href", base + hash);
+    let url;
+    try {
+      url = new URL(base, location.origin);
+    } catch {
+      return;
+    }
+    // "//host" is a path too, but it belongs to somebody else: only this origin may end up in the href
+    if (url.origin !== location.origin) return;
+    url.hash = hash;
+    a.setAttribute("href", url.pathname + url.search + url.hash);
   });
 }
 
