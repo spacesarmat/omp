@@ -59,21 +59,29 @@ export function LazyImg({ src, alt = '', onLoad, onError }: { src: string; alt?:
       return;
     }
     let live = true;
-    // a request that never answers must not keep the tile blank
-    const timer = setTimeout(() => {
+    // a request that never answers must not keep the tile blank; once the cache has answered the fallback is off
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    timer = setTimeout(() => {
+      timer = undefined;
       if (live) setUrl(src);
     }, WAIT_MS);
+    const stop = (): void => {
+      if (timer !== undefined) clearTimeout(timer);
+      timer = undefined;
+    };
     loadImage(src).then(
       (out) => {
+        stop();
         if (live) setUrl(out);
       },
       () => {
+        stop();
         if (live) setUrl(src);
       },
     );
     return () => {
       live = false;
-      clearTimeout(timer);
+      stop();
     };
   }, [near, src, hold]);
 

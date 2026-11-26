@@ -92,6 +92,31 @@ describe('loadImage', () => {
     expect(fetcher).toHaveBeenCalledTimes(1);
   });
 
+  it('does not blacklist a host over one broken poster', async () => {
+    fetcher.mockResolvedValue({ ok: false, status: 404 });
+    expect(await loadImage('https://img.test/gone.jpg')).toBe('https://img.test/gone.jpg');
+    expect(imageCacheStats().blocked).toEqual([]);
+    fetcher.mockResolvedValue(picture(4));
+    // the next poster of the same host still gets its copy
+    expect(await loadImage('https://img.test/good.jpg')).not.toBe('https://img.test/good.jpg');
+    // and the broken one is not asked again on every remount
+    await loadImage('https://img.test/gone.jpg');
+    expect(fetcher.mock.calls.filter((c) => c[0] === 'https://img.test/gone.jpg').length).toBe(1);
+  });
+
+  it('asks a refused host again after the cooldown', async () => {
+    vi.useFakeTimers();
+    fetcher.mockRejectedValue(new TypeError('no CORS'));
+    await loadImage('https://down.test/a.jpg');
+    await loadImage('https://down.test/b.jpg');
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    vi.advanceTimersByTime(6 * 60 * 1000);
+    fetcher.mockResolvedValue(picture(2));
+    expect(await loadImage('https://down.test/c.jpg')).not.toBe('https://down.test/c.jpg');
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    vi.useRealTimers();
+  });
+
   it('does not touch fetch for data and local addresses', async () => {
     expect(await loadImage('data:image/png;base64,AAAA')).toBe('data:image/png;base64,AAAA');
     expect(await loadImage('assets/icon.png')).toBe('assets/icon.png');
@@ -110,6 +135,15 @@ describe('loadImage', () => {
     // the picture that stayed is the newer one
     expect(imageSrc('https://img.test/a.jpg')).toBe('https://img.test/a.jpg');
     expect(imageSrc('https://img.test/b.jpg')).not.toBe('https://img.test/b.jpg');
+  });
+
+  it('leaves a picture bigger than the whole room out of the cache', async () => {
+    setImageCacheBudget(10);
+    fetcher.mockResolvedValue(picture(50));
+    expect(await loadImage('https://img.test/huge.jpg')).toBe('https://img.test/huge.jpg');
+    expect(imageCacheStats().items).toBe(0);
+    expect(imageCacheStats().bytes).toBe(0);
+    expect(created).toEqual([]);
   });
 
   it('forgets everything on clear', async () => {
@@ -143,6 +177,25 @@ describe('prefetchImages', () => {
     prefetchImages(['https://img.test/done.jpg', '', 'https://img.test/new.jpg']);
     await new Promise((res) => setTimeout(res, 0));
     expect(fetcher.mock.calls.filter((c) => c[0] === 'https://img.test/done.jpg').length).toBe(1);
+  });
+
+  it('shares the two workers between several calls', async () => {
+    let inFlight = 0;
+    let peak = 0;
+    fetcher.mockImplementation(() => {
+      inFlight++;
+      peak = Math.max(peak, inFlight);
+      return new Promise((res) => setTimeout(() => {
+        inFlight--;
+        res(picture(1));
+      }, 5));
+    });
+    // two focus changes before the first answer lands: the backlog grows, the workers do not
+    prefetchImages(['https://img.test/a1.jpg', 'https://img.test/a2.jpg', 'https://img.test/a3.jpg']);
+    prefetchImages(['https://img.test/b1.jpg', 'https://img.test/b2.jpg', 'https://img.test/b3.jpg']);
+    await new Promise((res) => setTimeout(res, 60));
+    expect(peak).toBeLessThanOrEqual(2);
+    expect(imageCacheStats().items).toBe(6);
   });
 });
 
