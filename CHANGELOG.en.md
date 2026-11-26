@@ -8,6 +8,7 @@ The English translation covers the latest versions only; the full history (in Ru
 
 - [tv] Posters stay in the app's memory: scrolling back to a row no longer downloads it again, and the rows below the focus load ahead of time
 - [phone] Posters in Discover and in a filmography are no longer re-downloaded when the person returns to a row they already saw
+- The "In library" mark and the poster search see a series whose release reads "Title 1 season 1-8 episodes": the season tail is no longer part of the name
 
 ## 0.30.4-beta.2
 
