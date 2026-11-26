@@ -2155,11 +2155,26 @@ html.m-kb-open .m-toast-host { bottom: calc(16px + env(safe-area-inset-bottom));
 .m-acct-card { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; border-radius: 16px; background: var(--panel); }
 .m-acct-card .m-set-row { padding-left: 0; padding-right: 0; background: transparent; }
 .m-acct-wide { width: 100%; }
-.m-acct-links { display: flex; gap: 16px; }
+.m-acct-links { display: flex; gap: 16px; padding: 10px 14px; }
+/* «Аккаунт OMP» is the same stack of rows as «Настройки»: the label stands outside the block, the rows join into one
+   rounded panel, and an action button keeps the side padding of a row instead of being a slab edge to edge */
+.m-screen[data-route='account'] .m-bill-block { display: flex; flex-direction: column; border-radius: 16px; background: var(--panel); overflow: hidden; }
+.m-screen[data-route='account'] .m-bill-block .m-set-row { min-height: 56px; padding: 12px 14px; }
+.m-screen[data-route='account'] .m-bill-block .m-set-row + .m-set-row,
+.m-screen[data-route='account'] .m-bill-block .m-set-row + .m-acct-links { box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06); }
+.m-screen[data-route='account'] .m-bill-block > .m-btn { width: auto; margin: 12px 14px; }
+.m-screen[data-route='account'] .m-bill-block > .m-field { padding: 12px 14px; }
+.m-bill-lead { margin: 0 2px; }
+.m-bill-note { margin: 0; padding: 10px 14px; font-size: 13px; line-height: 1.45; }
+.m-pay-methods { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px 14px; }
 .m-local-titleline { display: flex; align-items: center; gap: 6px; }
 .m-local-foot { margin: 4px 0 8px; }
 .m-local-vpn { margin-top: 8px; }
 .m-promo-row { display: flex; align-items: center; gap: 8px; }
+/* the button keeps its own width and the field gives room: without this the label of «Активировать» is squeezed
+   out of its own box on a narrow phone */
+.m-promo-apply { flex: none; }
+.m-screen[data-route='account'] .m-promo-row { padding: 12px 14px; }
 .m-promo-row .m-input { flex: 1 1 auto; min-width: 0; }
 .m-promo-apply:disabled { background: #252A35; color: var(--muted); opacity: 1; }
 .m-sub-quality { display: flex; }

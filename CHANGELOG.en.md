@@ -13,6 +13,7 @@ The English translation covers the latest versions only; the full history (in Ru
 - [tv] Launching on the TV now shows the brand screen instead of a black frame: the OMP logo on the dark background while the app loads
 - [lg] Launching on LG no longer flashes a light rectangle: the app icon sits on the brand background with no transparent corners
 - [phone] Settings are even now: one gap between sections instead of double, the name of a row follows its icon, and the second line of a row is no longer centered
+- [phone] "OMP account" is rebuilt: sections are stacks of rows like settings instead of a card inside a card, the subscription time and its price share one row, buttons and links sit at the edges of the block, and the promo code and its button share a row
 - [phone] In the help, opening a question keeps its section heading on screen: a short section comes to the top whole, a long one moves only as far as the answer needs
 - [tech] One reading of a release year instead of five different ones; when the indexer reports a year of its own, it is used
 - [tech] A stalled poster request frees the prefetch worker after 15 s: two silent addresses no longer stop the rows ahead from loading

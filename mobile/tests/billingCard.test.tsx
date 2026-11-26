@@ -127,6 +127,44 @@ describe('OMP subscription card', () => {
     open.mockRestore();
   });
 
+  it('the paid rows are one stack: price inside the status row, methods and links in rows of their own', async () => {
+    const day = 86400000;
+    me.paidUntil = Date.now() + 21 * day;
+    me.bill = {
+      priceRub: 299,
+      feeRub: 12,
+      totalRub: 311,
+      autoRenew: true,
+      payments: [
+        { at: Date.now() - 30 * day, amount: '299', currency: 'RUB', title: 'card payment' },
+        { at: 0, amount: '50', currency: 'XTR', title: 'stars top-up' },
+      ],
+    };
+    saveBillingSession({ token: 'legacy-token', paidUntil: me.paidUntil });
+    await act(async () => render(<OmpJackettCard />, el));
+    await flush();
+    // no card inside a card any more
+    const card = el.querySelector('[data-billing="jackett"]');
+    expect(card!.querySelector('.m-src-card, .m-acct-card')).toBeNull();
+    // the price is the second line of the status row, not a loose paragraph under it
+    const status = card!.querySelector('[data-bill-status]')!;
+    expect(status.classList.contains('m-set-row')).toBe(true);
+    const price = card!.querySelector('[data-bill-price]')!;
+    expect(price.parentElement!.parentElement).toBe(status);
+    expect(price.classList.contains('m-muted')).toBe(true);
+    // payment history: a block of rows, each with the amount on the right
+    const payments = card!.querySelector('[data-bill-payments]')!;
+    expect(payments.classList.contains('m-bill-block')).toBe(true);
+    const rows = Array.from(payments.querySelectorAll('[data-payment]'));
+    expect(rows.length).toBe(2);
+    expect(rows[0].classList.contains('m-set-row')).toBe(true);
+    expect(rows[0].textContent).toContain('299 ₽');
+    expect(rows[1].textContent).toContain('50');
+    // the two text actions live in one links row, not as two centered buttons
+    const links = Array.from(card!.querySelectorAll('.m-acct-links')).map((n) => Array.from(n.querySelectorAll('button')).map((b) => b.textContent));
+    expect(links.some((set) => set.indexOf('Отменить автопродление') >= 0 && set.indexOf('Отключить') >= 0)).toBe(true);
+  });
+
   it('shows days, hides the id and the bot line, and keeps Telegram in a menu', async () => {
     me.telegramId = '424242';
     me.paidUntil = Date.now() + 10 * 86400000;
