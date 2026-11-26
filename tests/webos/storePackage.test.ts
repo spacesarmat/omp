@@ -75,6 +75,13 @@ describe('opaque store icons', () => {
     expect(icon).toEqual({ width: 80, height: 80, transparent: 0 });
     expect(large).toEqual({ width: 130, height: 130, transparent: 0 });
   });
+
+  it('the beta band icons are opaque too: LG paints a light card behind transparent pixels', () => {
+    const icon = transparentPixels(readFileSync('webos/beta/icon.png'));
+    const large = transparentPixels(readFileSync('webos/beta/largeIcon.png'));
+    expect(icon).toEqual({ width: 80, height: 80, transparent: 0 });
+    expect(large).toEqual({ width: 130, height: 130, transparent: 0 });
+  });
 });
 
 describe('store bundle luna strings', () => {

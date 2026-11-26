@@ -31,6 +31,7 @@ import { installProductionFlow } from '../design/production-flow.ts';
 import { createTvFlowDispatcher } from './productionFlowDispatcher';
 import { createTvFlowPublishers } from './productionFlowPublishers';
 import { currentRoute, routeStack } from './ui/nav';
+import { hideBootScreen } from '../mobile/src/bootScreen';
 
 // Preact schedules renders with queueMicrotask (Chrome 71+); the LG build polyfills it, an old Android TV WebView does not
 const w = window as unknown as { queueMicrotask?: (cb: () => void) => void };
@@ -94,6 +95,8 @@ function start(): void {
   if (activeServer.value) resetTo({ name: 'library' });
 
   render(<App />, document.getElementById('app')!);
+  // the brand screen of index.html covered the boot of the bundle; the app has painted now
+  hideBootScreen();
   // The phone launch command applies before the design runtime: a layout or flow failure
   // on an old WebView must never swallow it (the beta.11 incident aborted start here).
   runLaunchParams(readLaunchParams());
