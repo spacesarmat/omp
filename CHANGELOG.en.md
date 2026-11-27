@@ -9,7 +9,7 @@ The English translation covers the latest versions only; the full history (in Ru
 - [tech] The download page is redesigned: dark theme with an orange accent, six platform cards, a Stable/Beta switch and a device helper. Versions, sizes and sha256 still come from the same feeds
 - [tech] The download page has an SVG favicon from the already published assets/logo.svg: the browser no longer requests the missing /favicon.ico and no longer logs a console 404
 
-## 0.30.4-beta.4
+## 0.30.4
 
 - [tv] The launch screen logo got bigger: the mark now takes a fifth of the screen width, the same on 1080p and on 4K
 - [tech] The pairing link and the language switcher on the site follow only omp-player.online: an address that merely starts with our domain no longer reaches the intent or the href
