@@ -1,12 +1,12 @@
 {
-  "version": "0.30.4-beta.4",
-  "ipkUrl": "https://github.com/spacesarmat/omp/releases/download/v0.30.4-beta.4/OMP-0.30.4-beta.4-webOS.ipk",
-  "ipkHash": "c9fe1924c04842f2d26d87c30e9ab9311220fd76390d68af523d511fac9267cc",
-  "ipkSize": 1259320,
+  "version": "0.30.4",
+  "ipkUrl": "https://github.com/spacesarmat/omp/releases/download/v0.30.4/OMP-0.30.4-webOS.ipk",
+  "ipkHash": "c21f4429edc2228f507c3dd79e449d254089c34fbc0c0fc9d30895a9e7242fab",
+  "ipkSize": 1257308,
   "notes": [
     "Логотип на заставке запуска стал крупнее: знак занимает пятую часть ширины экрана, одинаково на 1080p и на 4K"
   ],
-  "releaseUrl": "https://github.com/spacesarmat/omp/releases/tag/v0.30.4-beta.4",
+  "releaseUrl": "https://github.com/spacesarmat/omp/releases/tag/v0.30.4",
   "notesTv": [
     "Логотип на заставке запуска стал крупнее: знак занимает пятую часть ширины экрана, одинаково на 1080p и на 4K"
   ],

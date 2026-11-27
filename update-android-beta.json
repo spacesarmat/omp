@@ -1,18 +1,18 @@
 {
-  "version": "0.30.4-beta.4",
-  "ipkUrl": "https://github.com/spacesarmat/omp/releases/download/v0.30.4-beta.4/OMP-0.30.4-beta.4.apk",
-  "ipkHash": "e36e6c3eb06ffb12ea85e0e298cf02372c15cea1bb3e34b2d5e7e8eb6dcf0312",
-  "ipkSize": 98453856,
+  "version": "0.30.4",
+  "ipkUrl": "https://github.com/spacesarmat/omp/releases/download/v0.30.4/OMP-0.30.4.apk",
+  "ipkHash": "823c625af5c86542b31c891077d058183e7fef8b57b8be4b15a748fa9e6c828a",
+  "ipkSize": 98447336,
   "apks": {
     "arm64": {
-      "url": "https://github.com/spacesarmat/omp/releases/download/v0.30.4-beta.4/OMP-0.30.4-beta.4-arm64.apk",
-      "sha256": "30a25056121ec2673e78ea7cd770cfa012eccede64930b8f365965a61a09c34b",
-      "size": 63905590
+      "url": "https://github.com/spacesarmat/omp/releases/download/v0.30.4/OMP-0.30.4-arm64.apk",
+      "sha256": "35957be6d3bddcd7094c194fed893d625963014787c250882664326c71627e4e",
+      "size": 63899074
     },
     "armv7": {
-      "url": "https://github.com/spacesarmat/omp/releases/download/v0.30.4-beta.4/OMP-0.30.4-beta.4-armv7.apk",
-      "sha256": "c746812074f0b7137765538013f273ecaf8f685891cafdf7c6419f83d271772d",
-      "size": 59724618
+      "url": "https://github.com/spacesarmat/omp/releases/download/v0.30.4/OMP-0.30.4-armv7.apk",
+      "sha256": "551ff6b53abe8697dac1260774a3bff8b910f46f485e0017b4ad1db696859658",
+      "size": 59718102
     }
   },
   "notes": [
@@ -22,5 +22,5 @@
     "Логотип на заставке запуска стал крупнее: знак занимает пятую часть ширины экрана, одинаково на 1080p и на 4K"
   ],
   "notesPhone": [],
-  "releaseUrl": "https://github.com/spacesarmat/omp/releases/tag/v0.30.4-beta.4"
+  "releaseUrl": "https://github.com/spacesarmat/omp/releases/tag/v0.30.4"
 }
