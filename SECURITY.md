@@ -5,8 +5,8 @@
 Поддерживается последний стабильный релиз. Более новая бета поддерживается вместе с ним. Более ранние релизы и предыдущие беты не поддерживаются. Когда выходит новый стабильный релиз или более новая бета, поддержка переходит на них. Актуальные теги: https://github.com/spacesarmat/omp/releases
 
 <!-- versions:start -->
-- последний стабильный релиз, сейчас [v0.30.3](https://github.com/spacesarmat/omp/releases/tag/v0.30.3)
-- текущая бета, сейчас [v0.30.4-beta.4](https://github.com/spacesarmat/omp/releases/tag/v0.30.4-beta.4)
+- последний стабильный релиз, сейчас [v0.30.4](https://github.com/spacesarmat/omp/releases/tag/v0.30.4)
+- текущей беты нет
 <!-- versions:end -->
 
 ## Куда писать
@@ -26,8 +26,8 @@ https://github.com/spacesarmat/omp/security/advisories/new
 The latest stable release is supported. A newer beta is supported with it. Older releases are not supported. Support moves on when a newer stable or beta tag is published. Current tags: https://github.com/spacesarmat/omp/releases
 
 <!-- versions:start -->
-- latest stable release, currently [v0.30.3](https://github.com/spacesarmat/omp/releases/tag/v0.30.3)
-- current beta, currently [v0.30.4-beta.4](https://github.com/spacesarmat/omp/releases/tag/v0.30.4-beta.4)
+- latest stable release, currently [v0.30.4](https://github.com/spacesarmat/omp/releases/tag/v0.30.4)
+- there is no current beta
 <!-- versions:end -->
 
 Report a vulnerability through GitHub private vulnerability reporting:
