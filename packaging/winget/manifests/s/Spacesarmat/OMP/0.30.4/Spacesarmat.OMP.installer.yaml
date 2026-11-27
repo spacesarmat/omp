@@ -1,17 +1,17 @@
 # yaml-language-server: $schema=https://aka.ms/winget-manifest.installer.1.10.0.schema.json
 PackageIdentifier: Spacesarmat.OMP
-PackageVersion: 0.30.0
+PackageVersion: 0.30.4
 Platform:
   - Windows.Desktop
 MinimumOSVersion: 10.0.17763.0
 InstallerType: nullsoft
 Scope: user
 UpgradeBehavior: install
-ReleaseDate: "2026-11-11"
+ReleaseDate: "2026-11-27"
 Installers:
   - Architecture: x64
-    InstallerUrl: https://github.com/spacesarmat/omp/releases/download/v0.30.0/OMP-0.30.0-setup.exe
-    InstallerSha256: efa559bb0929a6c675801edbf276dbe04b628bd4d0a35f0278378e157e2491b1
+    InstallerUrl: https://github.com/spacesarmat/omp/releases/download/v0.30.4/OMP-0.30.4-setup.exe
+    InstallerSha256: 8e6a5edb38fd71491ebc804a76a39e7ae9d8ac24e2736b57867e6e379c04821a
     InstallerSwitches:
       Silent: /S
       SilentWithProgress: /S
