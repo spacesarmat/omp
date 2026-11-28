@@ -6,7 +6,7 @@
 
 <!-- versions:start -->
 - последний стабильный релиз, сейчас [v0.30.4](https://github.com/spacesarmat/omp/releases/tag/v0.30.4)
-- текущей беты нет
+- текущая бета, сейчас [v0.30.5-beta.1](https://github.com/spacesarmat/omp/releases/tag/v0.30.5-beta.1)
 <!-- versions:end -->
 
 ## Куда писать
@@ -27,7 +27,7 @@ The latest stable release is supported. A newer beta is supported with it. Older
 
 <!-- versions:start -->
 - latest stable release, currently [v0.30.4](https://github.com/spacesarmat/omp/releases/tag/v0.30.4)
-- there is no current beta
+- current beta, currently [v0.30.5-beta.1](https://github.com/spacesarmat/omp/releases/tag/v0.30.5-beta.1)
 <!-- versions:end -->
 
 Report a vulnerability through GitHub private vulnerability reporting:
