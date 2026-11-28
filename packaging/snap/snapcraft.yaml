@@ -1,7 +1,7 @@
 name: omp-player
 title: OMP
 base: core24
-version: '0.30.0'
+version: '0.30.4'
 summary: Media player for TorrServer
 description: |
   OMP plays movies and series from a TorrServer on the home network.
@@ -31,7 +31,7 @@ apps:
 parts:
   omp:
     plugin: nil
-    source: https://github.com/spacesarmat/omp/releases/download/v0.30.0/OMP-0.30.0-linux-x64.deb
+    source: https://github.com/spacesarmat/omp/releases/download/v0.30.4/OMP-0.30.4-linux-x64.deb
     source-type: deb
     stage-packages:
       - libwebkit2gtk-4.1-0

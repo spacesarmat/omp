@@ -30,9 +30,9 @@ modules:
         path: com.spacesarmat.omp.desktop.metainfo.xml
       - type: file
         dest-filename: omp.deb
-        url: https://github.com/spacesarmat/omp/releases/download/v0.30.0/OMP-0.30.0-linux-x64.deb
-        sha256: 567e10c5c64191b492848cf5b1e2ba3f6ea3a359562dd5801050c5fa06165778
-        size: 5917264
+        url: https://github.com/spacesarmat/omp/releases/download/v0.30.4/OMP-0.30.4-linux-x64.deb
+        sha256: 37d094bb9c2a503d72bac10ccaaa5ce3b8fb7e41cc141cefdb42a30cfe6e3894
+        size: 6699692
         x-checker-data:
           type: json
           url: https://api.github.com/repos/spacesarmat/omp/releases/latest

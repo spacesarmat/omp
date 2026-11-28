@@ -1,12 +1,12 @@
 {
-  "version": "0.30.0",
+  "version": "0.30.4",
   "description": "Media player for TorrServer on Windows",
   "homepage": "https://omp-player.online",
   "license": "GPL-3.0-only",
   "architecture": {
     "64bit": {
-      "url": "https://github.com/spacesarmat/omp/releases/download/v0.30.0/OMP-0.30.0-setup.exe",
-      "hash": "efa559bb0929a6c675801edbf276dbe04b628bd4d0a35f0278378e157e2491b1"
+      "url": "https://github.com/spacesarmat/omp/releases/download/v0.30.4/OMP-0.30.4-setup.exe",
+      "hash": "8e6a5edb38fd71491ebc804a76a39e7ae9d8ac24e2736b57867e6e379c04821a"
     }
   },
   "installer": {

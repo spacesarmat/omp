@@ -1,11 +1,11 @@
 cask "omp" do
   arch arm: "arm64", intel: "x64"
 
-  version "0.30.0"
-  sha256 arm:   "706c7966376f27117e07a34589403292258ec5e9f734755dee805bbcb82ffde0",
-         intel: "b3a93a261f55c38c056d2d43e7d68366d569920a42e178976961df8c3f15e5c4"
+  version "0.30.4"
+  sha256 arm:   "78d5f8177f9f082f69ea03731b9dca2e1ced8eee1b7bf18dc8c65fd0ffad168f",
+         intel: "df1f85863d65928e1911a6d0c958b7273959e021c755891b22f6330c8f76aa8e"
 
-  url "https://github.com/spacesarmat/omp/releases/download/v0.30.0/OMP-#{version}-macos-#{arch}.dmg",
+  url "https://github.com/spacesarmat/omp/releases/download/v0.30.4/OMP-#{version}-macos-#{arch}.dmg",
       verified: "github.com/spacesarmat/omp/"
   name "OMP"
   desc "Media player for TorrServer"
