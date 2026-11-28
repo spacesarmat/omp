@@ -1054,3 +1054,21 @@ describe('Sync V2 status', () => {
     resetSyncV2Status();
   });
 });
+
+describe('Settings: the sync action row', () => {
+  it('puts «Синхронизировать сейчас» in the block column, not in a card of its own', async () => {
+    const { setSyncEnabled } = await import('../../src/store/deviceDb');
+    act(() => setSyncEnabled(true));
+    const el = mount();
+    const block = el.querySelector('[data-row="sync"]') as HTMLElement;
+    expect(block.classList.contains('m-set-nest')).toBe(true);
+    const button = block.querySelector('button.m-btn-secondary') as HTMLButtonElement;
+    expect(button.textContent).toBe('Синхронизировать сейчас');
+    // the block is the column, so the button spans the card the way a row does
+    expect(button.parentElement).toBe(block);
+    expect(button.closest('.m-set-row')).toBeNull();
+    const toggle = block.querySelector('[role="switch"]') as HTMLElement;
+    expect(toggle.closest('.m-set-nest')).toBe(block);
+    expect(toggle.closest('.m-set-row')).not.toBeNull();
+  });
+});

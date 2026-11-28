@@ -1146,6 +1146,9 @@ textarea.m-input, textarea.m-area {
 .m-screen[data-route='sources'] { display: flex; flex-direction: column; gap: 20px; }
 .m-set-group { display: flex; flex-direction: column; gap: 10px; }
 .m-set-group[hidden] { display: none; }
+/* a block that keeps several rows of one setting together («Синхронизация»): the same column and the same
+   10px rhythm as the section, so a button inside it is a row of its own, as wide as a card and as tall as one */
+.m-set-nest { display: flex; flex-direction: column; gap: 10px; }
 .m-set-label { margin: 0 0 8px; padding-left: 14px; font-size: 13px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
 .m-set-row > .m-link, .m-set-row > .m-btn { flex-shrink: 0; }
 .m-set-row > .m-link { white-space: nowrap; }

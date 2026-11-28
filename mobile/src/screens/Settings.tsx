@@ -538,7 +538,7 @@ function SyncRow() {
                 ? t('settings.syncSynchronized')
                 : t('settings.syncLast', { when: syncWhen(at, now) });
   return (
-    <div data-row="sync">
+    <div class="m-set-nest" data-row="sync">
       <div class="m-set-row">
         <div class="m-set-text">
           <span>{t('settings.syncTitle')}</span>
@@ -563,11 +563,12 @@ function SyncRow() {
           <span class="m-switch-knob" />
         </button>
       </div>
+      {/* the action is a row of its own, not a card inside a card: see .m-set-nest in mobile.css */}
       {on && !blocked && (
-        <div class="m-set-row">
+        <>
           <button type="button" class="m-btn m-btn-secondary" disabled={busy} onClick={go}>{t('settings.syncNow')}</button>
           {err ? <button type="button" class="m-btn m-btn-secondary" disabled={busy} onClick={go}>{t('settings.syncRetry')}</button> : null}
-        </div>
+        </>
       )}
       {on && !blocked ? <PresenceCards /> : null}
       {open && (
