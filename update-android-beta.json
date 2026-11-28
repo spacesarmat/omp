@@ -1,26 +1,26 @@
 {
-  "version": "0.30.4",
-  "ipkUrl": "https://github.com/spacesarmat/omp/releases/download/v0.30.4/OMP-0.30.4.apk",
-  "ipkHash": "823c625af5c86542b31c891077d058183e7fef8b57b8be4b15a748fa9e6c828a",
-  "ipkSize": 98447336,
+  "version": "0.30.5-beta.1",
+  "ipkUrl": "https://github.com/spacesarmat/omp/releases/download/v0.30.5-beta.1/OMP-0.30.5-beta.1.apk",
+  "ipkHash": "df4092c4e6520b38629c25f06652478c99643daaf206c2280b1de8ada2c93ba4",
+  "ipkSize": 98455112,
   "apks": {
     "arm64": {
-      "url": "https://github.com/spacesarmat/omp/releases/download/v0.30.4/OMP-0.30.4-arm64.apk",
-      "sha256": "35957be6d3bddcd7094c194fed893d625963014787c250882664326c71627e4e",
-      "size": 63899074
+      "url": "https://github.com/spacesarmat/omp/releases/download/v0.30.5-beta.1/OMP-0.30.5-beta.1-arm64.apk",
+      "sha256": "a14a45e9f6e4797af9a7eb380f031cf1964dc8b732b828b88cebe6aab60f2797",
+      "size": 63906846
     },
     "armv7": {
-      "url": "https://github.com/spacesarmat/omp/releases/download/v0.30.4/OMP-0.30.4-armv7.apk",
-      "sha256": "551ff6b53abe8697dac1260774a3bff8b910f46f485e0017b4ad1db696859658",
-      "size": 59718102
+      "url": "https://github.com/spacesarmat/omp/releases/download/v0.30.5-beta.1/OMP-0.30.5-beta.1-armv7.apk",
+      "sha256": "086adb24d13829243e6c2683a1c41afc41ca86e8a24a6e7fed05b053e11c5ac5",
+      "size": 59725874
     }
   },
   "notes": [
-    "Логотип на заставке запуска стал крупнее: знак занимает пятую часть ширины экрана, одинаково на 1080p и на 4K"
+    "Исправления и улучшения"
   ],
-  "notesTv": [
-    "Логотип на заставке запуска стал крупнее: знак занимает пятую часть ширины экрана, одинаково на 1080p и на 4K"
+  "notesTv": [],
+  "notesPhone": [
+    "«Синхронизировать сейчас» в «Аккаунт OMP» стала отдельной строкой на всю ширину карточки, такой же высоты, как соседние строки: раньше кнопка стояла внутри серой строки и оставляла пустое место справа"
   ],
-  "notesPhone": [],
-  "releaseUrl": "https://github.com/spacesarmat/omp/releases/tag/v0.30.4"
+  "releaseUrl": "https://github.com/spacesarmat/omp/releases/tag/v0.30.5-beta.1"
 }

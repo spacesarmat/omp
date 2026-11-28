@@ -1,14 +1,14 @@
 {
-  "version": "0.30.4",
-  "ipkUrl": "https://github.com/spacesarmat/omp/releases/download/v0.30.4/OMP-0.30.4-webOS.ipk",
-  "ipkHash": "c21f4429edc2228f507c3dd79e449d254089c34fbc0c0fc9d30895a9e7242fab",
-  "ipkSize": 1257308,
+  "version": "0.30.5-beta.1",
+  "ipkUrl": "https://github.com/spacesarmat/omp/releases/download/v0.30.5-beta.1/OMP-0.30.5-beta.1-webOS.ipk",
+  "ipkHash": "65d6e00bf4a63b886a3eb00458b97c9303aeb2c8a2673402573bff9c6c6e8b27",
+  "ipkSize": 1259868,
   "notes": [
-    "Логотип на заставке запуска стал крупнее: знак занимает пятую часть ширины экрана, одинаково на 1080p и на 4K"
+    "Исправления и улучшения"
   ],
-  "releaseUrl": "https://github.com/spacesarmat/omp/releases/tag/v0.30.4",
-  "notesTv": [
-    "Логотип на заставке запуска стал крупнее: знак занимает пятую часть ширины экрана, одинаково на 1080p и на 4K"
-  ],
-  "notesPhone": []
+  "releaseUrl": "https://github.com/spacesarmat/omp/releases/tag/v0.30.5-beta.1",
+  "notesTv": [],
+  "notesPhone": [
+    "«Синхронизировать сейчас» в «Аккаунт OMP» стала отдельной строкой на всю ширину карточки, такой же высоты, как соседние строки: раньше кнопка стояла внутри серой строки и оставляла пустое место справа"
+  ]
 }
