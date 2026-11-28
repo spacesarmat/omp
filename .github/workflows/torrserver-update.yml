@@ -84,6 +84,9 @@ jobs:
         run: |
           npm ci
           npm ci --prefix desktop
+          # the root npm test also runs ops/billing tests (ops/billing/vitest.config.ts):
+          # their node_modules must be installed here too, or 'ws' is ERR_MODULE_NOT_FOUND
+          npm ci --prefix ops/billing
       - name: Test the update
         if: steps.apply.outputs.changed == 'true'
         run: npm test
