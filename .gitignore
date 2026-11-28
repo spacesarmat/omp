@@ -8,6 +8,9 @@ build/
 .vite/
 coverage/
 .superpowers/
+# agent CLIs: local state and local instruction files (not part of the repo)
+.qwen/
+OMP-DEVELOPER.md
 .idea/
 dist-mobile/
 android/app/build/
