@@ -4,7 +4,7 @@
 
 The English translation covers the latest versions only; the full history (in Russian) is in [CHANGELOG.md](CHANGELOG.md).
 
-## Unreleased
+## 0.30.5-beta.1
 
 - [phone] "Sync now" in the "OMP account" section is its own row now, as wide and as tall as the rows next to it: it used to sit inside a grey row and left a blank gap on its right
 - [tech] The download page is redesigned: dark theme with an orange accent, six platform cards, a Stable/Beta switch and a device helper. Versions, sizes and sha256 still come from the same feeds
